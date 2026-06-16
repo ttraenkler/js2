@@ -1,9 +1,10 @@
 ---
 id: 1355
 title: "spec backlog: Proxy implementation beyond JS-host fallback (235 test262 fails)"
-status: ready
+status: in-progress
+assignee: ttraenkler/sen-a
 created: 2026-05-08
-updated: 2026-06-15
+updated: 2026-06-16
 priority: top
 feasibility: hard
 reasoning_effort: high
@@ -157,3 +158,41 @@ unchanged.
 depends_on #1100 (hard prereq); #797/#1460/#1462 descriptor attributes;
 cascade-unblocks standalone `Reflect.*` invariants (#1346). Implement strictly
 from fetched §10.5 spec text, cite the section in each helper + commit.
+
+## Implementation — Slice 1: deleteProperty trap (sen-a, 2026-06-16, sprint 63)
+
+First slice on top of the #1100 substrate. Adds the §10.5.10 [[Delete]] trap;
+the remaining 9 traps + full §10.5 invariant enforcement stay as follow-up
+slices (they need the descriptor-attribute model — `$PropEntry`
+configurable/writable/enumerable bits — coordinated with #797/#1460/#1462).
+
+### Done
+- `$ProxyTraps` gains a 5th field `deleteProperty` (externref closure).
+- `__proxy_delete_dispatch` registered — same dispatch shape as `has` (2-arg
+  trap `(target, key)`, i32-returning forward via `__delete_property`,
+  ToBoolean-coerced trap result). Generalised `buildDispatch`'s has-arm to an
+  `isHasLike(trap)` predicate covering both `has` and `deleteProperty`; reuses
+  the existing arity-2 `__proxy_call_has` driver (identical
+  `(handler,trap,target,key)` signature) — no new driver/finalize-fill needed.
+- `ref.test $Proxy` front-guard prepended to `__delete_property` (mirrors the
+  `has` guard: dispatch result → `__is_truthy` → i32 return).
+- `__proxy_create` reads the `deleteProperty` trap off the open handler (local 6)
+  and stores it in the 5-field `$ProxyTraps`.
+- `tests/issue-1355.test.ts` (4 tests): trap fires, truthy result is the `delete`
+  value, absent trap forwards, and a #1100 get-trap regression guard. All green;
+  tsc clean; every program `WebAssembly.validate`s true.
+
+### Remaining (follow-up slices, NOT in this PR)
+- **Proxy.revocable** — needs `{proxy, revoke}` synthesis where `revoke` is a
+  closure capturing the proxy and calling the existing `__proxy_revoke` helper
+  (closure-pair codegen at the call site / a native builder). Acceptance #4.
+- **apply trap** (`proxy(...)` call) — `$ProxyTraps.apply` field reserved.
+- **ownKeys / getOwnPropertyDescriptor / defineProperty / getPrototypeOf /
+  setPrototypeOf / isExtensible / preventExtensions / construct** — these are the
+  bulk of the 235 fails; they require the standalone descriptor-attribute model
+  and §10.5 result-invariant predicates (the larger slice).
+- Wire `Reflect.*` standalone path through the proxy dispatch (#1346 cascade).
+
+### Acceptance progress
+Criteria 1–3, 5 (≥75%) remain for the follow-up descriptor slices; this slice
+clears the `deleteProperty/**` bucket from compile-error to pass.
