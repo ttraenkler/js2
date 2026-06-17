@@ -1,8 +1,9 @@
 {
   "id": "2166",
   "assignee": "ttraenkler/sdev-json2",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2166-json-parse-codec",
   "claimed_at": "2026-06-17T16:41:13Z",
-  "updated_at": "2026-06-17T16:41:13Z"
+  "updated_at": "2026-06-17T17:49:44Z",
+  "released_at": "2026-06-17T17:49:44Z"
 }
