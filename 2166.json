@@ -1,8 +1,9 @@
 {
   "id": "2166",
   "assignee": "ttraenkler/dev-collections",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2166-standalone-json",
   "claimed_at": "2026-06-17T03:27:21Z",
-  "updated_at": "2026-06-17T03:27:21Z"
+  "updated_at": "2026-06-17T04:11:35Z",
+  "released_at": "2026-06-17T04:11:35Z"
 }
