@@ -1,8 +1,9 @@
 {
   "id": "2158",
   "assignee": "ttraenkler/dev-rescue",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2158-class-prototype-residual",
   "claimed_at": "2026-06-17T03:21:09Z",
-  "updated_at": "2026-06-17T03:21:09Z"
+  "updated_at": "2026-06-17T03:23:59Z",
+  "released_at": "2026-06-17T03:23:59Z"
 }
