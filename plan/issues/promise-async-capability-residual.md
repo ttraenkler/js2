@@ -1,8 +1,8 @@
 ---
 id: promise-async-capability-residual
 title: "Promise residual: NewPromiseCapability(C) for custom constructors + resolver-element-function object semantics (~163 fails)"
-status: in-progress
-assignee: ttraenkler/sdev-async2
+status: blocked
+blocked_on: [2026]
 sprint: 63
 created: 2026-06-17
 updated: 2026-06-17
