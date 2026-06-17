@@ -1,8 +1,9 @@
 {
   "id": "2162",
   "assignee": "ttraenkler/sendev-set-conflict",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2162-set-clean",
   "claimed_at": "2026-06-17T07:10:44Z",
-  "updated_at": "2026-06-17T07:10:44Z"
+  "updated_at": "2026-06-17T07:25:45Z",
+  "released_at": "2026-06-17T07:25:45Z"
 }
