@@ -1,7 +1,8 @@
 ---
 id: promise-async-capability-residual
 title: "Promise residual: NewPromiseCapability(C) for custom constructors + resolver-element-function object semantics (~163 fails)"
-status: ready
+status: in-progress
+assignee: ttraenkler/sdev-async2
 sprint: 63
 created: 2026-06-17
 updated: 2026-06-17
@@ -107,3 +108,61 @@ Run each file in its **own** subprocess — async rejections from the host
 bridge (illegal-cast, bucket 2) escape try/catch onto the microtask queue and
 kill the process otherwise. Failing-file list derived from the baseline JSONL
 filtered to `test/built-ins/Promise` + `status != pass`.
+
+## Re-validation 2026-06-17 (sdev-async2) — root cause is ONE level deeper than "runtime-only"
+
+Re-ran the probe over **all four combinators** (109 files, baseline
+`test262-current.jsonl`, 168 `built-ins/Promise` fails total). Aggregated buckets:
+
+| bucket | all | allSettled | any | race | total |
+|--------|----:|----:|----:|----:|------:|
+| "Promise resolve or reject function is not callable" | 12 | 18 | 10 | 5 | **45** |
+| "illegal cast" (thenable iteration) | 8 | 9 | 8 | 4 | **29** |
+| "undefined is not a function" (unhandled rej) | 3 | 4 | 0 | 3 | **10** |
+| "[object Object] is not a constructor" | 2 | 2 | 2 | 2 | **8** |
+| "Function.prototype.bind called on non-callable" | 1 | 1 | 2 | 1 | **5** |
+| RAN ret=2/3 (species / assertion) | 1 | 2 | 0 | 2 | **5** |
+
+**The dominant bucket is NOT a runtime-marshaling bug — it is a front-end
+codegen elision.** WAT dump of the compiled `Constructor` from
+`all/same-reject-function.js` (`function Constructor(executor){ executor(a,b) }`
+with a `Constructor.resolve = …` static assignment):
+
+```
+(func $Constructor (type 6)          ;; type 6 == (func)  → NO `executor` param!
+   …__register_class_object prologue…
+   global.get 15 global.get 10 call 6 drop   ;; __extern_get(Test262Error.thrower), dropped
+   …self-registration of static .resolve…
+   ref.null extern drop)              ;; the executor(a,b) CALL IS GONE
+```
+
+The static-property assignment (`Constructor.resolve = …`) makes the front-end
+treat `Constructor` as a **class-object**, strip its parameter list, and **drop
+the `executor(resolve, reject)` invocation**. So when V8's
+`NewPromiseCapability(C)` does `Construct(C, «executor»)`, the body runs but
+**never calls its executor** → the capability's `[[Resolve]]`/`[[Reject]]` stay
+undefined → V8 throws "Promise resolve or reject function is not callable".
+`runtime.ts:_wrapCallableForHost`'s `construct` trap (4778) is correct; the
+compiled body it invokes is the broken part.
+
+**Implication for the fix order:** reimplementing `NewPromiseCapability`/
+`PerformPromiseAll` in JS (the doc's "fix direction") is necessary but **not
+sufficient** — a JS-side capability still calls `Construct(C, executor)`, and
+the compiled `C` still won't invoke `executor`. The **prerequisite** is a
+front-end fix so a user function/class used as a Promise constructor compiles
+with a real, callable `executor` parameter and emits its invocation (i.e. the
+class-object-registration path must not strip the parameter/call when the
+function is *also* used as an ordinary callable/constructor). This is
+architect-scale, broad blast radius (touches the class-object detection +
+function-parameter lowering), and overlaps the #2026 dynamic-ctor-ABI work
+already in flight (TaskList #31, `__construct_closure`). The remaining buckets
+(illegal-cast thenable iteration, species, bind) are downstream of the same
+capability machinery.
+
+**Conclusion: no safe small dev slice exists in the dominant bucket.** The
+45-file "not callable" bucket is blocked on the executor-elision front-end fix;
+the 29-file "illegal cast" bucket is blocked on capability-driven thenable
+iteration. Both require the capability rework. Recommend sequencing **behind**
+the #2026 dynamic-ctor ABI (which gives a real `Construct(closure, args)` that
+runs the body with a threaded parameter list) and folding into the #1042 async
+epic, rather than a partial PR that would not move the conformance needle.
