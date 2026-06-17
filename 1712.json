@@ -1,8 +1,9 @@
 {
   "id": "1712",
   "assignee": "ttraenkler/dev-mech1",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-1712-acorn-acceptance",
   "claimed_at": "2026-06-17T12:35:24Z",
-  "updated_at": "2026-06-17T12:35:24Z"
+  "updated_at": "2026-06-17T12:39:44Z",
+  "released_at": "2026-06-17T12:39:44Z"
 }
