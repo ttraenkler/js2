@@ -1,8 +1,9 @@
 {
   "id": "2162",
   "assignee": "ttraenkler/dev-mech1",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2162-weakmap-weakset",
   "claimed_at": "2026-06-17T13:31:43Z",
-  "updated_at": "2026-06-17T13:31:43Z"
+  "updated_at": "2026-06-17T13:31:52Z",
+  "released_at": "2026-06-17T13:31:52Z"
 }
