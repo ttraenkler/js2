@@ -1,8 +1,9 @@
 {
   "id": "2102",
   "assignee": "ttraenkler/dev-mech2",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2102-shared-throwjserror-v2",
   "claimed_at": "2026-06-17T12:06:26Z",
-  "updated_at": "2026-06-17T12:06:26Z"
+  "updated_at": "2026-06-17T12:47:37Z",
+  "released_at": "2026-06-17T12:47:37Z"
 }
