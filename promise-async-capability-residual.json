@@ -1,9 +1,8 @@
 {
   "id": "promise-async-capability-residual",
   "assignee": "ttraenkler/sdev-async2",
-  "status": "released",
-  "branch": "issue-28-promise-async-capability",
-  "claimed_at": "2026-06-17T16:04:29Z",
-  "updated_at": "2026-06-17T16:30:56Z",
-  "released_at": "2026-06-17T16:30:56Z"
+  "status": "in-progress",
+  "branch": "issue-promise-async-capability",
+  "claimed_at": "2026-06-18T00:32:29Z",
+  "updated_at": "2026-06-18T00:32:29Z"
 }
