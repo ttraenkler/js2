@@ -1,8 +1,9 @@
 {
   "id": "2195",
   "assignee": "ttraenkler/dev-jsmode",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2195-js-mode-template-process",
   "claimed_at": "2026-06-18T18:51:51Z",
-  "updated_at": "2026-06-18T18:51:51Z"
+  "updated_at": "2026-06-18T21:58:40Z",
+  "released_at": "2026-06-18T21:58:40Z"
 }
