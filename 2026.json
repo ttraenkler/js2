@@ -1,8 +1,9 @@
 {
   "id": "2026",
   "assignee": "ttraenkler/sdev-async2",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2026-standalone-ctor-abi",
   "claimed_at": "2026-06-17T23:12:56Z",
-  "updated_at": "2026-06-17T23:12:56Z"
+  "updated_at": "2026-06-18T00:31:49Z",
+  "released_at": "2026-06-18T00:31:49Z"
 }
