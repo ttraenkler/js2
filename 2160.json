@@ -1,8 +1,8 @@
 {
   "id": "2160",
-  "assignee": "ttraenkler/dev-strnum",
+  "assignee": "ttraenkler/sdev-proxy3",
   "status": "in-progress",
-  "branch": "issue-2160-standalone-strnum",
-  "claimed_at": "2026-06-17T03:18:30Z",
-  "updated_at": "2026-06-17T03:18:30Z"
+  "branch": "issue-2160-number-array-coercion",
+  "claimed_at": "2026-06-18T04:07:20Z",
+  "updated_at": "2026-06-18T04:07:20Z"
 }
