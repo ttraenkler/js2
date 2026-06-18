@@ -1,8 +1,9 @@
 {
   "id": "1629b-standalone",
   "assignee": "ttraenkler/sendev-date",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-1629b-standalone-define",
   "claimed_at": "2026-06-18T22:04:09Z",
-  "updated_at": "2026-06-18T22:04:09Z"
+  "updated_at": "2026-06-18T22:39:07Z",
+  "released_at": "2026-06-18T22:39:07Z"
 }
