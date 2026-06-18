@@ -1,9 +1,8 @@
 {
   "id": "2192",
   "assignee": "ttraenkler/sdev-proxy3",
-  "status": "done",
-  "branch": "issue-2192-standalone-error-residual",
-  "claimed_at": "2026-06-18T03:07:27Z",
-  "updated_at": "2026-06-18T03:32:55Z",
-  "released_at": "2026-06-18T03:32:55Z"
+  "status": "in-progress",
+  "branch": "issue-2192b-caught-error-string-consumers",
+  "claimed_at": "2026-06-18T03:35:38Z",
+  "updated_at": "2026-06-18T03:35:38Z"
 }
