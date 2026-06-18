@@ -1,8 +1,9 @@
 {
   "id": "2371",
   "assignee": "ttraenkler/sdev-harvest2",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2371-string-number-bool-proto-value-read",
   "claimed_at": "2026-06-18T22:51:54Z",
-  "updated_at": "2026-06-18T22:51:54Z"
+  "updated_at": "2026-06-18T23:11:31Z",
+  "released_at": "2026-06-18T23:11:31Z"
 }
