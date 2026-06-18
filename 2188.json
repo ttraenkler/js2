@@ -1,8 +1,9 @@
 {
   "id": "2188",
   "assignee": "ttraenkler/sdev-proxy3",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2188-sibling-error-brand",
   "claimed_at": "2026-06-18T03:18:15Z",
-  "updated_at": "2026-06-18T03:18:15Z"
+  "updated_at": "2026-06-18T03:52:55Z",
+  "released_at": "2026-06-18T03:52:55Z"
 }
