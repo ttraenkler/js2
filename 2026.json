@@ -1,9 +1,8 @@
 {
   "id": "2026",
-  "assignee": "ttraenkler/sdev-async2",
-  "status": "released",
-  "branch": "issue-2026-standalone-ctor-abi",
-  "claimed_at": "2026-06-17T23:12:56Z",
-  "updated_at": "2026-06-18T00:31:49Z",
-  "released_at": "2026-06-18T00:31:49Z"
+  "assignee": "ttraenkler/sdev-dynnew",
+  "status": "in-progress",
+  "branch": "issue-2026-dynamic-new-ctor",
+  "claimed_at": "2026-06-18T09:11:12Z",
+  "updated_at": "2026-06-18T09:11:12Z"
 }
