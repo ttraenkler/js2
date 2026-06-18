@@ -1,8 +1,9 @@
 {
   "id": "2193",
   "assignee": "ttraenkler/sdev-json3",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2193-pr-b",
   "claimed_at": "2026-06-18T06:04:48Z",
-  "updated_at": "2026-06-18T06:04:48Z"
+  "updated_at": "2026-06-18T06:05:01Z",
+  "released_at": "2026-06-18T06:05:01Z"
 }
