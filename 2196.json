@@ -1,8 +1,9 @@
 {
   "id": "2196",
   "assignee": "ttraenkler/release-hygiene",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2196-release-version-hygiene",
   "claimed_at": "2026-06-18T20:04:17Z",
-  "updated_at": "2026-06-18T20:04:17Z"
+  "updated_at": "2026-06-18T21:58:45Z",
+  "released_at": "2026-06-18T21:58:45Z"
 }
