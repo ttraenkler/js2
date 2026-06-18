@@ -1,8 +1,9 @@
 {
   "id": "2162b",
   "assignee": "ttraenkler/sdev-iter",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2162b-pair-iterator-spread",
   "claimed_at": "2026-06-18T19:33:22Z",
-  "updated_at": "2026-06-18T19:33:22Z"
+  "updated_at": "2026-06-18T20:09:34Z",
+  "released_at": "2026-06-18T20:09:34Z"
 }
