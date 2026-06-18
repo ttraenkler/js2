@@ -1,8 +1,9 @@
 {
   "id": "2190",
   "assignee": "ttraenkler/sdev-proxy3",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2190-element-idx-externref",
   "claimed_at": "2026-06-18T02:47:17Z",
-  "updated_at": "2026-06-18T02:47:17Z"
+  "updated_at": "2026-06-18T03:08:31Z",
+  "released_at": "2026-06-18T03:08:31Z"
 }
