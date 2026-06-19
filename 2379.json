@@ -1,8 +1,9 @@
 {
   "id": "2379",
   "assignee": "ttraenkler/sendev-receiver",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2379-array-sort-sparse-cast",
   "claimed_at": "2026-06-19T01:32:39Z",
-  "updated_at": "2026-06-19T01:32:39Z"
+  "updated_at": "2026-06-19T01:51:54Z",
+  "released_at": "2026-06-19T01:51:54Z"
 }
