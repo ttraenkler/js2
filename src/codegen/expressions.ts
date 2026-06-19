@@ -825,12 +825,15 @@ function compileExpressionInner(
 
   if (expr.kind === ts.SyntaxKind.TrueKeyword) {
     fctx.body.push({ op: "i32.const", value: 1 });
-    return { kind: "i32" };
+    // (#1629b) Brand the i32 as a boolean so a later i32→externref coercion
+    // boxes it via __box_boolean (preserving `typeof === "boolean"`) instead
+    // of __box_number. Native arithmetic/i32 consumers ignore the brand.
+    return { kind: "i32", boolean: true };
   }
 
   if (expr.kind === ts.SyntaxKind.FalseKeyword) {
     fctx.body.push({ op: "i32.const", value: 0 });
-    return { kind: "i32" };
+    return { kind: "i32", boolean: true };
   }
 
   if (expr.kind === ts.SyntaxKind.NullKeyword) {

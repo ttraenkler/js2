@@ -1514,9 +1514,21 @@ export function coerceType(
     fctx.body.push({ op: "ref.null.extern" });
     return;
   }
-  // i32 → externref (box as number to preserve value)
+  // i32 → externref.
+  // (#1629b) A boolean-branded i32 boxes via __box_boolean so it crosses the
+  // externref frontier as a real JS boolean — `typeof v === "boolean"`,
+  // GetOwnPropertyDescriptor attribute flags, JSON, etc. all observe the boolean
+  // type instead of a number. A non-branded i32 (an actual integer/number value)
+  // keeps the legacy __box_number boxing, byte-identical to before.
   if (from.kind === "i32" && to.kind === "externref") {
     addUnionImports(ctx);
+    if (from.boolean === true) {
+      const boxBoolIdx = ctx.funcMap.get("__box_boolean");
+      if (boxBoolIdx !== undefined) {
+        fctx.body.push({ op: "call", funcIdx: boxBoolIdx });
+        return;
+      }
+    }
     const funcIdx = ctx.funcMap.get("__box_number");
     if (funcIdx !== undefined) {
       fctx.body.push({ op: "f64.convert_i32_s" });
