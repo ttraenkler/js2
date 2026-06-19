@@ -1,8 +1,9 @@
 {
   "id": "2379b",
   "assignee": "ttraenkler/sdev-arrayrep",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2379-array-sort-sparse-cast",
   "claimed_at": "2026-06-19T06:35:06Z",
-  "updated_at": "2026-06-19T06:35:06Z"
+  "updated_at": "2026-06-19T06:44:39Z",
+  "released_at": "2026-06-19T06:44:39Z"
 }
