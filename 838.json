@@ -1,8 +1,9 @@
 {
   "id": "838",
   "assignee": "ttraenkler/sdev-ctorval",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-838-bigint64-ctor",
   "claimed_at": "2026-06-19T06:52:19Z",
-  "updated_at": "2026-06-19T06:52:19Z"
+  "updated_at": "2026-06-19T06:54:30Z",
+  "released_at": "2026-06-19T06:54:30Z"
 }
