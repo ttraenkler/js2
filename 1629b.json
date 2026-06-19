@@ -1,8 +1,9 @@
 {
   "id": "1629b",
   "assignee": "ttraenkler/sendev-receiver",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-1629b-gopd-attr-flags",
   "claimed_at": "2026-06-19T00:47:43Z",
-  "updated_at": "2026-06-19T00:47:43Z"
+  "updated_at": "2026-06-19T01:08:18Z",
+  "released_at": "2026-06-19T01:08:18Z"
 }
