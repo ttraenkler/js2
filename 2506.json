@@ -1,8 +1,9 @@
 {
   "id": "2506",
   "assignee": "ttraenkler/sdev-ctorval",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2506-anyfind",
   "claimed_at": "2026-06-19T07:25:08Z",
-  "updated_at": "2026-06-19T07:25:08Z"
+  "updated_at": "2026-06-19T07:29:24Z",
+  "released_at": "2026-06-19T07:29:24Z"
 }
