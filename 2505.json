@@ -1,8 +1,9 @@
 {
   "id": "2505",
   "assignee": "ttraenkler/sdev-ctorval",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2505-anyjoin",
   "claimed_at": "2026-06-19T07:06:08Z",
-  "updated_at": "2026-06-19T07:06:08Z"
+  "updated_at": "2026-06-19T07:24:56Z",
+  "released_at": "2026-06-19T07:24:56Z"
 }
