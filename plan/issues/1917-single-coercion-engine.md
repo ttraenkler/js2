@@ -148,3 +148,50 @@ them together to avoid changing array-callback-loop ToNumber behavior.
 #1998/#2074), `emitToPrimitive` (Step 2, #1989/#2022/#1990/#1988),
 `emitStrictEq`/`emitLooseEq` (Step 3, #1986/#1987/#2081), `emitToNumber`/
 `emitToBoolean` (Step 4), then the drift gate (Step 5, #2108).
+
+## Handoff from #1629b (sendev-receiver, 2026-06-19) — boxed-primitive boolean representation
+
+Investigated the standalone GOPD attribute-flag read-back (#1629b) and drilled it
+to a boxed-primitive representation root cause that belongs to THIS engine, not a
+localized GOPD fix. Three measured/WAT-proven layers — banked on branch
+`issue-1629b-gopd-attr-flags` (commits below), ready to compose with Steps 3/4:
+
+**Layer 3 (the ROOT, highest-value — likely under several #1917/#2374 symptoms):**
+The `true`/`false` literal (`src/codegen/expressions.ts:826-834`) returns a bare
+`{kind:"i32"}` — the **boolean brand is dropped at the source**. So every
+boolean→externref coercion (object-literal field, `__extern_set`, any `any`-typed
+boolean) hits the generic `i32→externref` arm in `type-coercion.ts:1518` and boxes
+via `__box_number`. WAT proof for `const o:any={f:true}`:
+`i32.const 1 ; f64.convert_i32_s ; call __box_number`. Result: `o.f` is a boxed
+**number**, `typeof o.f === "number"` (not "boolean"), and any descriptor flag /
+JSON / reflection that round-trips a boolean through a `$Object` loses its type.
+Fix (banked, commit `c04a03dac`): brand the literal `{kind:"i32",boolean:true}`
+and honor `from.boolean` at `type-coercion.ts:1518` to box via `__box_boolean`.
+**Caveat:** only literals carry the brand — comparison/`!`/`&&` boolean-producing
+expressions still return unbranded i32, so full coverage needs the brand to
+propagate from all boolean-producing ops (binary-ops relational/equality results,
+unary `!`). This is engine-scope (Step 4 `emitToBoolean` / the i32-boolean brand
+discipline), which is why it's handed here, not shipped piecemeal.
+
+**Layer 2 (Step 3 `emitStrictEq`):** strict-eq between two boxed-boolean externrefs
+compares struct IDENTITY, not value — `a.f === b.g` (two `$Object` booleans) →
+false. `__any_strict_eq` (`any-helpers.ts:1361`) only handles `$AnyValue` tagged
+structs (tag 4=bool); a `$__box_boolean_struct` read off a `$Object` never reaches
+the tag path. Cleanest fix: extend `__any_strict_eq` with a `ref.test` arm over the
+box brand (`$__box_boolean_struct`/number/string) that unboxes before compare —
+the same ref.test-over-brand ladder as the `__typeof` fix below. NO ToPrimitive
+contact (strict-eq is SameValueNonNumber).
+
+**Layer 1 (typeof, banked commit `28f058bf5`, regression-clean, 0-flip ALONE):**
+native `__typeof` was a `ref.null.extern` stub → `typeof <dynamic externref>`
+returned null (#2107's externref-path sibling). Fixed with a `ref.test` brand
+ladder ($__box_number→"number", $__box_boolean→"boolean", $BigInt→"bigint",
+$AnyString→"string", else "object"). Correct + 27 typeof equiv assertions green,
+but flips 0 test262 alone (measured base-vs-fix per-file diff GOPD+boolean+typeof =
+0/0; the GOPD assertion-shape files already pass on base). Composes with Layers 2/3.
+
+All three are in `src/codegen/{expressions,type-coercion,index,any-helpers}.ts` —
+the #1917 engine's files (and #1709 already edits type-coercion.ts/literals.ts, so
+these MUST be done by the engine owner to avoid conflict). Cherry-pick from
+`issue-1629b-gopd-attr-flags` or re-derive; the analysis + WAT proof is the
+load-bearing handoff.
