@@ -1,8 +1,9 @@
 {
   "id": "2074-residual",
   "assignee": "ttraenkler/sdev-protoglue",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2074-join-residual",
   "claimed_at": "2026-06-19T06:50:23Z",
-  "updated_at": "2026-06-19T06:50:23Z"
+  "updated_at": "2026-06-19T07:24:33Z",
+  "released_at": "2026-06-19T07:24:33Z"
 }
