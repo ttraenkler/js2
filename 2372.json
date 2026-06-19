@@ -1,8 +1,9 @@
 {
   "id": "2372",
   "assignee": "ttraenkler/sendev-receiver",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2372-receiver-rep",
   "claimed_at": "2026-06-18T22:40:38Z",
-  "updated_at": "2026-06-18T22:40:38Z"
+  "updated_at": "2026-06-19T01:09:31Z",
+  "released_at": "2026-06-19T01:09:31Z"
 }
