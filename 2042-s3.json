@@ -1,8 +1,9 @@
 {
   "id": "2042-s3",
   "assignee": "ttraenkler/sdev-protoglue",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2042-descriptor-reflection",
   "claimed_at": "2026-06-19T08:53:03Z",
-  "updated_at": "2026-06-19T08:53:03Z"
+  "updated_at": "2026-06-19T09:03:33Z",
+  "released_at": "2026-06-19T09:03:33Z"
 }
