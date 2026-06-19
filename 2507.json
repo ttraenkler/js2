@@ -1,8 +1,9 @@
 {
   "id": "2507",
   "assignee": "ttraenkler/sdev-arrayrep",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2507-anyarray-find",
   "claimed_at": "2026-06-19T07:19:57Z",
-  "updated_at": "2026-06-19T07:19:57Z"
+  "updated_at": "2026-06-19T07:27:59Z",
+  "released_at": "2026-06-19T07:27:59Z"
 }
