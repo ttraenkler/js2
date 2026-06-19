@@ -1,8 +1,9 @@
 {
   "id": "2190b",
   "assignee": "ttraenkler/sdev-arrayrep",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2190b-anytuple-nested",
   "claimed_at": "2026-06-19T09:57:03Z",
-  "updated_at": "2026-06-19T09:57:03Z"
+  "updated_at": "2026-06-19T10:05:39Z",
+  "released_at": "2026-06-19T10:05:39Z"
 }
