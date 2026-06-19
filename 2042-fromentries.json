@@ -1,8 +1,9 @@
 {
   "id": "2042-fromentries",
   "assignee": "ttraenkler/sdev-arrayrep",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2042-fromentries",
   "claimed_at": "2026-06-19T10:07:54Z",
-  "updated_at": "2026-06-19T10:07:54Z"
+  "updated_at": "2026-06-19T10:42:32Z",
+  "released_at": "2026-06-19T10:42:32Z"
 }
