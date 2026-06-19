@@ -1,8 +1,9 @@
 {
   "id": "2380",
   "assignee": "ttraenkler/sdev-protoglue",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2380-error-subclass-proto",
   "claimed_at": "2026-06-19T06:30:58Z",
-  "updated_at": "2026-06-19T06:30:58Z"
+  "updated_at": "2026-06-19T06:44:47Z",
+  "released_at": "2026-06-19T06:44:47Z"
 }
