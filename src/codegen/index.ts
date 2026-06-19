@@ -9580,12 +9580,74 @@ function addUnionImportsAsNativeFuncs(ctx: CodegenContext): void {
   //     callable JS functions to the outside, so this is conservatively 0.
   registerNative("__typeof_function", externrefToI32, [{ op: "i32.const", value: 0 }]);
 
-  // 15. __typeof(externref) -> externref — returns null externref under
-  //     wasi. Producing real type-tag strings would require a NativeString
-  //     per tag; defer until a wasi caller needs the typeof RESULT as a
-  //     string (today's callers compare against literal tags via the
-  //     __typeof_* helpers above).
-  registerNative("__typeof", externrefToExternref, [{ op: "ref.null.extern" }]);
+  // 15. __typeof(externref) -> externref.
+  //
+  // (#1629b) Real native type-tag dispatch when nativeStrings is available
+  // (always under --target standalone/wasi). Previously a `ref.null.extern`
+  // stub, so `typeof v` on a plain externref operand (e.g. a boolean/number
+  // read back from a `$Object` as a `$__box_*_struct` externref) returned
+  // `null` — breaking `typeof v === "boolean"` and, transitively,
+  // `Object.getOwnPropertyDescriptor` attribute-flag read-back (the boxed
+  // writable/enumerable/configurable booleans). The `$AnyValue` operand path
+  // already routes through `__any_typeof` (#2107); this fixes the externref
+  // path that fell through to here.
+  //
+  // ref.test ladder over the operand's WasmGC struct brand → native type-tag
+  // string (via stringConstantExternrefInstrs, which builds a `$NativeString`
+  // and `extern.convert_any`s it to externref):
+  //   null                    → "undefined"
+  //   $__box_number_struct     → "number"
+  //   $__box_boolean_struct    → "boolean"
+  //   $BigInt                  → "bigint"
+  //   $NativeString/$AnyString → "string"
+  //   else (non-null ref)      → "object"
+  // Functions are conservatively "object" here (wasi/standalone binaries do
+  // not expose a distinct callable JS brand at this frontier; the legacy
+  // __typeof_function helper is likewise conservative). The non-nativeStrings
+  // legacy path keeps the null stub so gc/host builds stay byte-identical.
+  if (ctx.nativeStrings && ctx.anyStrTypeIdx >= 0) {
+    for (const tag of ["undefined", "number", "boolean", "bigint", "string", "object"]) {
+      addStringConstantGlobal(ctx, tag);
+    }
+    const tagInstrs = (tag: string): Instr[] => stringConstantExternrefInstrs(ctx, tag);
+    // local 0 = arg (externref), local 1 = $any_temp (anyref)
+    const brandReturn = (typeIdx: number, tag: string): Instr[] => [
+      { op: "local.get", index: 1 },
+      { op: "ref.test", typeIdx },
+      {
+        op: "if",
+        blockType: { kind: "empty" },
+        then: [...tagInstrs(tag), { op: "return" }],
+      },
+    ];
+    registerNative(
+      "__typeof",
+      externrefToExternref,
+      [
+        // null → "undefined"
+        { op: "local.get", index: 0 },
+        { op: "ref.is_null" },
+        {
+          op: "if",
+          blockType: { kind: "empty" },
+          then: [...tagInstrs("undefined"), { op: "return" }],
+        },
+        // any = any.convert_extern(arg)
+        { op: "local.get", index: 0 },
+        { op: "any.convert_extern" },
+        { op: "local.set", index: 1 },
+        ...brandReturn(boxNumStructIdx, "number"),
+        ...brandReturn(boxBoolStructIdx, "boolean"),
+        ...brandReturn(bigIntStructIdx, "bigint"),
+        ...brandReturn(ctx.anyStrTypeIdx, "string"),
+        // non-null, not a boxed primitive → "object"
+        ...tagInstrs("object"),
+      ],
+      [{ name: "$any_temp", type: { kind: "anyref" } as ValType }],
+    );
+  } else {
+    registerNative("__typeof", externrefToExternref, [{ op: "ref.null.extern" }]);
+  }
 }
 
 /**
