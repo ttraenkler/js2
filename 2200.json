@@ -1,9 +1,8 @@
 {
   "id": "2200",
-  "assignee": "ttraenkler/dev-conformance",
-  "status": "released",
-  "branch": "issue-2200-annexb-block-fn-hoisting",
-  "claimed_at": "2026-06-21T02:06:13Z",
-  "updated_at": "2026-06-21T02:09:15Z",
-  "released_at": "2026-06-21T02:09:15Z"
+  "assignee": "ttraenkler/dev-carla",
+  "status": "in-progress",
+  "branch": "issue-2200-annexb-verify",
+  "claimed_at": "2026-06-21T02:15:21Z",
+  "updated_at": "2026-06-21T02:15:21Z"
 }
