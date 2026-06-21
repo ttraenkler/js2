@@ -1,9 +1,8 @@
 {
   "id": "2202",
   "assignee": "ttraenkler/dev-agent",
-  "status": "released",
-  "branch": "issue-2202-arguments-trailing-comma-spread",
-  "claimed_at": "2026-06-21T01:59:47Z",
-  "updated_at": "2026-06-21T02:09:26Z",
-  "released_at": "2026-06-21T02:09:26Z"
+  "status": "in-progress",
+  "branch": "issue-2202-spread-arguments-count",
+  "claimed_at": "2026-06-21T02:52:43Z",
+  "updated_at": "2026-06-21T02:52:43Z"
 }
