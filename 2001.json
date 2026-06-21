@@ -1,8 +1,9 @@
 {
   "id": "2001",
   "assignee": "ttraenkler/dev-agent",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2001-sparse-holes",
   "claimed_at": "2026-06-21T01:30:05Z",
-  "updated_at": "2026-06-21T01:30:05Z"
+  "updated_at": "2026-06-21T01:30:24Z",
+  "released_at": "2026-06-21T01:30:24Z"
 }
