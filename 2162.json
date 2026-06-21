@@ -1,9 +1,8 @@
 {
   "id": "2162",
-  "assignee": "ttraenkler/dev-mech1",
-  "status": "released",
-  "branch": "issue-2162-weakmap-weakset",
-  "claimed_at": "2026-06-17T13:31:43Z",
-  "updated_at": "2026-06-17T13:31:52Z",
-  "released_at": "2026-06-17T13:31:52Z"
+  "assignee": "ttraenkler/dev-carla",
+  "status": "in-progress",
+  "branch": "issue-2162-nonliteral-iterable-ctor",
+  "claimed_at": "2026-06-21T02:19:12Z",
+  "updated_at": "2026-06-21T02:19:12Z"
 }
