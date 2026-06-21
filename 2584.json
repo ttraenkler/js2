@@ -1,8 +1,8 @@
 {
   "id": "2584",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-06-21T17:11:04Z",
-  "updated_at": "2026-06-21T17:11:04Z"
+  "assignee": "ttraenkler/sdev-vrep",
+  "status": "in-progress",
+  "branch": "issue-2584-dual-storage",
+  "claimed_at": "2026-06-21T17:49:48Z",
+  "updated_at": "2026-06-21T17:49:48Z"
 }
