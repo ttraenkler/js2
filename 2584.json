@@ -1,8 +1,9 @@
 {
   "id": "2584",
   "assignee": "ttraenkler/sdev-vrep",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2584-dual-storage",
   "claimed_at": "2026-06-21T17:49:48Z",
-  "updated_at": "2026-06-21T17:49:48Z"
+  "updated_at": "2026-06-21T18:24:08Z",
+  "released_at": "2026-06-21T18:24:08Z"
 }
