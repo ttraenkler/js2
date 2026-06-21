@@ -1,8 +1,9 @@
 {
   "id": "2203",
   "assignee": "ttraenkler/dev-agent",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2203-tmp",
   "claimed_at": "2026-06-21T01:29:24Z",
-  "updated_at": "2026-06-21T01:29:24Z"
+  "updated_at": "2026-06-21T01:29:42Z",
+  "released_at": "2026-06-21T01:29:42Z"
 }
