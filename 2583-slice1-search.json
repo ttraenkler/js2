@@ -2,8 +2,9 @@
   "id": "2583",
   "slice": "slice1-search",
   "assignee": "ttraenkler/sdev-vecdispatch",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2583-any-array-search",
   "claimed_at": "2026-06-21T17:19:04Z",
-  "updated_at": "2026-06-21T17:19:04Z"
+  "updated_at": "2026-06-21T18:28:37Z",
+  "released_at": "2026-06-21T18:28:37Z"
 }
