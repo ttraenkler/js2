@@ -1,8 +1,9 @@
 {
   "id": "2042",
   "assignee": "ttraenkler/sdev-reflect",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2042-defineproperty-writeside",
   "claimed_at": "2026-06-21T12:32:23Z",
-  "updated_at": "2026-06-21T12:32:23Z"
+  "updated_at": "2026-06-21T12:40:43Z",
+  "released_at": "2026-06-21T12:40:43Z"
 }
