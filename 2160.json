@@ -1,9 +1,8 @@
 {
   "id": "2160",
-  "assignee": "ttraenkler/sdev-proxy3",
-  "status": "released",
-  "branch": "issue-2160-number-array-coercion",
-  "claimed_at": "2026-06-18T04:07:20Z",
-  "updated_at": "2026-06-21T02:01:35Z",
-  "released_at": "2026-06-21T02:01:35Z"
+  "assignee": "ttraenkler/dev-agent",
+  "status": "in-progress",
+  "branch": "issue-2160-string-number-coercion",
+  "claimed_at": "2026-06-21T02:03:12Z",
+  "updated_at": "2026-06-21T02:03:12Z"
 }
