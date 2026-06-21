@@ -2,9 +2,8 @@
   "id": "2029",
   "slice": "ta-subclass",
   "assignee": "ttraenkler/dev-agent",
-  "status": "released",
-  "branch": "issue-2029-ta-subclass-leak",
-  "claimed_at": "2026-06-21T02:36:16Z",
-  "updated_at": "2026-06-21T02:38:25Z",
-  "released_at": "2026-06-21T02:38:25Z"
+  "status": "in-progress",
+  "branch": "issue-2029-ta-subclass-host-leak",
+  "claimed_at": "2026-06-21T02:42:07Z",
+  "updated_at": "2026-06-21T02:42:07Z"
 }
