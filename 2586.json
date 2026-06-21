@@ -1,8 +1,8 @@
 {
   "id": "2586",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-06-21T17:14:48Z",
-  "updated_at": "2026-06-21T17:14:48Z"
+  "assignee": "ttraenkler/sdev-vrep",
+  "status": "in-progress",
+  "branch": "issue-2586-arrayfrom-map",
+  "claimed_at": "2026-06-21T17:35:25Z",
+  "updated_at": "2026-06-21T17:35:25Z"
 }
