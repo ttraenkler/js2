@@ -1,8 +1,8 @@
 {
   "id": "2585",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-06-21T17:11:11Z",
-  "updated_at": "2026-06-21T17:11:11Z"
+  "assignee": "ttraenkler/sdev-tails",
+  "status": "in-progress",
+  "branch": "issue-2585-proto-identity",
+  "claimed_at": "2026-06-21T17:27:47Z",
+  "updated_at": "2026-06-21T17:27:47Z"
 }
