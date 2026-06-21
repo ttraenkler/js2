@@ -1,8 +1,9 @@
 {
   "id": "2187",
   "assignee": "ttraenkler/sdev-strdispatch",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2187-any-string-dispatch",
   "claimed_at": "2026-06-21T11:44:32Z",
-  "updated_at": "2026-06-21T11:44:32Z"
+  "updated_at": "2026-06-21T13:22:11Z",
+  "released_at": "2026-06-21T13:22:11Z"
 }
