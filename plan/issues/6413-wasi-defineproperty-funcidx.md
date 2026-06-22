@@ -1,5 +1,5 @@
 ---
-id: 2602
+id: 6413
 title: "WASI native __defineProperty_value bakes undefined funcIdx (host-free __object_is gate)"
 status: done
 sprint: Backlog
