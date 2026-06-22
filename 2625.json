@@ -1,8 +1,8 @@
 {
   "id": "2625",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-06-22T18:21:33Z",
-  "updated_at": "2026-06-22T18:21:33Z"
+  "assignee": "ttraenkler/sendev-node-emu",
+  "status": "in-progress",
+  "branch": "issue-2625-node-process-rename",
+  "claimed_at": "2026-06-22T18:39:33Z",
+  "updated_at": "2026-06-22T18:39:33Z"
 }
