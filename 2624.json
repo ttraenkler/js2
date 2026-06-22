@@ -2,7 +2,7 @@
   "id": "2624",
   "assignee": "ttraenkler/sendev-node-emu",
   "status": "in-progress",
-  "branch": "fix-dedupe-node-builtin-warnings",
-  "claimed_at": "2026-06-22T18:22:11Z",
-  "updated_at": "2026-06-22T18:22:11Z"
+  "branch": "issue-2624-import-scoped-node-emulation",
+  "claimed_at": "2026-06-22T18:38:22Z",
+  "updated_at": "2026-06-22T18:38:22Z"
 }
