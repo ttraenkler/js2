@@ -1,8 +1,9 @@
 {
   "id": "2175",
   "assignee": "ttraenkler/sdev-async",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2175-s1-regexp-engine-bodies",
   "claimed_at": "2026-06-22T21:43:20Z",
-  "updated_at": "2026-06-22T21:43:20Z"
+  "updated_at": "2026-06-22T21:51:28Z",
+  "released_at": "2026-06-22T21:51:28Z"
 }
