@@ -1,8 +1,8 @@
 {
   "id": "2624",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-06-22T18:21:19Z",
-  "updated_at": "2026-06-22T18:21:19Z"
+  "assignee": "ttraenkler/sendev-node-emu",
+  "status": "in-progress",
+  "branch": "fix-dedupe-node-builtin-warnings",
+  "claimed_at": "2026-06-22T18:22:11Z",
+  "updated_at": "2026-06-22T18:22:11Z"
 }
