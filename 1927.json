@@ -1,8 +1,9 @@
 {
   "id": "1927",
   "assignee": "ttraenkler/sendev-pipeline",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-1927-single-pipeline-driver",
   "claimed_at": "2026-06-22T21:35:29Z",
-  "updated_at": "2026-06-22T21:35:29Z"
+  "updated_at": "2026-06-22T22:22:46Z",
+  "released_at": "2026-06-22T22:22:46Z"
 }
