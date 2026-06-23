@@ -142,17 +142,39 @@ call sites are untouched.
   plumbing, not a matrix; an early false-positive from the literal helper name in
   a comment was reworded away).
 
-### Stage B + equality — the remaining (large) work, gated
+### Stage B — DEFERRED (analysed 2026-06-23, sdev-coercion-impl-2): risk ≫ value
 
-- **Stage B** (fold the `coerceType` ref→f64 ToPrimitive *dispatch region*,
-  ~`:1781`–`:2160`, ~380 lines: recursion-guarded @@toPrimitive/valueOf-field/
-  ClassName_valueOf/closure-call_ref/externref arms + 5 host-call sites, threaded
-  with `cleanup()`/`return`, into `emitToPrimitive`; keep `coerceType(…,hint)` a
-  façade over its ~100 callers). This is the single highest-regression-risk
-  extraction in the series — must be gated hard with the 36-hash byte-diff harness
-  and the merge_group. Independent of #1962.
-- **Equality step (LAST):** wraps task-#32's `tag5StringEqThen` classifier (on
-  main) and reuses `emitToNumber`, so it BLOCKS ON #1962 landing. Stack then.
+I mapped the full `coerceType` ref→f64 ToPrimitive dispatch region (`:1783`–`:2165`,
+one `if ((from.kind ref/ref_null) && to.kind f64) {…}` unit). Conclusion: physically
+moving it into `coercion-engine.ts` is the single highest-risk extraction AND its
+marginal value is low, so it is DEFERRED (not abandoned). Reasons:
+- **It has reachable fall-through, not just returns.** When `name === undefined`,
+  `!structFields`, or an inner valueOf branch doesn't return, control falls past
+  `:2165` to the `// Fallback: drop + push default` at `:2167`. So an extraction
+  can't be a plain "move + return" — the helper must signal handled/not-handled.
+- **Latent re-entrancy-guard quirk must be preserved byte-for-byte.** The flag
+  `__insideValueOfCoercion` is set at `:1817`; some fall-through paths exit WITHOUT
+  `cleanup()` (flag stays set). Byte-neutrality means preserving that exact quirk —
+  an extraction that "tidies" it is a behaviour change.
+- **No external caller needs it.** `emitToPrimitiveHostCall`/`toPrimitiveHostCallInstrs`
+  have ZERO real callers outside `type-coercion.ts` (the only other mention,
+  `expressions/late-imports.ts:108`, is a doc comment). Stage A already gave the
+  engine its public `emitToPrimitive` entry, so the consolidation goal is met for
+  every *new* consumer; moving the legacy body buys no ratchet reduction (it stays
+  in-file either way) and no behaviour win — only regression risk.
+The deep dispatch-region move folds in NATURALLY with the architect's bug-fix
+increments (#1989 per-instance valueOf dispatch, #2022 `+` hint routing) — do it
+THEN, when there's a behaviour-correctness reason to touch the block, fully byte-
+diff + merge_group gated. Until then Stage A is the emitToPrimitive deliverable.
+
+### Equality step (LAST) — gated on #1962
+
+Wraps task-#32's `tag5StringEqThen` classifier (confirmed on main) and reuses
+`emitToNumber` (the SA loose-eq ToNumber tail), so it BLOCKS ON #1962 landing.
+Stack it on emitToNumber's branch / on main once #1962 lands. This is the genuine
+high-value remaining step (fixes #1986 `null===0`, #1987 `0===-0`, #2081 SA
+`'1'==1`) and the dangerous one vs the #1888 tag-5 field-4 contract — same phased,
+both-lane, byte-diff, #2108-ratchet, merge_group-gated discipline.
 
 ## Implementation — Step 1 in progress (sendev-coercion, 2026-06-22; user un-parked)
 
