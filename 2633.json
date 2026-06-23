@@ -1,8 +1,8 @@
 {
   "id": "2633",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-06-23T07:50:04Z",
-  "updated_at": "2026-06-23T07:50:04Z"
+  "assignee": "ttraenkler/agent-a0c10078166a3b3a5",
+  "status": "in-progress",
+  "branch": "issue-2633-process-io-to-node-fs",
+  "claimed_at": "2026-06-23T22:29:59Z",
+  "updated_at": "2026-06-23T22:29:59Z"
 }
