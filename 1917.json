@@ -1,8 +1,8 @@
 {
   "id": "1917",
-  "assignee": "ttraenkler/sendev-flatten",
+  "assignee": "ttraenkler/sdev-coercion-impl-2",
   "status": "in-progress",
-  "branch": "issue-1917-emit-tonumber",
-  "claimed_at": "2026-06-23T00:05:03Z",
-  "updated_at": "2026-06-23T00:05:03Z"
+  "branch": "issue-1917-emit-eq",
+  "claimed_at": "2026-06-23T01:02:07Z",
+  "updated_at": "2026-06-23T01:02:07Z"
 }
