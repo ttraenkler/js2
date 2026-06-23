@@ -1,8 +1,8 @@
 {
   "id": "2029",
-  "assignee": "ttraenkler/dev-agent",
+  "assignee": "ttraenkler/dev-class",
   "status": "in-progress",
-  "branch": "issue-2029-check",
-  "claimed_at": "2026-06-21T03:25:52Z",
-  "updated_at": "2026-06-21T03:25:52Z"
+  "branch": "issue-2029-primitive-wrapper-subclass-refusal",
+  "claimed_at": "2026-06-23T00:54:20Z",
+  "updated_at": "2026-06-23T00:54:20Z"
 }
