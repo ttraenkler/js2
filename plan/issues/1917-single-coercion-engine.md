@@ -127,6 +127,33 @@ tail), so it BLOCKS ON #1962 landing — stack it on emitToNumber's branch (or o
 main once #1962 lands), not here. emitToPrimitive itself is independent of #1962
 and proceeds off main now.
 
+### Stage A LANDED on branch (commit 597a145b0) — byte-neutral, gate-clean
+
+`emitToPrimitive(ctx, fctx, targetKind, hint)` now exists in `coercion-engine.ts`
+as the engine's public §7.1.1 ToPrimitive entry. To dodge the engine↔
+type-coercion import cycle it delegates to a new `shared.ts`-registered
+`toPrimitiveHostCall` (mirrors the existing `registerCoerceType` leaf idiom);
+`type-coercion.ts` registers its `emitToPrimitiveHostCall` into it. No emission
+path changed — the host-call body stays in `type-coercion.ts` and its 5 in-file
+call sites are untouched.
+- **Diff-neutrality:** all 36 byte-hashes (13 corpus + 5 inline ToPrimitive, ×2
+  lanes) byte-IDENTICAL to the pre-impl baseline. tsc + prettier + biome clean.
+- **#2108 coercion-sites gate:** OK, no unsanctioned growth (the delegate is
+  plumbing, not a matrix; an early false-positive from the literal helper name in
+  a comment was reworded away).
+
+### Stage B + equality — the remaining (large) work, gated
+
+- **Stage B** (fold the `coerceType` ref→f64 ToPrimitive *dispatch region*,
+  ~`:1781`–`:2160`, ~380 lines: recursion-guarded @@toPrimitive/valueOf-field/
+  ClassName_valueOf/closure-call_ref/externref arms + 5 host-call sites, threaded
+  with `cleanup()`/`return`, into `emitToPrimitive`; keep `coerceType(…,hint)` a
+  façade over its ~100 callers). This is the single highest-regression-risk
+  extraction in the series — must be gated hard with the 36-hash byte-diff harness
+  and the merge_group. Independent of #1962.
+- **Equality step (LAST):** wraps task-#32's `tag5StringEqThen` classifier (on
+  main) and reuses `emitToNumber`, so it BLOCKS ON #1962 landing. Stack then.
+
 ## Implementation — Step 1 in progress (sendev-coercion, 2026-06-22; user un-parked)
 
 Branch `issue-1917-emit-tostring`. Phased behavior-neutral consolidation per the
