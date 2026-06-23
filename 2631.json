@@ -1,8 +1,9 @@
 {
   "id": "2631",
   "assignee": "ttraenkler/agent-a0c9d00fc32018cde",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2631-node-fs-fd-shim",
   "claimed_at": "2026-06-23T07:40:58Z",
-  "updated_at": "2026-06-23T07:40:58Z"
+  "updated_at": "2026-06-23T09:00:05Z",
+  "released_at": "2026-06-23T09:00:05Z"
 }
