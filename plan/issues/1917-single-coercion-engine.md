@@ -88,6 +88,45 @@ Sequencing: Step 0 (ValType table) is dependency-safe now; Steps 1+ land
 AFTER the type-aware boxing P0 (#2072/#2080) so the engine consumes
 correct tags. Drift gate: #2108.
 
+## Implementation — Step 4 (`emitToPrimitive`) in progress (sdev-coercion-impl-2, 2026-06-23)
+
+Branch `issue-1917-emit-toprimitive`, off `origin/main`. Execution order so far:
+emitToString (#1960, landed) → emitToNumber (#1962, green/held) → emitToBoolean
+(#1963, green/held, stacked behind #1962) → **emitToPrimitive (this branch)** →
+the isolated equality step (LAST — the dangerous one vs the #1888 tag-5 field-4
+contract; it WRAPS the task-#32 classifier `tag5StringEqThen` already on main,
+does NOT re-derive it).
+
+**Scope / extraction boundary (behavior-neutral first).** The architect spec's
+"Step 2 — emitToPrimitive" lists bug-fixes (#1989/#2022/#1990/#1988); those stay
+**deferred increments** per the user's phased discipline. This branch does PURE
+code-motion only:
+- **Stage A (lowest risk):** move `emitToPrimitiveHostCall` /
+  `toPrimitiveHostCallInstrs` (`type-coercion.ts` `:122`/`:148`) into
+  `coercion-engine.ts` as the host tail of a new `emitToPrimitive`; `type-coercion`
+  re-imports them. These bodies are self-contained (ctx/fctx/targetKind/hint),
+  so byte-identical output is expected.
+- **Stage B (higher risk, gated):** the `coerceType` ref→f64 ToPrimitive static
+  dispatch region (`:1820`–`:1990`+: valueOf-field / closure call_ref / externref
+  arms + host fallback, threaded with `cleanup()`/`return`). Move internals into
+  `emitToPrimitive`; keep `coerceType(…, hint)` as a **façade** (do NOT touch its
+  ~100 callers). This is the single highest-regression-risk extraction in the
+  series — gate it hard.
+
+**Diff-neutrality gate (built, baseline captured 2026-06-23).** `.tmp/`
+`diff-neutrality.mts` (gitignored) compiles the full `website/playground/examples`
+corpus (13 files) + 5 inline ToPrimitive programs (valueOf/toString/@@toPrimitive/
+`+`-on-object) on BOTH lanes (gc + standalone) and SHA-256s the emitted
+`result.binary`. Pre-impl baseline = 36 byte-hashes saved to
+`.tmp/preimpl-baseline.json`. A pure code-motion extraction MUST reproduce all 36
+hashes byte-for-byte; any change is a real codegen delta the merge_group would
+catch. (Reusable for the equality step too.)
+
+**Sequencing:** the equality step reuses `emitToNumber` (the SA loose-eq ToNumber
+tail), so it BLOCKS ON #1962 landing — stack it on emitToNumber's branch (or on
+main once #1962 lands), not here. emitToPrimitive itself is independent of #1962
+and proceeds off main now.
+
 ## Implementation — Step 1 in progress (sendev-coercion, 2026-06-22; user un-parked)
 
 Branch `issue-1917-emit-tostring`. Phased behavior-neutral consolidation per the
