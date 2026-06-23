@@ -2,8 +2,9 @@
   "id": "2042",
   "slice": "s4-callsite",
   "assignee": "ttraenkler/sdev-validate",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2042-s4-callsite",
   "claimed_at": "2026-06-21T13:06:41Z",
-  "updated_at": "2026-06-21T13:06:41Z"
+  "updated_at": "2026-06-23T01:25:04Z",
+  "released_at": "2026-06-23T01:25:04Z"
 }
