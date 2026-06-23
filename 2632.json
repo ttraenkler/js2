@@ -1,8 +1,8 @@
 {
   "id": "2632",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-06-23T07:39:21Z",
-  "updated_at": "2026-06-23T07:39:21Z"
+  "assignee": "ttraenkler/senior-dev-2632",
+  "status": "in-progress",
+  "branch": "issue-2632-event-loop-phase1",
+  "claimed_at": "2026-06-23T21:12:45Z",
+  "updated_at": "2026-06-23T21:12:45Z"
 }
