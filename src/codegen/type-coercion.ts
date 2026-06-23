@@ -15,7 +15,13 @@ import { addUnionImports, ensureAnyHelpers, ensureAnyToExternHelper, isAnyValue 
 import { ensureAnyToStringHelper, stringConstantExternrefInstrs } from "./native-strings.js";
 import { addStringConstantGlobal } from "./registry/imports.js";
 import { getArrTypeIdxFromVec } from "./registry/types.js";
-import { ensureLateImport, flushLateImportShifts, materializeStructAsObject, registerCoerceType } from "./shared.js";
+import {
+  ensureLateImport,
+  flushLateImportShifts,
+  materializeStructAsObject,
+  registerCoerceType,
+  registerToPrimitiveHostCall,
+} from "./shared.js";
 
 /**
  * Emit a guarded ref.cast: use ref.test to check if the cast will succeed.
@@ -2981,3 +2987,7 @@ export function coercionInstrs(ctx: CodegenContext, from: ValType, to: ValType, 
 
 // Register coerceType so shared.ts callers (closures, statements) can use it
 registerCoerceType(coerceType);
+
+// (#1917 Step 4) Register the host ToPrimitive tail so the coercion engine's
+// `emitToPrimitive` can reach it without a back-import cycle (mirrors coerceType).
+registerToPrimitiveHostCall(emitToPrimitiveHostCall);

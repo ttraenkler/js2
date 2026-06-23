@@ -311,6 +311,42 @@ export function coerceType(
   _coerceType(ctx, fctx, from, to, toPrimitiveHint);
 }
 
+// ── toPrimitiveHostCall (#1917 Step 4) ────────────────────────────────
+//
+// The host §7.1.1 ToPrimitive tail (the runtime helper call) physically lives in
+// `type-coercion.ts`, where its `pushStringHint` / `ensureLateImport` deps already
+// sit. The coercion engine (`coercion-engine.ts`) needs it as the host tail of
+// `emitToPrimitive`, but it already imports FROM `type-coercion.ts`, so a
+// back-import would cycle. Register the emitter here (the leaf), exactly like
+// `coerceType` above — this is plumbing, NOT a hand-rolled coercion matrix (the
+// one matrix stays in `type-coercion.ts`). The struct ref must be on the stack
+// before the call; the sequence consumes it.
+
+type ToPrimitiveHostCallFn = (
+  ctx: CodegenContext,
+  fctx: FunctionContext,
+  targetKind: "f64" | "externref",
+  hint: "number" | "string" | "default",
+) => void;
+
+let _toPrimitiveHostCall: ToPrimitiveHostCallFn = () => {
+  throw unregisteredDelegateError("toPrimitiveHostCall");
+};
+
+export function registerToPrimitiveHostCall(fn: ToPrimitiveHostCallFn): void {
+  _toPrimitiveHostCall = fn;
+  markRegistered("toPrimitiveHostCall");
+}
+
+export function toPrimitiveHostCall(
+  ctx: CodegenContext,
+  fctx: FunctionContext,
+  targetKind: "f64" | "externref",
+  hint: "number" | "string" | "default",
+): void {
+  _toPrimitiveHostCall(ctx, fctx, targetKind, hint);
+}
+
 // ── materializeStructAsObject (#2358) ─────────────────────────────────
 //
 // Reify a nominal object struct (whose ref is on the Wasm stack) into a

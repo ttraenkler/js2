@@ -38,7 +38,13 @@ import type { CodegenContext, FunctionContext } from "./context/types.js";
 import { noJsHost } from "./expressions/helpers.js";
 import { nativeStringType } from "./index.js";
 import { ensureAnyToStringHelper } from "./native-strings.js";
-import { compileExpression, compileStringLiteral, ensureLateImport, flushLateImportShifts } from "./shared.js";
+import {
+  compileExpression,
+  compileStringLiteral,
+  ensureLateImport,
+  flushLateImportShifts,
+  toPrimitiveHostCall,
+} from "./shared.js";
 import { coerceType, tryStructToString } from "./type-coercion.js";
 
 /**
@@ -246,6 +252,30 @@ export function compileAndEmitToString(
 ): ValType {
   const valType = compileExpression(ctx, fctx, operand);
   return emitToString(ctx, fctx, valType, tsType, hint);
+}
+
+/**
+ * §7.1.1 ToPrimitive host tail. Emit a call to the host `__to_primitive`
+ * helper for a struct/object ref ALREADY on the stack, returning either f64
+ * (`targetKind:"f64"`, unboxed via `__unbox_number`) or the externref result
+ * (`targetKind:"externref"`). The `hint` selects valueOf-first ("number"/
+ * "default") vs toString-first ("string") per OrdinaryToPrimitive.
+ *
+ * (#1917 Step 4) This is the engine's public ToPrimitive entry point. For now it
+ * is a thin delegate to the host-call emitter that physically lives in
+ * `type-coercion.ts` (registered via `shared.ts` to avoid the engine↔
+ * type-coercion import cycle). Behaviour is byte-identical to the prior in-place
+ * `emitToPrimitiveHostCall` — this PR only exposes the engine entry; the static
+ * valueOf/toString dispatch region and the bug-fixes (#1989/#2022/#1990/#1988)
+ * fold in as separate, gated increments.
+ */
+export function emitToPrimitive(
+  ctx: CodegenContext,
+  fctx: FunctionContext,
+  targetKind: "f64" | "externref",
+  hint: "number" | "string" | "default",
+): void {
+  toPrimitiveHostCall(ctx, fctx, targetKind, hint);
 }
 
 /**
