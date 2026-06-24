@@ -1,9 +1,8 @@
 {
   "id": "2046",
-  "assignee": "ttraenkler/dev-reflect2",
-  "status": "released",
-  "branch": "issue-2046-reflect-defineproperty-route",
-  "claimed_at": "2026-06-24T21:34:15Z",
-  "updated_at": "2026-06-24T22:21:47Z",
-  "released_at": "2026-06-24T22:21:47Z"
+  "assignee": "ttraenkler/dev-reflect-c",
+  "status": "in-progress",
+  "branch": "issue-2046-reflect-prc",
+  "claimed_at": "2026-06-24T22:53:50Z",
+  "updated_at": "2026-06-24T22:53:50Z"
 }
