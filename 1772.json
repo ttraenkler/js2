@@ -1,8 +1,8 @@
 {
   "id": "1772",
-  "assignee": "ttraenkler/agent-a9512a06",
+  "assignee": "ttraenkler/dev-1772-p2",
   "status": "in-progress",
-  "branch": "issue-1772-edgejs-provider",
-  "claimed_at": "2026-06-23T21:10:15Z",
-  "updated_at": "2026-06-23T21:10:15Z"
+  "branch": "issue-1772-p2-no-provider-gate",
+  "claimed_at": "2026-06-24T17:37:31Z",
+  "updated_at": "2026-06-24T17:37:31Z"
 }
