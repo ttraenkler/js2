@@ -1,8 +1,8 @@
 {
   "id": "2645",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-06-24T18:43:50Z",
-  "updated_at": "2026-06-24T18:43:50Z"
+  "assignee": "ttraenkler/sdev-2528-2645",
+  "status": "in-progress",
+  "branch": "issue-2528-2645-platform-node-web",
+  "claimed_at": "2026-06-24T23:09:58Z",
+  "updated_at": "2026-06-24T23:09:58Z"
 }
