@@ -1,8 +1,8 @@
 {
   "id": "2642",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-06-24T13:54:15Z",
-  "updated_at": "2026-06-24T13:54:15Z"
+  "assignee": "ttraenkler/dev-2642",
+  "status": "in-progress",
+  "branch": "issue-2642-wasi-stale-funcidx-late-import-console-concat",
+  "claimed_at": "2026-06-24T14:47:44Z",
+  "updated_at": "2026-06-24T14:47:44Z"
 }
