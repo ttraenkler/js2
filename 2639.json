@@ -1,8 +1,8 @@
 {
   "id": "2639",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-06-24T06:18:50Z",
-  "updated_at": "2026-06-24T06:18:50Z"
+  "assignee": "ttraenkler/dev-2639",
+  "status": "in-progress",
+  "branch": "issue-2639-node-fs-writesync-string-dataview",
+  "claimed_at": "2026-06-24T14:02:14Z",
+  "updated_at": "2026-06-24T14:02:14Z"
 }
