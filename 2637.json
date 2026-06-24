@@ -1,9 +1,8 @@
 {
   "id": "2637",
-  "assignee": "ttraenkler/verify-released",
-  "status": "released",
-  "branch": "",
-  "claimed_at": "2026-06-24T20:50:31Z",
-  "updated_at": "2026-06-24T20:50:57Z",
-  "released_at": "2026-06-24T20:50:57Z"
+  "assignee": "ttraenkler/sdev-definebuiltin",
+  "status": "in-progress",
+  "branch": "issue-2637-b1-executor-unwrap",
+  "claimed_at": "2026-06-24T20:51:51Z",
+  "updated_at": "2026-06-24T20:51:51Z"
 }
