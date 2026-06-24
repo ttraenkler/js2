@@ -1,8 +1,9 @@
 {
   "id": "2527",
   "assignee": "ttraenkler/sdev-corelink",
-  "status": "in-progress",
+  "status": "done",
   "branch": "worktree-agent-a406e828f4e07ca18",
   "claimed_at": "2026-06-24T06:19:01Z",
-  "updated_at": "2026-06-24T06:19:01Z"
+  "updated_at": "2026-06-24T06:33:13Z",
+  "released_at": "2026-06-24T06:33:13Z"
 }
