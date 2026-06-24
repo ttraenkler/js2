@@ -1,9 +1,8 @@
 {
   "id": "2632",
-  "assignee": "ttraenkler/test",
-  "status": "released",
+  "assignee": "ttraenkler/check",
+  "status": "in-progress",
   "branch": "issue-2632-phase3-stdin-readable",
-  "claimed_at": "2026-06-24T13:29:22Z",
-  "updated_at": "2026-06-24T13:29:36Z",
-  "released_at": "2026-06-24T13:29:36Z"
+  "claimed_at": "2026-06-24T13:29:40Z",
+  "updated_at": "2026-06-24T13:29:40Z"
 }
