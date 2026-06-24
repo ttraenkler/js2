@@ -1,8 +1,9 @@
 {
   "id": "2639",
   "assignee": "ttraenkler/dev-2639",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2639-node-fs-writesync-string-dataview",
   "claimed_at": "2026-06-24T14:02:14Z",
-  "updated_at": "2026-06-24T14:02:14Z"
+  "updated_at": "2026-06-24T14:33:23Z",
+  "released_at": "2026-06-24T14:33:23Z"
 }
