@@ -1,8 +1,8 @@
 {
   "id": "2646",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-06-24T18:44:01Z",
-  "updated_at": "2026-06-24T18:44:01Z"
+  "assignee": "ttraenkler/sdev-2646",
+  "status": "in-progress",
+  "branch": "issue-2646-edgejs-asyncify-incremental-stdin",
+  "claimed_at": "2026-06-24T23:09:24Z",
+  "updated_at": "2026-06-24T23:09:24Z"
 }
