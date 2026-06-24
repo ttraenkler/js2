@@ -1,8 +1,9 @@
 {
   "id": "1760",
   "assignee": "ttraenkler/sdev-strback",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-1760-status-done",
   "claimed_at": "2026-06-24T06:24:14Z",
-  "updated_at": "2026-06-24T06:24:14Z"
+  "updated_at": "2026-06-24T06:30:04Z",
+  "released_at": "2026-06-24T06:30:04Z"
 }
