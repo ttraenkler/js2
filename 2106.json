@@ -1,8 +1,8 @@
 {
   "id": "2106",
-  "assignee": "ttraenkler/sdev-async",
+  "assignee": "ttraenkler/sdev-undef-s1",
   "status": "in-progress",
-  "branch": "issue-2106-undefined-observability",
-  "claimed_at": "2026-06-22T21:52:43Z",
-  "updated_at": "2026-06-22T21:52:43Z"
+  "branch": "issue-2106-s1-undefined-singleton",
+  "claimed_at": "2026-06-24T21:33:14Z",
+  "updated_at": "2026-06-24T21:33:14Z"
 }
