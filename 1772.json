@@ -1,8 +1,9 @@
 {
   "id": "1772",
   "assignee": "ttraenkler/dev-1772-p2",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-1772-p2-no-provider-gate",
   "claimed_at": "2026-06-24T17:37:31Z",
-  "updated_at": "2026-06-24T17:37:31Z"
+  "updated_at": "2026-06-24T18:40:41Z",
+  "released_at": "2026-06-24T18:40:41Z"
 }
