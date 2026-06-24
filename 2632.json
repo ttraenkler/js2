@@ -1,8 +1,9 @@
 {
   "id": "2632",
   "assignee": "ttraenkler/sdev-2632-readable",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2632-faithful-stdin-readable",
   "claimed_at": "2026-06-24T13:58:48Z",
-  "updated_at": "2026-06-24T13:58:48Z"
+  "updated_at": "2026-06-24T14:04:19Z",
+  "released_at": "2026-06-24T14:04:19Z"
 }
