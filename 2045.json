@@ -1,8 +1,8 @@
 {
   "id": "2045",
-  "assignee": "ttraenkler/agent-a3f38ba142507c57a",
+  "assignee": "ttraenkler/agent-acafb1",
   "status": "in-progress",
-  "branch": "issue-2045-linear-uint8-escape-demotion",
-  "claimed_at": "2026-06-23T14:09:08Z",
-  "updated_at": "2026-06-23T14:09:08Z"
+  "branch": "issue-2045-escape-demotion",
+  "claimed_at": "2026-06-24T00:44:25Z",
+  "updated_at": "2026-06-24T00:44:25Z"
 }
