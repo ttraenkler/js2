@@ -1,9 +1,8 @@
 {
   "id": "2637",
-  "assignee": "ttraenkler/sdev-definebuiltin",
-  "status": "released",
-  "branch": "issue-2637-b1-executor-unwrap",
-  "claimed_at": "2026-06-24T20:51:51Z",
-  "updated_at": "2026-06-24T21:53:13Z",
-  "released_at": "2026-06-24T21:53:13Z"
+  "assignee": "ttraenkler/sdev-b2codegen",
+  "status": "in-progress",
+  "branch": "issue-2637-b2-ctor-closure-registration",
+  "claimed_at": "2026-06-24T22:03:17Z",
+  "updated_at": "2026-06-24T22:03:17Z"
 }
