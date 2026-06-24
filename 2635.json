@@ -1,8 +1,9 @@
 {
   "id": "2635",
   "assignee": "ttraenkler/sdev-2635",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2635-async-dual-provider",
   "claimed_at": "2026-06-24T17:37:49Z",
-  "updated_at": "2026-06-24T17:37:49Z"
+  "updated_at": "2026-06-24T18:09:02Z",
+  "released_at": "2026-06-24T18:09:02Z"
 }
