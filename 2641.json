@@ -1,8 +1,8 @@
 {
   "id": "2641",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-06-24T09:25:57Z",
-  "updated_at": "2026-06-24T09:25:57Z"
+  "assignee": "ttraenkler/agent-a8be3a60a77954742",
+  "status": "in-progress",
+  "branch": "issue-2641-classmethod-shadow-hoist",
+  "claimed_at": "2026-06-24T10:00:05Z",
+  "updated_at": "2026-06-24T10:00:05Z"
 }
