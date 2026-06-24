@@ -1,8 +1,8 @@
 {
   "id": "2640",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-06-24T06:42:19Z",
-  "updated_at": "2026-06-24T06:42:19Z"
+  "assignee": "ttraenkler/sdev-bce",
+  "status": "in-progress",
+  "branch": "issue-2640-arraylike-recv-arg",
+  "claimed_at": "2026-06-24T06:42:59Z",
+  "updated_at": "2026-06-24T06:42:59Z"
 }
