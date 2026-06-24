@@ -1,8 +1,8 @@
 {
   "id": "2632",
-  "assignee": "ttraenkler/senior-dev-2632",
+  "assignee": "ttraenkler/senior-dev-2632-phase2",
   "status": "in-progress",
-  "branch": "issue-2632-event-loop-phase1",
-  "claimed_at": "2026-06-23T21:12:45Z",
-  "updated_at": "2026-06-23T21:12:45Z"
+  "branch": "issue-2632-phase2-fd-reactor",
+  "claimed_at": "2026-06-24T00:11:02Z",
+  "updated_at": "2026-06-24T00:11:02Z"
 }
