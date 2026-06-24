@@ -1,8 +1,8 @@
 {
   "id": "2643",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-06-24T13:54:46Z",
-  "updated_at": "2026-06-24T13:54:46Z"
+  "assignee": "ttraenkler/dev-2643a",
+  "status": "in-progress",
+  "branch": "issue-2643a-wasi-p2-adapter",
+  "claimed_at": "2026-06-24T23:31:49Z",
+  "updated_at": "2026-06-24T23:31:49Z"
 }
