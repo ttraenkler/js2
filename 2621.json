@@ -1,8 +1,9 @@
 {
   "id": "2621",
   "assignee": "ttraenkler/sdev-bce",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2621-bce",
   "claimed_at": "2026-06-24T06:15:03Z",
-  "updated_at": "2026-06-24T06:15:03Z"
+  "updated_at": "2026-06-24T06:22:33Z",
+  "released_at": "2026-06-24T06:22:33Z"
 }
