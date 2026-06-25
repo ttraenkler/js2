@@ -1,8 +1,8 @@
 {
   "id": "2669",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-06-25T16:24:27Z",
-  "updated_at": "2026-06-25T16:24:27Z"
+  "assignee": "ttraenkler/sd-dstr",
+  "status": "in-progress",
+  "branch": "issue-2669-dstr-binding-patterns",
+  "claimed_at": "2026-06-25T23:35:21Z",
+  "updated_at": "2026-06-25T23:35:21Z"
 }
