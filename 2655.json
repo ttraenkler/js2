@@ -1,8 +1,8 @@
 {
   "id": "2655",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-06-25T04:39:25Z",
-  "updated_at": "2026-06-25T04:39:25Z"
+  "assignee": "ttraenkler/sendev-wasi",
+  "status": "in-progress",
+  "branch": "issue-2655-direct-wasi-p1-readsync-writesync",
+  "claimed_at": "2026-06-25T04:39:47Z",
+  "updated_at": "2026-06-25T04:39:47Z"
 }
