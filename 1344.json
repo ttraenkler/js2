@@ -1,8 +1,9 @@
 {
   "id": "1344",
   "assignee": "ttraenkler/dev-2046",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-1344-generator-prototype",
   "claimed_at": "2026-06-25T11:50:57Z",
-  "updated_at": "2026-06-25T11:50:57Z"
+  "updated_at": "2026-06-25T11:51:27Z",
+  "released_at": "2026-06-25T11:51:27Z"
 }
