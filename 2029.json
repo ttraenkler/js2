@@ -1,8 +1,8 @@
 {
   "id": "2029",
-  "assignee": "ttraenkler/sd-2038",
+  "assignee": "ttraenkler/sd-2029fn",
   "status": "in-progress",
-  "branch": "issue-2029-global-index-sentinel",
-  "claimed_at": "2026-06-25T14:13:22Z",
-  "updated_at": "2026-06-25T14:13:22Z"
+  "branch": "issue-2029-function-index",
+  "claimed_at": "2026-06-25T15:13:16Z",
+  "updated_at": "2026-06-25T15:13:16Z"
 }
