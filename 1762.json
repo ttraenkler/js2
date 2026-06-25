@@ -1,8 +1,9 @@
 {
   "id": "1762",
   "assignee": "ttraenkler/dev-2046",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-1762-string-backing",
   "claimed_at": "2026-06-25T11:50:08Z",
-  "updated_at": "2026-06-25T11:50:08Z"
+  "updated_at": "2026-06-25T11:50:32Z",
+  "released_at": "2026-06-25T11:50:32Z"
 }
