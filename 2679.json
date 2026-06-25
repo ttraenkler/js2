@@ -1,8 +1,9 @@
 {
   "id": "2679",
   "assignee": "ttraenkler/sd-2679",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2679-number-hint-valueof-this",
   "claimed_at": "2026-06-25T19:38:21Z",
-  "updated_at": "2026-06-25T19:38:21Z"
+  "updated_at": "2026-06-25T20:37:50Z",
+  "released_at": "2026-06-25T20:37:50Z"
 }
