@@ -1,8 +1,8 @@
 {
   "id": "2029",
-  "assignee": "ttraenkler/dev-class",
+  "assignee": "ttraenkler/sd-2038",
   "status": "in-progress",
-  "branch": "issue-2029-primitive-wrapper-subclass-refusal",
-  "claimed_at": "2026-06-23T00:54:20Z",
-  "updated_at": "2026-06-23T00:54:20Z"
+  "branch": "issue-2029-u32-out-of-range",
+  "claimed_at": "2026-06-25T12:23:44Z",
+  "updated_at": "2026-06-25T12:23:44Z"
 }
