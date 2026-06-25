@@ -1,9 +1,8 @@
 {
   "id": "2106",
-  "assignee": "ttraenkler/sdev-undef-s1",
-  "status": "released",
+  "assignee": "ttraenkler/sdev-s1fix",
+  "status": "in-progress",
   "branch": "issue-2106-s1-undefined-singleton",
-  "claimed_at": "2026-06-24T21:33:14Z",
-  "updated_at": "2026-06-24T22:52:06Z",
-  "released_at": "2026-06-24T22:52:06Z"
+  "claimed_at": "2026-06-25T08:22:14Z",
+  "updated_at": "2026-06-25T08:22:14Z"
 }
