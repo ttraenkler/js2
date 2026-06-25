@@ -1,8 +1,9 @@
 {
   "id": "2674",
   "assignee": "ttraenkler/sd-2674c",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2674-typeof-residual",
   "claimed_at": "2026-06-25T20:43:19Z",
-  "updated_at": "2026-06-25T20:43:19Z"
+  "updated_at": "2026-06-25T22:57:01Z",
+  "released_at": "2026-06-25T22:57:01Z"
 }
