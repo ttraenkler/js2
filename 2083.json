@@ -1,8 +1,8 @@
 {
   "id": "2083",
-  "assignee": "ttraenkler/agent-codesize",
+  "assignee": "ttraenkler/dev-2665",
   "status": "in-progress",
-  "branch": "issue-2083-host-glue-escape-gate",
-  "claimed_at": "2026-06-23T14:09:37Z",
-  "updated_at": "2026-06-23T14:09:37Z"
+  "branch": "issue-2083-host-glue-size",
+  "claimed_at": "2026-06-25T15:46:26Z",
+  "updated_at": "2026-06-25T15:46:26Z"
 }
