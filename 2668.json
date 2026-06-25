@@ -1,8 +1,9 @@
 {
   "id": "2668",
   "assignee": "ttraenkler/sd-2668a",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2668-sliceA",
   "claimed_at": "2026-06-25T17:05:11Z",
-  "updated_at": "2026-06-25T17:05:11Z"
+  "updated_at": "2026-06-25T19:27:48Z",
+  "released_at": "2026-06-25T19:27:48Z"
 }
