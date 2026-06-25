@@ -2,7 +2,7 @@
   "id": "2660",
   "assignee": "ttraenkler/sd-2580",
   "status": "in-progress",
-  "branch": "issue-2660-fnctor-escape-gate-spec",
-  "claimed_at": "2026-06-25T13:48:34Z",
-  "updated_at": "2026-06-25T13:48:34Z"
+  "branch": "issue-2660-s1-escape-analysis",
+  "claimed_at": "2026-06-25T13:55:09Z",
+  "updated_at": "2026-06-25T13:55:09Z"
 }
