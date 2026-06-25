@@ -1,9 +1,8 @@
 {
   "id": "1355",
-  "assignee": "ttraenkler/sdev-proxy",
-  "status": "released",
-  "branch": "issue-1355-proxy-ownkeys",
-  "claimed_at": "2026-06-25T08:51:19Z",
-  "updated_at": "2026-06-25T08:59:22Z",
-  "released_at": "2026-06-25T08:59:22Z"
+  "assignee": "ttraenkler/dev-builtin-ctor",
+  "status": "in-progress",
+  "branch": "issue-1355-defineproperty-trap",
+  "claimed_at": "2026-06-25T09:34:05Z",
+  "updated_at": "2026-06-25T09:34:05Z"
 }
