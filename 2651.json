@@ -1,8 +1,9 @@
 {
   "id": "2651",
   "assignee": "ttraenkler/sd-2651",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2651-m2-m3-residual",
   "claimed_at": "2026-06-25T11:46:31Z",
-  "updated_at": "2026-06-25T11:46:31Z"
+  "updated_at": "2026-06-25T12:20:28Z",
+  "released_at": "2026-06-25T12:20:28Z"
 }
