@@ -1,9 +1,8 @@
 {
   "id": "2651",
-  "assignee": "ttraenkler/dev-builtin-ctor",
-  "status": "released",
-  "branch": "issue-2651-m2-m3",
-  "claimed_at": "2026-06-25T09:26:24Z",
-  "updated_at": "2026-06-25T09:31:20Z",
-  "released_at": "2026-06-25T09:31:20Z"
+  "assignee": "ttraenkler/sd-2651",
+  "status": "in-progress",
+  "branch": "issue-2651-m2-m3-residual",
+  "claimed_at": "2026-06-25T11:46:31Z",
+  "updated_at": "2026-06-25T11:46:31Z"
 }
