@@ -1,8 +1,9 @@
 {
   "id": "2664",
   "assignee": "ttraenkler/dev-2046",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2664-acorn-deeper-wall",
   "claimed_at": "2026-06-25T14:23:40Z",
-  "updated_at": "2026-06-25T14:23:40Z"
+  "updated_at": "2026-06-25T14:42:27Z",
+  "released_at": "2026-06-25T14:42:27Z"
 }
