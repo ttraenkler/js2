@@ -1,8 +1,9 @@
 {
   "id": "2656",
   "assignee": "ttraenkler/dev-2046",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2656-switch-externref-identity",
   "claimed_at": "2026-06-25T11:59:46Z",
-  "updated_at": "2026-06-25T11:59:46Z"
+  "updated_at": "2026-06-25T14:17:51Z",
+  "released_at": "2026-06-25T14:17:51Z"
 }
