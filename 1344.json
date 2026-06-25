@@ -1,9 +1,8 @@
 {
   "id": "1344",
-  "assignee": "ttraenkler/dev-2046",
-  "status": "released",
-  "branch": "issue-1344-generator-prototype",
-  "claimed_at": "2026-06-25T11:50:57Z",
-  "updated_at": "2026-06-25T11:51:27Z",
-  "released_at": "2026-06-25T11:51:27Z"
+  "assignee": "ttraenkler/sd-2651",
+  "status": "in-progress",
+  "branch": "issue-1344-generator-receiver-checks",
+  "claimed_at": "2026-06-25T12:59:56Z",
+  "updated_at": "2026-06-25T12:59:56Z"
 }
