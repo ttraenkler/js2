@@ -1,8 +1,8 @@
 {
   "id": "2684",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-06-25T23:09:02Z",
-  "updated_at": "2026-06-25T23:09:02Z"
+  "assignee": "ttraenkler/sendev-deno",
+  "status": "in-progress",
+  "branch": "issue-2682-deno-stdio-surface",
+  "claimed_at": "2026-06-25T23:14:54Z",
+  "updated_at": "2026-06-25T23:14:54Z"
 }
