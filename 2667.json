@@ -1,8 +1,8 @@
 {
   "id": "2667",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-06-25T16:24:08Z",
-  "updated_at": "2026-06-25T16:24:08Z"
+  "assignee": "ttraenkler/dev-es3",
+  "status": "in-progress",
+  "branch": "issue-2667-mapped-arguments",
+  "claimed_at": "2026-06-25T16:40:28Z",
+  "updated_at": "2026-06-25T16:40:28Z"
 }
