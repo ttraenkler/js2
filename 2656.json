@@ -1,9 +1,8 @@
 {
   "id": "2656",
   "assignee": "ttraenkler/dev-2046",
-  "status": "released",
-  "branch": "issue-2656-acorn-tokentype",
-  "claimed_at": "2026-06-25T11:52:37Z",
-  "updated_at": "2026-06-25T11:58:18Z",
-  "released_at": "2026-06-25T11:58:18Z"
+  "status": "in-progress",
+  "branch": "issue-2656-switch-externref-identity",
+  "claimed_at": "2026-06-25T11:59:46Z",
+  "updated_at": "2026-06-25T11:59:46Z"
 }
