@@ -1,8 +1,8 @@
 {
   "id": "2665",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-06-25T14:19:34Z",
-  "updated_at": "2026-06-25T14:19:34Z"
+  "assignee": "ttraenkler/dev-2665",
+  "status": "in-progress",
+  "branch": "issue-2665-landing-page-auto-status",
+  "claimed_at": "2026-06-25T15:11:42Z",
+  "updated_at": "2026-06-25T15:11:42Z"
 }
