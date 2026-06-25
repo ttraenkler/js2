@@ -1,9 +1,8 @@
 {
   "id": "2663",
   "assignee": "ttraenkler/dev-2046",
-  "status": "done",
-  "branch": "issue-2663-runner-destrict",
-  "claimed_at": "2026-06-25T14:44:45Z",
-  "updated_at": "2026-06-25T18:03:58Z",
-  "released_at": "2026-06-25T18:03:58Z"
+  "status": "in-progress",
+  "branch": "issue-2663-var-precedence",
+  "claimed_at": "2026-06-25T18:04:19Z",
+  "updated_at": "2026-06-25T18:04:19Z"
 }
