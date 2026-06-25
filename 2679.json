@@ -1,8 +1,8 @@
 {
   "id": "2679",
-  "assignee": "ttraenkler/dev-2046",
+  "assignee": "ttraenkler/sd-2679",
   "status": "in-progress",
-  "branch": "issue-2679-tonumber-valueof-this",
-  "claimed_at": "2026-06-25T18:44:35Z",
-  "updated_at": "2026-06-25T18:44:35Z"
+  "branch": "issue-2679-number-hint-valueof-this",
+  "claimed_at": "2026-06-25T19:38:21Z",
+  "updated_at": "2026-06-25T19:38:21Z"
 }
