@@ -1,8 +1,8 @@
 {
   "id": "2670",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-06-25T16:24:40Z",
-  "updated_at": "2026-06-25T16:24:40Z"
+  "assignee": "ttraenkler/sd-2670",
+  "status": "in-progress",
+  "branch": "issue-2670-array-proto-generic-receiver",
+  "claimed_at": "2026-06-25T19:23:21Z",
+  "updated_at": "2026-06-25T19:23:21Z"
 }
