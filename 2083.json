@@ -1,8 +1,9 @@
 {
   "id": "2083",
   "assignee": "ttraenkler/dev-2665",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2083-host-glue-size",
   "claimed_at": "2026-06-25T15:46:26Z",
-  "updated_at": "2026-06-25T15:46:26Z"
+  "updated_at": "2026-06-25T16:01:12Z",
+  "released_at": "2026-06-25T16:01:12Z"
 }
