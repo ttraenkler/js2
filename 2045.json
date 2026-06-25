@@ -1,8 +1,9 @@
 {
   "id": "2045",
   "assignee": "ttraenkler/sd-2651",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2045-escape-demote",
   "claimed_at": "2026-06-25T12:20:51Z",
-  "updated_at": "2026-06-25T12:20:51Z"
+  "updated_at": "2026-06-25T12:57:51Z",
+  "released_at": "2026-06-25T12:57:51Z"
 }
