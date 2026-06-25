@@ -1,9 +1,8 @@
 {
   "id": "1762",
-  "assignee": "ttraenkler/sdev-strback",
-  "status": "released",
-  "branch": "issue-1762-linear-memory-string-backing",
-  "claimed_at": "2026-06-24T06:13:02Z",
-  "updated_at": "2026-06-24T06:17:46Z",
-  "released_at": "2026-06-24T06:17:46Z"
+  "assignee": "ttraenkler/dev-2046",
+  "status": "in-progress",
+  "branch": "issue-1762-string-backing",
+  "claimed_at": "2026-06-25T11:50:08Z",
+  "updated_at": "2026-06-25T11:50:08Z"
 }
