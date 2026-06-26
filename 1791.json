@@ -1,8 +1,9 @@
 {
   "id": "1791",
   "assignee": "ttraenkler/sd-2668c",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-1791-node-path",
   "claimed_at": "2026-06-26T00:44:47Z",
-  "updated_at": "2026-06-26T00:44:47Z"
+  "updated_at": "2026-06-26T01:29:54Z",
+  "released_at": "2026-06-26T01:29:54Z"
 }
