@@ -1,8 +1,9 @@
 {
   "id": "2692",
   "assignee": "ttraenkler/sd-dstr",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2692-closure-box-eager",
   "claimed_at": "2026-06-26T00:27:29Z",
-  "updated_at": "2026-06-26T00:27:29Z"
+  "updated_at": "2026-06-26T01:32:38Z",
+  "released_at": "2026-06-26T01:32:38Z"
 }
