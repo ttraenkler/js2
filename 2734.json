@@ -1,8 +1,8 @@
 {
   "id": "2734",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-06-26T22:08:21Z",
-  "updated_at": "2026-06-26T22:08:21Z"
+  "assignee": "ttraenkler/sendev-target-axis",
+  "status": "in-progress",
+  "branch": "issue-2734-target-axis-unification",
+  "claimed_at": "2026-06-26T22:08:51Z",
+  "updated_at": "2026-06-26T22:08:51Z"
 }
