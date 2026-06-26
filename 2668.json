@@ -1,8 +1,9 @@
 {
   "id": "2668",
   "assignee": "ttraenkler/sd-2668c",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2668-sliceC",
   "claimed_at": "2026-06-25T23:34:50Z",
-  "updated_at": "2026-06-25T23:34:50Z"
+  "updated_at": "2026-06-26T00:42:20Z",
+  "released_at": "2026-06-26T00:42:20Z"
 }
