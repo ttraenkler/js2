@@ -1,8 +1,9 @@
 {
   "id": "2689",
   "assignee": "ttraenkler/sendev-eslint",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2689-sourcecode-returncall-tailtype",
   "claimed_at": "2026-06-26T00:15:30Z",
-  "updated_at": "2026-06-26T00:15:30Z"
+  "updated_at": "2026-06-26T01:22:03Z",
+  "released_at": "2026-06-26T01:22:03Z"
 }
