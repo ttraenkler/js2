@@ -1,8 +1,9 @@
 {
   "id": "2693",
   "assignee": "ttraenkler/sendev-eslint",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2693-linter-verify-demo",
   "claimed_at": "2026-06-26T01:38:03Z",
-  "updated_at": "2026-06-26T01:38:03Z"
+  "updated_at": "2026-06-26T01:50:04Z",
+  "released_at": "2026-06-26T01:50:04Z"
 }
