@@ -1,9 +1,8 @@
 {
   "id": "2688",
   "assignee": "ttraenkler/sd-2668c",
-  "status": "released",
+  "status": "in-progress",
   "branch": "issue-2688-conditional-spread-struct-shape",
-  "claimed_at": "2026-06-26T01:32:06Z",
-  "updated_at": "2026-06-26T01:46:50Z",
-  "released_at": "2026-06-26T01:46:50Z"
+  "claimed_at": "2026-06-26T04:38:06Z",
+  "updated_at": "2026-06-26T04:38:06Z"
 }
