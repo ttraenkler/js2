@@ -1,8 +1,9 @@
 {
   "id": "2697",
   "assignee": "ttraenkler/agent-ae565d4893a5783d7",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2697-node-util",
   "claimed_at": "2026-06-26T05:53:08Z",
-  "updated_at": "2026-06-26T05:53:08Z"
+  "updated_at": "2026-06-26T06:02:13Z",
+  "released_at": "2026-06-26T06:02:13Z"
 }
