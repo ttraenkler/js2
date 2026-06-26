@@ -1,8 +1,9 @@
 {
   "id": "2699",
   "assignee": "ttraenkler/agent-ae565d4893a5783d7",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2699-node-builtin-fn-host-glue",
   "claimed_at": "2026-06-26T06:10:22Z",
-  "updated_at": "2026-06-26T06:10:22Z"
+  "updated_at": "2026-06-26T06:40:23Z",
+  "released_at": "2026-06-26T06:40:23Z"
 }
