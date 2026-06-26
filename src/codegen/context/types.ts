@@ -335,6 +335,24 @@ export interface FunctionContext {
   /** Enclosing class name — propagated to closures for super keyword resolution */
   enclosingClassName?: string;
   /**
+   * (#2681) The WasmGC struct type name that `this` resolves to inside this
+   * lifted method body, when the method was assigned to a class's prototype via
+   * the bundled `Class.prototype.m = function(){}` / `var pp = Class.prototype;
+   * pp.m = function(){}` pattern (acorn's parser methods). The TS checker types
+   * such a `this` as `any` (the prototype is reached through an aliased var, so
+   * JS-prototype-method `this` inference doesn't fire), which routed `this.<field>`
+   * reads through the dynamic `__extern_get` host-proxy path — diverging from the
+   * `struct.set`-written raw struct and breaking `this.type === types$1.X` identity
+   * (the acorn 10th-wall `unexpected()` non-match). When set, a `this`-receiver
+   * member read is routed through the guarded `emitExternrefToStructGet`
+   * (`ref.test $struct → struct.get → __extern_get` fallback) so it returns the
+   * RAW struct, identity-consistent with the write. The built-in `ref.test`
+   * fallback keeps a borrowed/non-matching receiver (and #2179 delete-tombstoned
+   * fields) on the dynamic path. NOT set for real `class X { m(){} }` methods —
+   * those already get a checker-typed `this`.
+   */
+  thisStructName?: string;
+  /**
    * (#1395) True when compiling a static class member context (static field
    * initializer, static method body, or a closure spawned from inside one).
    * In a static context, `this` resolves to the class constructor object

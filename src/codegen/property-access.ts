@@ -2353,6 +2353,48 @@ function tryEmitConstructorViaTag(
   return { kind: "externref" };
 }
 
+/**
+ * (#2681) `this.<field>` read inside a lifted prototype method whose `this` was
+ * bound to a WasmGC struct (`fctx.thisStructName`, set in `compileArrowAsClosure`
+ * for acorn's `Class.prototype.m = function(){}` parser methods). The checker
+ * types this `this` as `any`, so the ordinary read takes the dynamic
+ * `__extern_get` host-proxy path, whose result is NOT reference-identical to the
+ * `struct.set`-written raw struct — breaking `this.type === types$1.X` identity in
+ * the parseExprAtom `switch` (the 10th-wall `unexpected()` non-match). When the
+ * accessed property is a real field of the bound struct, route the read through
+ * the guarded `emitExternrefToStructGet` (`ref.test $struct → struct.get →
+ * __extern_get` fallback), which returns the RAW struct field — identity-consistent
+ * with the write. Returns `undefined` (caller falls through to the normal path) for
+ * a non-`this` receiver, an unbound `this`, or a property that is not a struct
+ * field (sidecar prop / method / #2179 delete-tombstoned field — those keep their
+ * existing dynamic lowering; the `ref.test` fallback also covers a borrowed/non-
+ * matching receiver at runtime).
+ */
+function tryEmitThisStructMemberRead(
+  ctx: CodegenContext,
+  fctx: FunctionContext,
+  expr: ts.PropertyAccessExpression,
+  propName: string,
+): ValType | null | undefined {
+  if (fctx.thisStructName === undefined) return undefined;
+  if (expr.expression.kind !== ts.SyntaxKind.ThisKeyword) return undefined;
+  const structTypeIdx = ctx.structMap.get(fctx.thisStructName);
+  const fields = ctx.structFields.get(fctx.thisStructName);
+  if (structTypeIdx === undefined || !fields) return undefined;
+  const fieldIdx = fields.findIndex((f) => f.name === propName);
+  if (fieldIdx === -1) return undefined; // not a struct field — let the normal path handle it
+  const fieldType = fields[fieldIdx]!.type;
+
+  // Push `this` as externref (ThisKeyword → __current_this read), then guarded
+  // struct read. `emitExternrefToStructGet` expects the externref on the stack.
+  const selfResult = compileExpression(ctx, fctx, expr.expression);
+  if (!selfResult) return null;
+  if (selfResult.kind !== "externref") coerceType(ctx, fctx, selfResult, { kind: "externref" });
+  emitExternrefToStructGet(ctx, fctx, fieldType, structTypeIdx, fieldIdx, propName, true /* throwOnNull */);
+  if (fieldType.kind === "ref") return { kind: "ref_null", typeIdx: (fieldType as { typeIdx: number }).typeIdx };
+  return fieldType;
+}
+
 export function compilePropertyAccess(
   ctx: CodegenContext,
   fctx: FunctionContext,
@@ -2371,6 +2413,18 @@ export function compilePropertyAccess(
 
   const objType = ctx.checker.getTypeAtLocation(expr.expression);
   const propName = ts.isPrivateIdentifier(expr.name) ? "__priv_" + expr.name.text.slice(1) : expr.name.text;
+
+  // (#2681) `this.<field>` inside a lifted prototype method whose `this` we bound
+  // to a WasmGC struct (acorn's `Class.prototype.m = function(){}` parser methods).
+  // The checker types this `this` as `any`, which would route the read through the
+  // dynamic `__extern_get` host-proxy path and diverge from the struct.set-written
+  // raw struct (the acorn 10th-wall identity break). Route it through the guarded
+  // struct read instead. Returns `undefined` (fall through) for non-struct fields
+  // (sidecar / methods / delete-tombstoned) so nothing else regresses.
+  {
+    const thisRead = tryEmitThisStructMemberRead(ctx, fctx, expr, propName);
+    if (thisRead !== undefined) return thisRead;
+  }
 
   // (#2026 PR-2) `.constructor` on an externref / `any`-typed instance: recover
   // class identity by reading the instance `__tag` and dispatching to the

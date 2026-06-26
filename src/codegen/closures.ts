@@ -1395,6 +1395,67 @@ export function compileArrowFunction(
   return compileArrowAsClosure(ctx, fctx, arrow);
 }
 
+/**
+ * (#2681) Resolve the WasmGC struct that `this` denotes inside a lifted method
+ * body, when the function expression is assigned to a class prototype via the
+ * bundled `Class.prototype.m = function(){}` or aliased `var pp = Class.prototype;
+ * pp.m = function(){}` pattern (acorn's parser methods). Returns the
+ * `__fnctor_<Class>` struct name when (a) the function is the RHS of such an
+ * assignment AND (b) that fnctor struct is registered; otherwise `undefined`.
+ *
+ * The TS checker types `this` here as `any` (the prototype is reached through an
+ * aliased var, so JS-prototype-method `this` inference doesn't fire), so without
+ * this resolution `this.<field>` reads take the dynamic `__extern_get` host-proxy
+ * path and diverge from the `struct.set`-written raw struct (the acorn 10th-wall
+ * identity break). We resolve the alias via the checker's symbol/declaration link
+ * (no separate module pre-scan): `pp` → `var pp = Class.prototype` → `Class`.
+ */
+function resolveLiftedMethodThisStruct(
+  ctx: CodegenContext,
+  arrow: ts.ArrowFunction | ts.FunctionExpression,
+): string | undefined {
+  // Arrow functions get their `this` lexically from the enclosing scope — never
+  // a fresh method receiver — so only plain function expressions qualify.
+  if (!ts.isFunctionExpression(arrow)) return undefined;
+  const parent = arrow.parent;
+  if (
+    !parent ||
+    !ts.isBinaryExpression(parent) ||
+    parent.operatorToken.kind !== ts.SyntaxKind.EqualsToken ||
+    parent.right !== arrow
+  ) {
+    return undefined;
+  }
+  const lhs = parent.left;
+  if (!ts.isPropertyAccessExpression(lhs)) return undefined; // need `<recv>.<method>`
+  const recv = lhs.expression;
+
+  // Resolve `recv` to a class identifier: either `Class.prototype` directly, or
+  // an identifier alias whose declaration is `var alias = Class.prototype`.
+  let classId: string | undefined;
+  if (ts.isPropertyAccessExpression(recv) && recv.name.text === "prototype" && ts.isIdentifier(recv.expression)) {
+    classId = recv.expression.text;
+  } else if (ts.isIdentifier(recv)) {
+    const sym = ctx.checker.getSymbolAtLocation(recv);
+    const decl = sym?.valueDeclaration ?? sym?.declarations?.[0];
+    if (
+      decl &&
+      ts.isVariableDeclaration(decl) &&
+      decl.initializer &&
+      ts.isPropertyAccessExpression(decl.initializer) &&
+      decl.initializer.name.text === "prototype" &&
+      ts.isIdentifier(decl.initializer.expression)
+    ) {
+      classId = decl.initializer.expression.text;
+    }
+  }
+  if (!classId) return undefined;
+
+  const structName = `__fnctor_${classId}`;
+  if (ctx.structMap.get(structName) === undefined) return undefined;
+  return structName;
+}
+
 /** Compile an arrow function as a first-class closure value (Wasm GC struct + funcref) */
 export function compileArrowAsClosure(
   ctx: CodegenContext,
@@ -1870,6 +1931,11 @@ export function compileArrowAsClosure(
     // (with no other binding) to read that global. Named functions / methods
     // are NOT lifted here and keep `undefined`/globalObject `this`.
     readsCurrentThis: true,
+    // (#2681) When this lifted function is a `Class.prototype.m = function(){}`
+    // (or aliased-prototype) method, bind `this` to the class's WasmGC struct so
+    // `this.<field>` reads use guarded struct.get (raw struct, identity-consistent
+    // with the write) instead of the dynamic `__extern_get` host proxy.
+    thisStructName: resolveLiftedMethodThisStruct(ctx, arrow),
   };
 
   // (#1384) Track liftedFctx.body in liveBodies BEFORE any emission so
