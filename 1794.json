@@ -1,8 +1,9 @@
 {
   "id": "1794",
   "assignee": "ttraenkler/sendev-eslint",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-1794-node-events",
   "claimed_at": "2026-06-26T05:31:31Z",
-  "updated_at": "2026-06-26T05:31:31Z"
+  "updated_at": "2026-06-26T06:10:49Z",
+  "released_at": "2026-06-26T06:10:49Z"
 }
