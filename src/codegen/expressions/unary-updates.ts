@@ -27,6 +27,7 @@ import {
   emitAlternateStructSetDispatch,
   emitBoundsGuardedArraySet,
   resolveInheritedStaticProp,
+  resolvePinnedReceiverStruct,
 } from "../property-access.js";
 import { coerceType, compileExpression, skipTransparentExpressions } from "../shared.js";
 import { compileStringLiteral } from "../string-ops.js";
@@ -213,6 +214,7 @@ function emitExternrefMemberIncDec(
   propName: string,
   f64Op: "f64.add" | "f64.sub",
   mode: "prefix" | "postfix",
+  pinnedStructName?: string,
 ): ValType {
   // Key string for __extern_get / __extern_set.
   addStringConstantGlobal(ctx, propName);
@@ -280,7 +282,15 @@ function emitExternrefMemberIncDec(
   // terminal else-arm IS the `__extern_set` sidecar; its struct-candidate arms
   // are enumerated at finalize (the full type table), fixing the compile-order
   // candidate freeze (#2664).
-  const dispatched = emitAlternateStructSetDispatch(ctx, fctx, objLocal, boxedLocal, propName, /*strict*/ false);
+  const dispatched = emitAlternateStructSetDispatch(
+    ctx,
+    fctx,
+    objLocal,
+    boxedLocal,
+    propName,
+    /*strict*/ false,
+    pinnedStructName,
+  );
   if (!dispatched) {
     // Dispatcher could not be reserved — emit the bare host write as before.
     fctx.body.push({ op: "local.get", index: objLocal });
@@ -461,7 +471,15 @@ function compileMemberIncDec(
           coerceType(ctx, fctx, objResult, { kind: "externref" });
         }
         fctx.body.push({ op: "local.set", index: objLocal });
-        return emitExternrefMemberIncDec(ctx, fctx, objLocal, propName, f64Op, mode);
+        return emitExternrefMemberIncDec(
+          ctx,
+          fctx,
+          objLocal,
+          propName,
+          f64Op,
+          mode,
+          resolvePinnedReceiverStruct(ctx, fctx, operand.expression),
+        );
       }
       // Could not compile the receiver — graceful NaN (incrementing an
       // unresolvable property is NaN in JS).

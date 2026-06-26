@@ -71,7 +71,7 @@ import { tryCompileStandaloneRegExpLastIndexWrite } from "../regexp-standalone.j
 import { getOrRegisterErrorStructType } from "../registry/error-types.js";
 import { ensureObjectRuntime } from "../object-runtime.js";
 import { stringConstantExternrefInstrs } from "../native-strings.js";
-import { resolveEffectiveStructName } from "../property-access.js";
+import { resolveEffectiveStructName, resolvePinnedReceiverStruct } from "../property-access.js";
 import {
   compileStringBuilderAppend,
   emitStringBuilderAppendCodeUnit,
@@ -2943,7 +2943,15 @@ function compilePropertyAssignmentExternSet(
   // dispatcher's terminal else-arm IS the `__extern_set_strict` sidecar, so no
   // inline fallback is needed; its struct-candidate arms are enumerated at
   // finalize (the full type table), fixing the compile-order candidate freeze.
-  const dispatched = emitAlternateStructSetDispatch(ctx, fctx, objLocal, valLocal, propName, /*strict*/ true);
+  const dispatched = emitAlternateStructSetDispatch(
+    ctx,
+    fctx,
+    objLocal,
+    valLocal,
+    propName,
+    /*strict*/ true,
+    resolvePinnedReceiverStruct(ctx, fctx, target.expression),
+  );
   if (!dispatched) {
     // Dispatcher could not be reserved (no __extern_set_strict) — emit the bare
     // strict host write as before.
@@ -5960,7 +5968,15 @@ function compilePropertyCompoundAssignmentExternref(
   // getter-only-accessor throw). The dispatcher's terminal else-arm IS the
   // `__extern_set` sidecar; its struct-candidate arms are enumerated at finalize
   // (the full type table), fixing the compile-order candidate freeze (#2664).
-  const cmpdDispatched = emitAlternateStructSetDispatch(ctx, fctx, objLocal, boxedLocal, propName, /*strict*/ false);
+  const cmpdDispatched = emitAlternateStructSetDispatch(
+    ctx,
+    fctx,
+    objLocal,
+    boxedLocal,
+    propName,
+    /*strict*/ false,
+    resolvePinnedReceiverStruct(ctx, fctx, target.expression),
+  );
   if (!cmpdDispatched) {
     // Dispatcher could not be reserved — emit the bare host write as before.
     fctx.body.push({ op: "local.get", index: objLocal });

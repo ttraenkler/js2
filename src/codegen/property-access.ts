@@ -1279,6 +1279,28 @@ export function emitNullCheckThrow(ctx: CodegenContext, fctx: FunctionContext, r
  * when there are no struct candidates (caller emits its `__extern_set` as
  * before).
  */
+/**
+ * (#2660 P1/P2 / #2681) Consumer seam for the unified slot-consistency dispatch.
+ * Resolves a member-access RECEIVER expression to the single WasmGC fnctor struct
+ * to PIN read+write+compound to — so all three agree on the slot (symmetry mandate).
+ *  - `this` in a lifted prototype method → `fctx.thisStructName` (#2681, syntactic).
+ *  - (P2) a flow-resolved local (`node = this.startNode()`, `scope =
+ *    this.currentVarScope()`) → sd-2674b's `resolveReceiverStruct` provider
+ *    (#2660 PART-1). Wired here when that lands; returns undefined meanwhile, so
+ *    every non-`this` receiver stays on the dynamic path (byte-identical pre-P2).
+ * Returns the `__fnctor_<Class>` struct name, or undefined → dynamic fallback.
+ */
+export function resolvePinnedReceiverStruct(
+  ctx: CodegenContext,
+  fctx: FunctionContext,
+  recvExpr: ts.Expression,
+): string | undefined {
+  const r = skipTransparentExpressions(recvExpr);
+  if (r.kind === ts.SyntaxKind.ThisKeyword) return fctx.thisStructName;
+  // P2: delegate to the #2660 flow provider for locals (sd-2674b). Inert until then.
+  return undefined;
+}
+
 export function emitAlternateStructSetDispatch(
   ctx: CodegenContext,
   fctx: FunctionContext,
@@ -1286,7 +1308,69 @@ export function emitAlternateStructSetDispatch(
   valExtLocal: number,
   propName: string,
   strict: boolean,
+  pinnedStructName?: string,
 ): boolean {
+  // (#2660 P1 / #2681 unified slot-consistency) PINNED write. When the caller has
+  // RESOLVED the receiver to ONE struct (via `resolveReceiverStruct` — `this` in a
+  // lifted prototype method, or a flow-resolved local), emit a DIRECT
+  // `ref.test $pinned → struct.set $pinned <slot>` arm (sidecar fallback) instead
+  // of the shared open-candidate `__set_member_<name>` dispatcher below. The open
+  // dispatcher ref.tests EVERY struct that owns `propName` and writes the FIRST
+  // match — but WasmGC structural canonicalization (#2009) lets a
+  // structurally-identical sibling `ref.test` true FIRST, so the write can land in
+  // a DIFFERENT slot than the pinned READ reads → read/write desync (the #2664
+  // finishToken hazard). Pinning BOTH read and write to the resolver's one struct,
+  // off the SAME direct receiver value (`recvExtLocal`, never a re-wrapped proxy),
+  // makes them agree by construction. Falls through to the shared dispatcher when
+  // the field isn't an own (mutable) field of the pinned struct (sidecar/dynamic).
+  if (pinnedStructName !== undefined) {
+    const pinnedIdx = ctx.structMap.get(pinnedStructName);
+    const pinnedFields = ctx.structFields.get(pinnedStructName);
+    const pinnedFieldIdx = pinnedFields ? pinnedFields.findIndex((f) => f.name === propName) : -1;
+    if (pinnedIdx !== undefined && pinnedFields && pinnedFieldIdx !== -1 && pinnedFields[pinnedFieldIdx]!.mutable) {
+      const fieldType = pinnedFields[pinnedFieldIdx]!.type;
+      const setName = strict ? "__extern_set_strict" : "__extern_set";
+      const setIdx = ensureLateImport(
+        ctx,
+        setName,
+        [{ kind: "externref" }, { kind: "externref" }, { kind: "externref" }],
+        [],
+      );
+      flushLateImportShifts(ctx, fctx);
+      addStringConstantGlobal(ctx, propName);
+      const tmpAny = allocTempLocal(fctx, { kind: "anyref" });
+      // struct.set arm: cast recv→pinned, coerce val externref→fieldType, store slot.
+      const setArm: Instr[] = [
+        { op: "local.get", index: tmpAny } as Instr,
+        { op: "ref.cast", typeIdx: pinnedIdx } as Instr,
+        { op: "local.get", index: valExtLocal } as Instr,
+        ...coercionInstrs(ctx, { kind: "externref" }, fieldType, fctx),
+        { op: "struct.set", typeIdx: pinnedIdx, fieldIdx: pinnedFieldIdx } as Instr,
+      ];
+      // Sidecar fallback: genuine host externref / non-matching (borrowed) receiver
+      // / #2179 delete-tombstoned. Preserves the strict-[[Set]] throw semantics.
+      const sidecar: Instr[] =
+        setIdx !== undefined
+          ? [
+              { op: "local.get", index: recvExtLocal } as Instr,
+              ...stringConstantExternrefInstrs(ctx, propName),
+              { op: "local.get", index: valExtLocal } as Instr,
+              { op: "call", funcIdx: setIdx } as Instr,
+            ]
+          : [];
+      fctx.body.push(
+        { op: "local.get", index: recvExtLocal } as Instr,
+        { op: "any.convert_extern" } as Instr,
+        { op: "local.tee", index: tmpAny } as Instr,
+        { op: "ref.test", typeIdx: pinnedIdx } as Instr,
+        { op: "if", blockType: { kind: "empty" }, then: setArm, else: sidecar } as Instr,
+      );
+      releaseTempLocal(fctx, tmpAny);
+      return true;
+    }
+    // pinned struct lacks this own mutable field → fall through to shared dispatcher.
+  }
+
   // (#2664) Route the write through a DEFERRED-FILL dispatcher
   // `__set_member_<name>(recv, val)` instead of inlining the `ref.test`/
   // `struct.set` candidate chain here. The inline chain froze its struct-
@@ -2370,29 +2454,68 @@ function tryEmitConstructorViaTag(
  * existing dynamic lowering; the `ref.test` fallback also covers a borrowed/non-
  * matching receiver at runtime).
  */
-function tryEmitThisStructMemberRead(
+function tryEmitStructReceiverMemberRead(
   ctx: CodegenContext,
   fctx: FunctionContext,
   expr: ts.PropertyAccessExpression,
   propName: string,
 ): ValType | null | undefined {
-  if (fctx.thisStructName === undefined) return undefined;
-  if (expr.expression.kind !== ts.SyntaxKind.ThisKeyword) return undefined;
-  const structTypeIdx = ctx.structMap.get(fctx.thisStructName);
-  const fields = ctx.structFields.get(fctx.thisStructName);
+  // Resolve the receiver to ONE pinned struct (the unified slot-consistency seam;
+  // `this` now, flow-resolved locals at P2). undefined → dynamic path unchanged.
+  const pinnedName = resolvePinnedReceiverStruct(ctx, fctx, expr.expression);
+  if (pinnedName === undefined) return undefined;
+  const structTypeIdx = ctx.structMap.get(pinnedName);
+  const fields = ctx.structFields.get(pinnedName);
   if (structTypeIdx === undefined || !fields) return undefined;
   const fieldIdx = fields.findIndex((f) => f.name === propName);
   if (fieldIdx === -1) return undefined; // not a struct field — let the normal path handle it
   const fieldType = fields[fieldIdx]!.type;
+  const resultType: ValType =
+    fieldType.kind === "ref" ? { kind: "ref_null", typeIdx: (fieldType as { typeIdx: number }).typeIdx } : fieldType;
 
-  // Push `this` as externref (ThisKeyword → __current_this read), then guarded
-  // struct read. `emitExternrefToStructGet` expects the externref on the stack.
+  // PINNED read, symmetric with the pinned write (emitAlternateStructSetDispatch):
+  // `ref.test $pinned → struct.get $pinned <slot>` else `__extern_get` sidecar — NO
+  // open alternates, so read and write resolve the SAME slot off the SAME direct
+  // receiver value (held in `recvLocal`, never re-evaluated/re-wrapped).
   const selfResult = compileExpression(ctx, fctx, expr.expression);
   if (!selfResult) return null;
   if (selfResult.kind !== "externref") coerceType(ctx, fctx, selfResult, { kind: "externref" });
-  emitExternrefToStructGet(ctx, fctx, fieldType, structTypeIdx, fieldIdx, propName, true /* throwOnNull */);
-  if (fieldType.kind === "ref") return { kind: "ref_null", typeIdx: (fieldType as { typeIdx: number }).typeIdx };
-  return fieldType;
+  const recvLocal = allocTempLocal(fctx, { kind: "externref" });
+  fctx.body.push({ op: "local.set", index: recvLocal } as Instr);
+
+  const getIdx = ensureLateImport(
+    ctx,
+    "__extern_get",
+    [{ kind: "externref" }, { kind: "externref" }],
+    [{ kind: "externref" }],
+  );
+  flushLateImportShifts(ctx, fctx);
+  addStringConstantGlobal(ctx, propName);
+  const tmpAny = allocTempLocal(fctx, { kind: "anyref" });
+  const slotArm: Instr[] = [
+    { op: "local.get", index: tmpAny } as Instr,
+    { op: "ref.cast", typeIdx: structTypeIdx } as Instr,
+    { op: "struct.get", typeIdx: structTypeIdx, fieldIdx } as Instr,
+  ];
+  const sidecarArm: Instr[] =
+    getIdx !== undefined
+      ? [
+          { op: "local.get", index: recvLocal } as Instr,
+          ...stringConstantExternrefInstrs(ctx, propName),
+          { op: "call", funcIdx: getIdx } as Instr,
+          ...coercionInstrs(ctx, { kind: "externref" }, resultType, fctx),
+        ]
+      : [...defaultValueInstrs(resultType)];
+  fctx.body.push(
+    { op: "local.get", index: recvLocal } as Instr,
+    { op: "any.convert_extern" } as Instr,
+    { op: "local.tee", index: tmpAny } as Instr,
+    { op: "ref.test", typeIdx: structTypeIdx } as Instr,
+    { op: "if", blockType: { kind: "val", type: resultType }, then: slotArm, else: sidecarArm } as Instr,
+  );
+  releaseTempLocal(fctx, tmpAny);
+  releaseTempLocal(fctx, recvLocal);
+  return resultType;
 }
 
 export function compilePropertyAccess(
@@ -2422,7 +2545,7 @@ export function compilePropertyAccess(
   // struct read instead. Returns `undefined` (fall through) for non-struct fields
   // (sidecar / methods / delete-tombstoned) so nothing else regresses.
   {
-    const thisRead = tryEmitThisStructMemberRead(ctx, fctx, expr, propName);
+    const thisRead = tryEmitStructReceiverMemberRead(ctx, fctx, expr, propName);
     if (thisRead !== undefined) return thisRead;
   }
 
