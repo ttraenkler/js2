@@ -1,8 +1,8 @@
 {
   "id": "2697",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-06-26T05:43:30Z",
-  "updated_at": "2026-06-26T05:43:30Z"
+  "assignee": "ttraenkler/agent-ae565d4893a5783d7",
+  "status": "in-progress",
+  "branch": "issue-2697-node-util",
+  "claimed_at": "2026-06-26T05:53:08Z",
+  "updated_at": "2026-06-26T05:53:08Z"
 }
