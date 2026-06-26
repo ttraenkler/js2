@@ -1,8 +1,9 @@
 {
   "id": "2696",
   "assignee": "ttraenkler/sendev-nm389",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2696-native-messaging-389-fixes",
   "claimed_at": "2026-06-26T05:41:46Z",
-  "updated_at": "2026-06-26T05:41:46Z"
+  "updated_at": "2026-06-26T07:04:39Z",
+  "released_at": "2026-06-26T07:04:39Z"
 }
