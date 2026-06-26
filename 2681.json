@@ -1,8 +1,9 @@
 {
   "id": "2681",
   "assignee": "ttraenkler/sd-2674c",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2681-acorn-lifted-method-this",
   "claimed_at": "2026-06-26T04:40:33Z",
-  "updated_at": "2026-06-26T04:40:33Z"
+  "updated_at": "2026-06-26T05:13:25Z",
+  "released_at": "2026-06-26T05:13:25Z"
 }
