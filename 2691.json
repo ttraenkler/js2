@@ -1,8 +1,9 @@
 {
   "id": "2691",
   "assignee": "ttraenkler/sendev-eslint",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2691-api-reexport",
   "claimed_at": "2026-06-26T01:22:07Z",
-  "updated_at": "2026-06-26T01:22:07Z"
+  "updated_at": "2026-06-26T01:31:07Z",
+  "released_at": "2026-06-26T01:31:07Z"
 }
