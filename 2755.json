@@ -1,8 +1,9 @@
 {
   "id": "2755",
   "assignee": "ttraenkler/dev-2750-s1s2",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2755-nm-shared-framing",
   "claimed_at": "2026-06-27T17:16:55Z",
-  "updated_at": "2026-06-27T17:16:55Z"
+  "updated_at": "2026-06-27T17:19:54Z",
+  "released_at": "2026-06-27T17:19:54Z"
 }
