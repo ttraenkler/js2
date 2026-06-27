@@ -1,8 +1,8 @@
 {
   "id": "2752",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-06-27T14:50:44Z",
-  "updated_at": "2026-06-27T14:50:44Z"
+  "assignee": "ttraenkler/sdev-2752-prelude-js",
+  "status": "in-progress",
+  "branch": "issue-2752-stdin-prelude-js",
+  "claimed_at": "2026-06-27T15:11:23Z",
+  "updated_at": "2026-06-27T15:11:23Z"
 }
