@@ -1,8 +1,9 @@
 {
   "id": "2628",
   "assignee": "ttraenkler/dev-acorn-construct",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2628-construct-method",
   "claimed_at": "2026-06-26T23:27:55Z",
-  "updated_at": "2026-06-26T23:27:55Z"
+  "updated_at": "2026-06-27T01:04:56Z",
+  "released_at": "2026-06-27T01:04:56Z"
 }
