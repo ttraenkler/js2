@@ -1,8 +1,9 @@
 {
   "id": "2749",
   "assignee": "ttraenkler/agent-ace4f48e",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2749-no-sprint-version-autotag-protocol",
   "claimed_at": "2026-06-27T09:30:42Z",
-  "updated_at": "2026-06-27T09:30:42Z"
+  "updated_at": "2026-06-27T10:08:12Z",
+  "released_at": "2026-06-27T10:08:12Z"
 }
