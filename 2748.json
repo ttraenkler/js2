@@ -1,8 +1,8 @@
 {
   "id": "2748",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-06-27T09:10:01Z",
-  "updated_at": "2026-06-27T09:10:01Z"
+  "assignee": "ttraenkler/sdev-2748-deno-transpile",
+  "status": "in-progress",
+  "branch": "issue-2748-deno-transpile-extern-get-leak",
+  "claimed_at": "2026-06-27T09:12:16Z",
+  "updated_at": "2026-06-27T09:12:16Z"
 }
