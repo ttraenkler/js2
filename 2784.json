@@ -1,8 +1,8 @@
 {
   "id": "2784",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-06-28T10:43:51Z",
-  "updated_at": "2026-06-28T10:43:51Z"
+  "assignee": "ttraenkler/sendev-substrate",
+  "status": "in-progress",
+  "branch": "issue-2784-s3-array-host-boundary",
+  "claimed_at": "2026-06-28T10:47:41Z",
+  "updated_at": "2026-06-28T10:47:41Z"
 }
