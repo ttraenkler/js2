@@ -1,8 +1,9 @@
 {
   "id": "2671",
   "assignee": "ttraenkler/agent-af359e7cc95c024c6",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2671-promise-resolve-element",
   "claimed_at": "2026-06-28T01:48:03Z",
-  "updated_at": "2026-06-28T01:48:03Z"
+  "updated_at": "2026-06-28T03:07:01Z",
+  "released_at": "2026-06-28T03:07:01Z"
 }
