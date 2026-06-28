@@ -2,7 +2,7 @@
   "id": "2784",
   "assignee": "ttraenkler/sendev-substrate",
   "status": "in-progress",
-  "branch": "issue-2784-s3-array-host-boundary",
-  "claimed_at": "2026-06-28T10:47:41Z",
-  "updated_at": "2026-06-28T10:47:41Z"
+  "branch": "issue-2784-s3-native-vec-dispatch",
+  "claimed_at": "2026-06-28T13:01:27Z",
+  "updated_at": "2026-06-28T13:01:27Z"
 }
