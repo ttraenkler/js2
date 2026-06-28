@@ -1,9 +1,8 @@
 {
   "id": "2669",
-  "assignee": "ttraenkler/sd-dstr",
-  "status": "released",
-  "branch": "issue-2669-dstr-binding-patterns",
-  "claimed_at": "2026-06-25T23:35:21Z",
-  "updated_at": "2026-06-26T00:09:12Z",
-  "released_at": "2026-06-26T00:09:12Z"
+  "assignee": "ttraenkler/dev-dstr2669b",
+  "status": "in-progress",
+  "branch": "issue-2669-typed-default-init",
+  "claimed_at": "2026-06-28T01:48:16Z",
+  "updated_at": "2026-06-28T01:48:16Z"
 }
