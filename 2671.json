@@ -1,9 +1,8 @@
 {
   "id": "2671",
-  "assignee": "ttraenkler/agent-ae565d4893a5783d7",
-  "status": "released",
-  "branch": "issue-2671-es6-builtin-residuals",
-  "claimed_at": "2026-06-25T23:22:18Z",
-  "updated_at": "2026-06-26T00:31:11Z",
-  "released_at": "2026-06-26T00:31:11Z"
+  "assignee": "ttraenkler/agent-af359e7cc95c024c6",
+  "status": "in-progress",
+  "branch": "issue-2671-promise-resolve-element",
+  "claimed_at": "2026-06-28T01:48:03Z",
+  "updated_at": "2026-06-28T01:48:03Z"
 }
