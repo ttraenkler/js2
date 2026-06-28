@@ -1,9 +1,8 @@
 {
   "id": "2726",
-  "assignee": "ttraenkler/agent-af359e7cc95c024c6",
-  "status": "released",
-  "branch": "issue-2726-delete-residual",
-  "claimed_at": "2026-06-28T02:21:22Z",
-  "updated_at": "2026-06-28T02:21:53Z",
-  "released_at": "2026-06-28T02:21:53Z"
+  "assignee": "ttraenkler/dev-dstr2669b",
+  "status": "in-progress",
+  "branch": "probe",
+  "claimed_at": "2026-06-28T02:22:43Z",
+  "updated_at": "2026-06-28T02:22:43Z"
 }
