@@ -1,8 +1,9 @@
 {
   "id": "2757",
   "assignee": "ttraenkler/agent-dev",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2757-assign-dstr-rest",
   "claimed_at": "2026-06-28T01:50:10Z",
-  "updated_at": "2026-06-28T01:50:10Z"
+  "updated_at": "2026-06-28T02:28:27Z",
+  "released_at": "2026-06-28T02:28:27Z"
 }
