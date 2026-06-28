@@ -1,8 +1,9 @@
 {
   "id": "2801",
   "assignee": "ttraenkler/sendev-acorn-callargs",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2801-callexpr-arguments-marshal",
   "claimed_at": "2026-06-28T18:12:41Z",
-  "updated_at": "2026-06-28T18:12:41Z"
+  "updated_at": "2026-06-28T19:02:15Z",
+  "released_at": "2026-06-28T19:02:15Z"
 }
