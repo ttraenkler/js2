@@ -1,8 +1,8 @@
 {
   "id": "2768",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-06-28T03:19:21Z",
-  "updated_at": "2026-06-28T03:19:21Z"
+  "assignee": "ttraenkler/agent-dev",
+  "status": "in-progress",
+  "branch": "issue-2768-bare-var-property-rw",
+  "claimed_at": "2026-06-28T03:19:49Z",
+  "updated_at": "2026-06-28T03:19:49Z"
 }
