@@ -1,8 +1,8 @@
 {
   "id": "2787",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-06-28T12:05:52Z",
-  "updated_at": "2026-06-28T12:05:52Z"
+  "assignee": "ttraenkler/agent-a38bbfcfa964dff14",
+  "status": "in-progress",
+  "branch": "issue-2787-diff-test",
+  "claimed_at": "2026-06-28T12:10:21Z",
+  "updated_at": "2026-06-28T12:10:21Z"
 }
