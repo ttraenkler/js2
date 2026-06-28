@@ -1,8 +1,8 @@
 {
   "id": "2814",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-06-28T23:32:18Z",
-  "updated_at": "2026-06-28T23:32:18Z"
+  "assignee": "ttraenkler/agent-a089c35fb80d8f342",
+  "status": "in-progress",
+  "branch": "issue-2814-all-nm-hosts-rechunk",
+  "claimed_at": "2026-06-28T23:43:29Z",
+  "updated_at": "2026-06-28T23:43:29Z"
 }
