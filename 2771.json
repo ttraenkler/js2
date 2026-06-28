@@ -1,8 +1,9 @@
 {
   "id": "2771",
   "assignee": "ttraenkler/sdev-2771-bundling",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2771-cli-relative-import-bundling-standalone",
   "claimed_at": "2026-06-28T04:51:03Z",
-  "updated_at": "2026-06-28T04:51:03Z"
+  "updated_at": "2026-06-28T05:36:38Z",
+  "released_at": "2026-06-28T05:36:38Z"
 }
