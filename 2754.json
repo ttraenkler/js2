@@ -1,8 +1,9 @@
 {
   "id": "2754",
   "assignee": "ttraenkler/sendev-2754",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2754-transpiled-js-nm",
   "claimed_at": "2026-06-28T16:22:29Z",
-  "updated_at": "2026-06-28T16:22:29Z"
+  "updated_at": "2026-06-28T17:31:44Z",
+  "released_at": "2026-06-28T17:31:44Z"
 }
