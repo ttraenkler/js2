@@ -1,8 +1,9 @@
 {
   "id": "2788",
   "assignee": "ttraenkler/sdev-2788-malformed",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2788-malformed-module-init",
   "claimed_at": "2026-06-28T12:39:48Z",
-  "updated_at": "2026-06-28T12:39:48Z"
+  "updated_at": "2026-06-28T13:57:12Z",
+  "released_at": "2026-06-28T13:57:12Z"
 }
