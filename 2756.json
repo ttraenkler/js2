@@ -1,8 +1,9 @@
 {
   "id": "2756",
   "assignee": "ttraenkler/dev-2756-nm-refactor",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2756-nm-shared-sync-framing-refactor",
   "claimed_at": "2026-06-28T01:55:47Z",
-  "updated_at": "2026-06-28T01:55:47Z"
+  "updated_at": "2026-06-28T05:52:06Z",
+  "released_at": "2026-06-28T05:52:06Z"
 }
