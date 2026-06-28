@@ -1,8 +1,8 @@
 {
   "id": "2808",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-06-28T21:00:48Z",
-  "updated_at": "2026-06-28T21:00:48Z"
+  "assignee": "ttraenkler/agent-ad343",
+  "status": "in-progress",
+  "branch": "issue-2808-nm-node-process-rechunk-writes",
+  "claimed_at": "2026-06-28T21:10:25Z",
+  "updated_at": "2026-06-28T21:10:25Z"
 }
