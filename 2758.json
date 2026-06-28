@@ -1,8 +1,9 @@
 {
   "id": "2758",
   "assignee": "ttraenkler/agent-af359e7cc95c024c6",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2758-tmp",
   "claimed_at": "2026-06-28T02:22:08Z",
-  "updated_at": "2026-06-28T02:22:08Z"
+  "updated_at": "2026-06-28T02:22:34Z",
+  "released_at": "2026-06-28T02:22:34Z"
 }
