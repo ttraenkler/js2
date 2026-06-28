@@ -1,8 +1,8 @@
 {
   "id": "2807",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-06-28T19:19:30Z",
-  "updated_at": "2026-06-28T19:19:30Z"
+  "assignee": "ttraenkler/sendev-2807",
+  "status": "in-progress",
+  "branch": "issue-2807-nm-process-256mib",
+  "claimed_at": "2026-06-28T19:50:58Z",
+  "updated_at": "2026-06-28T19:50:58Z"
 }
