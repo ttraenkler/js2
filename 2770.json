@@ -1,8 +1,8 @@
 {
   "id": "2770",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-06-28T03:59:57Z",
-  "updated_at": "2026-06-28T03:59:57Z"
+  "assignee": "ttraenkler/sendev-s5b-bool-brand",
+  "status": "in-progress",
+  "branch": "issue-2770-s5b-bool-brand",
+  "claimed_at": "2026-06-28T10:48:13Z",
+  "updated_at": "2026-06-28T10:48:13Z"
 }
