@@ -1,8 +1,9 @@
 {
   "id": "2758",
   "assignee": "ttraenkler/dev-dstr2669b",
-  "status": "in-progress",
+  "status": "released",
   "branch": "probe",
   "claimed_at": "2026-06-28T02:22:47Z",
-  "updated_at": "2026-06-28T02:22:47Z"
+  "updated_at": "2026-06-28T03:29:01Z",
+  "released_at": "2026-06-28T03:29:01Z"
 }
