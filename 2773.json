@@ -1,8 +1,9 @@
 {
   "id": "2773",
   "assignee": "ttraenkler/sendev-substrate",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2773-s1-fnctor-typeidx",
   "claimed_at": "2026-06-28T05:04:21Z",
-  "updated_at": "2026-06-28T05:04:21Z"
+  "updated_at": "2026-06-28T05:31:39Z",
+  "released_at": "2026-06-28T05:31:39Z"
 }
