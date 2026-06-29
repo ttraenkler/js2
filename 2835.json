@@ -1,8 +1,8 @@
 {
   "id": "2835",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-06-29T05:34:41Z",
-  "updated_at": "2026-06-29T05:34:41Z"
+  "assignee": "ttraenkler/sendev-2835",
+  "status": "in-progress",
+  "branch": "issue-2835-split-vec-key",
+  "claimed_at": "2026-06-29T06:01:47Z",
+  "updated_at": "2026-06-29T06:01:47Z"
 }
