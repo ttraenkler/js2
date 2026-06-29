@@ -1,8 +1,8 @@
 {
   "id": "2839",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-06-29T10:55:03Z",
-  "updated_at": "2026-06-29T10:55:03Z"
+  "assignee": "ttraenkler/agent-senior-2839",
+  "status": "in-progress",
+  "branch": "issue-2839-externref-vec-i8-i16-coerce",
+  "claimed_at": "2026-06-29T10:56:30Z",
+  "updated_at": "2026-06-29T10:56:30Z"
 }
