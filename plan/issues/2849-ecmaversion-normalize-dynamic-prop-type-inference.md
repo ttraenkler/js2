@@ -1,8 +1,7 @@
 ---
 id: 2849
 title: "dynamic-object numeric property reads back 0 when the same property is also compared via === string / == null (acorn ecmaVersion 2022 not normalised → spurious import attributes)"
-status: done
-completed: 2026-06-30
+status: blocked
 assignee: sendev-ecmaver
 sprint: current
 priority: medium
@@ -304,3 +303,53 @@ live-mirror Proxy" comments.
 |---|---|---|
 | **before (main)** | `0` (bug) | `0` (bug) |
 | **after (fix)** | `13` | `13` |
+
+`tests/issue-2849.test.ts` (the minimal repro) is **green** with the fix.
+
+### BLOCKER — Option A breaks the acorn dogfood target (escalated 2026-06-30)
+
+The minimal-probe de-risk is insufficient: **the gate removal breaks compiled
+acorn entirely in host mode.** Validated against the uncapped NM differential
+(`.tmp/nm-diff-2849.mjs`, `maxDivergences: 100000`):
+
+- **Control (pre-fix `origin/main`):** all three targets parse; node counts
+  match. `edge.js` shows exactly the **4 spurious `attributes: []`** divergences
+  (the bug) among the larger accepted-quirk set; `background.js` parses.
+- **With the fix:** **every** target — including the trivial sanity
+  `foo(bar,baz);` and `"1;"` with `{}` defaults and `ecmaVersion: 5` (no
+  normalisation) — throws on `parse(...)`. Unwrapping the `__exn_tag` payload:
+  `TypeError: Cannot access property on null or undefined` (a **synthesised,
+  line-0 null-check** in a member-access dispatcher).
+
+**Root cause of the breakage.** Instrumenting the acorn compile, the gate
+removal newly poisons **exactly one** var: acorn's `getOptions` **`options`**
+(`var options = {}; for (opt in defaultOptions) options[opt] = …`), whose
+inferred widened struct is `{ ecmaVersion, allowReserved, allowHashBang,
+onToken, onComment }` — i.e. it carries **function-typed** fields
+(`onToken`/`onComment`). Forcing `options` to stay `$Object` (correct for the
+ecmaVersion read) makes it later trap when stored into `this.options` and
+read/dispatched deep in the parser. **This is unavoidable for this issue:**
+acorn's `options` is the *same* var that must be `$Object` to fix edge.js, so
+there is **no narrowing of the poison predicate** that fixes edge.js without
+putting acorn's `options` on the `$Object` path that traps.
+
+**Minimal repros do NOT reproduce.** Synthetic `{}` expandos with a for-in
+copy + function-typed field + `Array.isArray` guard + function reassignment all
+return correctly (`.tmp/probe-2849/min.mjs` cases A/B/C → 5/6/5). The trap is a
+deeper acorn-specific `$Object`/`this.options` member-dispatch interaction, not
+the obvious "function field in `$Object`".
+
+**Why this is not trivially fixable / why escalated.** The real remaining work
+is fixing the **host `$Object` representation** so acorn's `options` object
+(stored to `this.options`, then member-dispatched) does not hit the line-0
+null-check trap — unknown-depth codegen work in the member-access dispatcher
+(the architect's flagged #2664/#2659 risk), **not** the 4-line gate removal.
+The architect's de-risk validated only the numeric-only minimal probe; it never
+compiled full acorn (the acceptance target). Option B/C (struct-aware computed
+access / host-proxy field mapping) were rejected by the architect as broad, but
+one of them — or a `this.options`-specific lowering fix — is likely the actual
+path. **No PR opened; branch `issue-2849-host-expando-gate` carries the Option-A
+fix + green minimal test + this analysis as the foundation for the follow-up.**
+
+Repros (gitignored, on branch): `.tmp/nm-diff-2849.mjs` (uncapped NM-diff),
+`.tmp/probe-2849/{verify,trap,bisect,unwrap,min}.mjs`.
