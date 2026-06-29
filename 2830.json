@@ -1,8 +1,9 @@
 {
   "id": "2830",
   "assignee": "ttraenkler/agent-a684644ca31db72b9",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2830-wasi-p1-nobundle-doc",
   "claimed_at": "2026-06-29T22:54:24Z",
-  "updated_at": "2026-06-29T22:54:24Z"
+  "updated_at": "2026-06-29T22:55:02Z",
+  "released_at": "2026-06-29T22:55:02Z"
 }
