@@ -2,6 +2,7 @@
 id: 2849
 title: "dynamic-object numeric property reads back 0 when the same property is also compared via === string / == null (acorn ecmaVersion 2022 not normalised → spurious import attributes)"
 status: blocked
+architect_spec: candidate
 assignee: sendev-ecmaver
 sprint: current
 priority: medium
@@ -353,3 +354,18 @@ fix + green minimal test + this analysis as the foundation for the follow-up.**
 
 Repros (gitignored, on branch): `.tmp/nm-diff-2849.mjs` (uncapped NM-diff),
 `.tmp/probe-2849/{verify,trap,bisect,unwrap,min}.mjs`.
+
+### Coordinator decision (2026-06-30): stay `blocked`, latent / non-blocking
+
+Tech lead confirmed #2849 is **NOT a real-world edge.js blocker** and Option A
+must **not** ship: edge.js is **already 0-non-quirk on `main`** at matched
+`ecmaVersion` (verified on a confirmed-#2329 checkout). The 4 spurious
+`attributes: []` only appear under `nm-diff.mjs`'s **`ecmaVersion: 2022`**
+oracle/compiled mismatch — a **version-skew artifact** of the differential
+harness (year-form vs internal-form), not a runtime divergence at matched
+ecmaVersion. So the underlying codegen bug (storage-split on a computed-write →
+static-read expando) is **real but latent / non-blocking**, and the only sound
+fix is the architecture-hard host `$Object` member-dispatch rework — out of
+scope for a gate tweak. Hence `status: blocked` + `architect_spec: candidate`;
+claim released; branch + minimal test retained as the record. No re-architecture
+now.
