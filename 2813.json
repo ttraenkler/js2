@@ -1,8 +1,9 @@
 {
   "id": "2813",
   "assignee": "ttraenkler/agent-a684644ca31db72b9",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2813-wasi-runtimes-doc",
   "claimed_at": "2026-06-29T22:49:59Z",
-  "updated_at": "2026-06-29T22:49:59Z"
+  "updated_at": "2026-06-29T22:56:54Z",
+  "released_at": "2026-06-29T22:56:54Z"
 }
