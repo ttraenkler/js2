@@ -1,8 +1,8 @@
 {
   "id": "2832",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-06-29T04:26:50Z",
-  "updated_at": "2026-06-29T04:26:50Z"
+  "assignee": "ttraenkler/agent-dev",
+  "status": "in-progress",
+  "branch": "issue-2832-nm-node-process-readside",
+  "claimed_at": "2026-06-29T04:27:33Z",
+  "updated_at": "2026-06-29T04:27:33Z"
 }
