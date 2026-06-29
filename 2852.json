@@ -1,8 +1,9 @@
 {
   "id": "2852",
   "assignee": "ttraenkler/agent-a83",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2852-seqexpr-marshalling",
   "claimed_at": "2026-06-29T22:45:01Z",
-  "updated_at": "2026-06-29T22:45:01Z"
+  "updated_at": "2026-06-29T22:49:50Z",
+  "released_at": "2026-06-29T22:49:50Z"
 }
