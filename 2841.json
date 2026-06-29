@@ -1,8 +1,8 @@
 {
   "id": "2841",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-06-29T15:18:37Z",
-  "updated_at": "2026-06-29T15:18:37Z"
+  "assignee": "ttraenkler/agent-senior-2841",
+  "status": "in-progress",
+  "branch": "issue-2841-arrow-param-name-type-marshalling",
+  "claimed_at": "2026-06-29T15:20:23Z",
+  "updated_at": "2026-06-29T15:20:23Z"
 }
