@@ -1,8 +1,9 @@
 {
   "id": "2838",
   "assignee": "ttraenkler/sendev-arrowparam",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2838-this-threading",
   "claimed_at": "2026-06-29T09:06:58Z",
-  "updated_at": "2026-06-29T09:06:58Z"
+  "updated_at": "2026-06-29T09:33:24Z",
+  "released_at": "2026-06-29T09:33:24Z"
 }
