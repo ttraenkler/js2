@@ -1,8 +1,9 @@
 {
   "id": "2851",
   "assignee": "ttraenkler/agent-a684644ca31db72b9",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2851-2852-marshalling-fixed-by-2841",
   "claimed_at": "2026-06-29T22:46:16Z",
-  "updated_at": "2026-06-29T22:46:16Z"
+  "updated_at": "2026-06-29T22:48:55Z",
+  "released_at": "2026-06-29T22:48:55Z"
 }
