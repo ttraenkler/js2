@@ -2196,18 +2196,27 @@ export function collectEmptyObjectWidening(
           // Scan all following statements in the same block for property assignments
           collectPropsFromStatements(checker, ctx, stmts, varName, extraProps, seenProps);
 
-          // (#2584) Standalone: if this var is ALSO the subject of any
+          // (#2584/#2849) If this var is ALSO the subject of any
           // `$Object`-hash-only consumer (bracket read/write, `in`, Object.keys
           // / values / entries / GOPD / GOPN / assign, for-in), a widened closed
           // struct would be invisible to that consumer (`o.a=7; o["a"]` → 0).
           // Mark it poisoned so widening is suppressed below and the receiver
           // stays a `$Object`. Scan the whole enclosing statement list (the same
-          // tree `collectPropsFromStatements` walks). Standalone-gated — host
-          // keeps the struct fast path via the live-mirror Proxy.
-          if (ctx.standalone) {
-            for (const s of stmts) {
-              markObjectHashConsumers(s, varName, ctx.objectHashConsumerVars);
-            }
+          // tree `collectPropsFromStatements` walks).
+          //
+          // (#2849) Runs in ALL modes now — host/gc parity with standalone. The
+          // earlier standalone-only gate rested on the claim that "host keeps the
+          // struct fast path via the live-mirror Proxy", but that is FALSE for the
+          // computed-write → static-read case: the #1712 host proxy canonicalises
+          // identity, yet its writes land in the host WeakMap sidecar
+          // (`__extern_set`), which a `struct.get` against a widened `$__anon_N`
+          // slot cannot observe. So a `{}` expando written via `o[k]=…` and read
+          // via static `o.prop` returned the never-written f64 slot (0). Acorn's
+          // `getOptions` (`for (opt in defaults) options[opt] = …` then
+          // `options.ecmaVersion`) is exactly this shape, and the edge.js NM-diff
+          // runs in host mode — so the gate had to go.
+          for (const s of stmts) {
+            markObjectHashConsumers(s, varName, ctx.objectHashConsumerVars);
           }
 
           // (#2372) Standalone: if any `Object.defineProperty(varName, …)` on
@@ -2219,15 +2228,15 @@ export function collectEmptyObjectWidening(
           // widening entirely for such receivers so they stay on the `$Object`
           // representation and writes + reads route through the native runtime
           // consistently. (`collectPropsFromStatements` sets the poison flag
-          // above, before this decision point.) Host mode is unaffected — it
-          // keeps the struct fast path via the live-mirror Proxy writeback.
+          // above, before this decision point.)
           if (ctx.dynamicDescriptorWidenVars.has(varName)) {
             continue;
           }
 
-          // (#2584) Suppress widening when a $Object-hash consumer was found
-          // above — the var stays a `$Object` so bracket/`in`/keys/GOPD see the
-          // same representation the dot-writes land in.
+          // (#2584/#2849) Suppress widening when a $Object-hash consumer was
+          // found above — the var stays a `$Object` so bracket/`in`/keys/GOPD
+          // see the same representation the dot-writes land in. Applies in all
+          // modes (the population scan above is no longer standalone-gated).
           if (ctx.objectHashConsumerVars.has(varName)) {
             continue;
           }
