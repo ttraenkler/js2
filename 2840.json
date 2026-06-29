@@ -1,8 +1,8 @@
 {
   "id": "2840",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-06-29T11:02:52Z",
-  "updated_at": "2026-06-29T11:02:52Z"
+  "assignee": "ttraenkler/senior-dev-2840",
+  "status": "in-progress",
+  "branch": "issue-2840-nm-node-process-ts-direct",
+  "claimed_at": "2026-06-29T11:35:42Z",
+  "updated_at": "2026-06-29T11:35:42Z"
 }
