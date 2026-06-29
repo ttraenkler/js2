@@ -114,3 +114,67 @@ standalone-floor.**
 - Repro infra (branch `issue-2837-objrep` `.tmp/`): `bb-instr.mjs`,
   `bb-instr2.mjs` (getter-never-invoked proof), `bb-probe2.mjs` (return trigger).
 - Diagnosed after #2837 on compiled acorn@8.16.0, 2026-06-29 (sendev round 5).
+
+## Round-6 implementation findings (sendev, 2026-06-29) — the architect's `this`-threading reframe is NECESSARY but NOT SUFFICIENT; acorn is blocked by a SECOND (member-read) layer
+
+I implemented the architect's `this`-threading fix and then verified it against
+acorn's ACTUAL pattern. Two distinct layers exist; the architect's verify-first
+captured only the first, and on an unrepresentative repro.
+
+### Layer 3 (the architect's): accessor-getter `this`-threading — IMPLEMENTED, works, non-regressing
+- Root cause confirmed: a getter/setter wrapped at fixed arity 0/1
+  (`_maybeWrapCallable`) needs `__call_fn_method_0`/`_1` to thread `this` via
+  `__current_this`; those are often not emitted → `this` inert.
+- **Better fix than the architect's** `_maybeWrapCallableUnknownArity` swap
+  (which is **eager** — it checks `__call_fn_N` availability at WRAP time, but
+  `Object.defineProperties` runs during MODULE-INIT before `__setExports`, so it
+  returns null → "Getter must be a function" crash at init): instead patch the
+  **lazy** `wasmClosureBridge` (`runtime.ts:2009`) so its method-`this` path falls
+  back to the HIGHEST available `__call_fn_method_N` when the exact-arity
+  dispatcher is absent (padding to that arity). Lazy ⇒ module-init-safe; mirrors
+  the dynamic bridge's `methodMaxArity` logic. Confirmed: acorn module-init no
+  longer crashes; closure suites (`#585`, `#1712`) fail IDENTICALLY with/without
+  the change (pre-existing, not a regression). **This change is reverted on the
+  branch pending the Layer-4 design** (it does not achieve acorn alone and is a
+  broad method-`this` change; re-apply once Layer 4 lands).
+
+### Layer 4 (the actual acorn blocker, NOT in the architect's spec): member-get on `this.<field>` never invokes the runtime-installed prototype accessor
+- WAT/instrumented proof (`bb-instr2.mjs`, `bb-instr3.mjs`): inside
+  `parseReturnStatement`, `this.inFunction` reads a static **0**, the getter body's
+  injected `console.log` **never fires**, AND
+  `Object.getPrototypeOf(this)` has **no `inFunction` descriptor**
+  (`proto has inFunction desc=false`). So the getter installed by
+  `Object.defineProperties(Parser.prototype, …)` is **not reachable** from the
+  member-get on the typed `this` receiver.
+- **Why the architect missed it:** the verify-first used `new C().f` (instance
+  member access — `c` is externref/host → routes through `__extern_get`/MOP →
+  getter fires, `this` inert = Layer 3). acorn uses **`this.<field>` inside a
+  prototype method**, where `this` is a typed Parser **struct** receiver: the
+  member-get takes the static struct-field path (field absent → default 0) and
+  **does NOT consult the prototype's runtime-installed accessors**. acorn's
+  prototype **methods** work (compile-time `__register_prototype` registry), but
+  runtime-installed **accessors** are not in that registry and the typed-receiver
+  member-get's prototype lookup (`_fnctorProtoLookup` / sidecar) doesn't surface
+  them.
+- **This IS the member-read layer the original carve's (a)/(b)/(c) targeted** —
+  the architect rejected them based on the `new C().f` repro, but for `this.field`
+  they are the relevant layer. Re-spec needed.
+
+### Ask for the re-spec (architect)
+Verify-first MUST use the REPRESENTATIVE chain: a prototype METHOD that reads
+`this.<accessor>` where the accessor was installed via
+`Object.defineProperties(C.prototype, <variableDescriptorMap>)` and `this` is a
+typed struct receiver — e.g.
+```ts
+function C(){ this.flags = 2; }
+C.prototype.m = function(){ return 1; };           // ensures method dispatchers exist
+var acc = { f: { get: function(){ return this.flags; } } };
+Object.defineProperties(C.prototype, acc);
+C.prototype.read = function(){ return this.f; };   // this.<accessor> in a method
+// new C().read() must return 2 (currently the getter never fires → 0/null)
+```
+NOT `new C().f`. The fix must make a typed-receiver member-get of a
+not-statically-known field consult runtime-installed prototype accessors (host
+MOP / `_fnctorProtoLookup` over the accessor sidecar). Couple it with the Layer-3
+`wasmClosureBridge` `this`-threading fix above (re-apply from this branch's git
+history / the `.tmp` notes).
