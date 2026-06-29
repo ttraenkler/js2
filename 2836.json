@@ -1,8 +1,8 @@
 {
   "id": "2836",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-06-29T05:57:29Z",
-  "updated_at": "2026-06-29T05:57:29Z"
+  "assignee": "ttraenkler/sendev-arrowparam",
+  "status": "in-progress",
+  "branch": "issue-arrowparam-toassignable",
+  "claimed_at": "2026-06-29T06:38:44Z",
+  "updated_at": "2026-06-29T06:38:44Z"
 }
