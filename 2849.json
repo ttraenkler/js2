@@ -1,8 +1,9 @@
 {
   "id": "2849",
   "assignee": "ttraenkler/sendev-ecmaver",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2849-host-expando-gate",
   "claimed_at": "2026-06-29T22:18:18Z",
-  "updated_at": "2026-06-29T22:18:18Z"
+  "updated_at": "2026-06-29T22:44:24Z",
+  "released_at": "2026-06-29T22:44:24Z"
 }
