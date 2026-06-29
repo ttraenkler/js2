@@ -1,8 +1,8 @@
 {
   "id": "2853",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-06-29T22:27:06Z",
-  "updated_at": "2026-06-29T22:27:06Z"
+  "assignee": "ttraenkler/agent-a684644ca31db72b9",
+  "status": "in-progress",
+  "branch": "issue-2853-acorn-selfparse-div-regex-group",
+  "claimed_at": "2026-06-29T22:27:19Z",
+  "updated_at": "2026-06-29T22:27:19Z"
 }
