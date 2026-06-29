@@ -1,9 +1,8 @@
 {
   "id": "2838",
-  "assignee": "ttraenkler/sendev-arrowparam",
-  "status": "released",
-  "branch": "issue-2838-this-threading",
-  "claimed_at": "2026-06-29T09:06:58Z",
-  "updated_at": "2026-06-29T09:33:24Z",
-  "released_at": "2026-06-29T09:33:24Z"
+  "assignee": "ttraenkler/sendev-2838",
+  "status": "in-progress",
+  "branch": "issue-2838-l3-bridge",
+  "claimed_at": "2026-06-29T10:50:00Z",
+  "updated_at": "2026-06-29T10:50:00Z"
 }
