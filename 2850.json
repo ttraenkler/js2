@@ -1,8 +1,8 @@
 {
   "id": "2850",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-06-29T21:39:58Z",
-  "updated_at": "2026-06-29T21:39:58Z"
+  "assignee": "ttraenkler/agent-a83",
+  "status": "in-progress",
+  "branch": "issue-2850-regex-validation",
+  "claimed_at": "2026-06-29T22:07:21Z",
+  "updated_at": "2026-06-29T22:07:21Z"
 }
