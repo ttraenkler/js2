@@ -1,8 +1,8 @@
 {
   "id": "2828",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-06-29T04:04:34Z",
-  "updated_at": "2026-06-29T04:04:34Z"
+  "assignee": "ttraenkler/agent-a8f0d6a619ca48044",
+  "status": "in-progress",
+  "branch": "issue-2828-ship-examples-on-npm",
+  "claimed_at": "2026-06-29T04:06:44Z",
+  "updated_at": "2026-06-29T04:06:44Z"
 }
