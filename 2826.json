@@ -1,8 +1,9 @@
 {
   "id": "2826",
   "assignee": "ttraenkler/agent-a684644ca31db72b9",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2826-bugc-cps-capture-repoint",
   "claimed_at": "2026-06-29T22:33:34Z",
-  "updated_at": "2026-06-29T22:33:34Z"
+  "updated_at": "2026-06-29T22:47:12Z",
+  "released_at": "2026-06-29T22:47:12Z"
 }
