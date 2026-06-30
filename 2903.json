@@ -1,8 +1,9 @@
 {
   "id": "2903",
   "assignee": "ttraenkler/sendev-callback",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2903-make-callback-dead-import",
   "claimed_at": "2026-06-30T20:39:42Z",
-  "updated_at": "2026-06-30T20:39:42Z"
+  "updated_at": "2026-06-30T21:07:18Z",
+  "released_at": "2026-06-30T21:07:18Z"
 }
