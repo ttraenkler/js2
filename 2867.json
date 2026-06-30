@@ -1,8 +1,9 @@
 {
   "id": "2867",
   "assignee": "ttraenkler/sendev-carrier-gaps",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2867-gap2",
   "claimed_at": "2026-06-30T21:52:48Z",
-  "updated_at": "2026-06-30T21:52:48Z"
+  "updated_at": "2026-06-30T22:29:22Z",
+  "released_at": "2026-06-30T22:29:22Z"
 }
