@@ -1,8 +1,9 @@
 {
   "id": "2865",
   "assignee": "ttraenkler/sendev-flatten",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2865-async-frame-ag0",
   "claimed_at": "2026-06-30T18:25:11Z",
-  "updated_at": "2026-06-30T18:25:11Z"
+  "updated_at": "2026-06-30T19:02:44Z",
+  "released_at": "2026-06-30T19:02:44Z"
 }
