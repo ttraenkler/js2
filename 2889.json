@@ -1,8 +1,9 @@
 {
   "id": "2889",
   "assignee": "ttraenkler/sendev-highwater",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2889-highwater-writeside-hostfree",
   "claimed_at": "2026-06-30T06:47:51Z",
-  "updated_at": "2026-06-30T06:47:51Z"
+  "updated_at": "2026-06-30T07:12:01Z",
+  "released_at": "2026-06-30T07:12:01Z"
 }
