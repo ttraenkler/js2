@@ -1,8 +1,8 @@
 {
   "id": "2861",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-06-30T02:07:41Z",
-  "updated_at": "2026-06-30T02:07:41Z"
+  "assignee": "ttraenkler/dev-standalone",
+  "status": "in-progress",
+  "branch": "issue-2861-arraybuffer-dataview-proto-standalone",
+  "claimed_at": "2026-06-30T02:13:32Z",
+  "updated_at": "2026-06-30T02:13:32Z"
 }
