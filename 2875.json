@@ -1,9 +1,8 @@
 {
   "id": "2875",
-  "assignee": "ttraenkler/agent-abb00",
-  "status": "released",
+  "assignee": "ttraenkler/agent-a516",
+  "status": "in-progress",
   "branch": "issue-2875-standalone-string-proto",
-  "claimed_at": "2026-06-30T05:45:32Z",
-  "updated_at": "2026-06-30T05:49:27Z",
-  "released_at": "2026-06-30T05:49:27Z"
+  "claimed_at": "2026-06-30T06:01:17Z",
+  "updated_at": "2026-06-30T06:01:17Z"
 }
