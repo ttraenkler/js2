@@ -1,8 +1,9 @@
 {
   "id": "2856",
   "assignee": "ttraenkler/agent-a515c1fe0122c9285",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2856-ir-body-shape-rejected",
   "claimed_at": "2026-06-30T03:21:04Z",
-  "updated_at": "2026-06-30T03:21:04Z"
+  "updated_at": "2026-06-30T03:30:00Z",
+  "released_at": "2026-06-30T03:30:00Z"
 }
