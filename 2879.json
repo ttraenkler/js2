@@ -1,8 +1,9 @@
 {
   "id": "2879",
   "assignee": "ttraenkler/dev-standalone",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2879-honest-standalone-floor",
   "claimed_at": "2026-06-30T05:22:27Z",
-  "updated_at": "2026-06-30T05:22:27Z"
+  "updated_at": "2026-06-30T05:38:32Z",
+  "released_at": "2026-06-30T05:38:32Z"
 }
