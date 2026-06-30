@@ -174,3 +174,21 @@ failures, all collapsed onto one signature by the runner's error-formatter.
 already tagged for (`architect_spec: candidate`). The claim is released so the
 de-mask step (a test-infra change, not this compiler substrate) can be routed
 independently.
+
+## Superseded by concrete clusters (#2872–#2877)
+
+After the #2870 de-mask made the standalone failures honest, the phantom
+"ToPrimitive" collapse was re-triaged into real, claimable clusters. This issue
+is **superseded** — do NOT implement the §A/§B `__to_primitive` arms against the
+728 expecting a mass flip. Work the concrete clusters instead:
+
+- **#2872** TypedArray/prototype (294)
+- **#2873** language/expressions (276)
+- **#2874** Object.getOwnPropertyDescriptor numeric/object key coercion (164)
+- **#2875** String/prototype (159)
+- **#2876** RegExp (125)
+- **#2877** (tooling) standalone exceptions expose no readable message
+
+A genuine `__to_primitive`-engine residual (e.g. RegExp/DataView/ArrayBuffer
+concat returning the wrong value, §A) may remain after those land — re-measure
+then and re-file a narrowly-scoped engine issue if so.
