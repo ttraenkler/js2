@@ -1,8 +1,9 @@
 {
   "id": "2864",
   "assignee": "ttraenkler/sr-frame",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2864-f1b-typed-spills",
   "claimed_at": "2026-06-30T09:09:48Z",
-  "updated_at": "2026-06-30T09:09:48Z"
+  "updated_at": "2026-06-30T09:53:41Z",
+  "released_at": "2026-06-30T09:53:41Z"
 }
