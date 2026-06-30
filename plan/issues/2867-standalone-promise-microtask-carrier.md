@@ -47,6 +47,15 @@ No standalone microtask queue + Promise state machine. Needs:
 
 ## Implementation Plan
 
+> **Prerequisite type-contract slice carved out → #2905** (architect spec
+> authored): `resolveWasmType(Promise<T>)` unwraps to `T` at `index.ts:12046`
+> ("compiled synchronously" — false under the carrier), corrupting every
+> STORED/TYPED `Promise<T>` (`const p = f()`, `Promise<T>` params/fields/returns,
+> `p.then(...)`) to NaN/illegal-cast. #2905 carrier-gates that branch to externref.
+> It is **independently landable on the already-on WASI carrier** and **blocks
+> #2895 slice 1d** (the standalone gate widen would otherwise expose the
+> corruption). Land #2905 before 1d.
+
 **`architect_spec: candidate`** — overlaps the generator-frame design (#2864).
 Recommend the architect design the **resumable-frame substrate once** and share
 it between async functions, generators, and async generators. Check #1326c
