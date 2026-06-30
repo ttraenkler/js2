@@ -1,8 +1,9 @@
 {
   "id": "2863",
   "assignee": "ttraenkler/agent-abb00",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2863-standalone-namespace-reads",
   "claimed_at": "2026-06-30T05:51:52Z",
-  "updated_at": "2026-06-30T05:51:52Z"
+  "updated_at": "2026-06-30T06:17:25Z",
+  "released_at": "2026-06-30T06:17:25Z"
 }
