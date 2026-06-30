@@ -1,8 +1,8 @@
 {
   "id": "2891",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-06-30T09:26:01Z",
-  "updated_at": "2026-06-30T09:26:01Z"
+  "assignee": "ttraenkler/sendev-toprim-ops",
+  "status": "in-progress",
+  "branch": "issue-2891-toprimitive-operators",
+  "claimed_at": "2026-06-30T09:26:13Z",
+  "updated_at": "2026-06-30T09:26:13Z"
 }
