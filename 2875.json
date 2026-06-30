@@ -1,8 +1,9 @@
 {
   "id": "2875",
   "assignee": "ttraenkler/dev-standalone",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2875-standalone-string-proto-cluster",
   "claimed_at": "2026-06-30T03:35:17Z",
-  "updated_at": "2026-06-30T03:35:17Z"
+  "updated_at": "2026-06-30T03:38:20Z",
+  "released_at": "2026-06-30T03:38:20Z"
 }
