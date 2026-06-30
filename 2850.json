@@ -1,9 +1,8 @@
 {
   "id": "2850",
-  "assignee": "ttraenkler/agent-a83",
-  "status": "released",
-  "branch": "issue-2850-regex-validation",
-  "claimed_at": "2026-06-29T22:07:21Z",
-  "updated_at": "2026-06-29T22:41:02Z",
-  "released_at": "2026-06-29T22:41:02Z"
+  "assignee": "ttraenkler/dev-standalone",
+  "status": "in-progress",
+  "branch": "probe",
+  "claimed_at": "2026-06-30T03:16:28Z",
+  "updated_at": "2026-06-30T03:16:28Z"
 }
