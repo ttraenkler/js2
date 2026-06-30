@@ -1,8 +1,8 @@
 {
   "id": "2867",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-06-30T02:08:44Z",
-  "updated_at": "2026-06-30T02:08:44Z"
+  "assignee": "ttraenkler/senior-dev-promise",
+  "status": "in-progress",
+  "branch": "issue-2867-standalone-promise-carrier",
+  "claimed_at": "2026-06-30T02:31:10Z",
+  "updated_at": "2026-06-30T02:31:10Z"
 }
