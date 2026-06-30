@@ -1,8 +1,9 @@
 {
   "id": "2879",
   "assignee": "ttraenkler/sendev-hostfree",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2879-hostfree-metric",
   "claimed_at": "2026-06-30T03:25:35Z",
-  "updated_at": "2026-06-30T03:25:35Z"
+  "updated_at": "2026-06-30T03:30:06Z",
+  "released_at": "2026-06-30T03:30:06Z"
 }
