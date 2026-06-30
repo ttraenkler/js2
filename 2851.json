@@ -1,8 +1,9 @@
 {
   "id": "2851",
   "assignee": "ttraenkler/dev-standalone",
-  "status": "in-progress",
+  "status": "released",
   "branch": "probe",
   "claimed_at": "2026-06-30T03:16:31Z",
-  "updated_at": "2026-06-30T03:16:31Z"
+  "updated_at": "2026-06-30T03:18:02Z",
+  "released_at": "2026-06-30T03:18:02Z"
 }
