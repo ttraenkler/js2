@@ -306,3 +306,55 @@ compiler intrinsic (carrier-gated: real drain on wasi, void no-op on
 standalone/gc while the carrier is wasi-only) + the test262 runner hook that
 emits it for `flags:[async]` tests. These are no-ops on the gc + standalone CI
 lanes now and auto-activate when 1d eventually widens the carrier.
+
+### 1d deep-dive — the count-move is blocked on the native Promise CARRIER, not the drive layer (definitive measurements)
+
+Per the coordinator's faster-partial-path directive, I isolated the −16 with three
+configs on `language/statements/async-function` (74) under `--target standalone`:
+
+| config | pass | Δ vs baseline | what's on |
+|--------|------|---------------|-----------|
+| baseline | 61 | — | gates wasi-only |
+| **A** broad carrier ON, drive OFF | 45 | **−16** | `isStandalonePromiseActive→standalone`, drive wiring wasi-only |
+| **B** full widen (carrier ON, drive ON) | 45 | **−16** | both |
+| **C** drive ON, broad carrier OFF | 61 | **0** | drive wiring decoupled to `isAsyncDriveActive`, carrier wasi-only |
+
+**The drive layer is innocent**: Config C (drive lowering active for standalone,
+broad carrier off) is regression-free (61=61), and also 0-Δ on
+`expressions/await`+`async-arrow-function` (60=60) and on the full 2013-file
+async sweep (1254 ≈ baseline). **The entire −16 is the broad carrier** — the
+native-`$Promise` substrate (`Promise.resolve`/`.then`/await-unwrap/async-fn-
+result) going native for standalone. The regressing tests are non-covered async
+fns whose results are consumed via `.then` chains that need **recursive thenable
+assimilation** (`returns-async-function`: `.then(retFn => retFn())`) and
+**throw→reject routing** (`evaluation-body-that-throws`) — completeness gaps in
+the native `.then`/rejection carrier, independent of the drive layer.
+
+**Full-cluster direction (the bulk):** sampled 150 files across `for-await-of` +
+`async-generator` + `Promise/then` + `Promise/all`:
+
+| config | pass | Δ |
+|--------|------|---|
+| baseline | 93 | — |
+| full widen | 64 | **−29** |
+
+So the widen is **strongly net-negative across the whole cluster** (−16 on
+async-function, −29 on the big corpora) because the native Promise carrier is
+incomplete; the drive layer alone gains **0** (it needs native promises for its
+awaited operands, which only the carrier provides). **There is no net-positive
+flip — full or per-shape — available until the native Promise carrier substrate
+is completed.**
+
+### Reframed plan (the real ~986 unlock)
+
+The async-frame drive layer (#2893/#2895 1a–1c, validated host-free incl. the
+genuinely-pending suspend→drain→resume milestone) is the **necessary, done**
+half. The **blocking** half is **native-Promise-carrier completion** (≈ #2367):
+recursive `.then`/`.catch` thenable assimilation, async-fn throw→reject routing,
+`Promise.all`/`race`/`allSettled`, and `for-await-of`/async-generator drive.
+Sequence: complete those in the native carrier (each measured against the
+−16/−29 guard), THEN widen `isStandalonePromiseActive` +
+`isStandaloneThenChainNativeActive` together — at which point the drive layer's
+gains compound. Carrier-gated drive wiring (current #2394) makes that widen flip
+both together automatically. Until then, gates stay wasi-only (standalone-inert,
+zero regression).
