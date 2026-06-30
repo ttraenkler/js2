@@ -2,8 +2,7 @@
   "id": "2902",
   "assignee": "ttraenkler/sendev-error",
   "status": "in-progress",
-  "branch": "issue-PLACEHOLDER",
-  "reserved_at": "2026-06-30T20:35:54Z",
-  "claimed_at": "2026-06-30T20:35:54Z",
-  "updated_at": "2026-06-30T20:35:54Z"
+  "branch": "issue-2902-native-test262error",
+  "claimed_at": "2026-06-30T20:36:12Z",
+  "updated_at": "2026-06-30T20:36:12Z"
 }
