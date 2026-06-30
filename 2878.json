@@ -1,8 +1,9 @@
 {
   "id": "2878",
   "assignee": "ttraenkler/agent-abb00",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2878-standalone-invalid-wasm-residual",
   "claimed_at": "2026-06-30T06:39:35Z",
-  "updated_at": "2026-06-30T06:39:35Z"
+  "updated_at": "2026-06-30T06:44:55Z",
+  "released_at": "2026-06-30T06:44:55Z"
 }
