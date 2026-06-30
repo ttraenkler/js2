@@ -1,8 +1,8 @@
 {
   "id": "2866",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-06-30T02:08:33Z",
-  "updated_at": "2026-06-30T02:08:33Z"
+  "assignee": "ttraenkler/sendev-promise",
+  "status": "in-progress",
+  "branch": "issue-2866-standalone-symbol-carrier",
+  "claimed_at": "2026-06-30T09:09:37Z",
+  "updated_at": "2026-06-30T09:09:37Z"
 }
