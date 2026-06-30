@@ -1,8 +1,8 @@
 {
   "id": "2877",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-06-30T03:03:18Z",
-  "updated_at": "2026-06-30T03:03:18Z"
+  "assignee": "ttraenkler/sr-genframe",
+  "status": "in-progress",
+  "branch": "issue-2877-standalone-exn-message",
+  "claimed_at": "2026-06-30T15:40:40Z",
+  "updated_at": "2026-06-30T15:40:40Z"
 }
