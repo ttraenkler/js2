@@ -1,8 +1,8 @@
 {
   "id": "2864",
-  "assignee": "ttraenkler/sendev-genframe",
+  "assignee": "ttraenkler/sr-frame",
   "status": "in-progress",
-  "branch": "issue-2864-standalone-gen-carrier",
-  "claimed_at": "2026-06-30T05:43:33Z",
-  "updated_at": "2026-06-30T05:43:33Z"
+  "branch": "issue-2864-f1b-typed-spills",
+  "claimed_at": "2026-06-30T09:09:48Z",
+  "updated_at": "2026-06-30T09:09:48Z"
 }
