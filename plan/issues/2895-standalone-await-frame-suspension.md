@@ -358,3 +358,53 @@ Sequence: complete those in the native carrier (each measured against the
 gains compound. Carrier-gated drive wiring (current #2394) makes that widen flip
 both together automatically. Until then, gates stay wasi-only (standalone-inert,
 zero regression).
+
+## Pickup-ready: native-Promise-CARRIER completion scope (the blocking half)
+
+The drive layer (1a–1c, PRs #2393/#2394) is DONE and safe (carrier-gated →
+standalone-inert). The async ~986 unlock is gated on completing the native
+`$Promise` carrier so the `isStandalonePromiseActive` +
+`isStandaloneThenChainNativeActive` widen stops regressing. **Co-blocked**: per
+leak-analysis only ~192 async tests leak Promise SOLELY; ~4,091 also leak
+Test262Error/iterator/callback — so this pays off best AFTER/alongside the
+sr-error (~2,779), sr-callback (~1,092), sr-iter (~889) fronts. Deferred until a
+slot frees and those land.
+
+**Exact gaps (derived from the −16/−29 regression breakdown), in `async-scheduler.ts`
+unless noted:**
+1. **Recursive thenable assimilation in native `.then`/`.catch`** — when a
+   `.then(cb)` callback RETURNS a `$Promise` (or thenable), the chained promise
+   must adopt that inner promise's eventual state, not settle with the promise
+   object. Today `emitThenWrapperFunction`/the settle path does
+   `__promise_fulfill(chained, cbResult)` directly. Add an "if cbResult is a
+   `$Promise`, register a reaction that settles `chained` when the inner settles"
+   path (a `__promise_resolve_thenable`/adopt helper). Regression proof:
+   `language/statements/async-function/returns-async-function.js`
+   (`.then(retFn => retFn())` → `result` must be `1`, not a promise).
+2. **async-fn throw → reject routing** — `async function f(){ throw 1 } f().then(_, onRej)`
+   must reject with `1`. The standalone catch path
+   (`wrapAsyncCallInTryCatch`, expressions.ts) + non-covered async-fn-result
+   wrapping must produce a REJECTED `$Promise` whose reason flows to the reject
+   reaction. Proof: `evaluation-body-that-throws.js`, `dflt-params-abrupt.js`
+   (default-param abrupt completion → reject).
+3. **try/finally across await** — `try { ... await ... } finally { ... }` /
+   `try { return x } finally { ... }` reject/return semantics. Proof:
+   `try-reject-finally-throw.js`, `try-return-finally-return.js`,
+   `try-return-finally-reject.js`. (This also needs the DRIVE layer extended to
+   spill/run finalizers across suspension — the frame ABI already reserves
+   `MODE_FIELD`/`ABRUPT_FIELD`/`ERROR_FIELD` for it, mirroring the native
+   generator abrupt-resume path in `generators-native.ts`.)
+4. **`Promise.all`/`race`/`allSettled`/`any`** native standalone combinators
+   (currently host-import-gated) — needed by the `built-ins/Promise/all|race`
+   corpora.
+5. **`for-await-of` + async-generator** native drive (huge corpora: 1234 + 623).
+
+**Verification guard (re-run each fix, `runTest262File(..., "standalone")`):**
+- `language/statements/async-function` (74) — must stay ≥ 61 (baseline) and climb.
+- sampled `for-await-of` + `async-generator` + `Promise/{then,all}` (the 150-file
+  sample that read 93 baseline → 64 widened) — widen must reach > 93 before shipping.
+- Flip `isStandalonePromiseActive` + `isStandaloneThenChainNativeActive` →
+  `standalone` only once BOTH corpora are net-positive. The carrier-gated drive
+  wiring (#2394) makes the flip activate the drive layer for standalone in lockstep.
+
+Cross-ref: native Promise carrier umbrella **#2367**. Drive-layer foundation: this issue (#2895), PRs #2393/#2394.
