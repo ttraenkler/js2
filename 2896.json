@@ -1,8 +1,9 @@
 {
   "id": "2896",
   "assignee": "ttraenkler/sr-fnmeta",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2896-standalone-fn-metadata",
   "claimed_at": "2026-06-30T19:01:39Z",
-  "updated_at": "2026-06-30T19:01:39Z"
+  "updated_at": "2026-06-30T19:10:21Z",
+  "released_at": "2026-06-30T19:10:21Z"
 }
