@@ -1,8 +1,9 @@
 {
   "id": "2869",
   "assignee": "ttraenkler/dev-standalone",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2869-standalone-object-rest",
   "claimed_at": "2026-06-30T02:10:38Z",
-  "updated_at": "2026-06-30T02:10:38Z"
+  "updated_at": "2026-06-30T02:11:49Z",
+  "released_at": "2026-06-30T02:11:49Z"
 }
