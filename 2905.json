@@ -1,8 +1,8 @@
 {
   "id": "2905",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-06-30T22:35:22Z",
-  "updated_at": "2026-06-30T22:35:22Z"
+  "assignee": "ttraenkler/sendev-promise",
+  "status": "in-progress",
+  "branch": "issue-2905-promise-carrier",
+  "claimed_at": "2026-06-30T22:40:57Z",
+  "updated_at": "2026-06-30T22:40:57Z"
 }
