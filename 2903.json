@@ -2,8 +2,7 @@
   "id": "2903",
   "assignee": "ttraenkler/sendev-callback",
   "status": "in-progress",
-  "branch": "issue-PLACEHOLDER",
-  "reserved_at": "2026-06-30T20:39:32Z",
-  "claimed_at": "2026-06-30T20:39:32Z",
-  "updated_at": "2026-06-30T20:39:32Z"
+  "branch": "issue-2903-make-callback-dead-import",
+  "claimed_at": "2026-06-30T20:39:42Z",
+  "updated_at": "2026-06-30T20:39:42Z"
 }
