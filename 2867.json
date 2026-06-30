@@ -1,8 +1,9 @@
 {
   "id": "2867",
   "assignee": "ttraenkler/sendev-promise",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2867-standalone-promise-carrier",
   "claimed_at": "2026-06-30T05:43:26Z",
-  "updated_at": "2026-06-30T05:43:26Z"
+  "updated_at": "2026-06-30T06:41:13Z",
+  "released_at": "2026-06-30T06:41:13Z"
 }
