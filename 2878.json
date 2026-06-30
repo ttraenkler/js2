@@ -1,8 +1,9 @@
 {
   "id": "2878",
   "assignee": "ttraenkler/agent-a516",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2878-standalone-invalid-wasm",
   "claimed_at": "2026-06-30T06:04:13Z",
-  "updated_at": "2026-06-30T06:04:13Z"
+  "updated_at": "2026-06-30T06:18:53Z",
+  "released_at": "2026-06-30T06:18:53Z"
 }
