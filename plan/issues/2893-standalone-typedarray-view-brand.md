@@ -1,7 +1,8 @@
 ---
 id: 2893
 title: "Standalone: distinct %TypedArray% view brand (unblocks #2872 reflective getter/method bodies)"
-status: ready
+status: in-progress
+assignee: ttraenkler/sendev-typedview
 created: 2026-06-30
 priority: high
 task_type: bug
@@ -12,6 +13,7 @@ horizon: l
 related: [2872, 2375, 2593, 2651, 2885, 2876]
 umbrella: 2860
 blocks: [2872]
+blocked_on: TBD-typedarray-intrinsic-ctor   # getProtoOf(<view ctor>) -> %TypedArray% materialization (see Implementation Notes)
 ---
 
 # Standalone: distinct %TypedArray% view brand
@@ -297,6 +299,85 @@ accessors, no rep change), PR-2 (float-view brand split, the rep change), PR-3
 low-risk slice that proves the recovery shape and banks the integer-view rows
 without touching the element representation at all. Dispatch PR-1 immediately;
 PR-2 only after PR-1's recovery shape is proven green.
+
+## Implementation Notes (sendev-typedview, 2026-06-30) — PR-1 built; corpus gated on a NEW predecessor
+
+### What was built (PR-1 core — committed on `issue-2893-typedarray-view-brand`)
+
+`emitTypedArrayProtoMemberBody` (+ helpers `typedArrayViewBrandCandidates`,
+`emitTypedArrayAccessorResult`) in `array-object-proto.ts`, wired into
+`makeTypedArrayGlue`. The `length`/`byteLength`/`byteOffset` accessor getters now
+emit a real reflective body: brand-recover the view from the opaque externref
+`this` over the registered integer-view vec/subview type set (a runtime
+`ref.test`/`ref.cast` cascade via `emitThisReceiverGuardConvert`), read/compute
+the §23.2.3 field off the recovered local, box to externref, and throw a catchable
+TypeError (`emitBrandCheckTypeError`) on any non-view receiver. `buffer` + all
+methods stay a catchable refusal. Verified standalone, **0 imports**:
+
+| probe (standalone) | result |
+|---|---|
+| `gOPD(Uint8Array.prototype,"length").get.call(new Uint8Array(8))` | `8` |
+| `gOPD(Int16Array.prototype,"byteLength").get.call(new Int16Array(4))` | `8` (4×2) |
+| `gOPD(Int32Array.prototype,"byteLength").get.call(new Int32Array(3))` | `12` (3×4) |
+| `byteOffset.get.call(Int32Array(8).subarray(4))` | `16` (subview arm) |
+| `length.get.call([1,2,3])` / `.call(new ArrayBuffer(8))` | TypeError (caught) |
+
+Two corrections to the spec, both verify-first:
+
+1. **No proto-identity arm.** The spec's step-1 prescribed
+   `emitNativeProtoIdentityReturnUndefined` (copied from RegExp). **Node-verified
+   that §23.2.3 TypedArray getters throw a TypeError for EVERY non-view receiver,
+   including both `%TypedArray%.prototype` and `Uint8Array.prototype`** — there is
+   NO `this===proto → undefined` carve-out (unlike §22.2.6 RegExp). So the
+   proto-identity arm is deliberately omitted; the brand-check else-arm correctly
+   throws for the prototype receivers. (`length/this-has-no-typedarrayname-internal.js`
+   et al. assert exactly this.)
+
+2. **Hoist-vs-emit timing fix.** The candidate set is read at closure-emit time,
+   but the descriptor closure is synthesised BEFORE any `new <View>()` is compiled
+   → the integer-view vec types were not yet in `vecTypeMap` → empty candidate set
+   → a valid view fell through to the brand-check throw. Fixed with
+   `reserveTypedArrayIntViewVecTypes(ctx)` (index.ts), reserving the `i8_byte`/
+   `i16_byte`/`i32_elem` vec structs up-front next to `reserveTypedArraySubviewTypes`
+   (under `suppressVecUsageFlag`, standalone/wasi-gated). Regression-neutral:
+   identical pass/fail (P=70/F=54) before vs after across a 124-file
+   TypedArray/DataView/ArrayBuffer standalone sweep.
+
+### THE BLOCKER — the spec's "PR-1 = immediate ~50–90 row win" framing is invalid
+
+The architect's verify-recipe probed the descriptor off `Uint8Array.prototype`
+**directly**. But **every** test262 accessor test reaches the getter via the
+`testTypedArray.js` harness (line 64): `var TypedArray = Object.getPrototypeOf(Int8Array);`
+then `TypedArray.prototype`. All 21 proto-referencing files in
+`length/`+`byteLength/`+`byteOffset/` use this path; **zero** read off a concrete
+view proto.
+
+And **`Object.getPrototypeOf(Int8Array)` THROWS standalone.** Root cause (depth-probed):
+
+- Standalone models **prototypes only**. `Int8Array` as a bare identifier compiles
+  to `ref.null.extern` (`identifiers.ts` — not in `SUPPORTED_STATIC_PROPS`); there
+  is **no constructor object**.
+- `%TypedArray%` exists only as a `$NativeProto` **prototype** glue
+  (`ensureTypedArrayIntrinsicNativeProtoGlue`), **not** as a constructor.
+- `Object.getPrototypeOf(<non-class externref>)` falls through to `drop` +
+  `ref.null.extern` (`calls.ts` ~6558) when the host import is absent.
+
+So PR-1's getter bodies are **correct and necessary but flip ZERO corpus rows**
+until a predecessor materialises, standalone:
+- `Int8Array`/… as **constructor objects** (with `.prototype` = `<View>.prototype`,
+  `[[Prototype]]` = the `%TypedArray%` intrinsic constructor), and
+- a `%TypedArray%` **intrinsic constructor** object whose `.prototype` is the
+  existing `%TypedArray%.prototype` glue, and
+- `Object.getPrototypeOf(<view ctor>)` wired to return it.
+
+This is a **rep-architecture fork** (~150–300 LOC across `native-proto.ts`
+brand-system, `identifiers.ts`, `calls.ts`, `builtin-static-globals.ts`,
+`array-object-proto.ts`), broad-impact on builtin-identifier resolution — NOT a
+contained getter slice. A net-zero PR-1 also can't pass the `net_per_test > 0`
+self-merge gate, so PR-1 must land **on top of** that predecessor in one
+net-positive change. **Escalated to tech lead 2026-06-30; awaiting a sequenced
+predecessor issue.** PR-2 (float-view brand split) and PR-3 (`buffer`/per-name
+brand) stay queued behind this — they have the same harness-reachability gate.
 
 ## Notes
 
