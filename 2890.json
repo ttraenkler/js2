@@ -2,8 +2,7 @@
   "id": "2890",
   "assignee": "ttraenkler/sendev-promise",
   "status": "in-progress",
-  "branch": "issue-NNNN-standalone-guard-hostfree",
-  "reserved_at": "2026-06-30T08:09:31Z",
-  "claimed_at": "2026-06-30T08:09:31Z",
-  "updated_at": "2026-06-30T08:09:31Z"
+  "branch": "issue-2890-standalone-guard-hostfree",
+  "claimed_at": "2026-06-30T08:09:45Z",
+  "updated_at": "2026-06-30T08:09:45Z"
 }
