@@ -1,8 +1,9 @@
 {
   "id": "2876",
   "assignee": "ttraenkler/agent-a516",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2876-standalone-regexp",
   "claimed_at": "2026-06-30T05:44:24Z",
-  "updated_at": "2026-06-30T05:44:24Z"
+  "updated_at": "2026-06-30T06:01:14Z",
+  "released_at": "2026-06-30T06:01:14Z"
 }
