@@ -1,8 +1,9 @@
 {
   "id": "2867",
   "assignee": "ttraenkler/senior-dev-promise",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2867-standalone-promise-carrier",
   "claimed_at": "2026-06-30T02:31:10Z",
-  "updated_at": "2026-06-30T02:31:10Z"
+  "updated_at": "2026-06-30T03:06:25Z",
+  "released_at": "2026-06-30T03:06:25Z"
 }
