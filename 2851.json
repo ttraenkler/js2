@@ -1,8 +1,9 @@
 {
   "id": "2851",
   "assignee": "ttraenkler/agent-a515c1fe0122c9285",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2851-acorn-template-element-marshal",
   "claimed_at": "2026-06-30T03:31:12Z",
-  "updated_at": "2026-06-30T03:31:12Z"
+  "updated_at": "2026-06-30T03:41:35Z",
+  "released_at": "2026-06-30T03:41:35Z"
 }
