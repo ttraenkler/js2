@@ -1,8 +1,9 @@
 {
   "id": "2862",
   "assignee": "ttraenkler/sendev-toprimitive",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2862-toprimitive-builtin-exotics",
   "claimed_at": "2026-06-30T02:35:18Z",
-  "updated_at": "2026-06-30T02:35:18Z"
+  "updated_at": "2026-06-30T02:44:47Z",
+  "released_at": "2026-06-30T02:44:47Z"
 }
