@@ -1,8 +1,9 @@
 {
   "id": "2846",
   "assignee": "ttraenkler/agent-a515c1fe0122c9285",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2846-bigint-functype-brand",
   "claimed_at": "2026-06-30T01:57:13Z",
-  "updated_at": "2026-06-30T01:57:13Z"
+  "updated_at": "2026-06-30T02:45:34Z",
+  "released_at": "2026-06-30T02:45:34Z"
 }
