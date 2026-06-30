@@ -1,8 +1,8 @@
 {
   "id": "2803",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-06-28T17:20:41Z",
-  "updated_at": "2026-06-28T17:20:41Z"
+  "assignee": "ttraenkler/dev-standalone",
+  "status": "in-progress",
+  "branch": "probe",
+  "claimed_at": "2026-06-30T03:16:24Z",
+  "updated_at": "2026-06-30T03:16:24Z"
 }
