@@ -1,8 +1,9 @@
 {
   "id": "2885",
   "assignee": "ttraenkler/sr-reflect",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2885-standalone-descriptor-reflection-core",
   "claimed_at": "2026-06-30T09:09:21Z",
-  "updated_at": "2026-06-30T09:09:21Z"
+  "updated_at": "2026-06-30T09:49:47Z",
+  "released_at": "2026-06-30T09:49:47Z"
 }
