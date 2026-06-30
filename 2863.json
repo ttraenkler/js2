@@ -1,8 +1,9 @@
 {
   "id": "2863",
   "assignee": "ttraenkler/sr-frame",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2863-standalone-dynshape-ops",
   "claimed_at": "2026-06-30T09:53:07Z",
-  "updated_at": "2026-06-30T09:53:07Z"
+  "updated_at": "2026-06-30T09:58:09Z",
+  "released_at": "2026-06-30T09:58:09Z"
 }
