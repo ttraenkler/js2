@@ -1,8 +1,9 @@
 {
   "id": "2895",
   "assignee": "ttraenkler/sendev-carriergap4",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2895-drain-hook",
   "claimed_at": "2026-06-30T23:28:52Z",
-  "updated_at": "2026-06-30T23:28:52Z"
+  "updated_at": "2026-06-30T23:36:56Z",
+  "released_at": "2026-06-30T23:36:56Z"
 }
