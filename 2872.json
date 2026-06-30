@@ -1,8 +1,9 @@
 {
   "id": "2872",
   "assignee": "ttraenkler/sr-reflect",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2872-standalone-typedarray-accessors",
   "claimed_at": "2026-06-30T10:35:06Z",
-  "updated_at": "2026-06-30T10:35:06Z"
+  "updated_at": "2026-06-30T10:42:33Z",
+  "released_at": "2026-06-30T10:42:33Z"
 }
