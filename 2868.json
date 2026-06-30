@@ -1,8 +1,9 @@
 {
   "id": "2868",
   "assignee": "ttraenkler/sendev-invalidwasm",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2868-standalone-invalid-wasm",
   "claimed_at": "2026-06-30T02:45:25Z",
-  "updated_at": "2026-06-30T02:45:25Z"
+  "updated_at": "2026-06-30T02:47:02Z",
+  "released_at": "2026-06-30T02:47:02Z"
 }
