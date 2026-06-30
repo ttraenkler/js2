@@ -1,8 +1,9 @@
 {
   "id": "2863",
   "assignee": "ttraenkler/dev-standalone",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2863-standalone-dynamic-shape-get-builtin",
   "claimed_at": "2026-06-30T02:48:43Z",
-  "updated_at": "2026-06-30T02:48:43Z"
+  "updated_at": "2026-06-30T05:50:43Z",
+  "released_at": "2026-06-30T05:50:43Z"
 }
