@@ -1,8 +1,9 @@
 {
   "id": "2895",
   "assignee": "ttraenkler/sendev-asyncdrive",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2895-standalone-async-drive",
   "claimed_at": "2026-06-30T19:21:58Z",
-  "updated_at": "2026-06-30T19:21:58Z"
+  "updated_at": "2026-06-30T20:44:38Z",
+  "released_at": "2026-06-30T20:44:38Z"
 }
