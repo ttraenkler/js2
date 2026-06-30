@@ -1,8 +1,9 @@
 {
   "id": "2874",
   "assignee": "ttraenkler/sendev-desckey",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2874-descriptor-key-coercion",
   "claimed_at": "2026-06-30T03:06:58Z",
-  "updated_at": "2026-06-30T03:06:58Z"
+  "updated_at": "2026-06-30T03:15:12Z",
+  "released_at": "2026-06-30T03:15:12Z"
 }
