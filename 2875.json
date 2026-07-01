@@ -1,9 +1,8 @@
 {
   "id": "2875",
-  "assignee": "ttraenkler/agent-a516",
-  "status": "released",
-  "branch": "issue-2875-standalone-string-proto",
-  "claimed_at": "2026-06-30T06:01:17Z",
-  "updated_at": "2026-06-30T06:04:07Z",
-  "released_at": "2026-06-30T06:04:07Z"
+  "assignee": "ttraenkler/fable-dev",
+  "status": "in-progress",
+  "branch": "issue-2875-string-proto-standalone",
+  "claimed_at": "2026-07-01T22:42:04Z",
+  "updated_at": "2026-07-01T22:42:04Z"
 }
