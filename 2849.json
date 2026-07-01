@@ -1,8 +1,9 @@
 {
   "id": "2849",
   "assignee": "ttraenkler/fable-dev",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2849-acorn-ecmaversion-normalize",
   "claimed_at": "2026-07-01T22:53:10Z",
-  "updated_at": "2026-07-01T22:53:10Z"
+  "updated_at": "2026-07-01T23:40:44Z",
+  "released_at": "2026-07-01T23:40:44Z"
 }
