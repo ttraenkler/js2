@@ -1,8 +1,8 @@
 {
   "id": "2923",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-07-01T23:21:48Z",
-  "updated_at": "2026-07-01T23:21:48Z"
+  "assignee": "ttraenkler/fable-dev",
+  "status": "in-progress",
+  "branch": "issue-2923-any-closure-param-dispatch",
+  "claimed_at": "2026-07-01T23:53:51Z",
+  "updated_at": "2026-07-01T23:53:51Z"
 }
