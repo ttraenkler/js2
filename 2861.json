@@ -1,8 +1,9 @@
 {
   "id": "2861",
   "assignee": "ttraenkler/fable-dev",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2861-disposablestack-glue",
   "claimed_at": "2026-07-01T23:39:22Z",
-  "updated_at": "2026-07-01T23:39:22Z"
+  "updated_at": "2026-07-01T23:56:41Z",
+  "released_at": "2026-07-01T23:56:41Z"
 }
