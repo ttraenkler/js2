@@ -1,8 +1,8 @@
 {
   "id": "2918",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-07-01T02:59:01Z",
-  "updated_at": "2026-07-01T02:59:01Z"
+  "assignee": "ttraenkler/sendev-promisethen",
+  "status": "in-progress",
+  "branch": "issue-2918-native-promise-then-all-funcidx-shift",
+  "claimed_at": "2026-07-01T02:59:09Z",
+  "updated_at": "2026-07-01T02:59:09Z"
 }
