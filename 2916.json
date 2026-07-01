@@ -1,8 +1,8 @@
 {
   "id": "2916",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-07-01T02:19:50Z",
-  "updated_at": "2026-07-01T02:19:50Z"
+  "assignee": "ttraenkler/sendev-instanceof",
+  "status": "in-progress",
+  "branch": "issue-2916-native-instanceof",
+  "claimed_at": "2026-07-01T02:26:56Z",
+  "updated_at": "2026-07-01T02:26:56Z"
 }
