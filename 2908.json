@@ -1,8 +1,9 @@
 {
   "id": "2908",
   "assignee": "ttraenkler/sdev-2908-externget-leak",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2908-standalone-externget-elemaccess-leak",
   "claimed_at": "2026-07-01T00:32:00Z",
-  "updated_at": "2026-07-01T00:32:00Z"
+  "updated_at": "2026-07-01T00:57:07Z",
+  "released_at": "2026-07-01T00:57:07Z"
 }
