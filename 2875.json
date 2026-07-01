@@ -1,8 +1,9 @@
 {
   "id": "2875",
   "assignee": "ttraenkler/fable-dev",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2875-string-proto-standalone",
   "claimed_at": "2026-07-01T22:42:04Z",
-  "updated_at": "2026-07-01T22:42:04Z"
+  "updated_at": "2026-07-01T22:53:07Z",
+  "released_at": "2026-07-01T22:53:07Z"
 }
