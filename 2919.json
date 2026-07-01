@@ -1,9 +1,8 @@
 {
   "id": "2919",
-  "assignee": "ttraenkler/sendev-2919",
-  "status": "released",
+  "assignee": "ttraenkler/sr-combinator2",
+  "status": "in-progress",
   "branch": "issue-2919-generic-iterable-combinators",
-  "claimed_at": "2026-07-01T22:41:03Z",
-  "updated_at": "2026-07-01T22:48:25Z",
-  "released_at": "2026-07-01T22:48:25Z"
+  "claimed_at": "2026-07-01T22:49:24Z",
+  "updated_at": "2026-07-01T22:49:24Z"
 }
