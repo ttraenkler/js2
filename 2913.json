@@ -1,8 +1,9 @@
 {
   "id": "2913",
   "assignee": "ttraenkler/dev-f2",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2913-report-dedup",
   "claimed_at": "2026-07-02T02:12:47Z",
-  "updated_at": "2026-07-02T02:12:47Z"
+  "updated_at": "2026-07-02T02:36:39Z",
+  "released_at": "2026-07-02T02:36:39Z"
 }
