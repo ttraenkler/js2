@@ -1,9 +1,8 @@
 {
   "id": "2847",
-  "assignee": "ttraenkler/agent-af86afead7d5",
-  "status": "released",
+  "assignee": "ttraenkler/opus-16b",
+  "status": "in-progress",
   "branch": "issue-2847-acorn-marshalling-quirks",
-  "claimed_at": "2026-07-02T19:10:43Z",
-  "updated_at": "2026-07-02T19:14:22Z",
-  "released_at": "2026-07-02T19:14:22Z"
+  "claimed_at": "2026-07-02T19:51:11Z",
+  "updated_at": "2026-07-02T19:51:11Z"
 }
