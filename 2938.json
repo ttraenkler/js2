@@ -1,8 +1,9 @@
 {
   "id": "2938",
   "assignee": "ttraenkler/fable-3",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2933-noyield-relax",
   "claimed_at": "2026-07-02T07:48:17Z",
-  "updated_at": "2026-07-02T07:48:17Z"
+  "updated_at": "2026-07-02T09:09:47Z",
+  "released_at": "2026-07-02T09:09:47Z"
 }
