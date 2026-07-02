@@ -1,8 +1,9 @@
 {
   "id": "2847",
   "assignee": "ttraenkler/probe-check",
-  "status": "in-progress",
+  "status": "released",
   "branch": "x",
   "claimed_at": "2026-07-02T19:54:41Z",
-  "updated_at": "2026-07-02T19:54:41Z"
+  "updated_at": "2026-07-02T19:54:44Z",
+  "released_at": "2026-07-02T19:54:44Z"
 }
