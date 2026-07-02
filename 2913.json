@@ -1,8 +1,9 @@
 {
   "id": "2913",
   "assignee": "ttraenkler/dev-callback",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2913-report-dedup",
   "claimed_at": "2026-07-02T01:24:39Z",
-  "updated_at": "2026-07-02T01:24:39Z"
+  "updated_at": "2026-07-02T01:34:49Z",
+  "released_at": "2026-07-02T01:34:49Z"
 }
