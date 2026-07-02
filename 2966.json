@@ -2,8 +2,7 @@
   "id": "2966",
   "assignee": "ttraenkler/fable-3",
   "status": "in-progress",
-  "branch": "issue-XXXX-standalone-descriptor-cluster",
-  "reserved_at": "2026-07-02T07:06:43Z",
-  "claimed_at": "2026-07-02T07:06:43Z",
-  "updated_at": "2026-07-02T07:06:43Z"
+  "branch": "issue-2966-externref-param-marshalling",
+  "claimed_at": "2026-07-02T07:12:33Z",
+  "updated_at": "2026-07-02T07:12:33Z"
 }
