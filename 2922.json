@@ -1,8 +1,9 @@
 {
   "id": "2922",
   "assignee": "ttraenkler/fable-4",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2922-async-widen-arms-2-3",
   "claimed_at": "2026-07-02T07:04:29Z",
-  "updated_at": "2026-07-02T07:04:29Z"
+  "updated_at": "2026-07-02T08:57:13Z",
+  "released_at": "2026-07-02T08:57:13Z"
 }
