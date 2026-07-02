@@ -1,8 +1,9 @@
 {
   "id": "2960",
   "assignee": "ttraenkler/agent-dev-opus",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2960-eval-newfunction-diagnostics",
   "claimed_at": "2026-07-02T20:20:22Z",
-  "updated_at": "2026-07-02T20:20:22Z"
+  "updated_at": "2026-07-02T21:09:04Z",
+  "released_at": "2026-07-02T21:09:04Z"
 }
