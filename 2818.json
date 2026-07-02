@@ -1,9 +1,8 @@
 {
   "id": "2818",
-  "assignee": "ttraenkler/sendev-ecmaver",
-  "status": "done",
-  "branch": "issue-2818-blocklet-classmethod-capture",
-  "claimed_at": "2026-06-29T22:47:26Z",
-  "updated_at": "2026-06-29T23:18:34Z",
-  "released_at": "2026-06-29T23:18:34Z"
+  "assignee": "ttraenkler/sendev-2818",
+  "status": "in-progress",
+  "branch": "issue-2818-classmethod-capture-v2",
+  "claimed_at": "2026-07-02T22:33:13Z",
+  "updated_at": "2026-07-02T22:33:13Z"
 }
