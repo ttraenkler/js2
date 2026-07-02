@@ -1,8 +1,9 @@
 {
   "id": "2964",
   "assignee": "ttraenkler/opus-2964",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2964-forin-proto-chain",
   "claimed_at": "2026-07-02T20:13:25Z",
-  "updated_at": "2026-07-02T20:13:25Z"
+  "updated_at": "2026-07-02T20:36:02Z",
+  "released_at": "2026-07-02T20:36:02Z"
 }
