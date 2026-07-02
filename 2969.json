@@ -1,8 +1,8 @@
 {
   "id": "2969",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-07-02T08:35:30Z",
-  "updated_at": "2026-07-02T08:35:30Z"
+  "assignee": "ttraenkler/agent-error-msg",
+  "status": "in-progress",
+  "branch": "issue-2969-error-message-tostring",
+  "claimed_at": "2026-07-02T17:51:22Z",
+  "updated_at": "2026-07-02T17:51:22Z"
 }
