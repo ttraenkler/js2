@@ -1,9 +1,9 @@
 {
   "id": "2982",
   "assignee": "ttraenkler/opus-4",
-  "status": "done",
+  "status": "released",
   "branch": "issue-2982-tagged-template-string-array",
   "claimed_at": "2026-07-02T13:56:33Z",
-  "updated_at": "2026-07-02T14:16:01Z",
-  "released_at": "2026-07-02T14:16:01Z"
+  "updated_at": "2026-07-02T14:23:00Z",
+  "released_at": "2026-07-02T14:23:00Z"
 }
