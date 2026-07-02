@@ -1,8 +1,8 @@
 {
   "id": "2980",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-07-02T13:27:35Z",
-  "updated_at": "2026-07-02T13:27:35Z"
+  "assignee": "ttraenkler/opus-async-2980",
+  "status": "in-progress",
+  "branch": "issue-2980-async-carrier-classes-1-3",
+  "claimed_at": "2026-07-02T16:32:42Z",
+  "updated_at": "2026-07-02T16:32:42Z"
 }
