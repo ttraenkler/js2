@@ -1,8 +1,8 @@
 {
   "id": "2999",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-07-02T19:21:25Z",
-  "updated_at": "2026-07-02T19:21:25Z"
+  "assignee": "ttraenkler/agent-abd6cda44521fc1c9",
+  "status": "in-progress",
+  "branch": "issue-2999-object-get-constructor-leak",
+  "claimed_at": "2026-07-02T19:21:48Z",
+  "updated_at": "2026-07-02T19:21:48Z"
 }
