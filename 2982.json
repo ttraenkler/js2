@@ -1,8 +1,8 @@
 {
   "id": "2982",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-07-02T13:56:04Z",
-  "updated_at": "2026-07-02T13:56:04Z"
+  "assignee": "ttraenkler/opus-4",
+  "status": "in-progress",
+  "branch": "issue-2982-tagged-template-string-array",
+  "claimed_at": "2026-07-02T13:56:33Z",
+  "updated_at": "2026-07-02T13:56:33Z"
 }
