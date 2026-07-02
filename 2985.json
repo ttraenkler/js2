@@ -1,8 +1,8 @@
 {
   "id": "2985",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-07-02T14:07:07Z",
-  "updated_at": "2026-07-02T14:07:07Z"
+  "assignee": "ttraenkler/agent-dev-opus",
+  "status": "in-progress",
+  "branch": "issue-2985-obj-find-illegal-cast",
+  "claimed_at": "2026-07-02T15:15:17Z",
+  "updated_at": "2026-07-02T15:15:17Z"
 }
