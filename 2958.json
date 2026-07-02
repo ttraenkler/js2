@@ -1,8 +1,9 @@
 {
   "id": "2958",
   "assignee": "ttraenkler/agent-af86afead7d5",
-  "status": "in-progress",
+  "status": "released",
   "branch": "probe",
   "claimed_at": "2026-07-02T19:10:09Z",
-  "updated_at": "2026-07-02T19:10:09Z"
+  "updated_at": "2026-07-02T19:10:39Z",
+  "released_at": "2026-07-02T19:10:39Z"
 }
