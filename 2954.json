@@ -1,8 +1,9 @@
 {
   "id": "2954",
   "assignee": "ttraenkler/opus-dev-a",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2954-linear-emitter-core-ops",
   "claimed_at": "2026-07-02T20:23:19Z",
-  "updated_at": "2026-07-02T20:23:19Z"
+  "updated_at": "2026-07-02T20:57:51Z",
+  "released_at": "2026-07-02T20:57:51Z"
 }
