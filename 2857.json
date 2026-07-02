@@ -1,8 +1,8 @@
 {
   "id": "2857",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-06-30T02:06:11Z",
-  "updated_at": "2026-06-30T02:06:11Z"
+  "assignee": "ttraenkler/fable-4",
+  "status": "in-progress",
+  "branch": "issue-2857-ir-class-method-bucket",
+  "claimed_at": "2026-07-02T08:45:11Z",
+  "updated_at": "2026-07-02T08:45:11Z"
 }
