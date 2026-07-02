@@ -1,8 +1,9 @@
 {
   "id": "2962",
   "assignee": "ttraenkler/fable-2",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2962-native-error-identity",
   "claimed_at": "2026-07-02T07:04:42Z",
-  "updated_at": "2026-07-02T07:04:42Z"
+  "updated_at": "2026-07-02T09:24:17Z",
+  "released_at": "2026-07-02T09:24:17Z"
 }
