@@ -1,8 +1,9 @@
 {
   "id": "2979",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
+  "assignee": "ttraenkler/fable-3",
+  "status": "done",
+  "branch": "issue-2938-genresult-undefined-carrier",
   "reserved_at": "2026-07-02T13:26:43Z",
-  "updated_at": "2026-07-02T13:26:43Z"
+  "updated_at": "2026-07-02T13:26:43Z",
+  "note": "re-id 2970->2979 (shepherd, PR #2488); claim-completed by fable-3 under the old id"
 }
