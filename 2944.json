@@ -1,8 +1,9 @@
 {
   "id": "2944",
   "assignee": "ttraenkler/sr-escape",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2944-poison-escape-discipline",
   "claimed_at": "2026-07-02T04:34:46Z",
-  "updated_at": "2026-07-02T04:34:46Z"
+  "updated_at": "2026-07-02T06:24:34Z",
+  "released_at": "2026-07-02T06:24:34Z"
 }
