@@ -1,9 +1,8 @@
 {
   "id": "2959",
-  "assignee": "ttraenkler/dev-2973",
-  "status": "released",
-  "branch": "issue-2959-standalone-native-promise-executor",
-  "claimed_at": "2026-07-02T14:34:43Z",
-  "updated_at": "2026-07-02T14:37:29Z",
-  "released_at": "2026-07-02T14:37:29Z"
+  "assignee": "ttraenkler/opus-dev",
+  "status": "in-progress",
+  "branch": "issue-2959-native-promise-executor",
+  "claimed_at": "2026-07-02T14:46:25Z",
+  "updated_at": "2026-07-02T14:46:25Z"
 }
