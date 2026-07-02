@@ -1,8 +1,9 @@
 {
   "id": "3006",
   "assignee": "ttraenkler/senior-dev",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-3006-builtin-constructor-identity",
   "claimed_at": "2026-07-02T22:34:41Z",
-  "updated_at": "2026-07-02T22:34:41Z"
+  "updated_at": "2026-07-02T23:12:04Z",
+  "released_at": "2026-07-02T23:12:04Z"
 }
