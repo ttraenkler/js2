@@ -1,8 +1,9 @@
 {
   "id": "2873",
   "assignee": "ttraenkler/dev-f2",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2873-language-expressions",
   "claimed_at": "2026-07-02T01:45:21Z",
-  "updated_at": "2026-07-02T01:45:21Z"
+  "updated_at": "2026-07-02T01:50:40Z",
+  "released_at": "2026-07-02T01:50:40Z"
 }
