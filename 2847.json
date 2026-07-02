@@ -1,8 +1,9 @@
 {
   "id": "2847",
   "assignee": "ttraenkler/opus-2847",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2847-acorn-marshal-quirks",
   "claimed_at": "2026-07-02T20:38:00Z",
-  "updated_at": "2026-07-02T20:38:00Z"
+  "updated_at": "2026-07-02T20:40:02Z",
+  "released_at": "2026-07-02T20:40:02Z"
 }
