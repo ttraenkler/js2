@@ -1,9 +1,8 @@
 {
   "id": "2924",
   "assignee": "ttraenkler/dev-f2",
-  "status": "released",
+  "status": "in-progress",
   "branch": "issue-2924-new-function-compile-away",
-  "claimed_at": "2026-07-02T04:03:39Z",
-  "updated_at": "2026-07-02T04:06:07Z",
-  "released_at": "2026-07-02T04:06:07Z"
+  "claimed_at": "2026-07-02T04:19:54Z",
+  "updated_at": "2026-07-02T04:19:54Z"
 }
