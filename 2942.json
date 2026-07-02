@@ -1,8 +1,9 @@
 {
   "id": "2942",
   "assignee": "ttraenkler/dev-f2",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2942-promote-baseline-reanchor",
   "claimed_at": "2026-07-02T02:28:18Z",
-  "updated_at": "2026-07-02T02:28:18Z"
+  "updated_at": "2026-07-02T02:44:37Z",
+  "released_at": "2026-07-02T02:44:37Z"
 }
