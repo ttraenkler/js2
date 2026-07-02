@@ -1,8 +1,9 @@
 {
   "id": "2941",
   "assignee": "ttraenkler/sr-funcidx",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2941-nativegen-funcidx-sidechannel",
   "claimed_at": "2026-07-02T02:24:22Z",
-  "updated_at": "2026-07-02T02:24:22Z"
+  "updated_at": "2026-07-02T02:50:01Z",
+  "released_at": "2026-07-02T02:50:01Z"
 }
