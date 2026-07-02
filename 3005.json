@@ -1,8 +1,8 @@
 {
   "id": "3005",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-07-02T21:19:42Z",
-  "updated_at": "2026-07-02T21:19:42Z"
+  "assignee": "ttraenkler/agent-a736c48cc4ac5b6c4",
+  "status": "in-progress",
+  "branch": "issue-3005-eval-as-any-callee",
+  "claimed_at": "2026-07-02T21:28:16Z",
+  "updated_at": "2026-07-02T21:28:16Z"
 }
