@@ -1,9 +1,8 @@
 {
   "id": "2812",
-  "assignee": "ttraenkler/agent-a83",
-  "status": "released",
-  "branch": "issue-2812-nm-deployment-recipe",
-  "claimed_at": "2026-06-29T22:52:29Z",
-  "updated_at": "2026-06-29T22:55:49Z",
-  "released_at": "2026-06-29T22:55:49Z"
+  "assignee": "ttraenkler/agent-a45493",
+  "status": "in-progress",
+  "branch": "issue-2812-nm-deploy-recipe",
+  "claimed_at": "2026-07-02T20:00:12Z",
+  "updated_at": "2026-07-02T20:00:12Z"
 }
