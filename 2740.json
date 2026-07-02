@@ -1,8 +1,9 @@
 {
   "id": "2740",
   "assignee": "ttraenkler/opus-16b",
-  "status": "in-progress",
+  "status": "released",
   "branch": "",
   "claimed_at": "2026-07-02T19:44:22Z",
-  "updated_at": "2026-07-02T19:44:22Z"
+  "updated_at": "2026-07-02T19:44:37Z",
+  "released_at": "2026-07-02T19:44:37Z"
 }
