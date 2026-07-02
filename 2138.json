@@ -1,8 +1,9 @@
 {
   "id": "2138",
   "assignee": "ttraenkler/sr-irfirst",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2138-trap4-host-node-skip",
   "claimed_at": "2026-07-02T09:19:45Z",
-  "updated_at": "2026-07-02T09:19:45Z"
+  "updated_at": "2026-07-02T13:27:09Z",
+  "released_at": "2026-07-02T13:27:09Z"
 }
