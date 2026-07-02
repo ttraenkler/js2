@@ -1,8 +1,9 @@
 {
   "id": "2768",
   "assignee": "ttraenkler/agent-a7e5749647e8f1219",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2768-bare-var-recovery-safelist",
   "claimed_at": "2026-07-02T22:28:34Z",
-  "updated_at": "2026-07-02T22:28:34Z"
+  "updated_at": "2026-07-02T22:34:21Z",
+  "released_at": "2026-07-02T22:34:21Z"
 }
