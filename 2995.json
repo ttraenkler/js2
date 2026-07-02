@@ -1,8 +1,9 @@
 {
   "id": "2995",
   "assignee": "ttraenkler/agent-a67bcee7",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2995-native-tuple-from-iter",
   "claimed_at": "2026-07-02T17:15:29Z",
-  "updated_at": "2026-07-02T17:15:29Z"
+  "updated_at": "2026-07-02T17:36:22Z",
+  "released_at": "2026-07-02T17:36:22Z"
 }
