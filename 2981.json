@@ -1,8 +1,8 @@
 {
   "id": "2981",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-07-02T13:47:40Z",
-  "updated_at": "2026-07-02T13:47:40Z"
+  "assignee": "ttraenkler/opus-3",
+  "status": "in-progress",
+  "branch": "issue-2981-tagged-template-strictness",
+  "claimed_at": "2026-07-02T13:47:49Z",
+  "updated_at": "2026-07-02T13:47:49Z"
 }
