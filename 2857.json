@@ -1,8 +1,8 @@
 {
   "id": "2857",
-  "assignee": "ttraenkler/opus-2c",
+  "assignee": "ttraenkler/agent-a54",
   "status": "in-progress",
-  "branch": "issue-2857-ir-class-method-to-zero",
-  "claimed_at": "2026-07-02T14:37:33Z",
-  "updated_at": "2026-07-02T14:37:33Z"
+  "branch": "issue-2857-ir-static-method-slice",
+  "claimed_at": "2026-07-02T19:27:17Z",
+  "updated_at": "2026-07-02T19:27:17Z"
 }
