@@ -1,8 +1,8 @@
 {
   "id": "2961",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-07-02T06:48:15Z",
-  "updated_at": "2026-07-02T06:48:15Z"
+  "assignee": "ttraenkler/dev-opus-2961",
+  "status": "in-progress",
+  "branch": "issue-2961-standalone-strict-leak-scan",
+  "claimed_at": "2026-07-02T20:08:40Z",
+  "updated_at": "2026-07-02T20:08:40Z"
 }
