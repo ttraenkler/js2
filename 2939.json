@@ -1,8 +1,9 @@
 {
   "id": "2939",
   "assignee": "ttraenkler/dev-f1",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2939-nested-closure-dispatch",
   "claimed_at": "2026-07-02T03:10:25Z",
-  "updated_at": "2026-07-02T03:10:25Z"
+  "updated_at": "2026-07-02T09:49:43Z",
+  "released_at": "2026-07-02T09:49:43Z"
 }
