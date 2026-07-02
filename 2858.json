@@ -1,8 +1,9 @@
 {
   "id": "2858",
   "assignee": "ttraenkler/probe",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2858-call-graph-closure-fallback",
   "claimed_at": "2026-07-02T20:29:51Z",
-  "updated_at": "2026-07-02T20:29:51Z"
+  "updated_at": "2026-07-02T20:30:12Z",
+  "released_at": "2026-07-02T20:30:12Z"
 }
