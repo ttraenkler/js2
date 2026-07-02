@@ -1,8 +1,8 @@
 {
   "id": "2933",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-07-01T23:58:09Z",
-  "updated_at": "2026-07-01T23:58:09Z"
+  "assignee": "ttraenkler/sr-funcidx",
+  "status": "in-progress",
+  "branch": "issue-2920-standalone-native-sync-generator-resume",
+  "claimed_at": "2026-07-02T00:25:17Z",
+  "updated_at": "2026-07-02T00:25:17Z"
 }
