@@ -74,12 +74,33 @@ Replace the no-op stub with a compile-away path:
 
 ## Acceptance criteria
 
-- [ ] `new Function("a","b","return a+b")(1,2) === 3` in **standalone** mode.
-- [ ] `Function("return 42")() === 42` (plain call form) standalone.
-- [ ] `new Function("a", "b,c", "return a+b+c")(1,2,3) === 6` standalone.
-- [ ] A body referencing a caller local resolves it as a global (no capture).
-- [ ] `new Function("return")()` returns `undefined` via a real callable.
-- [ ] No regression in existing `new Function` tests.
+**Slice 1 (this PR):**
+
+- [x] `new Function("a","b","return a+b")(1,2) === 3` in **standalone (host-free)
+      AND host**. (headline)
+- [x] single-param + no-param const bodies, single call, both lanes host-free.
+- [x] reuse across **separate statements** correct on both lanes.
+- [x] a **non-constant** argument bails gracefully to the legacy stub — compiles,
+      never miscompiles (negative test).
+- [x] No regression in existing `new Function` tests (the stub still handles
+      every non-const / unsupported case).
+
+**Deferred to follow-up slices (explicit NON-GOALS of slice 1):**
+
+- [ ] Plain-call value form `Function("return 42")()` (AC2) — routed in
+      `calls.ts`, not `compileNewExpression`; not yet wired.
+- [ ] `new Function("a","b,c","return a+b+c")(1,2,3) === 6` (AC3) — ≥3-arg call
+      is correct in **host** but silently wrong (`NaN`) in **standalone** (a
+      standalone closure-call arg-marshalling temp-collision, NOT unique to this
+      feature — see below).
+- [ ] Two calls to the SAME synthesized closure coexisting in ONE expression
+      (`f(1)+f(2)`) — correct in host, silently `0` in standalone (same
+      standalone closure-call temp-collision; reuse across statements is fine).
+- [ ] `new Function("return")()` / `new Function()()` → `undefined` (AC5/AC6) —
+      currently the no-value result is the stub `null`, not the `undefined`
+      singleton.
+- [ ] no-capture `typeof x` string-return (AC4) — the empty-`localMap` global
+      compile is in place; the string-return marshalling needs confirming.
 
 ## WIP status (dev-f2, 2026-07-02) — core mechanism landed, iteration remaining
 
@@ -93,30 +114,26 @@ Reuses #2442's foreign-binding-less `compileNestedFunctionDeclaration`
 tolerance. Rollback-guarded (snapshots `mod.functions.length` + `funcMap` so a
 mid-body compile throw can't leave a half-registered empty-body function).
 
-**Working (measured, `.tmp/probe-2924.mjs`):**
+`tests/issue-2924.test.ts` (6/6) covers the slice-1 shapes + the graceful-bail
+negative test.
 
-- ✅ `new Function("a","b","return a+b")(1,2) === 3` — **standalone (host-free)
-  AND host**. The headline criterion.
+**The standalone silent-miscompile edges (AC3 `NaN`, `f(1)+f(2)` → `0`) are
+SPECIFIC to the synthesized-function closure, NOT general closure reuse.**
+Verified by control: a normal `function`-expression / `function`-declaration
+closure `const f=…; f(1)+f(2)` returns the CORRECT `23` in standalone, but the
+`new Function`-synthesized closure returns `0` — so something about the
+synthesized function's closure value / its standalone call marshalling collides
+when two calls coexist in one expression (reuse across statements is correct on
+both lanes; single call is correct on both lanes). Root-cause candidates: the
+`emitFuncRefAsClosure`/`emitCachedFuncClosureAccess` wrapper for the
+empty-`localMap`-compiled function, or the standalone `call_ref` arg temps.
+Needs a focused trace (follow-up slice). Because these edges silently produce a
+wrong value rather than bailing, a maintainer may prefer to **gate the
+compile-away to host-only** (host is correct on every measured shape) until the
+edge is fixed — flagged for the ship decision.
 
-**Remaining (each is a discrete follow-up slice):**
-
-- ⏳ **Plain-call `Function("return 42")()`** (AC2) — the plain-call form is a
-  `CallExpression`, routed in `calls.ts`, NOT `compileNewExpression`, so the
-  helper isn't reached. Wire an early `Function`-callee (unshadowed, all-const
-  args) check in the call-expression dispatch to call the same helper.
-- ⏳ **Standalone 3-arg dynamic call** (AC3) — `new Function("a","b,c",…)(1,2,3)`
-  returns the right value in host but `NaN` in standalone (the 3-externref-arg
-  closure-call marshalling on the standalone lane; host is correct).
-- ⏳ **`undefined`-return representation** (AC5/AC6) — `new Function("return")()`
-  / `new Function()()` return `null` instead of `undefined` standalone; the
-  no-value function result needs the undefined singleton, not `ref.null`.
-- ⏳ **No-capture `typeof x`** (AC4) — verify the global-scope resolution yields
-  `"undefined"` for a caller-local name (empty-localMap compile is in place;
-  needs the string-return marshalling to confirm).
-
-Blocked on #2442 (the eval-broaden `compileNestedFunctionDeclaration`
-foreign-tolerance) — this branch is stacked on `issue-2923-eval-const-broaden`;
-re-base onto `main` once #2442 lands. NOT yet PR-ready (acceptance partial).
+Stacked on #2442 (the eval-broaden `compileNestedFunctionDeclaration`
+foreign-tolerance); re-base onto `main` once #2442 lands, then PR.
 
 ## Notes
 

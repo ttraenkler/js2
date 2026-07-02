@@ -8,6 +8,7 @@ import { forEachChild, ts } from "../../ts-api.js";
 import {
   collectReferencedIdentifiers,
   collectWrittenIdentifiers,
+  emitCachedFuncClosureAccess,
   emitFuncRefAsClosure,
   isOwnParamName,
 } from "../closures.js";
@@ -2529,6 +2530,12 @@ function tryCompileConstantFunctionCtor(
   if (funcIdx === undefined) return undefined;
 
   // Escape the compiled global function as a first-class callable value.
+  // Prefer the cached-closure access (stable identity, reusable across multiple
+  // calls) exactly as the bare-function-identifier path does (identifiers.ts);
+  // the synthesized function is no-capture, so the cache applies. Fall back to a
+  // per-site closure struct if the cache emit is unavailable.
+  const cachedRefType = emitCachedFuncClosureAccess(ctx, fctx, synthName, funcIdx);
+  if (cachedRefType) return cachedRefType;
   const refType = emitFuncRefAsClosure(ctx, fctx, synthName, funcIdx);
   return refType ?? undefined;
 }
