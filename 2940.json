@@ -1,8 +1,8 @@
 {
   "id": "2940",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-07-02T02:14:07Z",
-  "updated_at": "2026-07-02T02:14:07Z"
+  "assignee": "ttraenkler/opus-1",
+  "status": "in-progress",
+  "branch": "issue-2940-vacuity-scorer",
+  "claimed_at": "2026-07-02T13:24:47Z",
+  "updated_at": "2026-07-02T13:24:47Z"
 }
