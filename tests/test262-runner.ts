@@ -1523,6 +1523,7 @@ function buildPreamble(
   needsAsyncTest: boolean,
   needsDoneForAsyncTest: boolean,
   needsTestTypedArray: boolean,
+  needsTestBigIntTypedArray: boolean,
   needsAssertThrowsAsync: boolean,
   needsTypedArrayBinding: boolean,
   needsIteratorBinding: boolean,
@@ -1801,6 +1802,31 @@ function testWithTypedArrayConstructors(fn: any): void {
   const constructors = [Int8Array, Uint8Array, Int16Array, Uint16Array, Int32Array, Uint32Array, Float32Array, Float64Array];
   for (let i = 0; i < constructors.length; i++) {
     fn(constructors[i]);
+  }
+}`;
+  }
+
+  // (#2939/#2940) BigInt TypedArray harness wrapper. The real test262
+  // `testWithBigIntTypedArrayConstructors(f, …)` (testTypedArray.js) calls
+  // `f(constructor, boundArgFactory)` — a 2-ARG invocation where the callback
+  // is typically `function (TA, makeCtorArg) { … }`. Passing only the ctor
+  // left `makeCtorArg` undefined; combined with the (now-fixed) nested-scope
+  // dispatch gap the whole callback body was dead (a vacuous host-free pass,
+  // ~814 tests). Shim the 2-arg signature with an identity `makeCtorArg`
+  // passthrough (maps a length/iterable straight to the ctor's first arg).
+  // Only emitted when the body actually references the BigInt variant, so the
+  // non-BigInt corpus preamble is byte-unchanged. Requires the #2939 dispatch
+  // fix to land in lockstep — else it produces dishonest vacuous passes.
+  if (needsTestBigIntTypedArray) {
+    p += `
+
+function __ta_makeCtorArgPassthrough(x: any): any {
+  return x;
+}
+function testWithBigIntTypedArrayConstructors(fn: any): void {
+  const constructors = [BigInt64Array, BigUint64Array];
+  for (let i = 0; i < constructors.length; i++) {
+    fn(constructors[i], __ta_makeCtorArgPassthrough);
   }
 }`;
   }
@@ -2180,6 +2206,11 @@ export function wrapTest(source: string, meta?: Test262Meta): WrapResult {
   const needsAsyncTest = includes.includes("asyncHelpers.js") && /\basyncTest\b/.test(body);
   const needsDoneForAsyncTest = needsAsyncTest && !needsDone;
   const needsTestTypedArray = includes.includes("testTypedArray.js") && /testWithTypedArrayConstructors/.test(body);
+  // (#2939/#2940) The BigInt variant `testWithBigIntTypedArrayConstructors`
+  // ships in the SAME testTypedArray.js include; the plain regex above does not
+  // match its `…BigIntTypedArray…` infix, so it needs its own gate + shim.
+  const needsTestBigIntTypedArray =
+    includes.includes("testTypedArray.js") && /testWithBigIntTypedArrayConstructors/.test(body);
 
   // test262's testTypedArray.js include defines `var TypedArray = Object.getPrototypeOf(Int8Array);`
   // as the abstract %TypedArray% intrinsic. Our runtime's Object.getPrototypeOf(Int8Array) does not
@@ -2237,6 +2268,7 @@ export function wrapTest(source: string, meta?: Test262Meta): WrapResult {
     needsAsyncTest,
     needsDoneForAsyncTest,
     needsTestTypedArray,
+    needsTestBigIntTypedArray,
     needsAssertThrowsAsync,
     needsTypedArrayBinding,
     needsIteratorBinding,
@@ -2267,6 +2299,7 @@ export function wrapTest(source: string, meta?: Test262Meta): WrapResult {
       needsAsyncTest,
       needsDoneForAsyncTest,
       needsTestTypedArray,
+      needsTestBigIntTypedArray,
       needsAssertThrowsAsync,
       needsTypedArrayBinding,
       needsIteratorBinding,
