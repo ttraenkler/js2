@@ -1,8 +1,8 @@
 {
   "id": "2965",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-07-02T07:06:24Z",
-  "updated_at": "2026-07-02T07:06:24Z"
+  "assignee": "ttraenkler/fable-6",
+  "status": "in-progress",
+  "branch": "issue-2965-standalone-descriptor-cluster",
+  "claimed_at": "2026-07-02T07:06:37Z",
+  "updated_at": "2026-07-02T07:06:37Z"
 }
