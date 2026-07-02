@@ -1,8 +1,9 @@
 {
   "id": "2847",
   "assignee": "ttraenkler/agent-dev-opus",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2847-acorn-marshal-quirks",
   "claimed_at": "2026-07-02T21:09:38Z",
-  "updated_at": "2026-07-02T21:09:38Z"
+  "updated_at": "2026-07-02T21:11:14Z",
+  "released_at": "2026-07-02T21:11:14Z"
 }
