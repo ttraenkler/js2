@@ -1,8 +1,9 @@
 {
   "id": "2858",
   "assignee": "ttraenkler/opus-2c",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2858-call-graph-closure-fallback",
   "claimed_at": "2026-07-02T14:34:31Z",
-  "updated_at": "2026-07-02T14:34:31Z"
+  "updated_at": "2026-07-02T14:35:26Z",
+  "released_at": "2026-07-02T14:35:26Z"
 }
