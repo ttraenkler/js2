@@ -1,8 +1,9 @@
 {
   "id": "2970",
   "assignee": "ttraenkler/fable-3",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2938-genresult-undefined-carrier",
   "claimed_at": "2026-07-02T09:18:45Z",
-  "updated_at": "2026-07-02T09:18:45Z"
+  "updated_at": "2026-07-02T13:30:01Z",
+  "released_at": "2026-07-02T13:30:01Z"
 }
