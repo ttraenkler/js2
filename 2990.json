@@ -1,8 +1,9 @@
 {
   "id": "2990",
   "assignee": "ttraenkler/opus-4",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2990-restore-auto-refresh-prs",
   "claimed_at": "2026-07-02T14:23:30Z",
-  "updated_at": "2026-07-02T14:23:30Z"
+  "updated_at": "2026-07-02T14:24:18Z",
+  "released_at": "2026-07-02T14:24:18Z"
 }
