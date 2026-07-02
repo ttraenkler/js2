@@ -1,8 +1,8 @@
 {
   "id": "2986",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-07-02T14:07:15Z",
-  "updated_at": "2026-07-02T14:07:15Z"
+  "assignee": "ttraenkler/dev-opus-40",
+  "status": "in-progress",
+  "branch": "issue-2986-standalone-arguments-defineproperty-mop",
+  "claimed_at": "2026-07-02T15:41:51Z",
+  "updated_at": "2026-07-02T15:41:51Z"
 }
