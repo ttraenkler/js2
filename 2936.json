@@ -1,8 +1,9 @@
 {
   "id": "2936",
   "assignee": "ttraenkler/sr-funcidx",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2930-resume-lazy-emit-funcidx-shift",
   "claimed_at": "2026-07-02T00:43:53Z",
-  "updated_at": "2026-07-02T00:43:53Z"
+  "updated_at": "2026-07-02T00:59:29Z",
+  "released_at": "2026-07-02T00:59:29Z"
 }
