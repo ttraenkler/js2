@@ -1,8 +1,9 @@
 {
   "id": "3001",
   "assignee": "ttraenkler/agent-a840cb644c42d6eab",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-3001-harden-degrade-stable-handle",
   "claimed_at": "2026-07-02T20:34:38Z",
-  "updated_at": "2026-07-02T20:34:38Z"
+  "updated_at": "2026-07-02T20:55:35Z",
+  "released_at": "2026-07-02T20:55:35Z"
 }
