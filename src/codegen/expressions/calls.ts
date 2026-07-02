@@ -2870,6 +2870,22 @@ function ensureFuncValueWrappersRegistered(ctx: CodegenContext, sf: ts.SourceFil
       if (seenFnNodes.has(node)) return;
       seenFnNodes.add(node);
       const { params, returnType } = computeClosureWrapperSig(ctx, node);
+      // (#2939) Restrict pre-registration to the ALL-EXTERNREF callback shape
+      // (externref params + externref/void return). This is exactly the harness
+      // callback shape (`function(TA, makeCtorArg)` — `any` params) — the whole
+      // ~1421-test target population. A candidate with a NUMERIC (f64/i32) param
+      // in an OVER-ARITY position mints a malformed dispatch arm in the
+      // higher-order body (`call[0] expected externref, found f64…`) — the
+      // over-arity numeric-pad + box path in `tryEmitInlineDynamicCall` is not
+      // sound for a speculatively-registered candidate that never matches a real
+      // runtime value. Numeric-mixed nested callbacks stay lazily-registered
+      // (unchanged from base — they were never candidates), so this both fixes
+      // the invalid-Wasm CE and keeps the fix's blast radius to the harness
+      // class. (Inner numeric-param callbacks like `findLastIndex(fn)` dispatch
+      // via the array-method path, never this inline dispatcher.)
+      const allExternref = params.every((p) => p.kind === "externref");
+      const externrefOrVoidReturn = returnType === null || returnType.kind === "externref";
+      if (!allExternref || !externrefOrVoidReturn) return;
       getOrCreateFuncRefWrapperTypes(ctx, params, returnType ? [returnType] : []);
     };
     const visitFns = (node: ts.Node): void => {
