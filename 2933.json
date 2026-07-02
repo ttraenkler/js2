@@ -2,7 +2,7 @@
   "id": "2933",
   "assignee": "ttraenkler/sr-funcidx",
   "status": "in-progress",
-  "branch": "issue-2920-standalone-native-sync-generator-resume",
-  "claimed_at": "2026-07-02T00:25:17Z",
-  "updated_at": "2026-07-02T00:25:17Z"
+  "branch": "issue-2933-noyield-relax",
+  "claimed_at": "2026-07-02T00:46:41Z",
+  "updated_at": "2026-07-02T00:46:41Z"
 }
