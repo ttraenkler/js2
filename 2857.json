@@ -1,8 +1,9 @@
 {
   "id": "2857",
   "assignee": "ttraenkler/fable-4",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2857-ir-class-method-bucket",
   "claimed_at": "2026-07-02T08:45:11Z",
-  "updated_at": "2026-07-02T08:45:11Z"
+  "updated_at": "2026-07-02T09:04:26Z",
+  "released_at": "2026-07-02T09:04:26Z"
 }
