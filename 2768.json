@@ -1,8 +1,8 @@
 {
   "id": "2768",
-  "assignee": "ttraenkler/agent-dev",
+  "assignee": "ttraenkler/agent-abbff25f3a84c2b88",
   "status": "in-progress",
-  "branch": "issue-2768-bare-var-property-rw",
-  "claimed_at": "2026-06-28T03:19:49Z",
-  "updated_at": "2026-06-28T03:19:49Z"
+  "branch": "issue-2768-bare-var-recovery-safelist",
+  "claimed_at": "2026-07-02T22:08:41Z",
+  "updated_at": "2026-07-02T22:08:41Z"
 }
