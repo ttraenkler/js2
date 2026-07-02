@@ -1,8 +1,8 @@
 {
   "id": "2959",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-07-02T06:48:04Z",
-  "updated_at": "2026-07-02T06:48:04Z"
+  "assignee": "ttraenkler/dev-2973",
+  "status": "in-progress",
+  "branch": "issue-2959-standalone-native-promise-executor",
+  "claimed_at": "2026-07-02T14:34:43Z",
+  "updated_at": "2026-07-02T14:34:43Z"
 }
