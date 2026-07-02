@@ -1,8 +1,9 @@
 {
   "id": "2933",
   "assignee": "ttraenkler/sr-funcidx",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2933-noyield-relax",
   "claimed_at": "2026-07-02T00:46:41Z",
-  "updated_at": "2026-07-02T00:46:41Z"
+  "updated_at": "2026-07-02T01:26:16Z",
+  "released_at": "2026-07-02T01:26:16Z"
 }
