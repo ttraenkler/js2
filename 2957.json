@@ -1,8 +1,8 @@
 {
   "id": "2957",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-07-02T06:47:52Z",
-  "updated_at": "2026-07-02T06:47:52Z"
+  "assignee": "ttraenkler/agent-a2552b729d56b218c",
+  "status": "in-progress",
+  "branch": "issue-2957-async-activation-shapes",
+  "claimed_at": "2026-07-03T05:47:23Z",
+  "updated_at": "2026-07-03T05:47:23Z"
 }
