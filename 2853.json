@@ -1,8 +1,9 @@
 {
   "id": "2853",
   "assignee": "ttraenkler/agent-a37bf61ced10136d1",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2853-acorn-selfparse-tokenizer",
   "claimed_at": "2026-07-03T09:23:32Z",
-  "updated_at": "2026-07-03T09:23:32Z"
+  "updated_at": "2026-07-03T09:33:03Z",
+  "released_at": "2026-07-03T09:33:03Z"
 }
