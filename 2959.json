@@ -1,8 +1,9 @@
 {
   "id": "2959",
   "assignee": "ttraenkler/sendev-promise-exec",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2959-native-promise-executor",
   "claimed_at": "2026-07-03T03:29:18Z",
-  "updated_at": "2026-07-03T03:29:18Z"
+  "updated_at": "2026-07-03T03:37:39Z",
+  "released_at": "2026-07-03T03:37:39Z"
 }
