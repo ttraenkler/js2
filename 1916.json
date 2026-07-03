@@ -1,8 +1,9 @@
 {
   "id": "1916",
   "assignee": "ttraenkler/agent-senior",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-1916-symbolic-fn-refs",
   "claimed_at": "2026-07-03T18:21:13Z",
-  "updated_at": "2026-07-03T18:21:13Z"
+  "updated_at": "2026-07-03T19:03:58Z",
+  "released_at": "2026-07-03T19:03:58Z"
 }
