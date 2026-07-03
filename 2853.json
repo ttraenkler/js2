@@ -1,9 +1,8 @@
 {
   "id": "2853",
-  "assignee": "ttraenkler/agent-a515c1fe0122c9285",
-  "status": "released",
-  "branch": "issue-2853-acorn-selfparse-throws",
-  "claimed_at": "2026-06-30T03:42:44Z",
-  "updated_at": "2026-06-30T03:46:58Z",
-  "released_at": "2026-06-30T03:46:58Z"
+  "assignee": "ttraenkler/dev-opus",
+  "status": "in-progress",
+  "branch": "issue-2853-acorn-regex-div",
+  "claimed_at": "2026-07-03T05:50:27Z",
+  "updated_at": "2026-07-03T05:50:27Z"
 }
