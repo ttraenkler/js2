@@ -1,8 +1,9 @@
 {
   "id": "2856",
   "assignee": "ttraenkler/dev-team-c",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2856-algorithms-cluster-spec",
   "claimed_at": "2026-07-03T13:16:37Z",
-  "updated_at": "2026-07-03T13:16:37Z"
+  "updated_at": "2026-07-03T14:37:33Z",
+  "released_at": "2026-07-03T14:37:33Z"
 }
