@@ -1,8 +1,9 @@
 {
   "id": "2949",
   "assignee": "ttraenkler/fable-2949",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2949-jstag-dynamic",
   "claimed_at": "2026-07-03T21:22:32Z",
-  "updated_at": "2026-07-03T21:22:32Z"
+  "updated_at": "2026-07-03T22:52:20Z",
+  "released_at": "2026-07-03T22:52:20Z"
 }
