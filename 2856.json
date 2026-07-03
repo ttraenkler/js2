@@ -1,9 +1,8 @@
 {
   "id": "2856",
-  "assignee": "ttraenkler/sr-bodyshape2",
-  "status": "released",
-  "branch": "issue-2856-body-shape-zero",
-  "claimed_at": "2026-07-03T12:36:45Z",
-  "updated_at": "2026-07-03T13:01:27Z",
-  "released_at": "2026-07-03T13:01:27Z"
+  "assignee": "ttraenkler/dev-team-c",
+  "status": "in-progress",
+  "branch": "issue-2856-algorithms-cluster-spec",
+  "claimed_at": "2026-07-03T13:16:37Z",
+  "updated_at": "2026-07-03T13:16:37Z"
 }
