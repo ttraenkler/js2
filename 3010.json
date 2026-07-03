@@ -1,9 +1,8 @@
 {
   "id": "3010",
-  "assignee": "ttraenkler/senior-developer",
-  "status": "done",
+  "assignee": "ttraenkler/senior-dev-3010",
+  "status": "in-progress",
   "branch": "issue-3010-extern-is-undefined-dstr-guard",
-  "claimed_at": "2026-07-03T03:23:47Z",
-  "updated_at": "2026-07-03T03:49:50Z",
-  "released_at": "2026-07-03T03:49:50Z"
+  "claimed_at": "2026-07-03T04:23:04Z",
+  "updated_at": "2026-07-03T04:23:04Z"
 }
