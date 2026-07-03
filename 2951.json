@@ -1,8 +1,8 @@
 {
   "id": "2951",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-07-02T06:47:17Z",
-  "updated_at": "2026-07-02T06:47:17Z"
+  "assignee": "ttraenkler/agent-opus-2951",
+  "status": "in-progress",
+  "branch": "issue-2951-ir-first-generators-class-members",
+  "claimed_at": "2026-07-03T05:45:55Z",
+  "updated_at": "2026-07-03T05:45:55Z"
 }
