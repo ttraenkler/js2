@@ -1,8 +1,9 @@
 {
   "id": "2980",
   "assignee": "ttraenkler/agent-ab81b787ac6992334",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2980-then-receiver-fallback",
   "claimed_at": "2026-07-03T11:08:35Z",
-  "updated_at": "2026-07-03T11:08:35Z"
+  "updated_at": "2026-07-03T11:17:33Z",
+  "released_at": "2026-07-03T11:17:33Z"
 }
