@@ -1,8 +1,8 @@
 {
   "id": "3010",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-07-03T03:23:34Z",
-  "updated_at": "2026-07-03T03:23:34Z"
+  "assignee": "ttraenkler/senior-developer",
+  "status": "in-progress",
+  "branch": "issue-3010-extern-is-undefined-dstr-guard",
+  "claimed_at": "2026-07-03T03:23:47Z",
+  "updated_at": "2026-07-03T03:23:47Z"
 }
