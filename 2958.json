@@ -1,9 +1,8 @@
 {
   "id": "2958",
-  "assignee": "ttraenkler/opus-17",
-  "status": "released",
+  "assignee": "ttraenkler/dev-standing-3",
+  "status": "in-progress",
   "branch": "issue-2958-unhandled-rejection",
-  "claimed_at": "2026-07-02T20:03:48Z",
-  "updated_at": "2026-07-02T20:08:36Z",
-  "released_at": "2026-07-02T20:08:36Z"
+  "claimed_at": "2026-07-03T08:12:32Z",
+  "updated_at": "2026-07-03T08:12:32Z"
 }
