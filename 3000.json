@@ -1,8 +1,9 @@
 {
   "id": "3000",
   "assignee": "ttraenkler/sr-classmember",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-3000-ir-classmember",
   "claimed_at": "2026-07-03T15:04:29Z",
-  "updated_at": "2026-07-03T15:04:29Z"
+  "updated_at": "2026-07-03T15:49:17Z",
+  "released_at": "2026-07-03T15:49:17Z"
 }
