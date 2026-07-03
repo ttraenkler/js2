@@ -1,8 +1,8 @@
 {
   "id": "3023",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-07-03T13:38:25Z",
-  "updated_at": "2026-07-03T13:38:25Z"
+  "assignee": "ttraenkler/dev-3023",
+  "status": "in-progress",
+  "branch": "issue-3023-iterator-destructure",
+  "claimed_at": "2026-07-03T17:39:56Z",
+  "updated_at": "2026-07-03T17:39:56Z"
 }
