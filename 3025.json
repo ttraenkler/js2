@@ -1,8 +1,9 @@
 {
   "id": "3025",
   "assignee": "ttraenkler/dev-3025",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-3025-with-statement-shape",
   "claimed_at": "2026-07-03T19:45:54Z",
-  "updated_at": "2026-07-03T19:45:54Z"
+  "updated_at": "2026-07-03T20:30:52Z",
+  "released_at": "2026-07-03T20:30:52Z"
 }
