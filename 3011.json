@@ -1,8 +1,8 @@
 {
   "id": "3011",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-07-03T03:33:51Z",
-  "updated_at": "2026-07-03T03:33:51Z"
+  "assignee": "ttraenkler/dev-dryrun-fix",
+  "status": "in-progress",
+  "branch": "issue-3011-dry-run-write-modes",
+  "claimed_at": "2026-07-03T03:34:04Z",
+  "updated_at": "2026-07-03T03:34:04Z"
 }
