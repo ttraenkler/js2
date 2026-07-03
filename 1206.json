@@ -1,8 +1,9 @@
 {
   "id": "1206",
   "assignee": "ttraenkler/agent-opus-2109",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-1206-build-pages-toplevel-copy",
   "claimed_at": "2026-07-03T11:01:07Z",
-  "updated_at": "2026-07-03T11:01:07Z"
+  "updated_at": "2026-07-03T11:03:10Z",
+  "released_at": "2026-07-03T11:03:10Z"
 }
