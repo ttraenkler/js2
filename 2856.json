@@ -1,9 +1,8 @@
 {
   "id": "2856",
-  "assignee": "ttraenkler/dev-team-c",
-  "status": "done",
-  "branch": "issue-2856-algorithms-cluster-spec",
-  "claimed_at": "2026-07-03T13:16:37Z",
-  "updated_at": "2026-07-03T14:37:33Z",
-  "released_at": "2026-07-03T14:37:33Z"
+  "assignee": "ttraenkler/fable-2856exec",
+  "status": "in-progress",
+  "branch": "issue-2856-algorithms-component",
+  "claimed_at": "2026-07-03T23:26:14Z",
+  "updated_at": "2026-07-03T23:26:14Z"
 }
