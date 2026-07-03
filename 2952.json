@@ -1,8 +1,9 @@
 {
   "id": "2952",
   "assignee": "ttraenkler/sr-multiexit",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2952-ir-multiexit",
   "claimed_at": "2026-07-03T15:04:16Z",
-  "updated_at": "2026-07-03T15:04:16Z"
+  "updated_at": "2026-07-03T15:41:06Z",
+  "released_at": "2026-07-03T15:41:06Z"
 }
