@@ -1,8 +1,9 @@
 {
   "id": "2988",
   "assignee": "ttraenkler/sr-globaldefine",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2988-global-defineproperty",
   "claimed_at": "2026-07-03T15:12:51Z",
-  "updated_at": "2026-07-03T15:12:51Z"
+  "updated_at": "2026-07-03T15:56:03Z",
+  "released_at": "2026-07-03T15:56:03Z"
 }
