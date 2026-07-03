@@ -1,8 +1,9 @@
 {
   "id": "2803",
   "assignee": "ttraenkler/agent-aaa1817de52269cea",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2803-callsite-param-inference-spec",
   "claimed_at": "2026-07-03T05:52:30Z",
-  "updated_at": "2026-07-03T05:52:30Z"
+  "updated_at": "2026-07-03T06:02:48Z",
+  "released_at": "2026-07-03T06:02:48Z"
 }
