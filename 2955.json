@@ -1,8 +1,9 @@
 {
   "id": "2955",
   "assignee": "ttraenkler/agent-a4461",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2955-depolymorph-ir-string-mode",
   "claimed_at": "2026-07-03T09:04:21Z",
-  "updated_at": "2026-07-03T09:04:21Z"
+  "updated_at": "2026-07-03T11:01:41Z",
+  "released_at": "2026-07-03T11:01:41Z"
 }
