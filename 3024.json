@@ -1,8 +1,8 @@
 {
   "id": "3024",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-07-03T13:38:32Z",
-  "updated_at": "2026-07-03T13:38:32Z"
+  "assignee": "ttraenkler/dev-team-c",
+  "status": "in-progress",
+  "branch": "issue-3024-compound-assign-externref",
+  "claimed_at": "2026-07-03T14:40:44Z",
+  "updated_at": "2026-07-03T14:40:44Z"
 }
