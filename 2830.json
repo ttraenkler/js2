@@ -1,8 +1,9 @@
 {
   "id": "2830",
   "assignee": "ttraenkler/senior-dev-2830",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2830-wasi-p1-nobundle-docs",
   "claimed_at": "2026-07-03T05:18:55Z",
-  "updated_at": "2026-07-03T05:18:55Z"
+  "updated_at": "2026-07-03T05:30:52Z",
+  "released_at": "2026-07-03T05:30:52Z"
 }
