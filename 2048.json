@@ -1,8 +1,9 @@
 {
   "id": "2048",
   "assignee": "ttraenkler/agent-opus-2109",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2048-reconciler-inreview-merged",
   "claimed_at": "2026-07-03T11:05:44Z",
-  "updated_at": "2026-07-03T11:05:44Z"
+  "updated_at": "2026-07-03T11:19:10Z",
+  "released_at": "2026-07-03T11:19:10Z"
 }
