@@ -1,8 +1,8 @@
 {
   "id": "3025",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-07-03T13:38:43Z",
-  "updated_at": "2026-07-03T13:38:43Z"
+  "assignee": "ttraenkler/dev-3025",
+  "status": "in-progress",
+  "branch": "issue-3025-with-statement-shape",
+  "claimed_at": "2026-07-03T19:45:54Z",
+  "updated_at": "2026-07-03T19:45:54Z"
 }
