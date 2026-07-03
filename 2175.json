@@ -1,8 +1,9 @@
 {
   "id": "2175",
   "assignee": "ttraenkler/fable-2175",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2175-builtin-proto-spec",
   "claimed_at": "2026-07-03T23:27:07Z",
-  "updated_at": "2026-07-03T23:27:07Z"
+  "updated_at": "2026-07-03T23:47:03Z",
+  "released_at": "2026-07-03T23:47:03Z"
 }
