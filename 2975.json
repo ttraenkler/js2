@@ -1,8 +1,9 @@
 {
   "id": "2975",
   "assignee": "ttraenkler/agent-opus-2109",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2975-failure-aware-enqueue",
   "claimed_at": "2026-07-03T08:55:17Z",
-  "updated_at": "2026-07-03T08:55:17Z"
+  "updated_at": "2026-07-03T10:55:03Z",
+  "released_at": "2026-07-03T10:55:03Z"
 }
