@@ -1,8 +1,8 @@
 {
   "id": "2906",
-  "assignee": "ttraenkler/sendev-async-multistate",
+  "assignee": "ttraenkler/fable-2906",
   "status": "in-progress",
-  "branch": "issue-2906-async-multistate-slice1",
-  "claimed_at": "2026-07-01T01:28:33Z",
-  "updated_at": "2026-07-01T01:28:33Z"
+  "branch": "issue-2906-multistate-core",
+  "claimed_at": "2026-07-03T21:22:41Z",
+  "updated_at": "2026-07-03T21:22:41Z"
 }
