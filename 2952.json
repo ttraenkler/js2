@@ -1,8 +1,8 @@
 {
   "id": "2952",
-  "assignee": "ttraenkler/sr-multiexit-2",
+  "assignee": "ttraenkler/fable-2952s2",
   "status": "in-progress",
-  "branch": "issue-2952-ir-multiexit",
-  "claimed_at": "2026-07-03T18:19:34Z",
-  "updated_at": "2026-07-03T18:19:34Z"
+  "branch": "issue-2952-slice2-breakcontinue",
+  "claimed_at": "2026-07-03T23:26:33Z",
+  "updated_at": "2026-07-03T23:26:33Z"
 }
