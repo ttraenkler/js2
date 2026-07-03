@@ -1,8 +1,8 @@
 {
   "id": "3014",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-07-03T06:08:04Z",
-  "updated_at": "2026-07-03T06:08:04Z"
+  "assignee": "ttraenkler/agent-opus",
+  "status": "in-progress",
+  "branch": "issue-3014-any-receiver-foreach-some-misroute",
+  "claimed_at": "2026-07-03T06:12:40Z",
+  "updated_at": "2026-07-03T06:12:40Z"
 }
