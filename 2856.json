@@ -1,8 +1,9 @@
 {
   "id": "2856",
   "assignee": "ttraenkler/sr-bodyshape2",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2856-body-shape-zero",
   "claimed_at": "2026-07-03T12:36:45Z",
-  "updated_at": "2026-07-03T12:36:45Z"
+  "updated_at": "2026-07-03T13:01:27Z",
+  "released_at": "2026-07-03T13:01:27Z"
 }
