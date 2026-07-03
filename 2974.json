@@ -1,8 +1,9 @@
 {
   "id": "2974",
   "assignee": "ttraenkler/agent-opus-2109",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2974-claim-allocate-backoff",
   "claimed_at": "2026-07-03T08:34:38Z",
-  "updated_at": "2026-07-03T08:34:38Z"
+  "updated_at": "2026-07-03T08:51:11Z",
+  "released_at": "2026-07-03T08:51:11Z"
 }
