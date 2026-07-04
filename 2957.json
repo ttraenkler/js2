@@ -1,8 +1,8 @@
 {
   "id": "2957",
-  "assignee": "ttraenkler/agent-a2552b729d56b218c",
+  "assignee": "ttraenkler/opus-2957p1",
   "status": "in-progress",
-  "branch": "issue-2957-async-activation-shapes",
-  "claimed_at": "2026-07-03T05:47:23Z",
-  "updated_at": "2026-07-03T05:47:23Z"
+  "branch": "issue-2957-phase1-extract",
+  "claimed_at": "2026-07-04T14:23:54Z",
+  "updated_at": "2026-07-04T14:23:54Z"
 }
