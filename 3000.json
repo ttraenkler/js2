@@ -1,8 +1,9 @@
 {
   "id": "3000",
   "assignee": "ttraenkler/opus-3000b",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-3000-b-accessors",
   "claimed_at": "2026-07-04T16:56:23Z",
-  "updated_at": "2026-07-04T16:56:23Z"
+  "updated_at": "2026-07-04T17:47:38Z",
+  "released_at": "2026-07-04T17:47:38Z"
 }
