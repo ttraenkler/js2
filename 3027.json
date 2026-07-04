@@ -1,8 +1,8 @@
 {
   "id": "3027",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-07-03T13:39:00Z",
-  "updated_at": "2026-07-03T13:39:00Z"
+  "assignee": "ttraenkler/dev-3027",
+  "status": "in-progress",
+  "branch": "issue-3027-object-dynamic-reader",
+  "claimed_at": "2026-07-04T22:06:19Z",
+  "updated_at": "2026-07-04T22:06:19Z"
 }
