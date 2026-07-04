@@ -1,9 +1,8 @@
 {
   "id": "2957",
-  "assignee": "ttraenkler/opus-2957p1",
-  "status": "released",
-  "branch": "issue-2957-phase1-extract",
-  "claimed_at": "2026-07-04T14:23:54Z",
-  "updated_at": "2026-07-04T15:07:11Z",
-  "released_at": "2026-07-04T15:07:11Z"
+  "assignee": "ttraenkler/opus-2957p2",
+  "status": "in-progress",
+  "branch": "issue-2957-phase2-arrows",
+  "claimed_at": "2026-07-04T15:45:51Z",
+  "updated_at": "2026-07-04T15:45:51Z"
 }
