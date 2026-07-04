@@ -1,8 +1,9 @@
 {
   "id": "2949",
   "assignee": "ttraenkler/fable-2949s3",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2949-slice3-lowering",
   "claimed_at": "2026-07-04T10:32:48Z",
-  "updated_at": "2026-07-04T10:32:48Z"
+  "updated_at": "2026-07-04T12:02:01Z",
+  "released_at": "2026-07-04T12:02:01Z"
 }
