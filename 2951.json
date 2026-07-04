@@ -1,8 +1,8 @@
 {
   "id": "2951",
-  "assignee": "ttraenkler/opus-2951",
+  "assignee": "ttraenkler/opus-2951gate2",
   "status": "in-progress",
-  "branch": "issue-2951-gen-setreturn",
-  "claimed_at": "2026-07-04T14:23:45Z",
-  "updated_at": "2026-07-04T14:23:45Z"
+  "branch": "issue-2951-gate2-generators",
+  "claimed_at": "2026-07-04T15:46:00Z",
+  "updated_at": "2026-07-04T15:46:00Z"
 }
