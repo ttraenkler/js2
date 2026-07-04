@@ -1,9 +1,8 @@
 {
   "id": "3000",
-  "assignee": "ttraenkler/sr-classmember",
-  "status": "released",
-  "branch": "issue-3000-ir-classmember",
-  "claimed_at": "2026-07-03T15:04:29Z",
-  "updated_at": "2026-07-03T15:49:17Z",
-  "released_at": "2026-07-03T15:49:17Z"
+  "assignee": "ttraenkler/opus-3000b",
+  "status": "in-progress",
+  "branch": "issue-3000-b-accessors",
+  "claimed_at": "2026-07-04T16:56:23Z",
+  "updated_at": "2026-07-04T16:56:23Z"
 }
