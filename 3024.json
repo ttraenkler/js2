@@ -1,9 +1,8 @@
 {
   "id": "3024",
-  "assignee": "ttraenkler/sr-interp",
-  "status": "released",
-  "branch": "issue-3024-invalid-wasm-default-lane",
-  "claimed_at": "2026-07-03T17:31:29Z",
-  "updated_at": "2026-07-03T17:42:20Z",
-  "released_at": "2026-07-03T17:42:20Z"
+  "assignee": "ttraenkler/dev-selfserve-1",
+  "status": "in-progress",
+  "branch": "issue-3024-numeric-slot-desync",
+  "claimed_at": "2026-07-04T18:44:50Z",
+  "updated_at": "2026-07-04T18:44:50Z"
 }
