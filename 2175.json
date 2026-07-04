@@ -1,8 +1,9 @@
 {
   "id": "2175",
   "assignee": "ttraenkler/opus-2175s2",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2175-v2s2",
   "claimed_at": "2026-07-04T16:57:14Z",
-  "updated_at": "2026-07-04T16:57:14Z"
+  "updated_at": "2026-07-04T17:32:26Z",
+  "released_at": "2026-07-04T17:32:26Z"
 }
