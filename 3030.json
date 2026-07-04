@@ -1,8 +1,9 @@
 {
   "id": "3030",
   "assignee": "ttraenkler/fable-arch-slices",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-3029-s1-s4-freeze",
   "claimed_at": "2026-07-04T08:41:43Z",
-  "updated_at": "2026-07-04T08:41:43Z"
+  "updated_at": "2026-07-04T09:17:53Z",
+  "released_at": "2026-07-04T09:17:53Z"
 }
