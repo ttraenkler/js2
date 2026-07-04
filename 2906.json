@@ -1,8 +1,9 @@
 {
   "id": "2906",
   "assignee": "ttraenkler/opus-2906-3d",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2906-3d-async-gen",
   "claimed_at": "2026-07-04T21:10:18Z",
-  "updated_at": "2026-07-04T21:10:18Z"
+  "updated_at": "2026-07-04T21:26:13Z",
+  "released_at": "2026-07-04T21:26:13Z"
 }
