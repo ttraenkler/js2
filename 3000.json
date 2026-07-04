@@ -1,9 +1,8 @@
 {
   "id": "3000",
-  "assignee": "ttraenkler/dev-selfserve-1",
-  "status": "released",
+  "assignee": "ttraenkler/opus-3000c-impl",
+  "status": "in-progress",
   "branch": "issue-3000-c-ctor",
-  "claimed_at": "2026-07-04T20:06:40Z",
-  "updated_at": "2026-07-04T20:26:18Z",
-  "released_at": "2026-07-04T20:26:18Z"
+  "claimed_at": "2026-07-04T20:26:33Z",
+  "updated_at": "2026-07-04T20:26:33Z"
 }
