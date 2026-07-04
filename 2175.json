@@ -1,8 +1,9 @@
 {
   "id": "2175",
   "assignee": "ttraenkler/opus-2175s3",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2175-v2s3b-reader-arm",
   "claimed_at": "2026-07-04T20:11:35Z",
-  "updated_at": "2026-07-04T20:11:35Z"
+  "updated_at": "2026-07-04T20:21:31Z",
+  "released_at": "2026-07-04T20:21:31Z"
 }
