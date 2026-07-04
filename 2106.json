@@ -1,9 +1,8 @@
 {
   "id": "2106",
-  "assignee": "ttraenkler/fable-2106",
-  "status": "released",
-  "branch": "issue-2106-s1-undefined-singleton",
-  "claimed_at": "2026-07-04T10:32:54Z",
-  "updated_at": "2026-07-04T11:52:09Z",
-  "released_at": "2026-07-04T11:52:09Z"
+  "assignee": "ttraenkler/dev-selfserve-2",
+  "status": "in-progress",
+  "branch": "issue-2106-undef-default-flip",
+  "claimed_at": "2026-07-04T18:46:40Z",
+  "updated_at": "2026-07-04T18:46:40Z"
 }
