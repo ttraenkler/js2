@@ -1,8 +1,9 @@
 {
   "id": "2906",
   "assignee": "ttraenkler/opus-asynciter",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2906-asynciter-carrier",
   "claimed_at": "2026-07-04T18:40:28Z",
-  "updated_at": "2026-07-04T18:40:28Z"
+  "updated_at": "2026-07-04T19:46:06Z",
+  "released_at": "2026-07-04T19:46:06Z"
 }
