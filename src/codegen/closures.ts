@@ -1745,7 +1745,21 @@ export function compileArrowAsClosure(
   // the canonical single-tail-await (`return await P`) has no live-after set, so
   // the env param is untouched — richer shapes stay on the legacy path via the
   // predicate gate.
-  const asyncDecision = isAsync && !isGenerator ? planAsyncClosureActivation(ctx, arrow, /*isAsync*/ true) : null;
+  // (#2957 phase 2) Async CLOSURE activation is scoped to async ARROWS only for
+  // now. Async FUNCTION EXPRESSIONS still null_deref in the lifted-closure CPS
+  // context — the test262 async-iteration harness wraps its bodies in
+  // `asyncTest(async function () { … })` / `assert.throwsAsync(_, async function() { … })`
+  // fn-expr callbacks, which regressed the built-ins/Array/fromAsync (16),
+  // language/statements/await-using (7) and AsyncFromSyncIteratorPrototype (1)
+  // clusters when activated (23 merge_group regressions — the lifted-closure
+  // `__self`/capture handling for the fn-expr shape is not yet validated). Arrow
+  // closures (the phase-2 headline, `async (x) => await g(x)`) are unaffected and
+  // stay activated; fn-expr closure activation is a follow-up once the
+  // closure-context CPS path is validated for that shape.
+  const asyncDecision =
+    isAsync && !isGenerator && ts.isArrowFunction(arrow)
+      ? planAsyncClosureActivation(ctx, arrow, /*isAsync*/ true)
+      : null;
   if (asyncDecision) {
     closureReturnType = { kind: "externref" };
   }
