@@ -1,8 +1,9 @@
 {
   "id": "3000",
   "assignee": "ttraenkler/opus-3000-1b",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-3000-1b-string-field-shape",
   "claimed_at": "2026-07-04T17:49:43Z",
-  "updated_at": "2026-07-04T17:49:43Z"
+  "updated_at": "2026-07-04T19:01:09Z",
+  "released_at": "2026-07-04T19:01:09Z"
 }
