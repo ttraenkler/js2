@@ -1,9 +1,8 @@
 {
   "id": "2906",
-  "assignee": "ttraenkler/opus-2957p2",
-  "status": "released",
-  "branch": "issue-2906-3a-while-await",
-  "claimed_at": "2026-07-04T16:29:51Z",
-  "updated_at": "2026-07-04T17:16:04Z",
-  "released_at": "2026-07-04T17:16:04Z"
+  "assignee": "ttraenkler/opus-2906-3b",
+  "status": "in-progress",
+  "branch": "issue-2906-3b-for-await",
+  "claimed_at": "2026-07-04T17:35:16Z",
+  "updated_at": "2026-07-04T17:35:16Z"
 }
