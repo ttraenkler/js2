@@ -1,8 +1,9 @@
 {
   "id": "2957",
   "assignee": "ttraenkler/opus-2957p2",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2957-phase2-arrows",
   "claimed_at": "2026-07-04T15:45:51Z",
-  "updated_at": "2026-07-04T15:45:51Z"
+  "updated_at": "2026-07-04T16:33:44Z",
+  "released_at": "2026-07-04T16:33:44Z"
 }
