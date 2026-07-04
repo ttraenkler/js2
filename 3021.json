@@ -1,8 +1,8 @@
 {
   "id": "3021",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-07-03T13:38:12Z",
-  "updated_at": "2026-07-03T13:38:12Z"
+  "assignee": "ttraenkler/fable-3021",
+  "status": "in-progress",
+  "branch": "issue-3021-class-elements-spec",
+  "claimed_at": "2026-07-04T08:41:49Z",
+  "updated_at": "2026-07-04T08:41:49Z"
 }
