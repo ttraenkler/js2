@@ -1,8 +1,9 @@
 {
   "id": "2853",
   "assignee": "ttraenkler/fable-2853",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2853-miscompile-fixes",
   "claimed_at": "2026-07-04T08:42:24Z",
-  "updated_at": "2026-07-04T08:42:24Z"
+  "updated_at": "2026-07-04T10:21:59Z",
+  "released_at": "2026-07-04T10:21:59Z"
 }
