@@ -1,8 +1,8 @@
 {
   "id": "3035",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-07-04T22:59:58Z",
-  "updated_at": "2026-07-04T22:59:58Z"
+  "assignee": "ttraenkler/dev-2980",
+  "status": "in-progress",
+  "branch": "issue-2980-async-carrier-widen-final",
+  "claimed_at": "2026-07-04T23:00:24Z",
+  "updated_at": "2026-07-04T23:00:24Z"
 }
