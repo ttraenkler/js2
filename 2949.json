@@ -1,8 +1,9 @@
 {
   "id": "2949",
   "assignee": "ttraenkler/opus-2949s4",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2949-s4-return-widening",
   "claimed_at": "2026-07-04T18:39:49Z",
-  "updated_at": "2026-07-04T18:39:49Z"
+  "updated_at": "2026-07-04T19:32:36Z",
+  "released_at": "2026-07-04T19:32:36Z"
 }
