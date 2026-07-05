@@ -1,8 +1,8 @@
 {
   "id": "3037",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-07-05T00:15:10Z",
-  "updated_at": "2026-07-05T00:15:10Z"
+  "assignee": "ttraenkler/opus-identity-cs1",
+  "status": "in-progress",
+  "branch": "issue-3037-cs1-identity-canon",
+  "claimed_at": "2026-07-05T00:23:07Z",
+  "updated_at": "2026-07-05T00:23:07Z"
 }
