@@ -1,8 +1,9 @@
 {
   "id": "3054",
   "assignee": "ttraenkler/opus-3054-b2",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-3054-b2-accessors",
   "claimed_at": "2026-07-05T15:17:37Z",
-  "updated_at": "2026-07-05T15:17:37Z"
+  "updated_at": "2026-07-05T15:55:42Z",
+  "released_at": "2026-07-05T15:55:42Z"
 }
