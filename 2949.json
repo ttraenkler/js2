@@ -1,9 +1,8 @@
 {
   "id": "2949",
-  "assignee": "ttraenkler/opus-s5-1",
-  "status": "released",
-  "branch": "issue-2949-s5-1-truthiness",
-  "claimed_at": "2026-07-05T01:17:36Z",
-  "updated_at": "2026-07-05T01:52:37Z",
-  "released_at": "2026-07-05T01:52:37Z"
+  "assignee": "ttraenkler/opus-s5-2",
+  "status": "in-progress",
+  "branch": "issue-2949-s5-2-eq",
+  "claimed_at": "2026-07-05T02:16:12Z",
+  "updated_at": "2026-07-05T02:16:12Z"
 }
