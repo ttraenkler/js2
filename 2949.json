@@ -1,8 +1,9 @@
 {
   "id": "2949",
   "assignee": "ttraenkler/opus-s5-0",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2949-s5-0-emit-plumbing",
   "claimed_at": "2026-07-05T00:10:58Z",
-  "updated_at": "2026-07-05T00:10:58Z"
+  "updated_at": "2026-07-05T00:32:41Z",
+  "released_at": "2026-07-05T00:32:41Z"
 }
