@@ -1,9 +1,8 @@
 {
   "id": "2726",
-  "assignee": "ttraenkler/agent-a83",
-  "status": "released",
-  "branch": "issue-2726-delete-residual",
-  "claimed_at": "2026-06-29T22:42:39Z",
-  "updated_at": "2026-06-29T22:43:04Z",
-  "released_at": "2026-06-29T22:43:04Z"
+  "assignee": "ttraenkler/opus-2726",
+  "status": "in-progress",
+  "branch": "issue-2726-delete-residuals",
+  "claimed_at": "2026-07-05T21:34:48Z",
+  "updated_at": "2026-07-05T21:34:48Z"
 }
