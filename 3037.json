@@ -1,8 +1,9 @@
 {
   "id": "3037",
   "assignee": "ttraenkler/opus-3037-cs1c",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-3037-cs1c-getprototypeof",
   "claimed_at": "2026-07-05T06:54:42Z",
-  "updated_at": "2026-07-05T06:54:42Z"
+  "updated_at": "2026-07-05T07:10:59Z",
+  "released_at": "2026-07-05T07:10:59Z"
 }
