@@ -1,8 +1,8 @@
 {
   "id": "3054",
-  "assignee": "ttraenkler/diag-b3",
+  "assignee": "ttraenkler/remerge-c",
   "status": "in-progress",
-  "branch": "issue-3054-b3-writethrough",
-  "claimed_at": "2026-07-05T16:53:07Z",
-  "updated_at": "2026-07-05T16:53:07Z"
+  "branch": "issue-3054-c-resizable",
+  "claimed_at": "2026-07-05T17:14:44Z",
+  "updated_at": "2026-07-05T17:14:44Z"
 }
