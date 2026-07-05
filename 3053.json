@@ -1,8 +1,8 @@
 {
   "id": "3053",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-07-05T07:34:01Z",
-  "updated_at": "2026-07-05T07:34:01Z"
+  "assignee": "ttraenkler/opus-u0-carrier",
+  "status": "in-progress",
+  "branch": "issue-3053-u0-carrier-helper",
+  "claimed_at": "2026-07-05T07:44:06Z",
+  "updated_at": "2026-07-05T07:44:06Z"
 }
