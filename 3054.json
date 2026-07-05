@@ -1,8 +1,9 @@
 {
   "id": "3054",
   "assignee": "ttraenkler/remerge-de",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-3054-de-dynctor",
   "claimed_at": "2026-07-05T18:51:22Z",
-  "updated_at": "2026-07-05T18:51:22Z"
+  "updated_at": "2026-07-05T19:19:28Z",
+  "released_at": "2026-07-05T19:19:28Z"
 }
