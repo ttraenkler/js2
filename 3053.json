@@ -1,9 +1,8 @@
 {
   "id": "3053",
-  "assignee": "ttraenkler/opus-u1-wire",
-  "status": "done",
-  "branch": "issue-3053-u1-ir-wire",
-  "claimed_at": "2026-07-05T08:55:51Z",
-  "updated_at": "2026-07-05T10:02:47Z",
-  "released_at": "2026-07-05T10:02:47Z"
+  "assignee": "ttraenkler/opus-u2-flip",
+  "status": "in-progress",
+  "branch": "issue-3053-u2-claim-flip",
+  "claimed_at": "2026-07-05T10:06:10Z",
+  "updated_at": "2026-07-05T10:06:10Z"
 }
