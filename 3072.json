@@ -1,8 +1,8 @@
 {
   "id": "3072",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-07-06T12:14:08Z",
-  "updated_at": "2026-07-06T12:14:08Z"
+  "assignee": "ttraenkler/donut-layout",
+  "status": "in-progress",
+  "branch": "issue-3072-donut-orbit-align",
+  "claimed_at": "2026-07-06T12:14:27Z",
+  "updated_at": "2026-07-06T12:14:27Z"
 }
