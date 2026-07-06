@@ -1,9 +1,8 @@
 {
   "id": "3058",
-  "assignee": "ttraenkler/opus-3058",
-  "status": "released",
+  "assignee": "ttraenkler/opus-3058b",
+  "status": "in-progress",
   "branch": "issue-3058-resizable-ta-proto",
-  "claimed_at": "2026-07-05T21:32:09Z",
-  "updated_at": "2026-07-05T21:37:14Z",
-  "released_at": "2026-07-05T21:37:14Z"
+  "claimed_at": "2026-07-06T01:02:56Z",
+  "updated_at": "2026-07-06T01:02:56Z"
 }
