@@ -1,9 +1,8 @@
 {
   "id": "2955",
-  "assignee": "ttraenkler/agent-a4461",
-  "status": "released",
-  "branch": "issue-2955-depolymorph-ir-string-mode",
-  "claimed_at": "2026-07-03T09:04:21Z",
-  "updated_at": "2026-07-03T11:01:41Z",
-  "released_at": "2026-07-03T11:01:41Z"
+  "assignee": "ttraenkler/opus-2955",
+  "status": "in-progress",
+  "branch": "issue-2955-ir-string-ops",
+  "claimed_at": "2026-07-06T03:00:48Z",
+  "updated_at": "2026-07-06T03:00:48Z"
 }
