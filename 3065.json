@@ -2,8 +2,7 @@
   "id": "3065",
   "assignee": "ttraenkler/sendev-irbucket",
   "status": "in-progress",
-  "branch": "issue-2856-nonterminating-if-guard",
-  "reserved_at": "2026-07-06T01:51:49Z",
-  "claimed_at": "2026-07-06T01:51:49Z",
-  "updated_at": "2026-07-06T01:51:49Z"
+  "branch": "issue-3065-nonterminating-if-guard",
+  "claimed_at": "2026-07-06T01:52:37Z",
+  "updated_at": "2026-07-06T01:52:37Z"
 }
