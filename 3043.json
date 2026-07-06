@@ -1,8 +1,9 @@
 {
   "id": "3043",
   "assignee": "ttraenkler/opus-3043",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-3043-defineprop",
   "claimed_at": "2026-07-06T02:14:26Z",
-  "updated_at": "2026-07-06T02:14:26Z"
+  "updated_at": "2026-07-06T02:29:54Z",
+  "released_at": "2026-07-06T02:29:54Z"
 }
