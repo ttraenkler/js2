@@ -1,8 +1,9 @@
 {
   "id": "2740",
   "assignee": "ttraenkler/opus-2740",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2740-instanceof",
   "claimed_at": "2026-07-06T00:47:59Z",
-  "updated_at": "2026-07-06T00:47:59Z"
+  "updated_at": "2026-07-06T00:51:08Z",
+  "released_at": "2026-07-06T00:51:08Z"
 }
