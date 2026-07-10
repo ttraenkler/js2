@@ -1,8 +1,8 @@
 {
   "id": "3076",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-07-06T22:18:11Z",
-  "updated_at": "2026-07-06T22:18:11Z"
+  "assignee": "ttraenkler/fable-3040",
+  "status": "in-progress",
+  "branch": "issue-3076-standalone-dstr-throwing-accessor",
+  "claimed_at": "2026-07-10T12:52:17Z",
+  "updated_at": "2026-07-10T12:52:17Z"
 }
