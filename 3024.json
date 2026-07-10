@@ -1,8 +1,9 @@
 {
   "id": "3024",
   "assignee": "ttraenkler/opus-3024",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-3024-invalid-wasm",
   "claimed_at": "2026-07-06T02:14:18Z",
-  "updated_at": "2026-07-06T02:14:18Z"
+  "updated_at": "2026-07-10T20:27:59Z",
+  "released_at": "2026-07-10T20:27:59Z"
 }
