@@ -1,8 +1,9 @@
 {
   "id": "3022",
   "assignee": "ttraenkler/fable-3084",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-3022-defineproperty-fidelity",
   "claimed_at": "2026-07-10T15:13:21Z",
-  "updated_at": "2026-07-10T15:13:21Z"
+  "updated_at": "2026-07-10T15:13:59Z",
+  "released_at": "2026-07-10T15:13:59Z"
 }
