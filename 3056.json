@@ -1,9 +1,8 @@
 {
   "id": "3056",
-  "assignee": "ttraenkler/fable-18th",
-  "status": "released",
-  "branch": "issue-3056-standalone-numeric-assertions",
-  "claimed_at": "2026-07-10T19:36:07Z",
-  "updated_at": "2026-07-10T19:37:34Z",
-  "released_at": "2026-07-10T19:37:34Z"
+  "assignee": "ttraenkler/fable-rescue",
+  "status": "in-progress",
+  "branch": "probe-3056",
+  "claimed_at": "2026-07-10T19:42:42Z",
+  "updated_at": "2026-07-10T19:42:42Z"
 }
