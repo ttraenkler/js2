@@ -1,9 +1,8 @@
 {
   "id": "2955",
-  "assignee": "ttraenkler/opus-2955",
-  "status": "released",
-  "branch": "issue-2955-ir-string-ops",
-  "claimed_at": "2026-07-06T03:00:48Z",
-  "updated_at": "2026-07-06T03:07:58Z",
-  "released_at": "2026-07-06T03:07:58Z"
+  "assignee": "ttraenkler/fable-2856",
+  "status": "in-progress",
+  "branch": "issue-2955-string-method-mode-lower",
+  "claimed_at": "2026-07-10T14:06:45Z",
+  "updated_at": "2026-07-10T14:06:45Z"
 }
