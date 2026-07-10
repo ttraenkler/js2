@@ -1,8 +1,9 @@
 {
   "id": "2992",
   "assignee": "ttraenkler/fable-18th",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2992-delete-tombstone-read",
   "claimed_at": "2026-07-10T18:17:00Z",
-  "updated_at": "2026-07-10T18:17:00Z"
+  "updated_at": "2026-07-10T20:20:13Z",
+  "released_at": "2026-07-10T20:20:13Z"
 }
