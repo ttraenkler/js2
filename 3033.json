@@ -1,9 +1,8 @@
 {
   "id": "3033",
-  "assignee": "ttraenkler/fable-rescue",
-  "status": "released",
-  "branch": "probe-3033",
-  "claimed_at": "2026-07-10T19:46:08Z",
-  "updated_at": "2026-07-10T19:46:13Z",
-  "released_at": "2026-07-10T19:46:13Z"
+  "assignee": "ttraenkler/fable-17th",
+  "status": "in-progress",
+  "branch": "issue-3033-bug2-literal-undefined",
+  "claimed_at": "2026-07-10T20:08:34Z",
+  "updated_at": "2026-07-10T20:08:34Z"
 }
