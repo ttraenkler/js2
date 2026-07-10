@@ -1,8 +1,9 @@
 {
   "id": "2967",
   "assignee": "ttraenkler/fable-6th",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2967-retire-single-await-cps",
   "claimed_at": "2026-07-10T15:15:57Z",
-  "updated_at": "2026-07-10T15:15:57Z"
+  "updated_at": "2026-07-10T15:17:59Z",
+  "released_at": "2026-07-10T15:17:59Z"
 }
