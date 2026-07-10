@@ -1,8 +1,8 @@
 {
   "id": "2956",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-07-02T06:47:46Z",
-  "updated_at": "2026-07-02T06:47:46Z"
+  "assignee": "ttraenkler/fable-2938",
+  "status": "in-progress",
+  "branch": "issue-2956-linear-ir-frontend",
+  "claimed_at": "2026-07-10T14:09:11Z",
+  "updated_at": "2026-07-10T14:09:11Z"
 }
