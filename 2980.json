@@ -1,8 +1,9 @@
 {
   "id": "2980",
   "assignee": "ttraenkler/fable-2938",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2980-async-widen-final-layers",
   "claimed_at": "2026-07-10T13:20:52Z",
-  "updated_at": "2026-07-10T13:20:52Z"
+  "updated_at": "2026-07-10T14:07:40Z",
+  "released_at": "2026-07-10T14:07:40Z"
 }
