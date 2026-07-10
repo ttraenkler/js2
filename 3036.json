@@ -1,9 +1,8 @@
 {
   "id": "3036",
   "assignee": "ttraenkler/fable-rescue",
-  "status": "released",
-  "branch": "probe-3036",
-  "claimed_at": "2026-07-10T19:45:55Z",
-  "updated_at": "2026-07-10T19:46:02Z",
-  "released_at": "2026-07-10T19:46:02Z"
+  "status": "in-progress",
+  "branch": "issue-3036-allsettled-late-microtask-closure",
+  "claimed_at": "2026-07-10T19:47:06Z",
+  "updated_at": "2026-07-10T19:47:06Z"
 }
