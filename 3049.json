@@ -1,8 +1,9 @@
 {
   "id": "3049",
   "assignee": "ttraenkler/fable-3084",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-3049-iterator-helper-callbacks",
   "claimed_at": "2026-07-10T13:20:12Z",
-  "updated_at": "2026-07-10T13:20:12Z"
+  "updated_at": "2026-07-10T16:40:28Z",
+  "released_at": "2026-07-10T16:40:28Z"
 }
