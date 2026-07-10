@@ -1,8 +1,9 @@
 {
   "id": "2938",
   "assignee": "ttraenkler/fable-2938",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2938-done-bool-brand",
   "claimed_at": "2026-07-10T12:47:33Z",
-  "updated_at": "2026-07-10T12:47:33Z"
+  "updated_at": "2026-07-10T14:04:51Z",
+  "released_at": "2026-07-10T14:04:51Z"
 }
