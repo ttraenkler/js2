@@ -1,8 +1,9 @@
 {
   "id": "3022",
   "assignee": "ttraenkler/fable-rescue",
-  "status": "in-progress",
+  "status": "released",
   "branch": "probe-3022",
   "claimed_at": "2026-07-10T19:42:55Z",
-  "updated_at": "2026-07-10T19:42:55Z"
+  "updated_at": "2026-07-10T19:43:01Z",
+  "released_at": "2026-07-10T19:43:01Z"
 }
