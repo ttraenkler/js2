@@ -1,8 +1,9 @@
 {
   "id": "3033",
   "assignee": "ttraenkler/fable-3084",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-3033-keyword-property-names",
   "claimed_at": "2026-07-10T15:18:42Z",
-  "updated_at": "2026-07-10T15:18:42Z"
+  "updated_at": "2026-07-10T16:40:39Z",
+  "released_at": "2026-07-10T16:40:39Z"
 }
