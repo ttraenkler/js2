@@ -1,8 +1,9 @@
 {
   "id": "3128",
   "assignee": "ttraenkler/fable-18th",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-3128-assign-rhs-closure-capture",
   "claimed_at": "2026-07-10T19:37:39Z",
-  "updated_at": "2026-07-10T19:37:39Z"
+  "updated_at": "2026-07-10T20:20:07Z",
+  "released_at": "2026-07-10T20:20:07Z"
 }
