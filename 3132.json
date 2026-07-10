@@ -1,8 +1,8 @@
 {
   "id": "3132",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-07-10T14:05:42Z",
-  "updated_at": "2026-07-10T14:05:42Z"
+  "assignee": "ttraenkler/fable-3075",
+  "status": "in-progress",
+  "branch": "issue-3132-standalone-native-async-generators",
+  "claimed_at": "2026-07-10T14:06:06Z",
+  "updated_at": "2026-07-10T14:06:06Z"
 }
