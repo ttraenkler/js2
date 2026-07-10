@@ -1,9 +1,8 @@
 {
   "id": "2980",
-  "assignee": "ttraenkler/dev-2980",
-  "status": "released",
-  "branch": "issue-2980-async-carrier-widen-final",
-  "claimed_at": "2026-07-04T22:06:15Z",
-  "updated_at": "2026-07-04T23:02:09Z",
-  "released_at": "2026-07-04T23:02:09Z"
+  "assignee": "ttraenkler/fable-2938",
+  "status": "in-progress",
+  "branch": "issue-2980-async-widen-final-layers",
+  "claimed_at": "2026-07-10T13:20:52Z",
+  "updated_at": "2026-07-10T13:20:52Z"
 }
