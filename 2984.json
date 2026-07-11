@@ -1,8 +1,9 @@
 {
   "id": "2984",
   "assignee": "ttraenkler/fable-sub1",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2984-gopd-builtin-key-dispatch",
   "claimed_at": "2026-07-11T16:12:16Z",
-  "updated_at": "2026-07-11T16:12:16Z"
+  "updated_at": "2026-07-11T17:19:20Z",
+  "released_at": "2026-07-11T17:19:20Z"
 }
