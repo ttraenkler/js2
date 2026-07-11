@@ -38,6 +38,7 @@ import { applyDefineSubstitutions, applyDefineSubstitutionsWithMap } from "./com
 import { rewriteCjsRequire, rewriteCjsRequireWithMap } from "./cjs-rewrite.js";
 import { preprocessImports } from "./import-resolver.js";
 import { PositionMap } from "./position-map.js";
+import { injectIteratorHelpersPrelude } from "./iterator-helpers-prelude.js";
 import { injectProcessStdinPrelude } from "./process-stdin-prelude.js";
 import type { CompileError, CompileOptions, CompileResult } from "./index.js";
 import { optimizeBinaryAsync } from "./optimize.js";
@@ -1112,12 +1113,24 @@ export function compileSourceSync(
       : { source: definedSource, positionMap: PositionMap.identity(), injected: false };
   const stdinInjectedSource = stdinResult.source;
 
+  // Step 0a.4b: #3146 — ES2025 Iterator static helpers (`Iterator.from` /
+  // `concat` / `zip` / `zipKeyed`) standalone source-prelude. Prepends the
+  // plain-TS helper library + rewrites the `Iterator.<helper>` call-site
+  // property accesses to `__js2wasm_iter_*`, replacing the `__get_builtin`
+  // dynamic-shape hard CE. Standalone-only + access-scoped: any other target,
+  // or a program without such an access, is byte-identical (identity map).
+  const iterHelpersResult =
+    options.target === "standalone"
+      ? injectIteratorHelpersPrelude(stdinInjectedSource)
+      : { source: stdinInjectedSource, positionMap: PositionMap.identity(), injected: false };
+  const iterInjectedSource = iterHelpersResult.source;
+
   // Step 0a.5: Rewrite CommonJS `const X = require('Y')` patterns to ESM `import`
   // declarations (#1279). This must run before preprocessImports so the resulting
   // import statements get the same declare-stub treatment as user-written imports,
   // and before `detectNodeFsImports` so `const fs = require('node:fs')` is picked
   // up as a node:fs import for WASI mode.
-  const cjsResult = rewriteCjsRequireWithMap(stdinInjectedSource);
+  const cjsResult = rewriteCjsRequireWithMap(iterInjectedSource);
   const cjsRewritten = cjsResult.source;
 
   // Step 0b: Pre-process imports (replace import * as X with declare namespace)
@@ -1146,6 +1159,7 @@ export function compileSourceSync(
   // outermost-first.
   const positionMap = preprocessed.positionMap
     .compose(cjsResult.positionMap)
+    .compose(iterHelpersResult.positionMap)
     .compose(stdinResult.positionMap)
     .compose(defineResult.positionMap);
 
