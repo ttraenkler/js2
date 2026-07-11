@@ -1,8 +1,8 @@
 {
   "id": "2984",
-  "assignee": "ttraenkler/fable-16th",
+  "assignee": "ttraenkler/fable-sub1",
   "status": "in-progress",
-  "branch": "issue-2984-gopd-runtime-dispatch",
-  "claimed_at": "2026-07-10T18:03:49Z",
-  "updated_at": "2026-07-10T18:03:49Z"
+  "branch": "issue-2984-gopd-builtin-key-dispatch",
+  "claimed_at": "2026-07-11T16:12:16Z",
+  "updated_at": "2026-07-11T16:12:16Z"
 }
