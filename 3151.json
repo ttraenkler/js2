@@ -1,8 +1,9 @@
 {
   "id": "3151",
   "assignee": "ttraenkler/fable-sub1",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-3151-comparearray-anyarr-shim",
   "claimed_at": "2026-07-11T18:45:02Z",
-  "updated_at": "2026-07-11T18:45:02Z"
+  "updated_at": "2026-07-11T19:15:00Z",
+  "released_at": "2026-07-11T19:15:00Z"
 }
