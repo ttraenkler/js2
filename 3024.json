@@ -1,8 +1,8 @@
 {
   "id": "3024",
-  "assignee": "ttraenkler/fable-18th",
+  "assignee": "ttraenkler/fable-wasm",
   "status": "in-progress",
-  "branch": "issue-3024-invalid-wasm-default-lane",
-  "claimed_at": "2026-07-10T20:28:38Z",
-  "updated_at": "2026-07-10T20:28:38Z"
+  "branch": "issue-3024-externref-f64-residual",
+  "claimed_at": "2026-07-11T16:45:15Z",
+  "updated_at": "2026-07-11T16:45:15Z"
 }
