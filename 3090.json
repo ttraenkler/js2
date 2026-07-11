@@ -1,9 +1,8 @@
 {
   "id": "3090",
-  "assignee": "ttraenkler/fable-6th",
-  "status": "released",
-  "branch": "issue-3090-phase0-audit",
-  "claimed_at": "2026-07-10T13:50:00Z",
-  "updated_at": "2026-07-10T15:54:23Z",
-  "released_at": "2026-07-10T15:54:23Z"
+  "assignee": "ttraenkler/fable-shrink",
+  "status": "in-progress",
+  "branch": "issue-3090-fresh-audit-unreferenced",
+  "claimed_at": "2026-07-11T16:09:43Z",
+  "updated_at": "2026-07-11T16:09:43Z"
 }
