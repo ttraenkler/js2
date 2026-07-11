@@ -1,8 +1,9 @@
 {
   "id": "2992",
   "assignee": "ttraenkler/fable-sub2",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2992-slice2-4-mop",
   "claimed_at": "2026-07-11T16:10:01Z",
-  "updated_at": "2026-07-11T16:10:01Z"
+  "updated_at": "2026-07-11T19:47:06Z",
+  "released_at": "2026-07-11T19:47:06Z"
 }
