@@ -1,8 +1,8 @@
 {
   "id": "3143",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-07-11T16:19:23Z",
-  "updated_at": "2026-07-11T16:19:23Z"
+  "assignee": "ttraenkler/fable-shrink",
+  "status": "in-progress",
+  "branch": "issue-3143-ir-first-default-flip",
+  "claimed_at": "2026-07-11T16:59:53Z",
+  "updated_at": "2026-07-11T16:59:53Z"
 }
