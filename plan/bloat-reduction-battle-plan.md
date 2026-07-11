@@ -182,7 +182,7 @@ a slice claims byte-inertness — the #1917 byte-SHA neutrality proof. Ordered b
 | 5 | **Self-hosting pilot: `math-helpers.ts` as compiled TS builtin** — typed-intrinsics dialect + build-time precompile via `src/link/`; measured A/B | **#3141 (NEW)** | **−1.5k now; proves −45–55k** | high (contained) | **NOW** — senior, L |
 | 6 | **Module-level (top-level statement) IR adoption**; clears **G3** | **#3142 (NEW)** | ~0 (enabler) | medium | NOW (parallel with #4) |
 | 7 | **Legacy handler deletion, wave 1** — ir-owned-kind files: `typeof-delete.ts` 1.4k, `statements/control-flow.ts` 1.3k, `expressions/unary-updates.ts` 1.7k, `expressions.ts` 1.2k, `identifiers.ts` 1.5k, `literals.ts` 3.4k | #3090 Phase 3a | **−10k** | medium | after #4 + #6 (G1+G3) + per-kind G2 |
-| 8 | **Legacy handler deletion, wave 2** — the big files largest-first: `calls.ts` 16.2k → `assignment.ts` 6.9k → `loops.ts` 5.6k → `new-super.ts` 5.2k → `binary-ops.ts` 4.2k → `builtins.ts` 3.5k | #3090 Phase 3b (one slice per file) | **−30–38k** | med-high | gated: G2 closure per kind (#2855 STRICT_IR_REASONS) + G4 (IR entry into runtime emission per family) |
+| 8 | **Legacy handler deletion, wave 2** — the big files largest-first: `calls.ts` 16.9k → `assignment.ts` 6.9k → `loops.ts` 5.8k → `new-super.ts` 5.3k → `binary-ops.ts` 4.2k → `builtins.ts` 3.5k. **calls.ts-first confirmed by growth data** (see §6): calls.ts is +645 fn-lines/wk = 56% of all frontend accretion, so it is both the biggest deletion AND the fastest-growing — highest-value target the moment its gates clear. | #3090 Phase 3b (one slice per file) | **−31–39k** | med-high | gated: G2 closure per kind (#2855 STRICT_IR_REASONS) + G4 (IR entry into runtime emission per family) |
 | 9 | **Stdlib self-hosting scale-up** — per family, biggest-first once #3141 passes: `array-methods` 9.6k, `object-runtime` 10.1k, `native-strings`+`string-ops` 10.9k, `dataview-native` 3.9k, `json-codec-native` 2.9k, `map-runtime` 2.1k, `parse-number`/`number-format` 3.5k | allocate per family at dispatch | **−40–50k** | high (per-family gated) | after #3141 verdict |
 | 10 | **`runtime.ts` host-glue audit** — classify the 16k into API surface vs per-builtin fast-path glue duplicating standalone-native impls; propose demotions | allocate at dispatch | **−3–6k** (post-audit) | low (audit only) | NOW — dev, S |
 
@@ -211,7 +211,12 @@ last confirmed-dead residue; from here every line of shrink is gated on the slic
   from 59,976 @ Phase 0 — accreting ~1.1K/week**). **Corollary: the gate-clearing enablers
   (#3143 IR-first default, #3142 module-level) are time-sensitive — every week they slip,
   the eventual deletion grows ~1.1K larger and the IR-first A/B population widens.** Treat
-  them as high-priority, not backlog.
+  them as high-priority, not backlog. **Growth is concentrated, not diffuse** (per-file
+  delta 2026-07-10→11, fable-shrink): calls.ts +645, loops.ts +194, new-super.ts +103,
+  calls-closures.ts +88, assignment.ts +77 — the top-5 accreting files ARE the wave-2 head
+  (§5 slice 8); the other 24 frontend files are flat. RUNTIME grew +1,312 in
+  dataview/property-access/json families (G4 surface). So the deletion targets and the bloat
+  sources coincide — sequencing biggest-first is also fastest-growing-first.
 - Track `src/` code-only LOC in the weekly status alongside test262 %: the plan's
   scoreboard is the pair **(code LOC ↓, pass % ≥ 76.0)**.
 - `scripts/ir-fallback-baseline.json` unintended-bucket sum is the leading indicator
