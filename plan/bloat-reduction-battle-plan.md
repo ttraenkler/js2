@@ -4,6 +4,12 @@
 **Evidence:** live `wc -l`/grep sweeps of our `src/`; shallow clone + measurement of
 `CanadaHonk/porffor` @ HEAD (v0.61.13, 2026-07-11); `plan/log/3090-phase0-legacy-delete-list.md`
 (reachability audit, 2026-07-10); `scripts/ir-fallback-baseline.json`; issues #2855/#3090/#2967.
+**Fresh audit (fable-shrink, same commit 2026-07-11):** FRONTEND legacy-only has grown
+59,976 → **61,118 fn-lines** since Phase 0 (calls.ts 16,210→16,855; assignment.ts
+6,853→6,930; loops.ts 5,645→5,839; new-super.ts 5,153→5,256), and RUNTIME legacy-only
+46,979 → **48,291** — i.e. the deletable frontend is **still accreting ~1.1K fn-lines/week**,
+and the G4 runtime surface is growing too. This makes the gate-clearing slices (§5 #3142/#3143)
+a **race against net-positive bloat**, not a background cleanup — see §6.
 
 ---
 
@@ -169,7 +175,7 @@ a slice claims byte-inertness — the #1917 byte-SHA neutrality proof. Ordered b
 
 | # | Slice | Issue | Net LOC | Risk | Dispatchable |
 | - | --- | --- | ---: | --- | --- |
-| 1 | **knip wiring + delete unreferenced set** (superseded `collect*Imports` family in `index.ts` ~1.4k, `regex/vm.ts` 245, unary-update strays) | #3090 Phase 2 (`ready`) | **−2.1k** | none (knip-confirmed, zero capability change) | **NOW** — dev, S/M |
+| 1 | **knip wiring + delete unreferenced set** — LARGELY DONE: PR #2886 (open 2026-07-11) deletes the last confirmed-dead residue (−198) and ratchets the dead-export baseline 36→16. The remaining "unreferenced" flags are all test-imported keeps + `regex/vm.ts` (kept as executable spec). **No more free deletions exist** — every further shrink is gated on slices below. | #3090 Phase 2 / PR #2886 | **−0.2k (residual)** | none | **land #2886** |
 | 2 | **CPS async engine retirement** (delete `emitAsyncStateMachine`/`splitBodyAtAwait`/`asyncCpsActive` plumbing after measured A/B) | #2967 (`in-progress`, fable-2967) | **−3k** | medium (behavior-observable; full-corpus A/B specified) | in flight — do not reassign |
 | 3 | **`body-shape-rejected` → 0** (last unintended IR bucket, 15 remaining; spec banked) | #2856 (`blocked` — verify assignee liveness + blocker `#2135` ordering) | ~0 (enabler for #4/#6) | medium | **NOW** if assignee stale — senior |
 | 4 | **IR-first default flip** — make `JS2WASM_IR_FIRST=1` (#2138, done as flag) the default; clears **G1** (legacy stops compiling claimed functions) | **#3143 (NEW)** | ~0 (enabler; unlocks −60k) | medium (full-corpus A/B on merge_group) | after #3 |
@@ -180,7 +186,9 @@ a slice claims byte-inertness — the #1917 byte-SHA neutrality proof. Ordered b
 | 9 | **Stdlib self-hosting scale-up** — per family, biggest-first once #3141 passes: `array-methods` 9.6k, `object-runtime` 10.1k, `native-strings`+`string-ops` 10.9k, `dataview-native` 3.9k, `json-codec-native` 2.9k, `map-runtime` 2.1k, `parse-number`/`number-format` 3.5k | allocate per family at dispatch | **−40–50k** | high (per-family gated) | after #3141 verdict |
 | 10 | **`runtime.ts` host-glue audit** — classify the 16k into API surface vs per-builtin fast-path glue duplicating standalone-native impls; propose demotions | allocate at dispatch | **−3–6k** (post-audit) | low (audit only) | NOW — dev, S |
 
-**Near-term bankable (slices 1–2): −5k this week with zero pass-rate exposure.**
+**Free-deletion budget is now exhausted** (fable-shrink, 2026-07-11): PR #2886 takes the
+last confirmed-dead residue; from here every line of shrink is gated on the slices below.
+**Near-term bankable (slices 1–2): ~−3k this week with zero pass-rate exposure.**
 **This quarter (slices 3–7 + pilot): −15–20k plus both big levers unlocked.**
 **Full plan: −90–115k net → src/ ≈ 160–180k raw at ≥76%.**
 
@@ -199,7 +207,11 @@ a slice claims byte-inertness — the #1917 byte-SHA neutrality proof. Ordered b
 ## 6. Measurement cadence
 
 - Re-run `node scripts/audit-legacy-reachability.mjs` after every wave-1/2 slice; the
-  legacy-only fn-line count is the burn-down metric (start: 59,976).
+  legacy-only fn-line count is the burn-down metric (**61,118 fn-lines @ 2026-07-11, up
+  from 59,976 @ Phase 0 — accreting ~1.1K/week**). **Corollary: the gate-clearing enablers
+  (#3143 IR-first default, #3142 module-level) are time-sensitive — every week they slip,
+  the eventual deletion grows ~1.1K larger and the IR-first A/B population widens.** Treat
+  them as high-priority, not backlog.
 - Track `src/` code-only LOC in the weekly status alongside test262 %: the plan's
   scoreboard is the pair **(code LOC ↓, pass % ≥ 76.0)**.
 - `scripts/ir-fallback-baseline.json` unintended-bucket sum is the leading indicator
