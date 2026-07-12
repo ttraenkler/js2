@@ -1,8 +1,8 @@
 {
   "id": "3166",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-07-12T12:01:19Z",
-  "updated_at": "2026-07-12T12:01:19Z"
+  "assignee": "ttraenkler/sendev-3164",
+  "status": "in-progress",
+  "branch": "issue-3166-class-computed-fields",
+  "claimed_at": "2026-07-12T15:44:28Z",
+  "updated_at": "2026-07-12T15:44:28Z"
 }
