@@ -1,8 +1,9 @@
 {
   "id": "3146",
   "assignee": "ttraenkler/fable-sub2",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-3146-standalone-iterator-helpers",
   "claimed_at": "2026-07-11T18:59:54Z",
-  "updated_at": "2026-07-11T18:59:54Z"
+  "updated_at": "2026-07-12T02:19:45Z",
+  "released_at": "2026-07-12T02:19:45Z"
 }
