@@ -1,8 +1,9 @@
 {
   "id": "2740",
   "assignee": "ttraenkler/fable-close",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2740-instanceof-residual",
   "claimed_at": "2026-07-12T03:44:26Z",
-  "updated_at": "2026-07-12T03:44:26Z"
+  "updated_at": "2026-07-12T03:48:19Z",
+  "released_at": "2026-07-12T03:48:19Z"
 }
