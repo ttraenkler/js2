@@ -1,8 +1,9 @@
 {
   "id": "3154",
   "assignee": "ttraenkler/fable-eqfix",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-90-any-value-eq",
   "claimed_at": "2026-07-12T09:13:49Z",
-  "updated_at": "2026-07-12T09:13:49Z"
+  "updated_at": "2026-07-12T14:23:24Z",
+  "released_at": "2026-07-12T14:23:24Z"
 }
