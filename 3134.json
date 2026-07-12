@@ -1,8 +1,8 @@
 {
   "id": "3134",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-07-10T19:30:30Z",
-  "updated_at": "2026-07-10T19:30:30Z"
+  "assignee": "ttraenkler/fable-senior",
+  "status": "in-progress",
+  "branch": "issue-3134-promise-value-slot-rep",
+  "claimed_at": "2026-07-12T02:36:47Z",
+  "updated_at": "2026-07-12T02:36:47Z"
 }
