@@ -1,9 +1,8 @@
 {
   "id": "2903",
-  "assignee": "ttraenkler/sendev-callback",
-  "status": "released",
-  "branch": "issue-2903-make-callback-dead-import",
-  "claimed_at": "2026-06-30T20:39:42Z",
-  "updated_at": "2026-06-30T21:07:18Z",
-  "released_at": "2026-06-30T21:07:18Z"
+  "assignee": "ttraenkler/opus-r3",
+  "status": "in-progress",
+  "branch": "issue-2903-r3-lazy-iter-helpers",
+  "claimed_at": "2026-07-12T22:11:38Z",
+  "updated_at": "2026-07-12T22:11:38Z"
 }
