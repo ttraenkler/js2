@@ -2,8 +2,7 @@
   "id": "3203",
   "assignee": "ttraenkler/opus-sendev",
   "status": "in-progress",
-  "branch": "issue-alloc",
-  "reserved_at": "2026-07-12T22:27:35Z",
-  "claimed_at": "2026-07-12T22:27:35Z",
-  "updated_at": "2026-07-12T22:27:35Z"
+  "branch": "issue-3203-ir-first-allowlist-widen-bool",
+  "claimed_at": "2026-07-12T22:28:28Z",
+  "updated_at": "2026-07-12T22:28:28Z"
 }
