@@ -1,8 +1,9 @@
 {
   "id": "3164",
   "assignee": "ttraenkler/sendev-3164",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-3164-gen-fn-expr",
   "claimed_at": "2026-07-12T13:10:47Z",
-  "updated_at": "2026-07-12T13:10:47Z"
+  "updated_at": "2026-07-12T15:17:15Z",
+  "released_at": "2026-07-12T15:17:15Z"
 }
