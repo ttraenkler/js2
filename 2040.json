@@ -1,8 +1,8 @@
 {
   "id": "2040",
-  "assignee": "ttraenkler/sdev-vecdispatch",
+  "assignee": "ttraenkler/opus-dstr",
   "status": "in-progress",
-  "branch": "issue-2040-tag5-classifier",
-  "claimed_at": "2026-06-21T18:33:07Z",
-  "updated_at": "2026-06-21T18:33:07Z"
+  "branch": "issue-2040-slice1-lazy-defaults",
+  "claimed_at": "2026-07-12T22:12:46Z",
+  "updated_at": "2026-07-12T22:12:46Z"
 }
