@@ -1,8 +1,9 @@
 {
   "id": "2040",
   "assignee": "ttraenkler/opus-dstr",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2040-slice1-lazy-defaults",
   "claimed_at": "2026-07-12T22:12:46Z",
-  "updated_at": "2026-07-12T22:12:46Z"
+  "updated_at": "2026-07-12T22:54:07Z",
+  "released_at": "2026-07-12T22:54:07Z"
 }
