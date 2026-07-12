@@ -1,8 +1,8 @@
 {
   "id": "3154",
-  "assignee": "ttraenkler/fable-substr",
+  "assignee": "ttraenkler/fable-eqfix",
   "status": "in-progress",
-  "branch": "issue-3154-ir-substring-family",
-  "claimed_at": "2026-07-12T03:39:47Z",
-  "updated_at": "2026-07-12T03:39:47Z"
+  "branch": "issue-90-any-value-eq",
+  "claimed_at": "2026-07-12T09:13:49Z",
+  "updated_at": "2026-07-12T09:13:49Z"
 }
