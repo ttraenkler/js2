@@ -1,9 +1,8 @@
 {
   "id": "3166",
-  "assignee": "ttraenkler/sendev-3164",
-  "status": "released",
+  "assignee": "ttraenkler/agent-a52eb84a",
+  "status": "in-progress",
   "branch": "issue-3166-class-computed-fields",
-  "claimed_at": "2026-07-12T15:44:28Z",
-  "updated_at": "2026-07-12T15:59:03Z",
-  "released_at": "2026-07-12T15:59:03Z"
+  "claimed_at": "2026-07-12T17:12:43Z",
+  "updated_at": "2026-07-12T17:12:43Z"
 }
