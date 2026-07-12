@@ -1,8 +1,9 @@
 {
   "id": "3201",
   "assignee": "ttraenkler/opus-dstr",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-3201-array-hof-traps",
   "claimed_at": "2026-07-12T22:59:13Z",
-  "updated_at": "2026-07-12T22:59:13Z"
+  "updated_at": "2026-07-12T23:44:49Z",
+  "released_at": "2026-07-12T23:44:49Z"
 }
