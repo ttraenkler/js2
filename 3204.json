@@ -2,8 +2,7 @@
   "id": "3204",
   "assignee": "ttraenkler/opus-sendev",
   "status": "in-progress",
-  "branch": "issue-selfhost-alloc",
-  "reserved_at": "2026-07-12T23:38:56Z",
-  "claimed_at": "2026-07-12T23:38:56Z",
-  "updated_at": "2026-07-12T23:38:56Z"
+  "branch": "issue-3204-selfhost-math-log-atan",
+  "claimed_at": "2026-07-12T23:39:35Z",
+  "updated_at": "2026-07-12T23:39:35Z"
 }
