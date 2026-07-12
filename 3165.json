@@ -1,8 +1,9 @@
 {
   "id": "3165",
   "assignee": "ttraenkler/sendev-3164",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-3165-arguments-vec-readback",
   "claimed_at": "2026-07-12T15:01:56Z",
-  "updated_at": "2026-07-12T15:01:56Z"
+  "updated_at": "2026-07-12T15:58:56Z",
+  "released_at": "2026-07-12T15:58:56Z"
 }
