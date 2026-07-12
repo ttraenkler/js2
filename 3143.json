@@ -1,8 +1,9 @@
 {
   "id": "3143",
   "assignee": "ttraenkler/fable-irflip",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-3143-ir-first-default-flip",
   "claimed_at": "2026-07-12T16:23:28Z",
-  "updated_at": "2026-07-12T16:23:28Z"
+  "updated_at": "2026-07-12T16:24:32Z",
+  "released_at": "2026-07-12T16:24:32Z"
 }
