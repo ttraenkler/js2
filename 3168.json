@@ -1,8 +1,9 @@
 {
   "id": "3168",
   "assignee": "ttraenkler/fable-irflip",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-3168-ir-unary-tonumber",
   "claimed_at": "2026-07-12T16:17:20Z",
-  "updated_at": "2026-07-12T16:17:20Z"
+  "updated_at": "2026-07-12T16:24:40Z",
+  "released_at": "2026-07-12T16:24:40Z"
 }
