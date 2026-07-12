@@ -1,8 +1,9 @@
 {
   "id": "3056",
   "assignee": "ttraenkler/fable-substr",
-  "status": "in-progress",
+  "status": "released",
   "branch": "tmp-probe-3056",
   "claimed_at": "2026-07-12T05:28:47Z",
-  "updated_at": "2026-07-12T05:28:47Z"
+  "updated_at": "2026-07-12T05:29:25Z",
+  "released_at": "2026-07-12T05:29:25Z"
 }
