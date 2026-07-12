@@ -1,9 +1,8 @@
 {
   "id": "2740",
-  "assignee": "ttraenkler/fable-rescue",
-  "status": "released",
-  "branch": "probe-2740",
-  "claimed_at": "2026-07-10T19:42:30Z",
-  "updated_at": "2026-07-10T19:42:37Z",
-  "released_at": "2026-07-10T19:42:37Z"
+  "assignee": "ttraenkler/fable-close",
+  "status": "in-progress",
+  "branch": "issue-2740-instanceof-residual",
+  "claimed_at": "2026-07-12T03:44:26Z",
+  "updated_at": "2026-07-12T03:44:26Z"
 }
