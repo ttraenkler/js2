@@ -1,8 +1,8 @@
 {
   "id": "3156",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-07-12T05:35:16Z",
-  "updated_at": "2026-07-12T05:35:16Z"
+  "assignee": "ttraenkler/sendev-rescue",
+  "status": "in-progress",
+  "branch": "issue-3154-ir-substring-family",
+  "claimed_at": "2026-07-12T08:57:22Z",
+  "updated_at": "2026-07-12T08:57:22Z"
 }
