@@ -1,8 +1,8 @@
 {
   "id": "3147",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-07-11T17:13:18Z",
-  "updated_at": "2026-07-11T17:13:18Z"
+  "assignee": "ttraenkler/fable-close",
+  "status": "in-progress",
+  "branch": "issue-3147-standalone-string-raw",
+  "claimed_at": "2026-07-12T03:53:26Z",
+  "updated_at": "2026-07-12T03:53:26Z"
 }
