@@ -1,8 +1,8 @@
 {
   "id": "3234",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-07-13T12:33:44Z",
-  "updated_at": "2026-07-13T12:33:44Z"
+  "assignee": "ttraenkler/opus-suppressed",
+  "status": "in-progress",
+  "branch": "issue-3234-standalone-suppressederror",
+  "claimed_at": "2026-07-13T12:34:25Z",
+  "updated_at": "2026-07-13T12:34:25Z"
 }
