@@ -2,8 +2,7 @@
   "id": "3238",
   "assignee": "ttraenkler/opus-leak2",
   "status": "in-progress",
-  "branch": "issue-PENDING",
-  "reserved_at": "2026-07-13T14:35:18Z",
-  "claimed_at": "2026-07-13T14:35:18Z",
-  "updated_at": "2026-07-13T14:35:18Z"
+  "branch": "issue-3238-standalone-subclass-object-native-ctor",
+  "claimed_at": "2026-07-13T14:36:32Z",
+  "updated_at": "2026-07-13T14:36:32Z"
 }
