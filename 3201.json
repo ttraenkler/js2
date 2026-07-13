@@ -1,9 +1,8 @@
 {
   "id": "3201",
-  "assignee": "ttraenkler/opus-dstr",
-  "status": "released",
-  "branch": "issue-3201-pop-splice-sort",
-  "claimed_at": "2026-07-13T00:26:01Z",
-  "updated_at": "2026-07-13T00:54:23Z",
-  "released_at": "2026-07-13T00:54:23Z"
+  "assignee": "ttraenkler/opus-3201b",
+  "status": "in-progress",
+  "branch": "issue-3201-sort-includes-trapsafe",
+  "claimed_at": "2026-07-13T01:19:09Z",
+  "updated_at": "2026-07-13T01:19:09Z"
 }
