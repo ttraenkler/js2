@@ -1,9 +1,8 @@
 {
   "id": "3236",
-  "assignee": "ttraenkler/opus-leak",
-  "status": "released",
-  "branch": "issue-genproto-intrinsics",
-  "claimed_at": "2026-07-13T13:45:10Z",
-  "updated_at": "2026-07-13T13:57:17Z",
-  "released_at": "2026-07-13T13:57:17Z"
+  "assignee": "ttraenkler/opus-genproto",
+  "status": "in-progress",
+  "branch": "issue-3236-slice1",
+  "claimed_at": "2026-07-13T13:57:28Z",
+  "updated_at": "2026-07-13T13:57:28Z"
 }
