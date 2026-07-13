@@ -1,9 +1,8 @@
 {
   "id": "3244",
-  "assignee": "ttraenkler/opus-asyncthen",
+  "assignee": "ttraenkler/opus-anycontainer",
   "status": "in-progress",
-  "branch": "issue-nested-dstr-elem-type",
-  "reserved_at": "2026-07-13T19:52:29Z",
-  "claimed_at": "2026-07-13T19:52:29Z",
-  "updated_at": "2026-07-13T19:52:29Z"
+  "branch": "issue-3244-any-container-elem-rep",
+  "claimed_at": "2026-07-13T20:25:24Z",
+  "updated_at": "2026-07-13T20:25:24Z"
 }
