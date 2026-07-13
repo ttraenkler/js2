@@ -1,8 +1,8 @@
 {
   "id": "2106",
-  "assignee": "ttraenkler/opus-2106flip",
+  "assignee": "ttraenkler/opus-regexp",
   "status": "in-progress",
-  "branch": "issue-2106-undef-default-flip",
-  "claimed_at": "2026-07-13T08:15:00Z",
-  "updated_at": "2026-07-13T08:15:00Z"
+  "branch": "issue-2106-regexp-singleton-cast",
+  "claimed_at": "2026-07-13T09:08:28Z",
+  "updated_at": "2026-07-13T09:08:28Z"
 }
