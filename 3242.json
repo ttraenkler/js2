@@ -2,8 +2,7 @@
   "id": "3242",
   "assignee": "ttraenkler/opus-weakcoll",
   "status": "in-progress",
-  "branch": "issue-weakref-native",
-  "reserved_at": "2026-07-13T18:51:09Z",
-  "claimed_at": "2026-07-13T18:51:09Z",
-  "updated_at": "2026-07-13T18:51:09Z"
+  "branch": "issue-3242-native-weakref",
+  "claimed_at": "2026-07-13T18:53:41Z",
+  "updated_at": "2026-07-13T18:53:41Z"
 }
