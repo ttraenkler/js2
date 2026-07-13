@@ -1,8 +1,8 @@
 {
   "id": "3226",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-07-13T05:01:32Z",
-  "updated_at": "2026-07-13T05:01:32Z"
+  "assignee": "ttraenkler/opus-selfhost2",
+  "status": "in-progress",
+  "branch": "issue-3226-selfhost-dialect-intrinsics",
+  "claimed_at": "2026-07-13T12:49:33Z",
+  "updated_at": "2026-07-13T12:49:33Z"
 }
