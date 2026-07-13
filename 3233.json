@@ -1,9 +1,9 @@
 {
   "id": "3233",
   "assignee": "ttraenkler/opus-selfhost2",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-selfhost-atan2",
-  "reserved_at": "2026-07-13T11:55:32Z",
   "claimed_at": "2026-07-13T11:55:32Z",
-  "updated_at": "2026-07-13T11:55:32Z"
+  "updated_at": "2026-07-13T12:48:32Z",
+  "released_at": "2026-07-13T12:48:32Z"
 }
