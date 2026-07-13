@@ -13,7 +13,7 @@ task_type: bugfix
 area: codegen, runtime
 language_feature: objects, property enumeration, spread, destructuring
 goal: standalone-mode
-related: [3218, 2515, 1472, 2714, 987, 2158]
+related: [3223, 2515, 1472, 2714, 987, 2158]
 test262_bucket: standalone-closed-struct-enumeration
 ---
 
@@ -41,7 +41,7 @@ a struct field-name registry (`_getStructFieldNames`, `src/runtime.ts`). The
 standalone native path has no equivalent.
 
 This is the substrate gap that blocks the DOMINANT test262 object-rest pattern
-(`var {a,b,...rest} = {x:1,y:2,a:5,b:3}`) — see #3218, which added the native
+(`var {a,b,...rest} = {x:1,y:2,a:5,b:3}`) — see #3223, which added the native
 `__extern_rest_object` de-leak that is correct for open-`$Object` sources but
 inherits this enumeration gap for closed-struct sources. It ALSO blocks
 `Object.keys`/`values`/`entries`/spread standalone for typed objects.
@@ -90,5 +90,5 @@ and the representation tradeoffs are acceptable.
 
 - `ctx.standalone`/`ctx.wasi`-gated; host/gc byte-identical.
 - Broad-impact → validate on the merge_group standalone floor.
-- Once landed, #3218's `__extern_rest_object` handles closed-struct sources
+- Once landed, #3223's `__extern_rest_object` handles closed-struct sources
   automatically (it delegates to `__object_keys`).
