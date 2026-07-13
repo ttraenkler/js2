@@ -2,8 +2,7 @@
   "id": "3218",
   "assignee": "ttraenkler/opus-substrate",
   "status": "in-progress",
-  "branch": "issue-PLACEHOLDER",
-  "reserved_at": "2026-07-13T03:14:54Z",
-  "claimed_at": "2026-07-13T03:14:54Z",
-  "updated_at": "2026-07-13T03:14:54Z"
+  "branch": "issue-3218-standalone-native-object-rest",
+  "claimed_at": "2026-07-13T03:15:12Z",
+  "updated_at": "2026-07-13T03:15:12Z"
 }
