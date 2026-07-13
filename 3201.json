@@ -1,8 +1,9 @@
 {
   "id": "3201",
   "assignee": "ttraenkler/opus-3201b",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-3201-sort-includes-trapsafe",
   "claimed_at": "2026-07-13T01:19:09Z",
-  "updated_at": "2026-07-13T01:19:09Z"
+  "updated_at": "2026-07-13T02:25:19Z",
+  "released_at": "2026-07-13T02:25:19Z"
 }
