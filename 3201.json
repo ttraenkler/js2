@@ -1,8 +1,9 @@
 {
   "id": "3201",
   "assignee": "ttraenkler/opus-dstr",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-3201-includes-slice-sparse",
   "claimed_at": "2026-07-12T23:54:29Z",
-  "updated_at": "2026-07-12T23:54:29Z"
+  "updated_at": "2026-07-13T00:22:42Z",
+  "released_at": "2026-07-13T00:22:42Z"
 }
