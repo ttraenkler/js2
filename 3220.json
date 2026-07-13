@@ -1,8 +1,9 @@
 {
   "id": "3220",
   "assignee": "ttraenkler/opus-3201b",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-3220-array-join-forof-sparse-trapsafe",
   "claimed_at": "2026-07-13T03:57:40Z",
-  "updated_at": "2026-07-13T03:57:40Z"
+  "updated_at": "2026-07-13T04:39:50Z",
+  "released_at": "2026-07-13T04:39:50Z"
 }
