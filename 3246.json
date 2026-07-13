@@ -1,8 +1,9 @@
 {
   "id": "3246",
   "assignee": "ttraenkler/opus-leak3",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-3246-standalone-topropertydescriptor",
   "claimed_at": "2026-07-13T20:03:26Z",
-  "updated_at": "2026-07-13T20:03:26Z"
+  "updated_at": "2026-07-13T20:45:38Z",
+  "released_at": "2026-07-13T20:45:38Z"
 }
