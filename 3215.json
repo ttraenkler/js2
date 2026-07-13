@@ -1,8 +1,9 @@
 {
   "id": "3215",
   "assignee": "ttraenkler/opus-3201b",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-3215-array-hof-sparse-trapsafe",
   "claimed_at": "2026-07-13T02:28:50Z",
-  "updated_at": "2026-07-13T02:28:50Z"
+  "updated_at": "2026-07-13T03:53:43Z",
+  "released_at": "2026-07-13T03:53:43Z"
 }
