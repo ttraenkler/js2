@@ -1,9 +1,8 @@
 {
   "id": "2856",
-  "assignee": "ttraenkler/fable-2856",
-  "status": "released",
-  "branch": "issue-2856-vec-push-arraytype",
-  "claimed_at": "2026-07-10T13:00:59Z",
-  "updated_at": "2026-07-10T14:13:48Z",
-  "released_at": "2026-07-10T14:13:48Z"
+  "assignee": "ttraenkler/opus-2856",
+  "status": "in-progress",
+  "branch": "issue-2856-body-shape-drain",
+  "claimed_at": "2026-07-13T00:58:39Z",
+  "updated_at": "2026-07-13T00:58:39Z"
 }
