@@ -1,8 +1,9 @@
 {
   "id": "3244",
   "assignee": "ttraenkler/opus-anycontainer",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-3244-any-container-elem-rep",
   "claimed_at": "2026-07-13T20:25:24Z",
-  "updated_at": "2026-07-13T20:25:24Z"
+  "updated_at": "2026-07-13T21:11:44Z",
+  "released_at": "2026-07-13T21:11:44Z"
 }
