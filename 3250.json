@@ -1,9 +1,9 @@
 {
   "id": "3250",
   "assignee": "ttraenkler/opus-tabrand",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-tabrand-accessor",
-  "reserved_at": "2026-07-13T21:24:01Z",
   "claimed_at": "2026-07-13T21:24:01Z",
-  "updated_at": "2026-07-13T21:24:01Z"
+  "updated_at": "2026-07-13T22:48:52Z",
+  "released_at": "2026-07-13T22:48:52Z"
 }
