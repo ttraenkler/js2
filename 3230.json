@@ -1,9 +1,8 @@
 {
   "id": "3230",
-  "assignee": "ttraenkler/opus-gapmap",
-  "status": "released",
+  "assignee": "ttraenkler/opus-privref",
+  "status": "in-progress",
   "branch": "issue-3230-static-private-setter-standalone",
-  "claimed_at": "2026-07-13T07:32:05Z",
-  "updated_at": "2026-07-13T07:34:26Z",
-  "released_at": "2026-07-13T07:34:26Z"
+  "claimed_at": "2026-07-13T07:37:45Z",
+  "updated_at": "2026-07-13T07:37:45Z"
 }
