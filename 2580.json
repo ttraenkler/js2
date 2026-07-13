@@ -1,8 +1,9 @@
 {
   "id": "2580",
   "assignee": "ttraenkler/opus-2580",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2580-dynamic-length-presence",
   "claimed_at": "2026-07-13T06:45:57Z",
-  "updated_at": "2026-07-13T06:45:57Z"
+  "updated_at": "2026-07-13T06:57:17Z",
+  "released_at": "2026-07-13T06:57:17Z"
 }
