@@ -1,8 +1,8 @@
 {
   "id": "3222",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-07-13T03:58:48Z",
-  "updated_at": "2026-07-13T03:58:48Z"
+  "assignee": "ttraenkler/opus-c1",
+  "status": "in-progress",
+  "branch": "issue-3222-c1-static-closed-struct-enum",
+  "claimed_at": "2026-07-13T05:06:52Z",
+  "updated_at": "2026-07-13T05:06:52Z"
 }
