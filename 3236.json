@@ -1,8 +1,9 @@
 {
   "id": "3236",
   "assignee": "ttraenkler/opus-genproto",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-3236-slice1",
   "claimed_at": "2026-07-13T13:57:28Z",
-  "updated_at": "2026-07-13T13:57:28Z"
+  "updated_at": "2026-07-13T14:58:09Z",
+  "released_at": "2026-07-13T14:58:09Z"
 }
