@@ -2,8 +2,7 @@
   "id": "3235",
   "assignee": "ttraenkler/opus-leak",
   "status": "in-progress",
-  "branch": "issue-leak-iter",
-  "reserved_at": "2026-07-13T12:48:11Z",
-  "claimed_at": "2026-07-13T12:48:11Z",
-  "updated_at": "2026-07-13T12:48:11Z"
+  "branch": "issue-3235-standalone-spurious-make-callback",
+  "claimed_at": "2026-07-13T12:50:32Z",
+  "updated_at": "2026-07-13T12:50:32Z"
 }
