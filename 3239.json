@@ -1,8 +1,9 @@
 {
   "id": "3239",
   "assignee": "ttraenkler/opus-subclass2",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-3239-standalone-subclass-typedarray-native-ctor",
   "claimed_at": "2026-07-13T15:43:39Z",
-  "updated_at": "2026-07-13T15:43:39Z"
+  "updated_at": "2026-07-13T15:59:15Z",
+  "released_at": "2026-07-13T15:59:15Z"
 }
