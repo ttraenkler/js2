@@ -1,8 +1,9 @@
 {
   "id": "3230",
   "assignee": "ttraenkler/opus-privref",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-3230-static-private-setter-standalone",
   "claimed_at": "2026-07-13T07:37:45Z",
-  "updated_at": "2026-07-13T07:37:45Z"
+  "updated_at": "2026-07-13T08:08:58Z",
+  "released_at": "2026-07-13T08:08:58Z"
 }
