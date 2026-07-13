@@ -18,7 +18,7 @@ signature) with sampled root-cause verdicts (opus-defineprop2, 2026-07-13).
 
 | # | Cluster | Size | Root verdict | Overlap / notes |
 |---|---------|------|--------------|-----------------|
-| 1 | **annexB B.3.3 function-in-block** (`annexB/language/*`) | 96 | **SHARED-ROOT, single semantic** | `assert.throws(ReferenceError, ()=>f)` — a block/switch fn-decl with a conflicting lexical `let f` must NOT create the AnnexB outer `var` binding; we hoist it so `f` resolves. Suppress the AnnexB hoist when a conflicting lexical binding is in scope. Likely BOTH-LANE. **CLEANEST pick.** → in-flight (opus-defineprop2) |
+| 1 | ~~**annexB B.3.3 function-in-block** (`annexB/language/*`)~~ | ~~96~~ **ALREADY-FIXED** | — | ⚠️ **STRUCK — cold-verified 2026-07-14: 21/21 sampled PASS on current main** (if/switch/block × for-in/for-of/try/block variants). The 22:20 baseline count of 96 is STALE — fixed since (plausibly #2552 annexB phase-2 or related). **Do NOT re-work.** |
 | 2 | **class/elements** (`language/statements/class/elements`) | 222 | **SHARED-FEATURE, MULTI-ROOT** | field/private-method PLACEMENT (`!hasOwnProperty.call(C/C.prototype,"a")` ~49; `throws(SyntaxError,new C())` 14; verifyProperty 9). Decompose into 2–3 slices (field placement / private access / early errors). Biggest single lever. |
 | 3 | **Iterator Helpers** (`built-ins/Iterator/prototype`) | 198 | **SHARED-FEATURE, ~2–3 roots** | find/some/take/every/map/filter/reduce/flatMap: brand-check TypeError (25), getPrototypeOf (11), lazy "next should not be read" (10). ⚠️ **OVERLAPS #3249** iterator-ladder-triage (PR #3036 merged) — coordinate with that owner before dispatch. |
 | 4 | **Array generic-method over defined-accessor index** (`built-ins/Array/prototype/{map,filter,reduce,reduceRight,forEach,some,every}`) | ~204 (+43 `newArr.length`) | **SHARED-ROOT** | `Object.defineProperty(arr,"1",{get(){…}})` then iterate; getter never stored/consulted. **FOLDS INTO #3251** (array-descriptor overlay) — NOT a separate dispatch. |
@@ -27,9 +27,9 @@ signature) with sampled root-cause verdicts (opus-defineprop2, 2026-07-13).
 | 7 | **Function.prototype bind/apply/call** (`built-ins/Function/prototype`) | ~110 | **likely 2 roots** | bind 42 (bound-fn length/name/this) + apply 34 / call 33 (array-like spread + this). Needs deeper sampling to split. |
 | 8 | **Promise combinators GetIterator-reject** (`built-ins/Promise/{any,allSettled,all,race}`) | 34 | **SHARED-ROOT** | non-iterable arg → reject with a TypeError whose `[[Prototype]]` is `TypeError.prototype`. Gated on promise-carrier maturity in standalone. |
 
-**Recommended wave order:** annexB-B.3.3 (96, clean single-root) → class/elements
-decomposition (222) → String this-ToString trim family (76) → Promise
-combinators (34). **Hold** Iterator (=#3249) and TypedArray-methods
+**Recommended wave order:** ~~annexB-B.3.3~~ (STRUCK — already green) → String
+this-ToString trim family (76, shared-root) → class/elements decomposition
+(222) → Promise combinators (34). **Hold** Iterator (=#3249) and TypedArray-methods
 (~500: slice 64/filter 59/map 57/subarray 47/copyWithin 38 — **must cold-verify
 it's method-semantics, not the TA/AB brand-check owned by opus-tabrand**) pending
 owner/cold checks. Array-204 folds into **#3251** (array-descriptor overlay epic).
