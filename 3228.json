@@ -1,8 +1,9 @@
 {
   "id": "3228",
   "assignee": "ttraenkler/opus-gapmap",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-3228-for-await-dstr-native",
   "claimed_at": "2026-07-13T05:43:39Z",
-  "updated_at": "2026-07-13T05:43:39Z"
+  "updated_at": "2026-07-13T07:17:17Z",
+  "released_at": "2026-07-13T07:17:17Z"
 }
