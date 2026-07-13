@@ -1,8 +1,9 @@
 {
   "id": "2903",
   "assignee": "ttraenkler/opus-r4c",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2903-r4c-clamped-anyheld",
   "claimed_at": "2026-07-13T05:30:28Z",
-  "updated_at": "2026-07-13T05:30:28Z"
+  "updated_at": "2026-07-13T06:28:34Z",
+  "released_at": "2026-07-13T06:28:34Z"
 }
