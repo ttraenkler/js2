@@ -1,8 +1,8 @@
 {
   "id": "3132",
-  "assignee": "ttraenkler/fable-3075",
+  "assignee": "ttraenkler/opus-asyncgen",
   "status": "in-progress",
-  "branch": "issue-3132-standalone-native-async-generators",
-  "claimed_at": "2026-07-10T14:06:06Z",
-  "updated_at": "2026-07-10T14:06:06Z"
+  "branch": "issue-3132-asyncgen-rescue",
+  "claimed_at": "2026-07-13T06:45:41Z",
+  "updated_at": "2026-07-13T06:45:41Z"
 }
