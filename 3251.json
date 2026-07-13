@@ -1,8 +1,8 @@
 {
   "id": "3251",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-07-13T21:34:37Z",
-  "updated_at": "2026-07-13T21:34:37Z"
+  "assignee": "ttraenkler/opus-defineprop2",
+  "status": "in-progress",
+  "branch": "issue-3251-array-descriptor-overlay",
+  "claimed_at": "2026-07-13T21:44:28Z",
+  "updated_at": "2026-07-13T21:44:28Z"
 }
