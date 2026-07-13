@@ -1,8 +1,9 @@
 {
   "id": "3132",
   "assignee": "ttraenkler/opus-asyncgen",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-3132-asyncgen-rescue",
   "claimed_at": "2026-07-13T06:45:41Z",
-  "updated_at": "2026-07-13T06:45:41Z"
+  "updated_at": "2026-07-13T08:37:16Z",
+  "released_at": "2026-07-13T08:37:16Z"
 }
