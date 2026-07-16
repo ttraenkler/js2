@@ -1,8 +1,8 @@
 {
   "id": "3008",
-  "assignee": "ttraenkler/agent-a7e5749647e8f1219",
+  "assignee": "ttraenkler/fable-s2",
   "status": "in-progress",
-  "branch": "issue-3008-issue-tests-not-in-required-ci",
-  "claimed_at": "2026-07-02T22:56:30Z",
-  "updated_at": "2026-07-02T22:56:30Z"
+  "branch": "issue-3008-issue-test-ci-audit",
+  "claimed_at": "2026-07-16T22:21:27Z",
+  "updated_at": "2026-07-16T22:21:27Z"
 }
