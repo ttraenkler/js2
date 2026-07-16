@@ -1,8 +1,9 @@
 {
   "id": "2955",
   "assignee": "ttraenkler/fable-gamma",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2955-ir-string-depolymorph-s3",
   "claimed_at": "2026-07-16T23:11:20Z",
-  "updated_at": "2026-07-16T23:11:20Z"
+  "updated_at": "2026-07-16T23:12:31Z",
+  "released_at": "2026-07-16T23:12:31Z"
 }
