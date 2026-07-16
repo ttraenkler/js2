@@ -1,8 +1,9 @@
 {
   "id": "2992",
   "assignee": "ttraenkler/fable-mop",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2992-s5-closed-struct-mop",
   "claimed_at": "2026-07-16T13:16:28Z",
-  "updated_at": "2026-07-16T13:16:28Z"
+  "updated_at": "2026-07-16T14:30:06Z",
+  "released_at": "2026-07-16T14:30:06Z"
 }
