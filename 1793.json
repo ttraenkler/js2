@@ -1,9 +1,8 @@
 {
   "id": "1793",
-  "assignee": "ttraenkler/sd-2674b",
-  "status": "released",
+  "assignee": "ttraenkler/fable-epsilon",
+  "status": "in-progress",
   "branch": "issue-1793-node-buffer",
-  "claimed_at": "2026-06-26T05:33:41Z",
-  "updated_at": "2026-06-26T06:03:47Z",
-  "released_at": "2026-06-26T06:03:47Z"
+  "claimed_at": "2026-07-16T18:45:02Z",
+  "updated_at": "2026-07-16T18:45:02Z"
 }
