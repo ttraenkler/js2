@@ -1,8 +1,9 @@
 {
   "id": "3142",
   "assignee": "ttraenkler/fable-epsilon",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-3142-slice2-module-init-lowering",
   "claimed_at": "2026-07-16T18:18:37Z",
-  "updated_at": "2026-07-16T18:18:37Z"
+  "updated_at": "2026-07-16T18:40:20Z",
+  "released_at": "2026-07-16T18:40:20Z"
 }
