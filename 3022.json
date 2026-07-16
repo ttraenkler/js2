@@ -1,9 +1,8 @@
 {
   "id": "3022",
-  "assignee": "ttraenkler/fable-substr",
-  "status": "released",
-  "branch": "tmp-probe-3022",
-  "claimed_at": "2026-07-12T05:28:55Z",
-  "updated_at": "2026-07-12T05:29:31Z",
-  "released_at": "2026-07-12T05:29:31Z"
+  "assignee": "ttraenkler/fable-2",
+  "status": "in-progress",
+  "branch": "issue-3022-defineproperty-fidelity",
+  "claimed_at": "2026-07-16T16:07:13Z",
+  "updated_at": "2026-07-16T16:07:13Z"
 }
