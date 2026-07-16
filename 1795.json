@@ -1,8 +1,9 @@
 {
   "id": "1795",
   "assignee": "ttraenkler/fable-epsilon",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-1795-node-http",
   "claimed_at": "2026-07-16T20:31:50Z",
-  "updated_at": "2026-07-16T20:31:50Z"
+  "updated_at": "2026-07-16T20:51:20Z",
+  "released_at": "2026-07-16T20:51:20Z"
 }
