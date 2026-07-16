@@ -1,9 +1,8 @@
 {
   "id": "2956",
-  "assignee": "ttraenkler/fable-2938",
-  "status": "released",
-  "branch": "issue-2956-linear-ir-frontend",
-  "claimed_at": "2026-07-10T15:02:26Z",
-  "updated_at": "2026-07-10T15:32:26Z",
-  "released_at": "2026-07-10T15:32:26Z"
+  "assignee": "ttraenkler/fable-epsilon",
+  "status": "in-progress",
+  "branch": "issue-2956-linear-ir-consume",
+  "claimed_at": "2026-07-16T22:30:08Z",
+  "updated_at": "2026-07-16T22:30:08Z"
 }
