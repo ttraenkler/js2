@@ -1,8 +1,9 @@
 {
   "id": "2040",
   "assignee": "ttraenkler/fable-epsilon",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2040-tag5-classifier-flip",
   "claimed_at": "2026-07-16T18:27:57Z",
-  "updated_at": "2026-07-16T18:27:57Z"
+  "updated_at": "2026-07-16T19:53:49Z",
+  "released_at": "2026-07-16T19:53:49Z"
 }
