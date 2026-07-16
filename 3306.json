@@ -1,8 +1,8 @@
 {
   "id": "3306",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-07-16T13:16:35Z",
-  "updated_at": "2026-07-16T13:16:35Z"
+  "assignee": "ttraenkler/fable-eqfix",
+  "status": "in-progress",
+  "branch": "issue-3306-any-value-eq",
+  "claimed_at": "2026-07-16T13:17:00Z",
+  "updated_at": "2026-07-16T13:17:00Z"
 }
