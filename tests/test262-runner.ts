@@ -2396,6 +2396,72 @@ export function parenthesizeAwaitBraceOperand(body: string): string {
   return out;
 }
 
+/**
+ * (#3312) Rewrite TOP-LEVEL (brace/paren/bracket-depth 0) re-declarations of
+ * an already-hoisted var name inside the wrapped test body:
+ * `var x = <expr>;` → `x = <expr>;` (assignment in place, initializer side
+ * effects run in original order), bare `var x;` → dropped (a re-declaration
+ * without initializer is a no-op on an existing binding). Depth-0 only — a
+ * same-name `var` inside a nested function/class body is a legitimately
+ * DIFFERENT binding and is left untouched. Single-declarator shapes only
+ * (`var x = 0, y = 1;` is not matched — conservative, mirroring the
+ * hoist collectors). String/comment-aware, same skip rules as the other
+ * wrap scanners.
+ */
+function sweepTopLevelVarRedecls(src: string, name: string): string {
+  let out = "";
+  let i = 0;
+  let depth = 0;
+  const withInitRe = new RegExp(`^var(\\s+${name}\\s*=)`);
+  const bareRe = new RegExp(`^var\\s+${name}\\s*;`);
+  const isWordChar = (ch: string | undefined): boolean => ch !== undefined && /[A-Za-z0-9_$]/.test(ch);
+  while (i < src.length) {
+    const c = src[i]!;
+    if (c === "/" && src[i + 1] === "/") {
+      const nl = src.indexOf("\n", i);
+      const end = nl === -1 ? src.length : nl;
+      out += src.slice(i, end);
+      i = end;
+      continue;
+    }
+    if (c === "/" && src[i + 1] === "*") {
+      const close = src.indexOf("*/", i + 2);
+      const end = close === -1 ? src.length : close + 2;
+      out += src.slice(i, end);
+      i = end;
+      continue;
+    }
+    if (c === "'" || c === '"' || c === "`") {
+      let j = i + 1;
+      while (j < src.length && src[j] !== c) {
+        if (src[j] === "\\") j += 2;
+        else j++;
+      }
+      j++;
+      out += src.slice(i, j);
+      i = j;
+      continue;
+    }
+    if (c === "{" || c === "(" || c === "[") depth++;
+    else if (c === "}" || c === ")" || c === "]") depth--;
+    if (depth === 0 && c === "v" && !isWordChar(src[i - 1])) {
+      const rest = src.slice(i);
+      if (withInitRe.test(rest)) {
+        i += 3; // drop just the `var` keyword — the declarator becomes an assignment
+        continue;
+      }
+      const bare = rest.match(bareRe);
+      if (bare) {
+        i += bare[0].length; // drop the whole no-op re-declaration
+        continue;
+      }
+    }
+    out += c;
+    i++;
+  }
+  return out;
+}
+
 export function wrapTest(
   source: string,
   meta?: Test262Meta,
@@ -2902,6 +2968,11 @@ export function wrapTest(
     for (const vm of body.matchAll(varDeclNumericPattern)) {
       const varName = vm[1]!;
       const initVal = vm[2]!;
+      // (#3312) First sighting wins: a DUPLICATE `var x = <n>;` re-declaration
+      // must not overwrite the meta, or the strip below removes the LATER
+      // statement and leaves the FIRST behind (out-of-order assignment after
+      // the duplicate-sweep rewrite).
+      if (hoistedVars.has(varName)) continue;
       // Check if this variable is referenced in any class body
       if (new RegExp(`\\b${varName}\\b`).test(classBodyText)) {
         hoistedVars.add(varName);
@@ -3014,6 +3085,27 @@ export function wrapTest(
         hoistedDecls += `let ${v}: any;\n`;
         bodyForFunc = bodyForFunc.replace(new RegExp(`\\bvar\\s+${v}\\s*;`), ``);
       }
+    }
+
+    // (#3312) Duplicate re-declaration sweep. `var x = 0; …; var x = 0;` is
+    // ONE binding in JS (the later `var` re-declares and re-assigns), but the
+    // per-meta strip above removes/rewrites only ONE declaration — the
+    // duplicate used to survive as a FUNCTION-LOCAL `var` SHADOWING the
+    // hoisted module `let`: a two-binding shape the original test never had.
+    // That is exactly the divergence the dstr `ary-elision-iter` template
+    // family (16 files, procedurally composed with two `var callCount = 0;`
+    // statements) hits, and the shape that trips the #3312 capture-promotion
+    // bug (class-method body binds the module global, sibling closures bind
+    // the shadowing local). Rewrite every REMAINING TOP-LEVEL (brace-depth 0
+    // — a same-name `var` inside a nested function is a legitimately
+    // DIFFERENT binding and must be left alone) single-declarator
+    // re-declaration of a hoisted name: `var x = <expr>;` becomes the plain
+    // assignment `x = <expr>;` (initializer side effects run in place, in
+    // order), and a bare `var x;` re-declaration is dropped (a no-op on an
+    // existing binding). Multi-declarator statements (`var x = 0, y = 1;`)
+    // are left untouched — conservative, matching the collectors above.
+    for (const v of hoistedVars) {
+      bodyForFunc = sweepTopLevelVarRedecls(bodyForFunc, v);
     }
   }
 
