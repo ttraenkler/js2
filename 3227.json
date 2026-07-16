@@ -1,8 +1,9 @@
 {
   "id": "3227",
   "assignee": "ttraenkler/fable-s2",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-3227-s2-await-nan",
   "claimed_at": "2026-07-16T18:17:56Z",
-  "updated_at": "2026-07-16T18:17:56Z"
+  "updated_at": "2026-07-16T20:30:07Z",
+  "released_at": "2026-07-16T20:30:07Z"
 }
