@@ -1,8 +1,9 @@
 {
   "id": "3314",
   "assignee": "ttraenkler/fable-mop",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-gopd-undef-observability",
   "claimed_at": "2026-07-16T14:35:47Z",
-  "updated_at": "2026-07-16T14:35:47Z"
+  "updated_at": "2026-07-16T15:55:10Z",
+  "released_at": "2026-07-16T15:55:10Z"
 }
