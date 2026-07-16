@@ -1,8 +1,9 @@
 {
   "id": "3142",
   "assignee": "ttraenkler/fable-b",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-3142-slice2-module-init-lowering",
   "claimed_at": "2026-07-16T18:40:41Z",
-  "updated_at": "2026-07-16T18:40:41Z"
+  "updated_at": "2026-07-16T20:59:36Z",
+  "released_at": "2026-07-16T20:59:36Z"
 }
