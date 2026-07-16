@@ -1,8 +1,9 @@
 {
   "id": "3318",
   "assignee": "ttraenkler/fable-s2",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-3318-declaredtype-crash",
   "claimed_at": "2026-07-16T23:01:32Z",
-  "updated_at": "2026-07-16T23:01:32Z"
+  "updated_at": "2026-07-16T23:28:43Z",
+  "released_at": "2026-07-16T23:28:43Z"
 }
