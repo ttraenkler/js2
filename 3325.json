@@ -1,8 +1,9 @@
 {
   "id": "3325",
   "assignee": "ttraenkler/fable-epsilon",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-3325-declared-fn-dep-call",
   "claimed_at": "2026-07-16T22:27:16Z",
-  "updated_at": "2026-07-16T22:27:16Z"
+  "updated_at": "2026-07-16T22:29:36Z",
+  "released_at": "2026-07-16T22:29:36Z"
 }
