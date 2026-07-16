@@ -1,8 +1,9 @@
 {
   "id": "2903",
   "assignee": "ttraenkler/fable-interp",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2903-make-callback-residual",
   "claimed_at": "2026-07-16T14:32:04Z",
-  "updated_at": "2026-07-16T14:32:04Z"
+  "updated_at": "2026-07-16T14:36:18Z",
+  "released_at": "2026-07-16T14:36:18Z"
 }
