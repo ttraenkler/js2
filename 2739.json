@@ -1,8 +1,9 @@
 {
   "id": "2739",
   "assignee": "ttraenkler/fable-epsilon",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2739-forin-proto-chain",
   "claimed_at": "2026-07-16T18:19:40Z",
-  "updated_at": "2026-07-16T18:19:40Z"
+  "updated_at": "2026-07-16T19:46:11Z",
+  "released_at": "2026-07-16T19:46:11Z"
 }
