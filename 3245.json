@@ -1,8 +1,9 @@
 {
   "id": "3245",
   "assignee": "ttraenkler/fable-s2",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-3245-asyncgen-dstr-decomp",
   "claimed_at": "2026-07-16T23:30:14Z",
-  "updated_at": "2026-07-16T23:30:14Z"
+  "updated_at": "2026-07-16T23:40:04Z",
+  "released_at": "2026-07-16T23:40:04Z"
 }
