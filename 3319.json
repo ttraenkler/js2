@@ -2,8 +2,7 @@
   "id": "3319",
   "assignee": "ttraenkler/fable-1",
   "status": "in-progress",
-  "branch": "issue-gopd-undef-singleton",
-  "reserved_at": "2026-07-16T15:55:36Z",
-  "claimed_at": "2026-07-16T15:55:36Z",
-  "updated_at": "2026-07-16T15:55:36Z"
+  "branch": "issue-3319-gopd-undef-singleton",
+  "claimed_at": "2026-07-16T15:55:56Z",
+  "updated_at": "2026-07-16T15:55:56Z"
 }
