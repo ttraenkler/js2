@@ -1,8 +1,9 @@
 {
   "id": "3286",
   "assignee": "ttraenkler/fable-s2",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-3286-land-3285-slice1",
   "claimed_at": "2026-07-16T23:23:22Z",
-  "updated_at": "2026-07-16T23:23:22Z"
+  "updated_at": "2026-07-16T23:28:30Z",
+  "released_at": "2026-07-16T23:28:30Z"
 }
