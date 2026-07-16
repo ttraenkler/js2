@@ -1,9 +1,8 @@
 {
   "id": "2955",
-  "assignee": "ttraenkler/fable-10th",
-  "status": "released",
-  "branch": "issue-2955-number-box-capability",
-  "claimed_at": "2026-07-10T16:48:58Z",
-  "updated_at": "2026-07-10T17:11:37Z",
-  "released_at": "2026-07-10T17:11:37Z"
+  "assignee": "ttraenkler/fable-gamma",
+  "status": "in-progress",
+  "branch": "issue-2955-ir-string-depolymorph-s3",
+  "claimed_at": "2026-07-16T22:47:12Z",
+  "updated_at": "2026-07-16T22:47:12Z"
 }
