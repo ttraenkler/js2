@@ -1,8 +1,8 @@
 {
   "id": "3227",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-07-13T05:19:39Z",
-  "updated_at": "2026-07-13T05:19:39Z"
+  "assignee": "ttraenkler/fable-3",
+  "status": "in-progress",
+  "branch": "issue-3227-async-harness-slice1",
+  "claimed_at": "2026-07-16T15:51:36Z",
+  "updated_at": "2026-07-16T15:51:36Z"
 }
