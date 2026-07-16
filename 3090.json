@@ -1,9 +1,8 @@
 {
   "id": "3090",
-  "assignee": "ttraenkler/fable-shrink",
-  "status": "released",
-  "branch": "issue-3090-fresh-audit-unreferenced",
-  "claimed_at": "2026-07-11T16:09:43Z",
-  "updated_at": "2026-07-11T17:02:02Z",
-  "released_at": "2026-07-11T17:02:02Z"
+  "assignee": "ttraenkler/fable-eqfix",
+  "status": "in-progress",
+  "branch": "issue-3090-knip-quality-ci",
+  "claimed_at": "2026-07-16T13:27:46Z",
+  "updated_at": "2026-07-16T13:27:46Z"
 }
