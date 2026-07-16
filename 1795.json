@@ -1,8 +1,9 @@
 {
   "id": "1795",
   "assignee": "ttraenkler/fable-s2",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-1795-node-http",
   "claimed_at": "2026-07-16T20:06:01Z",
-  "updated_at": "2026-07-16T20:06:01Z"
+  "updated_at": "2026-07-16T20:08:37Z",
+  "released_at": "2026-07-16T20:08:37Z"
 }
