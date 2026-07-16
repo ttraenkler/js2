@@ -1,8 +1,8 @@
 {
   "id": "3328",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-07-16T21:43:18Z",
-  "updated_at": "2026-07-16T21:43:18Z"
+  "assignee": "ttraenkler/fable-gamma",
+  "status": "in-progress",
+  "branch": "issue-3328-json-stringify-value-object-regression",
+  "claimed_at": "2026-07-16T21:43:43Z",
+  "updated_at": "2026-07-16T21:43:43Z"
 }
