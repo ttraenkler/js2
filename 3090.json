@@ -1,8 +1,9 @@
 {
   "id": "3090",
   "assignee": "ttraenkler/fable-eqfix",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-3090-knip-quality-ci",
   "claimed_at": "2026-07-16T13:27:46Z",
-  "updated_at": "2026-07-16T13:27:46Z"
+  "updated_at": "2026-07-16T13:30:14Z",
+  "released_at": "2026-07-16T13:30:14Z"
 }
