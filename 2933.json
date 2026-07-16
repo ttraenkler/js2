@@ -1,8 +1,8 @@
 {
   "id": "2933",
-  "assignee": "ttraenkler/opus-2933",
+  "assignee": "ttraenkler/fable-eqfix",
   "status": "in-progress",
-  "branch": "issue-2933-ns-value",
-  "claimed_at": "2026-07-06T03:15:02Z",
-  "updated_at": "2026-07-06T03:15:02Z"
+  "branch": "issue-2933-variadic-math-value",
+  "claimed_at": "2026-07-16T13:32:52Z",
+  "updated_at": "2026-07-16T13:32:52Z"
 }
