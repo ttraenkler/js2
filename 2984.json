@@ -1,8 +1,9 @@
 {
   "id": "2984",
   "assignee": "ttraenkler/fable-2",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2984-gopd-toobject-r2",
   "claimed_at": "2026-07-16T15:48:41Z",
-  "updated_at": "2026-07-16T15:48:41Z"
+  "updated_at": "2026-07-16T16:12:03Z",
+  "released_at": "2026-07-16T16:12:03Z"
 }
