@@ -1,8 +1,9 @@
 {
   "id": "3155",
   "assignee": "ttraenkler/opus-c",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-3155-standalone-object-keys-join",
   "claimed_at": "2026-07-17T07:05:57Z",
-  "updated_at": "2026-07-17T07:05:57Z"
+  "updated_at": "2026-07-17T07:58:41Z",
+  "released_at": "2026-07-17T07:58:41Z"
 }
