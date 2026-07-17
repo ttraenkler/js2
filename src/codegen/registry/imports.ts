@@ -1975,6 +1975,7 @@ export function addArrayIteratorImports(ctx: CodegenContext): void {
  *   - `__gen_push_i32`        (externref, i32) → ()
  *   - `__gen_push_ref`        (externref, externref) → ()
  *   - `__gen_yield_star`      (externref, externref) → ()  (same shape as push_ref)
+ *   - `__gen_yield_star_async` (externref, externref) → ()  (#3227 S5 — async-gen `yield*`, GetIterator hint=async)
  *   - `__create_generator`    (externref, externref) → externref  (buf, pendingThrow)
  *   - `__create_async_generator` (externref, externref) → externref  (same shape)
  *   - `__gen_next`            (externref) → externref
@@ -2003,6 +2004,14 @@ export function addGeneratorImports(ctx: CodegenContext, options?: { allowNoJsHo
   ensureLateImport(ctx, "__gen_push_ref", [ER, ER], []);
   // __gen_yield_star: (externref, externref) → void  (iterates inner iterable, pushes all values into outer buffer)
   ensureLateImport(ctx, "__gen_yield_star", [ER, ER], []);
+  // __gen_yield_star_async: (externref, externref) → void  (#3227 S5 — same
+  // shape, but applies GetIterator(hint=async) semantics per §14.4.14: prefer
+  // Symbol.asyncIterator (never touching a Symbol.iterator getter when the
+  // async method exists), TypeError on non-callable next / non-object
+  // iterator, sync-thenable unwrap of awaited results. Emitted only for
+  // `yield*` inside `async function*` bodies; sync generators keep the
+  // legacy import unchanged.)
+  ensureLateImport(ctx, "__gen_yield_star_async", [ER, ER], []);
   // __gen_set_return: (externref, externref) → void  (#2035 — stashes the
   // generator's `return` value on the buffer instead of pushing it as a yield)
   ensureLateImport(ctx, "__gen_set_return", [ER, ER], []);

@@ -12480,6 +12480,164 @@ assert._isSameValue = isSameValue;
             }
           }
         };
+      // (#3227 S5) `yield*` inside an ASYNC generator — GetIterator(hint=async)
+      // semantics (§14.4.14 / §27.6.3.8) in the eager buffer model:
+      //   - prefer Symbol.asyncIterator; a Symbol.iterator GETTER is never
+      //     touched when the async method exists (the sync helper's for-of
+      //     read it, so a poisoned getter's throw replaced the spec'd
+      //     TypeError — the yield-star-getiter-*/next-then-* cluster);
+      //   - TypeError for non-callable @@asyncIterator / non-object iterator /
+      //     non-callable next / non-object iterator result;
+      //   - Await(result) approximated by a SYNC-thenable unwrap: a thenable
+      //     whose `then` settles synchronously (the dominant test262 shape)
+      //     is unwrapped in-tick; a non-callable `then` means the object IS
+      //     the settled value (PromiseResolve semantics); a genuinely PENDING
+      //     host promise stops the eager drain (documented residual — the
+      //     eager model cannot await).
+      // Sync generators keep the legacy `__gen_yield_star` unchanged.
+      if (name === "__gen_yield_star_async")
+        return (buf: any[], rawIterable: any) => {
+          // Test identity checks (`v.constructor === TypeError`) resolve the
+          // ctor through the per-test sandbox realm — throw that realm's
+          // TypeError so identity holds (#779c pattern).
+          const _TypeError: TypeErrorConstructor = (globalSandbox && (globalSandbox as any).TypeError) || TypeError;
+          const pushChecked = (v: any) => {
+            if (buf.length >= __EAGER_GEN_LIMIT) {
+              throw new RangeError("Eager generator buffer exceeded " + __EAGER_GEN_LIMIT + " yields");
+            }
+            buf.push(v);
+          };
+          // Our own eagerly-buffered async generator: drain the remaining
+          // buffer directly (settled values are synchronously available) and
+          // propagate a pendingThrow like the eager body would (#3227 S3).
+          const asyncState = rawIterable != null ? _AsyncGeneratorState.get(rawIterable) : undefined;
+          if (asyncState !== undefined) {
+            while (asyncState.index < asyncState.buf.length) {
+              pushChecked(asyncState.buf[asyncState.index++]);
+            }
+            if (asyncState.pendingThrow !== null && asyncState.pendingThrow !== undefined) {
+              const e = asyncState.pendingThrow;
+              asyncState.pendingThrow = null;
+              throw e;
+            }
+            return;
+          }
+          // Await(x) approximation: unwrap synchronously-settling thenables.
+          const settleSync = (x: any, depth: number): { pending: boolean; value?: any } => {
+            if (depth > 32) return { pending: true };
+            if (x === null || (typeof x !== "object" && typeof x !== "function")) return { pending: false, value: x };
+            const then = x.then; // a throwing `then` getter rejects the Await — propagate
+            if (typeof then !== "function") return { pending: false, value: x };
+            let settled = false;
+            let isErr = false;
+            let out: any;
+            let err: any;
+            try {
+              then.call(
+                x,
+                (v: any) => {
+                  if (!settled) {
+                    settled = true;
+                    out = v;
+                  }
+                },
+                (e: any) => {
+                  if (!settled) {
+                    settled = true;
+                    isErr = true;
+                    err = e;
+                  }
+                },
+              );
+            } catch (e) {
+              if (!settled) {
+                settled = true;
+                isErr = true;
+                err = e;
+              }
+            }
+            if (!settled) return { pending: true };
+            if (isErr) throw err;
+            return settleSync(out, depth + 1);
+          };
+          // Only materialize OPAQUE WasmGC structs ($Vec operands, #3075) —
+          // `_materializeIterable` on a plain JS object probes
+          // `Symbol.iterator` via `_safeGet`, which touches (and swallows) a
+          // poisoned sync getter that GetIterator(hint=async) must never
+          // read. Plain JS objects are handled below with direct,
+          // spec-observable property access.
+          let iterable: any = rawIterable;
+          if (iterable != null && typeof iterable === "object" && _isWasmStruct(iterable)) {
+            iterable = _materializeIterable(rawIterable, callbackState);
+          }
+          if (iterable == null) {
+            throw new _TypeError("yield* operand is not async iterable");
+          }
+          const asyncMethod = (iterable as any)[Symbol.asyncIterator];
+          if (asyncMethod !== undefined && asyncMethod !== null) {
+            // GetMethod: present but not callable → TypeError.
+            if (typeof asyncMethod !== "function") {
+              throw new _TypeError("object is not async iterable (Symbol.asyncIterator is not a function)");
+            }
+            const iter = asyncMethod.call(iterable);
+            if (iter === null || (typeof iter !== "object" && typeof iter !== "function")) {
+              throw new _TypeError("GetIterator: Symbol.asyncIterator did not return an object");
+            }
+            for (;;) {
+              const next = (iter as any).next;
+              if (typeof next !== "function") {
+                throw new _TypeError("async iterator.next is not a function");
+              }
+              const settled = settleSync(next.call(iter), 0);
+              if (settled.pending) return; // eager-model residual: genuinely pending promise
+              const res = settled.value;
+              if (res === null || (typeof res !== "object" && typeof res !== "function")) {
+                throw new _TypeError("async iterator result is not an object");
+              }
+              if (res.done) return;
+              pushChecked(res.value);
+            }
+          }
+          // No @@asyncIterator (undefined/null) → CreateAsyncFromSyncIterator
+          // over @@iterator; a throwing getter's abrupt completion propagates
+          // (single direct touch — no `_safeGet` swallow, no double-get).
+          const syncMethod = (iterable as any)[Symbol.iterator];
+          if (syncMethod === undefined || syncMethod === null) {
+            throw new _TypeError("yield* operand is not async iterable");
+          }
+          // Compiled `obj[Symbol.iterator] = function(){…}` stores a Wasm
+          // closure struct, not a JS function — drain through the module's
+          // call export like `_materializeIterable` does (#1320/#1684).
+          if (typeof syncMethod === "object" && _isWasmStruct(syncMethod)) {
+            const drained = _drainClosureIterableToArray(iterable, callbackState?.getExports());
+            if (drained != null) {
+              for (const v of drained) pushChecked(v);
+              return;
+            }
+          }
+          if (typeof syncMethod !== "function") {
+            throw new _TypeError("object is not iterable (Symbol.iterator is not a function)");
+          }
+          const syncIter = syncMethod.call(iterable);
+          if (syncIter === null || (typeof syncIter !== "object" && typeof syncIter !== "function")) {
+            throw new _TypeError("GetIterator: Symbol.iterator did not return an object");
+          }
+          for (;;) {
+            const next = (syncIter as any).next;
+            if (typeof next !== "function") {
+              throw new _TypeError("iterator.next is not a function");
+            }
+            const res = next.call(syncIter);
+            if (res === null || (typeof res !== "object" && typeof res !== "function")) {
+              throw new _TypeError("iterator result is not an object");
+            }
+            if (res.done) return;
+            // AsyncFromSyncIterator awaits the VALUE before yielding it.
+            const settled = settleSync(res.value, 0);
+            if (settled.pending) return; // eager-model residual
+            pushChecked(settled.value);
+          }
+        };
       // __gen_set_return: (buf, value) → void. Stashes the generator's `return`
       // value on the buffer object (a non-enumerable side property) rather than
       // pushing it as a yielded element. `__create_generator` reads it into

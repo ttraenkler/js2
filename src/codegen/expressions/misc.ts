@@ -211,7 +211,23 @@ function compileYieldExpression(ctx: CodegenContext, fctx: FunctionContext, expr
     fctx.body.push({ op: "local.set", index: tmpLocal });
     fctx.body.push({ op: "local.get", index: bufferIdx });
     fctx.body.push({ op: "local.get", index: tmpLocal });
-    const yieldStarIdx = ctx.funcMap.get("__gen_yield_star");
+    // (#3227 S5) `yield*` inside an ASYNC generator must use
+    // GetIterator(hint=async) — prefer Symbol.asyncIterator and NEVER touch a
+    // Symbol.iterator getter when the async method exists (§14.4.14 /
+    // §27.6.3.8). The sync helper's for-of read the sync getter even for
+    // async generators (a poisoned getter's throw replaced the spec'd
+    // TypeError — the yield-star-getiter-*/next-then-* honest-fail cluster).
+    // Route async-generator bodies to the async-aware helper; sync generators
+    // keep the legacy import unchanged.
+    let yieldContainer: ts.Node | undefined = expr.parent;
+    while (yieldContainer !== undefined && !ts.isFunctionLike(yieldContainer)) {
+      yieldContainer = yieldContainer.parent;
+    }
+    const isAsyncGen =
+      yieldContainer !== undefined &&
+      ts.canHaveModifiers(yieldContainer) &&
+      (ts.getModifiers(yieldContainer)?.some((m) => m.kind === ts.SyntaxKind.AsyncKeyword) ?? false);
+    const yieldStarIdx = ctx.funcMap.get(isAsyncGen ? "__gen_yield_star_async" : "__gen_yield_star");
     if (yieldStarIdx !== undefined) {
       fctx.body.push({ op: "call", funcIdx: yieldStarIdx });
     }

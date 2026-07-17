@@ -370,6 +370,53 @@ Side effect fixed: since S1, `validate-test262-baseline` (which runs through
 the S1-patched `runTest262File`) has been diverging from the v6 baseline on
 sampled async rows; once promote-baseline re-seeds at v7 the two agree again.
 
+## S5 — WIP: async-gen `yield*` GetIterator(hint=async) (fable-s4, 2026-07-17, branch `issue-3227-s5-yield-star-async`)
+
+**Handoff state (budget stand-down; S4 PR #3201 riding separately).** The S4
+post-park shape census of the 1,007 honest-fail flips:
+`yield-star-getiter-*` 312 · `yield-star-next-*` 252 · other 310 ·
+yield-misc 45 · `yield-spread-*` 36 (eager-model `.next(value)` two-way sends
+— ARCHITECTURAL, not S5) · yield-star-misc 25 · dstr 16 · named-yield 11.
+
+**Implemented (committed on the S5 branch, NOT yet PR'd):**
+- `src/codegen/registry/imports.ts` + `src/codegen/expressions/misc.ts`: new
+  `__gen_yield_star_async` (ER,ER)→() import; `compileYieldExpression` routes
+  `yield*` to it when the containing function-like has the `async` modifier
+  (sync generators keep the legacy import — zero risk).
+- `src/runtime.ts`: the handler implements GetIterator(hint=async) eagerly —
+  prefers `Symbol.asyncIterator` and NEVER touches a `Symbol.iterator` getter
+  when the async method exists (KEY: do NOT call `_materializeIterable` on
+  plain JS objects first — its `_safeGet(Symbol.iterator)` probe touches the
+  poisoned getter; only materialize `_isWasmStruct` vec operands); TypeErrors
+  for non-callable @@asyncIterator / non-object iterator / non-callable next /
+  non-object result — thrown via **`globalSandbox.TypeError`** (`#779c`
+  pattern; a native TypeError fails the tests' `v.constructor === TypeError`
+  realm-identity check); sync-thenable unwrap for awaited results (pending
+  host promise stops the eager drain — documented residual);
+  CreateAsyncFromSyncIterator fallback with single-touch @@iterator getter
+  (abrupt getter completion propagates) + wasm-closure-struct iterator drain.
+
+**Verified:** `yield-star-next-not-callable-null-throw` and
+`yield-star-getiter-async-not-callable-object-throw` flip fail→PASS via
+`runTest262File`; instrumented probes `.tmp/probes/s5-*.js` show TypeError
+identity + untouched sync getter + second-`next()` `{done:true}` all correct.
+getiter sample (10): 5 pass / 5 fail.
+
+**Remaining S5 diagnosis (for the resuming dev):**
+- getiter-sync-* residuals fail at the deep asserts — probable cause: throw
+  IDENTITY through the wasm boundary (test `assert.sameValue(v, reason)` with
+  a plain-object throw from a compiled getter arrives wrapped) and/or the
+  sync-fallback TypeErrors thrown for `GetMethod(@@iterator)`-returns-
+  non-callable shapes (number/string/symbol) — check
+  `yield-star-getiter-sync-returns-number-throw` first (ret 3).
+- CAUTION (#1318): the runner's assert-index attribution is SOURCE-order, not
+  execution-order — a "assert #2 at L56 done===true" message usually means the
+  2nd EXECUTED assert (often `v.constructor === TypeError`) failed. Use the
+  `.tmp/probes/s5-real3.js` sandbox-marker pattern
+  (`getTestSandbox()` + globalThis channel) to see which step actually fails.
+- `yield-spread-*` / `named-yield-*` (47): need real suspension (`.next(v)`
+  sends) — out of eager-model scope, route to the async-frame lane (#2106).
+
 ### Test Results (S4)
 
 - `tests/issue-3227-s4.test.ts`: 4/4 (all three lanes carry the re-read,
