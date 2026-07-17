@@ -1,9 +1,8 @@
 {
   "id": "1792",
-  "assignee": "ttraenkler/sd-2668c",
-  "status": "released",
+  "assignee": "ttraenkler/opus-b",
+  "status": "in-progress",
   "branch": "issue-1792-node-url",
-  "claimed_at": "2026-06-26T05:55:45Z",
-  "updated_at": "2026-06-26T06:03:30Z",
-  "released_at": "2026-06-26T06:03:30Z"
+  "claimed_at": "2026-07-17T07:28:31Z",
+  "updated_at": "2026-07-17T07:28:31Z"
 }
