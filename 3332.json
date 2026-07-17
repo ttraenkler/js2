@@ -1,8 +1,8 @@
 {
   "id": "3332",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-07-16T22:48:18Z",
-  "updated_at": "2026-07-16T22:48:18Z"
+  "assignee": "ttraenkler/opus-dev",
+  "status": "in-progress",
+  "branch": "issue-3332-linear-multipush",
+  "claimed_at": "2026-07-17T18:54:42Z",
+  "updated_at": "2026-07-17T18:54:42Z"
 }
