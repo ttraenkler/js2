@@ -1,8 +1,9 @@
 {
   "id": "3349",
   "assignee": "ttraenkler/opus-dev",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-3349-verifyenumerable",
   "claimed_at": "2026-07-17T18:29:07Z",
-  "updated_at": "2026-07-17T18:29:07Z"
+  "updated_at": "2026-07-17T19:05:03Z",
+  "released_at": "2026-07-17T19:05:03Z"
 }
