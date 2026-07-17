@@ -1,8 +1,8 @@
 {
   "id": "3155",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-07-12T04:34:45Z",
-  "updated_at": "2026-07-12T04:34:45Z"
+  "assignee": "ttraenkler/opus-c",
+  "status": "in-progress",
+  "branch": "issue-3155-standalone-object-keys-join",
+  "claimed_at": "2026-07-17T07:05:57Z",
+  "updated_at": "2026-07-17T07:05:57Z"
 }
