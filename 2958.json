@@ -1,9 +1,8 @@
 {
   "id": "2958",
-  "assignee": "ttraenkler/opus-a",
-  "status": "released",
+  "assignee": "ttraenkler/opus-c",
+  "status": "in-progress",
   "branch": "issue-2958-standalone-unhandled-rejection",
-  "claimed_at": "2026-07-17T07:40:48Z",
-  "updated_at": "2026-07-17T07:48:10Z",
-  "released_at": "2026-07-17T07:48:10Z"
+  "claimed_at": "2026-07-17T08:09:30Z",
+  "updated_at": "2026-07-17T08:09:30Z"
 }
