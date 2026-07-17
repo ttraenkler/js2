@@ -1,8 +1,9 @@
 {
   "id": "3261",
   "assignee": "ttraenkler/opus-c",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-3261-standalone-env-leaks",
   "claimed_at": "2026-07-17T06:45:51Z",
-  "updated_at": "2026-07-17T06:45:51Z"
+  "updated_at": "2026-07-17T07:24:25Z",
+  "released_at": "2026-07-17T07:24:25Z"
 }
