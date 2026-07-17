@@ -1,8 +1,9 @@
 {
   "id": "3343",
   "assignee": "ttraenkler/dev-i",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-3343-object-recursive-read",
   "claimed_at": "2026-07-17T15:32:58Z",
-  "updated_at": "2026-07-17T15:32:58Z"
+  "updated_at": "2026-07-17T17:39:09Z",
+  "released_at": "2026-07-17T17:39:09Z"
 }
