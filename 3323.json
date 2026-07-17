@@ -1,8 +1,9 @@
 {
   "id": "3323",
   "assignee": "ttraenkler/opus-c",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-3323-forin-order-defineproperty",
   "claimed_at": "2026-07-17T12:10:02Z",
-  "updated_at": "2026-07-17T12:10:02Z"
+  "updated_at": "2026-07-17T13:12:39Z",
+  "released_at": "2026-07-17T13:12:39Z"
 }
