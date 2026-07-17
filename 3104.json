@@ -1,8 +1,9 @@
 {
   "id": "3104",
   "assignee": "ttraenkler/dev-l",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-3104-index-resplit-first",
   "claimed_at": "2026-07-17T17:16:30Z",
-  "updated_at": "2026-07-17T17:16:30Z"
+  "updated_at": "2026-07-17T17:56:48Z",
+  "released_at": "2026-07-17T17:56:48Z"
 }
