@@ -1,8 +1,9 @@
 {
   "id": "1044",
   "assignee": "ttraenkler/opus-b",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-1044-node-builtin-host",
   "claimed_at": "2026-07-17T12:13:35Z",
-  "updated_at": "2026-07-17T12:13:35Z"
+  "updated_at": "2026-07-17T13:06:59Z",
+  "released_at": "2026-07-17T13:06:59Z"
 }
