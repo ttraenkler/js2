@@ -1,9 +1,8 @@
 {
   "id": "3193",
-  "assignee": "ttraenkler/opus-b",
-  "status": "released",
-  "branch": "issue-3193-bloat-array-call-clones",
-  "claimed_at": "2026-07-17T12:55:29Z",
-  "updated_at": "2026-07-17T12:58:31Z",
-  "released_at": "2026-07-17T12:58:31Z"
+  "assignee": "ttraenkler/opus-c",
+  "status": "in-progress",
+  "branch": "issue-3193-slug",
+  "claimed_at": "2026-07-17T13:05:36Z",
+  "updated_at": "2026-07-17T13:05:36Z"
 }
