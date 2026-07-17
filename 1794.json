@@ -1,8 +1,9 @@
 {
   "id": "1794",
   "assignee": "ttraenkler/fable-s2",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-1794-node-events",
   "claimed_at": "2026-07-16T20:10:21Z",
-  "updated_at": "2026-07-16T20:10:21Z"
+  "updated_at": "2026-07-17T00:14:47Z",
+  "released_at": "2026-07-17T00:14:47Z"
 }
