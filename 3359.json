@@ -1,8 +1,9 @@
 {
   "id": "3359",
   "assignee": "ttraenkler/dev-f",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-3359-filter-thisarg-standalone",
   "claimed_at": "2026-07-17T15:19:29Z",
-  "updated_at": "2026-07-17T15:19:29Z"
+  "updated_at": "2026-07-17T16:42:54Z",
+  "released_at": "2026-07-17T16:42:54Z"
 }
