@@ -1,9 +1,8 @@
 {
   "id": "3342",
-  "assignee": "ttraenkler/opus-a",
-  "status": "released",
-  "branch": "issue-3342-object-values-join-ta-misclassify",
-  "claimed_at": "2026-07-17T07:56:46Z",
-  "updated_at": "2026-07-17T08:19:14Z",
-  "released_at": "2026-07-17T08:19:14Z"
+  "assignee": "ttraenkler/opus-e",
+  "status": "in-progress",
+  "branch": "issue-3342-values-join-misclassify",
+  "claimed_at": "2026-07-17T12:36:26Z",
+  "updated_at": "2026-07-17T12:36:26Z"
 }
