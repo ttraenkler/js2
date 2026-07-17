@@ -1,8 +1,9 @@
 {
   "id": "3150",
   "assignee": "ttraenkler/dev-j",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-3150-uint8-tohex-tobase64",
   "claimed_at": "2026-07-17T15:35:37Z",
-  "updated_at": "2026-07-17T15:35:37Z"
+  "updated_at": "2026-07-17T16:25:09Z",
+  "released_at": "2026-07-17T16:25:09Z"
 }
