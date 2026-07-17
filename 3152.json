@@ -1,9 +1,8 @@
 {
   "id": "3152",
-  "assignee": "ttraenkler/opus-a",
-  "status": "released",
-  "branch": "issue-3152-bounded-dstr-drain",
-  "claimed_at": "2026-07-17T06:39:58Z",
-  "updated_at": "2026-07-17T07:11:22Z",
-  "released_at": "2026-07-17T07:11:22Z"
+  "assignee": "ttraenkler/opus-1",
+  "status": "in-progress",
+  "branch": "issue-3152-array-destructure-drains-iterator",
+  "claimed_at": "2026-07-17T09:23:43Z",
+  "updated_at": "2026-07-17T09:23:43Z"
 }
