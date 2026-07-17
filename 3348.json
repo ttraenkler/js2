@@ -1,9 +1,9 @@
 {
   "id": "3348",
   "assignee": "ttraenkler/opus-4",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-3308-inwasm-ast-probe",
-  "reserved_at": "2026-07-17T10:02:08Z",
   "claimed_at": "2026-07-17T10:02:08Z",
-  "updated_at": "2026-07-17T10:02:08Z"
+  "updated_at": "2026-07-17T10:04:22Z",
+  "released_at": "2026-07-17T10:04:22Z"
 }
