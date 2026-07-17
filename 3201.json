@@ -1,8 +1,9 @@
 {
   "id": "3201",
   "assignee": "ttraenkler/fable-b",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-3201-array-search-structural-generics",
   "claimed_at": "2026-07-16T20:51:55Z",
-  "updated_at": "2026-07-16T20:51:55Z"
+  "updated_at": "2026-07-17T00:03:49Z",
+  "released_at": "2026-07-17T00:03:49Z"
 }
