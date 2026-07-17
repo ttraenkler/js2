@@ -1,8 +1,9 @@
 {
   "id": "3311",
   "assignee": "ttraenkler/opus-c",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-3311-string-vec-push-pop",
   "claimed_at": "2026-07-17T07:49:22Z",
-  "updated_at": "2026-07-17T07:49:22Z"
+  "updated_at": "2026-07-17T08:12:50Z",
+  "released_at": "2026-07-17T08:12:50Z"
 }
