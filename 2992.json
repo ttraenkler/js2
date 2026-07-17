@@ -1,8 +1,9 @@
 {
   "id": "2992",
   "assignee": "ttraenkler/fable-epsilon",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2992-s6-nonempty-literal-widening",
   "claimed_at": "2026-07-16T20:55:04Z",
-  "updated_at": "2026-07-16T20:55:04Z"
+  "updated_at": "2026-07-17T05:28:43Z",
+  "released_at": "2026-07-17T05:28:43Z"
 }
