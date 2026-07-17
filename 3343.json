@@ -1,8 +1,9 @@
 {
   "id": "3343",
   "assignee": "ttraenkler/dev-f",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-3343-inwasm-recursive-read-runaway",
   "claimed_at": "2026-07-17T15:02:47Z",
-  "updated_at": "2026-07-17T15:02:47Z"
+  "updated_at": "2026-07-17T15:03:39Z",
+  "released_at": "2026-07-17T15:03:39Z"
 }
