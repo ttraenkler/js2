@@ -1,8 +1,9 @@
 {
   "id": "3362",
   "assignee": "ttraenkler/dev-j",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-3362-date-toisostring",
   "claimed_at": "2026-07-17T16:13:33Z",
-  "updated_at": "2026-07-17T16:13:33Z"
+  "updated_at": "2026-07-17T16:22:04Z",
+  "released_at": "2026-07-17T16:22:04Z"
 }
