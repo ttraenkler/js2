@@ -1,8 +1,9 @@
 {
   "id": "869",
   "assignee": "ttraenkler/dev-i",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-869-default-params-caller-side",
   "claimed_at": "2026-07-17T17:07:51Z",
-  "updated_at": "2026-07-17T17:07:51Z"
+  "updated_at": "2026-07-17T17:09:07Z",
+  "released_at": "2026-07-17T17:09:07Z"
 }
