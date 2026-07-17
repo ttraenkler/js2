@@ -1,9 +1,8 @@
 {
   "id": "2802",
-  "assignee": "ttraenkler/fable-rescue",
-  "status": "released",
-  "branch": "probe-2802",
-  "claimed_at": "2026-07-10T19:44:40Z",
-  "updated_at": "2026-07-10T19:44:50Z",
-  "released_at": "2026-07-10T19:44:50Z"
+  "assignee": "ttraenkler/opus-c",
+  "status": "in-progress",
+  "branch": "issue-2802-slug",
+  "claimed_at": "2026-07-17T13:05:52Z",
+  "updated_at": "2026-07-17T13:05:52Z"
 }
