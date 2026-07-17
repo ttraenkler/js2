@@ -1,8 +1,9 @@
 {
   "id": "3152",
   "assignee": "ttraenkler/opus-1",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-3152-array-destructure-drains-iterator",
   "claimed_at": "2026-07-17T09:23:43Z",
-  "updated_at": "2026-07-17T09:23:43Z"
+  "updated_at": "2026-07-17T09:25:29Z",
+  "released_at": "2026-07-17T09:25:29Z"
 }
