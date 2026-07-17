@@ -1,8 +1,9 @@
 {
   "id": "2956",
   "assignee": "ttraenkler/fable-epsilon",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2956-linear-ir-consume",
   "claimed_at": "2026-07-16T22:30:08Z",
-  "updated_at": "2026-07-16T22:30:08Z"
+  "updated_at": "2026-07-17T05:41:54Z",
+  "released_at": "2026-07-17T05:41:54Z"
 }
