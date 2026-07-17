@@ -1,8 +1,8 @@
 {
   "id": "3310",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-07-16T13:51:46Z",
-  "updated_at": "2026-07-16T13:51:46Z"
+  "assignee": "ttraenkler/opus-4",
+  "status": "in-progress",
+  "branch": "issue-3310-g2-generic-method-args",
+  "claimed_at": "2026-07-17T09:13:50Z",
+  "updated_at": "2026-07-17T09:13:50Z"
 }
