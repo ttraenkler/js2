@@ -1,8 +1,9 @@
 {
   "id": "3193",
   "assignee": "ttraenkler/opus-c",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-3193-slug",
   "claimed_at": "2026-07-17T13:05:36Z",
-  "updated_at": "2026-07-17T13:05:36Z"
+  "updated_at": "2026-07-17T13:16:29Z",
+  "released_at": "2026-07-17T13:16:29Z"
 }
