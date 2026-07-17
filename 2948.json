@@ -1,8 +1,9 @@
 {
   "id": "2948",
   "assignee": "ttraenkler/opus-3",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2948-chained-anyadd-verify",
   "claimed_at": "2026-07-17T09:42:21Z",
-  "updated_at": "2026-07-17T09:42:21Z"
+  "updated_at": "2026-07-17T09:54:57Z",
+  "released_at": "2026-07-17T09:54:57Z"
 }
