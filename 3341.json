@@ -1,9 +1,8 @@
 {
   "id": "3341",
   "assignee": "ttraenkler/opus-c",
-  "status": "released",
-  "branch": "issue-3341-strict-ir-reasons",
-  "claimed_at": "2026-07-17T08:10:36Z",
-  "updated_at": "2026-07-17T08:22:03Z",
-  "released_at": "2026-07-17T08:22:03Z"
+  "status": "in-progress",
+  "branch": "issue-3341-slug",
+  "claimed_at": "2026-07-17T13:06:40Z",
+  "updated_at": "2026-07-17T13:06:40Z"
 }
