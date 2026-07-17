@@ -1,8 +1,8 @@
 {
   "id": "3362",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-07-17T16:12:45Z",
-  "updated_at": "2026-07-17T16:12:45Z"
+  "assignee": "ttraenkler/dev-j",
+  "status": "in-progress",
+  "branch": "issue-3362-date-toisostring",
+  "claimed_at": "2026-07-17T16:13:33Z",
+  "updated_at": "2026-07-17T16:13:33Z"
 }
