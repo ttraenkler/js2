@@ -1,8 +1,9 @@
 {
   "id": "3202",
   "assignee": "ttraenkler/opus-4",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-3202-typedarray-set-bigint-oob",
   "claimed_at": "2026-07-17T09:36:19Z",
-  "updated_at": "2026-07-17T09:36:19Z"
+  "updated_at": "2026-07-17T09:37:16Z",
+  "released_at": "2026-07-17T09:37:16Z"
 }
