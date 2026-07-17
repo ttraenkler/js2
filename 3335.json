@@ -1,8 +1,8 @@
 {
   "id": "3335",
-  "assignee": "ttraenkler/fable-oob",
+  "assignee": "ttraenkler/opus-3335",
   "status": "in-progress",
-  "branch": "issue-3335-oob-trap-bisect",
-  "claimed_at": "2026-07-17T05:03:57Z",
-  "updated_at": "2026-07-17T05:03:57Z"
+  "branch": "issue-3335-oob-trap-mode",
+  "claimed_at": "2026-07-17T06:34:28Z",
+  "updated_at": "2026-07-17T06:34:28Z"
 }
