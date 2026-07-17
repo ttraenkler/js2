@@ -1,8 +1,9 @@
 {
   "id": "3193",
   "assignee": "ttraenkler/opus-2",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-3193-bloat-s3-array-clones",
   "claimed_at": "2026-07-17T09:28:03Z",
-  "updated_at": "2026-07-17T09:28:03Z"
+  "updated_at": "2026-07-17T09:31:49Z",
+  "released_at": "2026-07-17T09:31:49Z"
 }
