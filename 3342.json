@@ -1,8 +1,9 @@
 {
   "id": "3342",
   "assignee": "ttraenkler/opus-e",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-3342-values-join-misclassify",
   "claimed_at": "2026-07-17T12:36:26Z",
-  "updated_at": "2026-07-17T12:36:26Z"
+  "updated_at": "2026-07-17T13:45:02Z",
+  "released_at": "2026-07-17T13:45:02Z"
 }
