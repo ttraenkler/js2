@@ -1,8 +1,9 @@
 {
   "id": "3325",
   "assignee": "ttraenkler/opus-b",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-3325-declare-fn-dropped-call",
   "claimed_at": "2026-07-17T06:52:27Z",
-  "updated_at": "2026-07-17T06:52:27Z"
+  "updated_at": "2026-07-17T07:13:31Z",
+  "released_at": "2026-07-17T07:13:31Z"
 }
