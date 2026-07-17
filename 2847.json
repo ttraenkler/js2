@@ -1,8 +1,9 @@
 {
   "id": "2847",
   "assignee": "ttraenkler/dev-f",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2847-acorn-marshalling-quirks",
   "claimed_at": "2026-07-17T15:04:53Z",
-  "updated_at": "2026-07-17T15:04:53Z"
+  "updated_at": "2026-07-17T15:18:55Z",
+  "released_at": "2026-07-17T15:18:55Z"
 }
