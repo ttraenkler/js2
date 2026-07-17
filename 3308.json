@@ -1,9 +1,8 @@
 {
   "id": "3308",
-  "assignee": "ttraenkler/opus-4",
-  "status": "released",
-  "branch": "issue-3308-inwasm-ast-probe",
-  "claimed_at": "2026-07-17T09:38:21Z",
-  "updated_at": "2026-07-17T10:00:52Z",
-  "released_at": "2026-07-17T10:00:52Z"
+  "assignee": "ttraenkler/opus-c",
+  "status": "in-progress",
+  "branch": "issue-3308-tmp",
+  "claimed_at": "2026-07-17T12:59:23Z",
+  "updated_at": "2026-07-17T12:59:23Z"
 }
