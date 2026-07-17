@@ -1,8 +1,9 @@
 {
   "id": "1315",
   "assignee": "ttraenkler/opus-2",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-1315-import-defer-early-error",
   "claimed_at": "2026-07-17T09:11:35Z",
-  "updated_at": "2026-07-17T09:11:35Z"
+  "updated_at": "2026-07-17T09:28:54Z",
+  "released_at": "2026-07-17T09:28:54Z"
 }
