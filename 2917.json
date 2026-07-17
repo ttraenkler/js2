@@ -1,8 +1,8 @@
 {
   "id": "2917",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-07-01T02:20:03Z",
-  "updated_at": "2026-07-01T02:20:03Z"
+  "assignee": "ttraenkler/fable-2917",
+  "status": "in-progress",
+  "branch": "issue-2917-extends-builtin-native",
+  "claimed_at": "2026-07-17T21:25:24Z",
+  "updated_at": "2026-07-17T21:25:24Z"
 }
