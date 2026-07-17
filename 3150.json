@@ -1,8 +1,9 @@
 {
   "id": "3150",
   "assignee": "ttraenkler/opus-1",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-3150-standalone-uint8array-base64-hex",
   "claimed_at": "2026-07-17T09:27:47Z",
-  "updated_at": "2026-07-17T09:27:47Z"
+  "updated_at": "2026-07-17T09:33:16Z",
+  "released_at": "2026-07-17T09:33:16Z"
 }
