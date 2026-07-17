@@ -1,9 +1,8 @@
 {
   "id": "2958",
-  "assignee": "ttraenkler/dev-g",
-  "status": "released",
-  "branch": "issue-2958-unhandled-rejection",
-  "claimed_at": "2026-07-17T14:28:38Z",
-  "updated_at": "2026-07-17T14:31:04Z",
-  "released_at": "2026-07-17T14:31:04Z"
+  "assignee": "ttraenkler/dev-h",
+  "status": "in-progress",
+  "branch": "issue-2958-standalone-unhandled-rejection",
+  "claimed_at": "2026-07-17T14:36:46Z",
+  "updated_at": "2026-07-17T14:36:46Z"
 }
