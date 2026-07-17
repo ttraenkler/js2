@@ -1,8 +1,9 @@
 {
   "id": "1645",
   "assignee": "ttraenkler/dev-g",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-1645-resizable-arraybuffer",
   "claimed_at": "2026-07-17T13:54:37Z",
-  "updated_at": "2026-07-17T13:54:37Z"
+  "updated_at": "2026-07-17T14:27:34Z",
+  "released_at": "2026-07-17T14:27:34Z"
 }
