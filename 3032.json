@@ -1,8 +1,8 @@
 {
   "id": "3032",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-07-04T00:48:14Z",
-  "updated_at": "2026-07-04T00:48:14Z"
+  "assignee": "ttraenkler/sendev-3032-w6",
+  "status": "in-progress",
+  "branch": "issue-3032-w6-host-lane-laziness",
+  "claimed_at": "2026-07-17T21:25:58Z",
+  "updated_at": "2026-07-17T21:25:58Z"
 }
