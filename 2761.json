@@ -1,8 +1,9 @@
 {
   "id": "2761",
   "assignee": "ttraenkler/dev-f",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2761-set-like-residual",
   "claimed_at": "2026-07-17T13:55:26Z",
-  "updated_at": "2026-07-17T13:55:26Z"
+  "updated_at": "2026-07-17T16:29:28Z",
+  "released_at": "2026-07-17T16:29:28Z"
 }
