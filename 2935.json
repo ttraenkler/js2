@@ -1,8 +1,9 @@
 {
   "id": "2935",
   "assignee": "ttraenkler/opus-3",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2935-strwrapper-flatten",
   "claimed_at": "2026-07-17T09:28:38Z",
-  "updated_at": "2026-07-17T09:28:38Z"
+  "updated_at": "2026-07-17T09:35:17Z",
+  "released_at": "2026-07-17T09:35:17Z"
 }
