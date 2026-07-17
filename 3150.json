@@ -1,8 +1,9 @@
 {
   "id": "3150",
   "assignee": "ttraenkler/opus-3",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-3150-wip",
   "claimed_at": "2026-07-17T09:15:52Z",
-  "updated_at": "2026-07-17T09:15:52Z"
+  "updated_at": "2026-07-17T09:16:20Z",
+  "released_at": "2026-07-17T09:16:20Z"
 }
