@@ -1,8 +1,8 @@
 {
   "id": "3438",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-07-18T18:36:26Z",
-  "updated_at": "2026-07-18T18:36:26Z"
+  "assignee": "ttraenkler/sendev-shards",
+  "status": "in-progress",
+  "branch": "issue-3438-test262-shard-rebalance",
+  "claimed_at": "2026-07-18T18:37:30Z",
+  "updated_at": "2026-07-18T18:37:30Z"
 }
