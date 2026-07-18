@@ -314,6 +314,35 @@ byte-identical (the #1917 discipline).
   `NONE_HEAP=-18` is `any`, real `none` is `-15` (vec-overlay documents this);
   never busy-wait on a pegged box; one compile at a time.
 
+## S2 plan (fable-1, branch `issue-3251-s2-write-enforcement`, stacked on S1)
+
+Scope: **dynamic write-lane enforcement + gOPD freshness**. Enqueue only after
+the S1 PR (#3327) lands (predecessor-stacking).
+
+1. **`__extern_set` overlay write prologue** (in `fillVecOverlayHelpers`,
+   spliced front — lands BEFORE the #3190 in-bounds store arm because my fill
+   runs after `fillExternSetVecArms` and both splice at body[0]). Covers
+   `__extern_set_strict` too (it is a funcMap ALIAS of the same native).
+   On a vec receiver with a companion entry for ToString(key) (key arrives as
+   `box(i)` from `arr[i] = v` — unbox+`number_toString`; string keys used
+   directly):
+   - ACCESSOR entry → invoke `e.set` via `__call_accessor_set(vec, setter, v)`
+     and return; null setter → sloppy no-op return (strict-throw deferred,
+     same discipline as the frozen-gate).
+   - data entry, `writable: false` → sloppy drop (return).
+   - data entry with `FLAG_COMPANION_VALUE` → `e.value = v`, return
+     (companion is authoritative; vec slot is dead).
+   - plain writable data entry → refresh `e.value = v` (fixes the S1
+     gOPD-staleness boundary for dynamic writes) then FALL THROUGH to the
+     #3190 vec store.
+2. **Boundaries staying open after S2** (document): typed/inline `array.set`
+   assignment lane still bypasses enforcement (needs a state-gated inline
+   check — perf question, S2b/S3 decision); strict-mode TypeError on
+   non-writable; for-in `enumerable:false` filtering.
+3. Tests: extend `tests/issue-3251.test.ts` — probe G (non-writable drop),
+   setter invoke + `this`, companion-value write refresh, gOPD-after-write
+   freshness, plain-write fall-through unregressed.
+
 ## Stale sibling branch (do not delete — hygiene-pass salvage)
 
 `origin/issue-3251-array-descriptor-overlay` (pre-dates this work, from
