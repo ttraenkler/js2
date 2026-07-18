@@ -78,7 +78,8 @@ import type { Instr, ValType, WasmFunction } from "../ir/types.js";
 import type { CodegenContext } from "./context/types.js";
 import { mintDefinedFunc, pushDefinedFunc } from "./func-space.js";
 import { addFuncType, getArrTypeIdxFromVec, getOrRegisterVecBaseType } from "./registry/types.js";
-import { nextModuleGlobalIdx } from "./registry/imports.js";
+import { ensureExnTag, nextModuleGlobalIdx } from "./registry/imports.js";
+import { emitWasiErrorConstructor } from "./registry/error-types.js";
 import { reserveAccessorGetDriver } from "./accessor-driver.js";
 import { ensureVecElemSet } from "./vec-elem-set.js";
 import { undefinedExternInstrs } from "./any-helpers.js";
@@ -576,6 +577,26 @@ export function fillVecOverlayHelpers(ctx: CodegenContext): void {
     { op: "if", blockType: { kind: "empty" }, then: bail },
   ];
 
+  /** Push the `"length"` property key as an externref `$AnyString`. */
+  const lengthLitExtern = (): Instr[] => [...nativeStringLiteralInstrs(ctx, "length"), { op: "extern.convert_any" }];
+
+  /**
+   * Run `inner` only when the (non-null, $AnyString) key at `keyLocal` is NOT
+   * `"length"` — the overlay prologues must never answer `"length"` from a
+   * companion entry (the live vec length field is authoritative; a companion
+   * copy goes stale on push/pop/plain writes). Inverse of `lengthKeyGuard`.
+   */
+  const notLengthWrap = (keyLocal: number, inner: Instr[]): Instr[] => [
+    { op: "local.get", index: keyLocal },
+    { op: "any.convert_extern" },
+    { op: "ref.cast", typeIdx: anyStrTypeIdx },
+    { op: "call", funcIdx: strFlattenIdx },
+    ...nativeStringLiteralInstrs(ctx, "length"),
+    { op: "call", funcIdx: strEqualsIdx },
+    { op: "i32.eqz" },
+    { op: "if", blockType: { kind: "empty" }, then: inner },
+  ];
+
   /** `idxLocal = __obj_index_of_key(cast key)` — canonical array index or -1. */
   const parseIndex = (keyLocal: number, idxLocal: number): Instr[] => [
     { op: "local.get", index: keyLocal },
@@ -684,9 +705,88 @@ export function fillVecOverlayHelpers(ctx: CodegenContext): void {
     return arms;
   };
 
+  // ── (#3251 S3) ArraySetLength (§10.4.2.1) support ────────────────────────
+  // The companion holds a reserved `"length"` entry carrying the length's
+  // WRITABLE bit (enumerable/configurable are spec-fixed false); §10.1.6.3
+  // transition legality is delegated to the $Object define natives against a
+  // SEEDED current descriptor `{value: len, writable: true, e: false,
+  // c: false}` (host flag word 0xB9 — W value bit + W/E/C specified +
+  // hasValue). Shrink walks indices down, stopping at (and throwing on) a
+  // non-configurable companion entry per step 15; growth reuses the
+  // per-carrier grow-with-default arms. Length values ≥ 2^31 keep the legacy
+  // no-op (the i32 vec length field cannot represent them — documented
+  // boundary).
+  const s3UnboxNumIdx = ctx.funcMap.get("__unbox_number");
+  const s3BoxNumIdx = ctx.funcMap.get("__box_number");
+  const s3DeleteIdx = ctx.funcMap.get("__delete_property");
+  let s3: {
+    throwRange: () => Instr[];
+    throwType: () => Instr[];
+    boxNumIdx: number;
+    unboxNumIdx: number;
+    deleteIdx: number;
+  } | null = null;
+  if (s3UnboxNumIdx !== undefined && s3BoxNumIdx !== undefined && s3DeleteIdx !== undefined) {
+    emitWasiErrorConstructor(ctx, "RangeError", 1);
+    emitWasiErrorConstructor(ctx, "TypeError", 1);
+    const rangeCtorIdx = ctx.funcMap.get("__new_RangeError");
+    const typeCtorIdx = ctx.funcMap.get("__new_TypeError");
+    if (rangeCtorIdx !== undefined && typeCtorIdx !== undefined) {
+      const tagIdx = ensureExnTag(ctx);
+      s3 = {
+        throwRange: () => [
+          ...nativeStringLiteralInstrs(ctx, "RangeError: Invalid array length"),
+          { op: "extern.convert_any" },
+          { op: "call", funcIdx: rangeCtorIdx },
+          { op: "throw", tagIdx },
+        ],
+        throwType: () => [
+          ...nativeStringLiteralInstrs(ctx, "TypeError: Cannot redefine property: length"),
+          { op: "extern.convert_any" },
+          { op: "call", funcIdx: typeCtorIdx },
+          { op: "throw", tagIdx },
+        ],
+        boxNumIdx: s3BoxNumIdx,
+        unboxNumIdx: s3UnboxNumIdx,
+        deleteIdx: s3DeleteIdx,
+      };
+    }
+  }
+  const LENGTH_SEED_FLAGS = 0xb9; // {writable:true} value bit + W/E/C specified + hasValue
+
+  /** Seed the companion `"length"` entry when absent. `any`/`comp`/`compExt`
+   *  locals per caller; the seeded value is the CURRENT vec length. */
+  const seedLengthEntry = (l: { any: number; comp: number; compExt: number }): Instr[] =>
+    s3 === null
+      ? []
+      : [
+          { op: "local.get", index: l.comp },
+          { op: "ref.as_non_null" },
+          ...lengthLitExtern(),
+          { op: "call", funcIdx: objFindIdx },
+          { op: "ref.is_null" },
+          {
+            op: "if",
+            blockType: { kind: "empty" },
+            then: [
+              { op: "local.get", index: l.compExt },
+              ...lengthLitExtern(),
+              { op: "local.get", index: l.any },
+              { op: "ref.cast", typeIdx: vecBaseIdx },
+              { op: "struct.get", typeIdx: vecBaseIdx, fieldIdx: 0 },
+              { op: "f64.convert_i32_s" },
+              { op: "call", funcIdx: s3.boxNumIdx },
+              { op: "f64.const", value: LENGTH_SEED_FLAGS },
+              { op: "call", funcIdx: dpValueIdx },
+              { op: "drop" },
+            ],
+          },
+        ];
+
   // ── __vec_dp_value ────────────────────────────────────────────────────────
   // params: 0=vec 1=key 2=value 3=flags(f64)
   // locals: 4=any 5=comp 6=compExt 7=i(i32) 8=len 9=e 10=hf 11=wrote 12=valAny
+  //         13=nLen(f64) 14=uLen(f64) 15=newLenI(i32) 16=k(i32)  — #3251 S3
   {
     const fn = findFn(DP_VALUE_NAME);
     if (fn) {
@@ -700,8 +800,213 @@ export function fillVecOverlayHelpers(ctx: CodegenContext): void {
         { name: "hf", type: { kind: "i32" } },
         { name: "wrote", type: { kind: "i32" } },
         { name: "valAny", type: { kind: "anyref" } },
+        { name: "nLen", type: { kind: "f64" } }, // #3251 S3
+        { name: "uLen", type: { kind: "f64" } },
+        { name: "newLenI", type: { kind: "i32" } },
+        { name: "k", type: { kind: "i32" } },
       ];
       const bailReturnVec: Instr[] = [{ op: "local.get", index: 0 }, { op: "return" }];
+
+      // (#3251 S3) The `"length"` define body — ArraySetLength §10.4.2.1.
+      // Runs INSTEAD of the index path when key == "length"; always returns.
+      const lengthDefineBody: Instr[] =
+        s3 === null
+          ? bailReturnVec.map((i) => ({ ...i }))
+          : [
+              // comp / compExt + seed the length descriptor
+              { op: "local.get", index: 4 },
+              { op: "call", funcIdx: core.ensureIdx },
+              { op: "local.set", index: 5 },
+              { op: "local.get", index: 5 },
+              { op: "extern.convert_any" },
+              { op: "local.set", index: 6 },
+              ...seedLengthEntry({ any: 4, comp: 5, compExt: 6 }),
+              // hf = trunc(flags)
+              { op: "local.get", index: 3 },
+              { op: "i32.trunc_f64_s" },
+              { op: "local.set", index: 10 },
+              { op: "local.get", index: 10 },
+              { op: "i32.const", value: HOST_HAS_VALUE },
+              { op: "i32.and" },
+              {
+                op: "if",
+                blockType: { kind: "empty" },
+                then: [
+                  // n = ToNumber(value) ; u = ToUint32(n) as f64 ; mismatch → RangeError (step 5)
+                  { op: "local.get", index: 2 },
+                  { op: "call", funcIdx: s3.unboxNumIdx },
+                  { op: "local.tee", index: 13 },
+                  { op: "i64.trunc_sat_f64_s" },
+                  { op: "i64.const", value: 0xffffffffn },
+                  { op: "i64.and" },
+                  { op: "f64.convert_i64_u" },
+                  { op: "local.tee", index: 14 },
+                  { op: "local.get", index: 13 },
+                  { op: "f64.ne" },
+                  { op: "if", blockType: { kind: "empty" }, then: s3.throwRange() },
+                  // u ≥ 2^31 → legacy no-op (i32 vec length cannot represent it)
+                  { op: "local.get", index: 14 },
+                  { op: "f64.const", value: 2147483647 },
+                  { op: "f64.gt" },
+                  {
+                    op: "if",
+                    blockType: { kind: "empty" },
+                    then: bailReturnVec.map((i) => ({ ...i })),
+                  },
+                  // Delegate {value: u, ...attrs} — §10.1.6.3 legality against
+                  // the seeded current (non-writable value change → TypeError,
+                  // configurable/enumerable flips → TypeError). Throws propagate.
+                  { op: "local.get", index: 6 },
+                  ...lengthLitExtern(),
+                  { op: "local.get", index: 14 },
+                  { op: "call", funcIdx: s3.boxNumIdx },
+                  { op: "local.get", index: 3 },
+                  { op: "call", funcIdx: dpValueIdx },
+                  { op: "drop" },
+                  // Apply to the vec: shrink (stop at non-configurable) or grow.
+                  { op: "local.get", index: 14 },
+                  { op: "i32.trunc_sat_f64_s" },
+                  { op: "local.set", index: 15 },
+                  ...vecLen(4, 8),
+                  { op: "local.get", index: 15 },
+                  { op: "local.get", index: 8 },
+                  { op: "i32.lt_s" },
+                  {
+                    op: "if",
+                    blockType: { kind: "empty" },
+                    then: [
+                      // k = oldLen - 1 ; while (k >= newLen) …
+                      { op: "local.get", index: 8 },
+                      { op: "i32.const", value: 1 },
+                      { op: "i32.sub" },
+                      { op: "local.set", index: 16 },
+                      {
+                        op: "block",
+                        blockType: { kind: "empty" },
+                        body: [
+                          {
+                            op: "loop",
+                            blockType: { kind: "empty" },
+                            body: [
+                              { op: "local.get", index: 16 },
+                              { op: "local.get", index: 15 },
+                              { op: "i32.lt_s" },
+                              { op: "br_if", depth: 1 },
+                              // e = __obj_find(comp, ToString(k))
+                              { op: "local.get", index: 5 },
+                              { op: "ref.as_non_null" },
+                              { op: "local.get", index: 16 },
+                              { op: "f64.convert_i32_s" },
+                              { op: "call", funcIdx: numToStringIdx },
+                              { op: "call", funcIdx: objFindIdx },
+                              { op: "local.tee", index: 9 },
+                              { op: "ref.is_null" },
+                              { op: "i32.eqz" },
+                              {
+                                op: "if",
+                                blockType: { kind: "empty" },
+                                then: [
+                                  { op: "local.get", index: 9 },
+                                  { op: "ref.as_non_null" },
+                                  { op: "struct.get", typeIdx: propEntryTypeIdx, fieldIdx: 2 },
+                                  { op: "i32.const", value: FLAG_CONFIGURABLE },
+                                  { op: "i32.and" },
+                                  { op: "i32.eqz" },
+                                  {
+                                    op: "if",
+                                    blockType: { kind: "empty" },
+                                    then: [
+                                      // step 15.b–d: stop — length = k+1, sync the
+                                      // companion "length" value, throw TypeError.
+                                      { op: "local.get", index: 4 },
+                                      { op: "ref.cast", typeIdx: vecBaseIdx },
+                                      { op: "local.get", index: 16 },
+                                      { op: "i32.const", value: 1 },
+                                      { op: "i32.add" },
+                                      { op: "struct.set", typeIdx: vecBaseIdx, fieldIdx: 0 },
+                                      { op: "local.get", index: 5 },
+                                      { op: "ref.as_non_null" },
+                                      ...lengthLitExtern(),
+                                      { op: "call", funcIdx: objFindIdx },
+                                      { op: "local.tee", index: 9 },
+                                      { op: "ref.is_null" },
+                                      { op: "i32.eqz" },
+                                      {
+                                        op: "if",
+                                        blockType: { kind: "empty" },
+                                        then: [
+                                          { op: "local.get", index: 9 },
+                                          { op: "ref.as_non_null" },
+                                          { op: "local.get", index: 16 },
+                                          { op: "i32.const", value: 1 },
+                                          { op: "i32.add" },
+                                          { op: "f64.convert_i32_s" },
+                                          { op: "call", funcIdx: s3.boxNumIdx },
+                                          { op: "any.convert_extern" },
+                                          { op: "struct.set", typeIdx: propEntryTypeIdx, fieldIdx: 1 },
+                                        ],
+                                      },
+                                      ...s3.throwType(),
+                                    ],
+                                  },
+                                  // configurable entry → remove it from the companion
+                                  { op: "local.get", index: 6 },
+                                  { op: "local.get", index: 16 },
+                                  { op: "f64.convert_i32_s" },
+                                  { op: "call", funcIdx: numToStringIdx },
+                                  { op: "call", funcIdx: s3.deleteIdx },
+                                  { op: "drop" },
+                                ],
+                              },
+                              { op: "local.get", index: 16 },
+                              { op: "i32.const", value: 1 },
+                              { op: "i32.sub" },
+                              { op: "local.set", index: 16 },
+                              { op: "br", depth: 0 },
+                            ],
+                          },
+                        ],
+                      },
+                      // vec.length = newLen
+                      { op: "local.get", index: 4 },
+                      { op: "ref.cast", typeIdx: vecBaseIdx },
+                      { op: "local.get", index: 15 },
+                      { op: "struct.set", typeIdx: vecBaseIdx, fieldIdx: 0 },
+                    ],
+                    else: [
+                      // growth: extend capacity + length via the per-carrier
+                      // grow-with-default arms (k = newLen - 1).
+                      { op: "local.get", index: 15 },
+                      { op: "local.get", index: 8 },
+                      { op: "i32.gt_s" },
+                      {
+                        op: "if",
+                        blockType: { kind: "empty" },
+                        then: [
+                          { op: "local.get", index: 15 },
+                          { op: "i32.const", value: 1 },
+                          { op: "i32.sub" },
+                          { op: "local.set", index: 16 },
+                          ...growDefaultArms(4, 16),
+                        ],
+                      },
+                    ],
+                  },
+                ],
+                else: [
+                  // flags-only define ({writable:false} etc.) — merge via the
+                  // $Object native; no length change.
+                  { op: "local.get", index: 6 },
+                  ...lengthLitExtern(),
+                  { op: "local.get", index: 2 },
+                  { op: "local.get", index: 3 },
+                  { op: "call", funcIdx: dpValueIdx },
+                  { op: "drop" },
+                ],
+              },
+              { op: "local.get", index: 0 },
+              { op: "return" },
+            ];
 
       // Per-carrier value write-back arms. Value must match the carrier's
       // element kind STRICTLY (defineProperty must not ToNumber-coerce);
@@ -832,10 +1137,8 @@ export function fillVecOverlayHelpers(ctx: CodegenContext): void {
           1,
           bailReturnVec.map((i) => ({ ...i })),
         ),
-        ...lengthKeyGuard(
-          1,
-          bailReturnVec.map((i) => ({ ...i })),
-        ),
+        // (#3251 S3) "length" → ArraySetLength (always returns inside).
+        ...lengthKeyGuard(1, lengthDefineBody),
         { op: "local.get", index: 4 },
         { op: "call", funcIdx: core.ensureIdx },
         { op: "local.set", index: 5 },
@@ -962,7 +1265,32 @@ export function fillVecOverlayHelpers(ctx: CodegenContext): void {
         { op: "local.set", index: 5 },
         ...carrierWhitelistGuard(5, bailReturnVec()),
         ...stringKeyGuard(1, bailReturnVec()),
-        ...lengthKeyGuard(1, bailReturnVec()),
+        // (#3251 S3) accessor define on "length": §10.4.2.1 step 2 — always a
+        // TypeError. Seed the length descriptor and delegate; the $Object S4
+        // accessor preflight rejects the data→accessor conversion on the
+        // seeded non-configurable current. (s3 unavailable → legacy no-op.)
+        ...lengthKeyGuard(
+          1,
+          s3 === null
+            ? bailReturnVec()
+            : [
+                { op: "local.get", index: 5 },
+                { op: "call", funcIdx: core.ensureIdx },
+                { op: "local.set", index: 6 },
+                { op: "local.get", index: 6 },
+                { op: "extern.convert_any" },
+                { op: "local.set", index: 7 },
+                ...seedLengthEntry({ any: 5, comp: 6, compExt: 7 }),
+                { op: "local.get", index: 7 },
+                ...lengthLitExtern(),
+                { op: "local.get", index: 2 },
+                { op: "local.get", index: 3 },
+                { op: "local.get", index: 4 },
+                { op: "call", funcIdx: dpAccessorIdx },
+                { op: "drop" },
+                ...bailReturnVec(),
+              ],
+        ),
         { op: "local.get", index: 5 },
         { op: "call", funcIdx: core.ensureIdx },
         { op: "local.set", index: 6 },
@@ -1021,6 +1349,7 @@ export function fillVecOverlayHelpers(ctx: CodegenContext): void {
         { name: "i", type: { kind: "i32" } },
         { name: "len", type: { kind: "i32" } },
         { name: "d", type: { kind: "externref" } },
+        { name: "lenE", type: { kind: "ref_null", typeIdx: propEntryTypeIdx } }, // #3251 S3
       ];
       const bailMiss = (): Instr[] => [...missExtern(), { op: "return" }];
       const setKey = (key: string, valueInstrs: Instr[]): Instr[] => [
@@ -1030,13 +1359,80 @@ export function fillVecOverlayHelpers(ctx: CodegenContext): void {
         ...valueInstrs,
         { op: "call", funcIdx: externSetIdx },
       ];
+      // (#3251 S3) gOPD("length") — synthesize the array-length descriptor
+      // {value: len, writable: <companion bit, default true>, enumerable:
+      // false, configurable: false}. (s3 unavailable → legacy miss.)
+      const lengthGopdBody: Instr[] =
+        s3 === null
+          ? bailMiss()
+          : [
+              // wbit (reuse local 4): default 1, else the companion entry's bit
+              { op: "i32.const", value: 1 },
+              { op: "local.set", index: 4 },
+              { op: "local.get", index: 2 },
+              { op: "call", funcIdx: core.lookupIdx },
+              { op: "local.tee", index: 3 },
+              { op: "ref.is_null" },
+              { op: "i32.eqz" },
+              {
+                op: "if",
+                blockType: { kind: "empty" },
+                then: [
+                  { op: "local.get", index: 3 },
+                  { op: "ref.as_non_null" },
+                  ...lengthLitExtern(),
+                  { op: "call", funcIdx: objFindIdx },
+                  { op: "local.tee", index: 7 },
+                  { op: "ref.is_null" },
+                  { op: "i32.eqz" },
+                  {
+                    op: "if",
+                    blockType: { kind: "empty" },
+                    then: [
+                      { op: "local.get", index: 7 },
+                      { op: "ref.as_non_null" },
+                      { op: "struct.get", typeIdx: propEntryTypeIdx, fieldIdx: 2 },
+                      { op: "i32.const", value: FLAG_WRITABLE },
+                      { op: "i32.and" },
+                      { op: "i32.const", value: 0 },
+                      { op: "i32.ne" },
+                      { op: "local.set", index: 4 },
+                    ],
+                  },
+                ],
+              },
+              { op: "call", funcIdx: newPlainObjectIdx },
+              { op: "local.set", index: 6 },
+              ...setKey("value", [
+                { op: "local.get", index: 2 },
+                { op: "ref.cast", typeIdx: vecBaseIdx },
+                { op: "struct.get", typeIdx: vecBaseIdx, fieldIdx: 0 },
+                { op: "f64.convert_i32_s" },
+                { op: "call", funcIdx: s3.boxNumIdx },
+              ]),
+              ...setKey("writable", [
+                { op: "local.get", index: 4 },
+                { op: "call", funcIdx: boxBoolIdx },
+              ]),
+              ...setKey("enumerable", [
+                { op: "i32.const", value: 0 },
+                { op: "call", funcIdx: boxBoolIdx },
+              ]),
+              ...setKey("configurable", [
+                { op: "i32.const", value: 0 },
+                { op: "call", funcIdx: boxBoolIdx },
+              ]),
+              { op: "local.get", index: 6 },
+              { op: "return" },
+            ];
       fn.body = [
         { op: "local.get", index: 0 },
         { op: "any.convert_extern" },
         { op: "local.set", index: 2 },
         ...carrierWhitelistGuard(2, bailMiss()),
         ...stringKeyGuard(1, bailMiss()),
-        ...lengthKeyGuard(1, bailMiss()),
+        // (#3251 S3) "length" → synthesized length descriptor (always returns).
+        ...lengthKeyGuard(1, lengthGopdBody),
         // Companion entry → delegate to the $Object descriptor builder.
         { op: "local.get", index: 2 },
         { op: "call", funcIdx: core.lookupIdx },
@@ -1263,7 +1659,11 @@ export function fillVecOverlayHelpers(ctx: CodegenContext): void {
             {
               op: "if",
               blockType: { kind: "empty" },
-              then: [
+              // (#3251 S3) "length" is EXCLUDED from the companion consult —
+              // the live vec length field is authoritative (a companion copy
+              // goes stale on push/plain writes); the #3183 length arm below
+              // answers it.
+              then: notLengthWrap(1, [
                 { op: "local.get", index: gAny },
                 { op: "call", funcIdx: core.lookupIdx },
                 { op: "local.tee", index: gComp },
@@ -1353,7 +1753,7 @@ export function fillVecOverlayHelpers(ctx: CodegenContext): void {
                     },
                   ],
                 },
-              ],
+              ]),
             },
           ],
         },
@@ -1526,7 +1926,10 @@ export function fillVecOverlayHelpers(ctx: CodegenContext): void {
                     {
                       op: "if",
                       blockType: { kind: "empty" },
-                      then: consult,
+                      // (#3251 S3) "length" writes are the length field's
+                      // business (and a dynamic no-op today) — never consult
+                      // or refresh a companion "length" entry here.
+                      then: notLengthWrap(wKey, consult),
                     },
                   ],
                 },
