@@ -1,8 +1,9 @@
 {
   "id": "3428",
   "assignee": "ttraenkler/opus-dev-b",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-3428-async-completion-marker",
   "claimed_at": "2026-07-18T12:02:00Z",
-  "updated_at": "2026-07-18T12:02:00Z"
+  "updated_at": "2026-07-18T12:21:24Z",
+  "released_at": "2026-07-18T12:21:24Z"
 }
