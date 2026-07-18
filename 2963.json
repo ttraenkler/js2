@@ -1,8 +1,8 @@
 {
   "id": "2963",
-  "assignee": "ttraenkler/senior-dev",
+  "assignee": "ttraenkler/opus-dev-b",
   "status": "in-progress",
-  "branch": "issue-2963-builtin-reification",
-  "claimed_at": "2026-07-02T21:25:58Z",
-  "updated_at": "2026-07-02T21:25:58Z"
+  "branch": "issue-2963-phase2-reify-builtins",
+  "claimed_at": "2026-07-18T06:52:15Z",
+  "updated_at": "2026-07-18T06:52:15Z"
 }
