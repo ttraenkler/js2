@@ -1,8 +1,8 @@
 {
   "id": "3427",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-07-18T11:33:01Z",
-  "updated_at": "2026-07-18T11:33:01Z"
+  "assignee": "ttraenkler/opus-dev-b",
+  "status": "in-progress",
+  "branch": "issue-3427-isprimitive-dedup",
+  "claimed_at": "2026-07-18T11:44:09Z",
+  "updated_at": "2026-07-18T11:44:09Z"
 }
