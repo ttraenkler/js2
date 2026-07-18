@@ -307,9 +307,18 @@ byte-identical (the #1917 discipline).
 - **S1 validation COMPLETE (2026-07-18)**: issue-3251 suite 18/18 post-growth;
   descriptor suite 119/120 (single failure = pre-existing main failure);
   read-lane collateral (3183/2190/2190b/2186/3098) — exactly the same 3
-  failures as main (pre-existing); host sha unchanged. S1 PR is up; epic stays
-  in-progress for S2 (write-side enforcement + gOPD staleness) and S3
-  (ArraySetLength). Next dev: pick S2 from the boundaries list above.
+  failures as main (pre-existing); host sha unchanged. **S1 PR #3327 riding
+  CI** (loopdive/js2).
+- **S2 IMPLEMENTED + VALIDATED (2026-07-18)** on stacked branch
+  `issue-3251-s2-write-enforcement` (625cf2565f, pushed): `__extern_set`
+  overlay write prologue per the S2 plan below. Probes G/L/M/N/O all correct
+  (drop, setter+this=vec, gOPD fresh, companion-value update, fall-through);
+  `tests/issue-3251-s2.test.ts` 7/7 + S1 18/18; tsc/prettier/biome clean;
+  host sha unchanged; scoped regression = only the 3 pre-existing-on-main
+  failures. **Open the S2 PR only AFTER #3327 lands** (predecessor-stacking);
+  re-merge S1/main into the branch first if either changes.
+- Remaining for S3: ArraySetLength (§10.4.2.1) + typed/inline write-lane
+  enforcement decision + for-in enumerable:false + strict-mode throw.
 - **Known hazards**: `ref.null`/`ref.cast` abstract heap types — object-runtime's
   `NONE_HEAP=-18` is `any`, real `none` is `-15` (vec-overlay documents this);
   never busy-wait on a pegged box; one compile at a time.
