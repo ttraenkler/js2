@@ -224,8 +224,14 @@ jobs:
             .test262-cache
             benchmarks/results/test262-cache.json
           key: test262-cache-v2-${{ hashFiles('src/**/*.ts', 'scripts/test262-worker.mjs', 'scripts/compiler-fork-worker.mjs') }}-${{ matrix.target.name }}-chunk-${{ matrix.chunk }}
+          # (#3411) LANE-SCOPED restore fallback — MUST include `-<target>-` so a
+          # standalone shard's cache miss never restores a HOST-lane .test262-cache
+          # (host compile records carry env:: imports; served to standalone they
+          # read as the #2961 host-import collapse). Defense-in-depth: the on-disk
+          # cache is currently disabled in the runner, but a future re-enable
+          # must not reintroduce the cross-lane restore.
           restore-keys: |
-            test262-cache-v2-${{ hashFiles('src/**/*.ts', 'scripts/test262-worker.mjs', 'scripts/compiler-fork-worker.mjs') }}-
+            test262-cache-v2-${{ hashFiles('src/**/*.ts', 'scripts/test262-worker.mjs', 'scripts/compiler-fork-worker.mjs') }}-${{ matrix.target.name }}-
 
       - name: Build compiler bundles
         run: |
@@ -314,6 +320,19 @@ jobs:
           find shard-artifacts/emergency-standalone-shard-* -name 'test262-standalone-results-*.jsonl' -print0 | sort -z | xargs -0 cat > merged-reports/test262-standalone-results-merged.jsonl
           test -s merged-reports/test262-standalone-results-merged.jsonl
 
+      # #3411 — CACHE-SUSPECT guard BEFORE the report build / promote. A poisoned
+      # standalone lane (>90% of non-skip records are the #2961 host-import
+      # verdict — e.g. the 2026-07-18 07:56 forced-refresh collapse of
+      # 4,312 pass / 38,771 host-import CE) must NEVER be force-published as the
+      # public baseline: a corrupt standalone baseline poisons every downstream
+      # regression gate for everyone. This runs in refresh-baseline.yml too (not
+      # just the merge_group in test262-sharded.yml) because THIS workflow force-
+      # PROMOTES, so it is the last line of defense against publishing the poison.
+      - name: Standalone cache-poison guard (#3411)
+        run: |
+          node scripts/check-standalone-cache-poison.mjs \
+            --jsonl merged-reports/test262-standalone-results-merged.jsonl
+
       - name: Build merged test262 report
         run: |
           # --baseline-sha records the main commit this baseline was generated
@@ -360,7 +379,14 @@ jobs:
           SPASS=$(node -e "console.log(JSON.parse(require('fs').readFileSync('merged-reports/test262-standalone-report-merged.json','utf8')).summary.pass)")
           STOTAL=$(node -e "console.log(JSON.parse(require('fs').readFileSync('merged-reports/test262-standalone-report-merged.json','utf8')).summary.total)")
           echo "STANDALONE PASS=$SPASS TOTAL=$STOTAL"
-          if [ "$SPASS" -lt 1000 ] || [ "$STOTAL" -lt 40000 ]; then
+          # #3411 — floor raised 1000 → 10000. The old 1000 floor let the
+          # 2026-07-18 07:56 host-import collapse (4,312 pass) through and it was
+          # force-published as the baseline. The standalone lane has run
+          # ~24,000–25,000 pass; a number below 10,000 is corrupt (host-import
+          # poison or empty data), never a legitimate conformance level. The
+          # #3411 cache-poison guard above catches the specific host-import
+          # signature; this floor is the coarse backstop for any other corruption.
+          if [ "$SPASS" -lt 10000 ] || [ "$STOTAL" -lt 40000 ]; then
             echo "ABORT: standalone report looks corrupt (pass=$SPASS total=$STOTAL). Not promoting."
             echo "Even emergency refreshes reject obviously corrupt standalone data."
             exit 1

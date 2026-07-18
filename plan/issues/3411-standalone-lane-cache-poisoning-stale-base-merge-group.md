@@ -111,7 +111,43 @@ The guard is deliberately narrow:
 - Root-cause of the host-import-in-standalone bundle/restore path identified
   and fixed (follow-up; the guard prevents the parking damage meanwhile).
 
+## Phase 2 update (2026-07-18) — it is NOT stale-base; it corrupts the published baseline
+
+New evidence: the **07:56 UTC FORCED baseline refresh was a `workflow_dispatch`
+on FRESH main HEAD (no merge group)** and STILL produced the poisoned standalone
+lane — **4,312 pass / 38,771 host-import CE, fail:0** — and force-**published**
+it as the public baseline (which then made every downstream regression gate diff
+against corrupt data). So:
+
+- **The stale-base hypothesis is insufficient** — the poison reproduces on a
+  fresh dispatch with no merge group.
+- **The disk result cache is NOT the live vector**: `getCachePaths`
+  (`tests/test262-shared.ts:155`) is lane-keyed (includes `TEST262_TARGET`) but
+  the on-disk cache is **disabled** in the runner (never read/written; line 857
+  "Cache disabled"). So `refresh-baseline.yml`'s lane-agnostic `restore-keys`
+  fallback (`test262-cache-v2-<hashFiles>-`, missing `-<target>-`) restores a
+  host-lane `.test262-cache` into a standalone shard, but the runner never reads
+  it. (Worth tightening the restore-key to `-<matrix.target.name>-` as
+  defense-in-depth against a future re-enable, but it is not the cause.)
+- **Symptom points at the compile lane, not a cache**: 38,771 host-import CEs =
+  essentially EVERY standalone compile emitted host imports, i.e.
+  `TEST262_TARGET=standalone` is not reaching the actual compile (the compiler
+  ran the host/gc lane). The pinpoint (the 07:56 Baseline Refresh run's
+  standalone-shard logs — which target the workers actually compiled with) is
+  the remaining root-cause thread.
+
+### Shipped in phase 2 (this PR)
+
+The guard is now also wired into **`refresh-baseline.yml`** (before the report
+build / promote), because THAT workflow force-**promotes** — it is the last
+line of defense against publishing a corrupt public baseline (worse than a
+merge_group park). Additionally the standalone promote **sanity floor was raised
+1000 → 10000**: the old floor let 4,312 through (the standalone lane runs
+~24,000–25,000; anything below 10,000 is corruption, never a legitimate level).
+
 ## Source
 
 fable-1 park diagnosis on PR #3327 (2026-07-18 ~08:30); byte-identical
-collapse on PR #3322. Guard authored by opus-dev-a.
+collapse on PR #3322; the 07:56 fresh-dispatch publish collapse
+(4,312/38,771). Guard + refresh-baseline wiring + floor raise authored by
+opus-dev-a.
