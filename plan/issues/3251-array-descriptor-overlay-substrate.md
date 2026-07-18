@@ -334,8 +334,27 @@ byte-identical (the #1917 discipline).
   host sha unchanged; scoped regression = only the 3 pre-existing-on-main
   failures. **Open the S2 PR only AFTER #3327 lands** (predecessor-stacking);
   re-merge S1/main into the branch first if either changes.
-- Remaining for S3: ArraySetLength (§10.4.2.1) + typed/inline write-lane
-  enforcement decision + for-in enumerable:false + strict-mode throw.
+- **S3 IMPLEMENTED + VALIDATED (2026-07-18)** on the same stacked branch
+  (`feat(#3251): S3 ArraySetLength`, folded into the S2 PR — same file, same
+  gates): ArraySetLength per the S3 plan below. Probes P–Z all correct
+  (shrink+undefined readback, RangeError −1/1.5, non-writable length
+  TypeError, shrink STOPS at non-configurable index with length=k+1 +
+  TypeError, grow, gOPD("length") synthesis incl. writable:false, accessor
+  length TypeError, same-length no-op, LIVE length after push);
+  `tests/issue-3251-s3.test.ts` 11/11; combined suites 36/36; tsc clean;
+  host sha unchanged; scoped regression = only the 3 pre-existing-on-main
+  failures. Also: the S2 read/write prologues now SKIP the "length" key
+  (live field authoritative — stale-companion hazard).
+- **2026-07-18 06:58 re-merge**: overnight upstream/main (14 merges incl.
+  #802/#739) merged into the S2 branch CLEAN (zero conflicts); tsc + all
+  probes (A–Z) + 36/36 suites re-validated on the merged base; pushed
+  (1cc1a2860). S1 PR #3327 is IN THE MERGE QUEUE — open the S2+S3 PR when
+  it lands.
+- Remaining post-S3 (S4/follow-up candidates): typed/inline write-lane
+  enforcement decision (state-gated inline check — perf question), for-in
+  enumerable:false filtering + companion-key enumeration merge, strict-mode
+  TypeError on non-writable writes, `Object.defineProperties` plural-loop
+  receiver gate audit, delete-on-index overlay integration.
 - **Known hazards**: `ref.null`/`ref.cast` abstract heap types — object-runtime's
   `NONE_HEAP=-18` is `any`, real `none` is `-15` (vec-overlay documents this);
   never busy-wait on a pegged box; one compile at a time.
