@@ -443,6 +443,13 @@ main catch-up merged+pushed on the S1 branch, determination documented on the
 PR, hold removed ONCE, escalated to the tech lead (#3322 owner needs the same
 catch-up; a [CI-FIX] should own the lane bug). Diagnostic artifacts: the
 merged-report jsonls under the worktree `.tmp/mg-merged/` + `.tmp/mg-3322-merged/`.
+UPDATE: after the catch-up push, PR-level checks are all green again (state
+CLEAN, hold cleared) — auto-enqueue owns the re-queue. **S4 (for-in/`in`
+coherence) also implemented + validated** on stacked branch
+`issue-3251-s4-forin` (probes AD–AH, 5/5 tests, tsc clean, host sha
+unchanged). Stack order: S1 PR #3327 → S2 PR (S2+S3+plural, branch
+`issue-3251-s2-write-enforcement`) → S4 PR (branch `issue-3251-s4-forin`);
+open each when its predecessor lands; re-merge on any predecessor change.
 
 ## Stale sibling branch (do not delete — hygiene-pass salvage)
 
