@@ -1361,4 +1361,181 @@ export function fillVecOverlayHelpers(ctx: CodegenContext): void {
       fn.body.splice(0, 0, ...prologue);
     }
   }
+
+  // ── (#3251 S2) Overlay WRITE prologue: __extern_set ──────────────────────
+  // Dynamic write-lane enforcement over companion entries. Splices in FRONT
+  // of the #3190 in-bounds vec store arm (this fill runs after
+  // `fillExternSetVecArms`; both splice at body[0], last wins the front).
+  // Also covers `__extern_set_strict` — a funcMap ALIAS of the same native.
+  //   - accessor entry → invoke `e.set` with the VEC as `this`; null setter
+  //     is a sloppy no-op (strict-throw deferred, frozen-gate discipline).
+  //   - data entry, writable:false → sloppy drop.
+  //   - data entry with FLAG_COMPANION_VALUE → update the companion value
+  //     (authoritative; the vec slot is dead) and return.
+  //   - plain writable data entry → refresh the companion value (keeps gOPD
+  //     coherent after dynamic writes) and FALL THROUGH to the vec store.
+  {
+    const unboxNumIdx = ctx.funcMap.get("__unbox_number");
+    const callAccessorSetIdx = ctx.funcMap.get("__call_accessor_set");
+    const fn = findFn("__extern_set");
+    if (fn && unboxNumIdx !== undefined && callAccessorSetIdx !== undefined) {
+      const base = 3 + fn.locals.length;
+      const wAny = base;
+      const wComp = base + 1;
+      const wE = base + 2;
+      const wKey = base + 3;
+      const wN = base + 4;
+      const wSetter = base + 5;
+      fn.locals.push(
+        { name: "__ov_any", type: { kind: "anyref" } },
+        { name: "__ov_comp", type: { kind: "ref_null", typeIdx: objectTypeIdx } },
+        { name: "__ov_e", type: { kind: "ref_null", typeIdx: propEntryTypeIdx } },
+        { name: "__ov_key", type: { kind: "externref" } },
+        { name: "__ov_n", type: { kind: "f64" } },
+        { name: "__ov_setter", type: { kind: "externref" } },
+      );
+      const eFlagBit = (bit: number): Instr[] => [
+        { op: "local.get", index: wE },
+        { op: "ref.as_non_null" },
+        { op: "struct.get", typeIdx: propEntryTypeIdx, fieldIdx: 2 },
+        { op: "i32.const", value: bit },
+        { op: "i32.and" },
+      ];
+      const consult: Instr[] = [
+        // e = __obj_find(comp, keyExt)
+        { op: "local.get", index: wComp },
+        { op: "ref.as_non_null" },
+        { op: "local.get", index: wKey },
+        { op: "call", funcIdx: objFindIdx },
+        { op: "local.tee", index: wE },
+        { op: "ref.is_null" },
+        { op: "i32.eqz" },
+        {
+          op: "if",
+          blockType: { kind: "empty" },
+          then: [
+            // accessor → invoke setter with the ORIGINAL vec receiver
+            ...eFlagBit(FLAG_ACCESSOR),
+            {
+              op: "if",
+              blockType: { kind: "empty" },
+              then: [
+                { op: "local.get", index: wE },
+                { op: "ref.as_non_null" },
+                { op: "struct.get", typeIdx: propEntryTypeIdx, fieldIdx: 5 },
+                { op: "extern.convert_any" },
+                { op: "local.tee", index: wSetter },
+                { op: "ref.is_null" },
+                {
+                  op: "if",
+                  blockType: { kind: "empty" },
+                  then: [{ op: "return" }], // no setter: sloppy no-op
+                },
+                { op: "local.get", index: 0 },
+                { op: "local.get", index: wSetter },
+                { op: "local.get", index: 2 },
+                { op: "call", funcIdx: callAccessorSetIdx },
+                { op: "return" },
+              ],
+            },
+            // data, writable:false → sloppy drop
+            ...eFlagBit(FLAG_WRITABLE),
+            { op: "i32.eqz" },
+            {
+              op: "if",
+              blockType: { kind: "empty" },
+              then: [{ op: "return" }],
+            },
+            // refresh the companion value (marker AND plain data)
+            { op: "local.get", index: wE },
+            { op: "ref.as_non_null" },
+            { op: "local.get", index: 2 },
+            { op: "any.convert_extern" },
+            { op: "struct.set", typeIdx: propEntryTypeIdx, fieldIdx: 1 },
+            // companion-authoritative value → done (vec slot is dead)
+            ...eFlagBit(FLAG_COMPANION_VALUE),
+            {
+              op: "if",
+              blockType: { kind: "empty" },
+              then: [{ op: "return" }],
+            },
+            // plain writable data → fall through to the #3190 vec store
+          ],
+        },
+      ];
+      const prologue: Instr[] = [
+        { op: "global.get", index: core.stateGlobalIdx },
+        { op: "ref.is_null" },
+        { op: "i32.eqz" },
+        {
+          op: "if",
+          blockType: { kind: "empty" },
+          then: [
+            { op: "local.get", index: 0 },
+            { op: "any.convert_extern" },
+            { op: "local.tee", index: wAny },
+            { op: "ref.test", typeIdx: vecBaseIdx },
+            {
+              op: "if",
+              blockType: { kind: "empty" },
+              then: [
+                { op: "local.get", index: wAny },
+                { op: "call", funcIdx: core.lookupIdx },
+                { op: "local.tee", index: wComp },
+                { op: "ref.is_null" },
+                { op: "i32.eqz" },
+                {
+                  op: "if",
+                  blockType: { kind: "empty" },
+                  then: [
+                    // keyExt: a string key passes through; a numeric key
+                    // (the `arr[i] = v` shape arrives as box(i)) canonicalises
+                    // via number_toString; anything else skips the consult.
+                    { op: "ref.null.extern" },
+                    { op: "local.set", index: wKey },
+                    { op: "local.get", index: 1 },
+                    { op: "any.convert_extern" },
+                    { op: "ref.test", typeIdx: anyStrTypeIdx },
+                    {
+                      op: "if",
+                      blockType: { kind: "empty" },
+                      then: [
+                        { op: "local.get", index: 1 },
+                        { op: "local.set", index: wKey },
+                      ],
+                      else: [
+                        { op: "local.get", index: 1 },
+                        { op: "call", funcIdx: unboxNumIdx },
+                        { op: "local.tee", index: wN },
+                        { op: "local.get", index: wN },
+                        { op: "f64.eq" },
+                        {
+                          op: "if",
+                          blockType: { kind: "empty" },
+                          then: [
+                            { op: "local.get", index: wN },
+                            { op: "call", funcIdx: numToStringIdx },
+                            { op: "local.set", index: wKey },
+                          ],
+                        },
+                      ],
+                    },
+                    { op: "local.get", index: wKey },
+                    { op: "ref.is_null" },
+                    { op: "i32.eqz" },
+                    {
+                      op: "if",
+                      blockType: { kind: "empty" },
+                      then: consult,
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ];
+      fn.body.splice(0, 0, ...prologue);
+    }
+  }
 }
