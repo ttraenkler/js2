@@ -350,11 +350,22 @@ byte-identical (the #1917 discipline).
   probes (A–Z) + 36/36 suites re-validated on the merged base; pushed
   (1cc1a2860). S1 PR #3327 is IN THE MERGE QUEUE — open the S2+S3 PR when
   it lands.
-- Remaining post-S3 (S4/follow-up candidates): typed/inline write-lane
-  enforcement decision (state-gated inline check — perf question), for-in
-  enumerable:false filtering + companion-key enumeration merge, strict-mode
-  TypeError on non-writable writes, `Object.defineProperties` plural-loop
-  receiver gate audit, delete-on-index overlay integration.
+- **Plural `Object.defineProperties` vec targets FIXED (2026-07-18,
+  57ea78d74, in the S2 PR)**: the target gate threw "unsupported" for
+  `$__vec_base` receivers before pass 2 could reach the singular vec arms
+  (the ~177 plural-with-array-receiver rows). Pass 2 applies with the
+  ORIGINAL externref target, so the gate relaxation is the whole fix.
+  Probes AA/AB/AC + 39/39 suites; host sha unchanged. Audited
+  `__defineProperty_desc`: no target gate — already flows to the vec arms.
+- Remaining post-S3 (deliberately DEFERRED to a post-S2-landing PR — the
+  stacked PR is large enough): (a) for-in `enumerable:false` filtering +
+  companion expando-key enumeration (needs a keys_forin overlay arm — the
+  enumerable half of verifyProperty); (b) delete-on-index + real hole
+  semantics (verifyProperty's configurable probe deletes then expects gOPD
+  undefined — requires the array-holes `$Hole` integration, NOT just
+  companion-entry removal); (c) typed/inline write-lane enforcement decision
+  (state-gated inline check — perf question); (d) strict-mode TypeError on
+  non-writable writes.
 - **Known hazards**: `ref.null`/`ref.cast` abstract heap types — object-runtime's
   `NONE_HEAP=-18` is `any`, real `none` is `-15` (vec-overlay documents this);
   never busy-wait on a pegged box; one compile at a time.
