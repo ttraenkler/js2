@@ -362,6 +362,34 @@ the S1 PR (#3327) lands (predecessor-stacking).
    setter invoke + `this`, companion-value write refresh, gOPD-after-write
    freshness, plain-write fall-through unregressed.
 
+## S3 plan (draft — ArraySetLength §10.4.2.1; implement after S2 lands)
+
+Hook: the `"length"` bail in `__vec_dp_value` (currently legacy no-op) routes
+to new fill-built logic; `__vec_dp_accessor` `"length"` → TypeError (length
+can never be an accessor, §10.4.2.1 step 2).
+
+1. **Value validation**: newLen = ToUint32(value); ToNumber(value) ≠ newLen →
+   RangeError (catchable, `__new_RangeError` + exn tag). Both coercions exist
+   natively (`__unbox_number` / `__toUint32`).
+2. **Length attributes**: a reserved companion entry under key `"length"`
+   holds the writable bit (enumerable/configurable are spec-fixed false).
+   `{writable:false}` defines set it; later length defines consult it
+   (non-writable → TypeError on value change per §10.1.6.3). gOPD("length")
+   vec arm synthesizes `{value: len, writable: !bit, enumerable: false,
+   configurable: false}` (replaces the S1 miss).
+3. **Shrink with non-configurable stopping**: iterate oldLen-1 down to newLen;
+   a companion entry for an index with FLAG_CONFIGURABLE clear stops the
+   shrink at idx+1 and throws TypeError; otherwise remove companion entries
+   for deleted indices (`__delete_property` on the companion) and set
+   `vec.length = newLen` (data capacity untouched — reads are bounds-checked
+   against the length field).
+4. **Boundaries**: plain `arr.length = n` writes (typed inline lane) still
+   bypass the non-writable bit — same typed-lane class as the S2 boundary;
+   decide the state-gated inline check together (S3b).
+5. Tests: the 28 throw-only length cluster shapes (RangeError -1, shrink over
+   non-configurable, writable:false redefine), gOPD("length") coherence,
+   plain shrink/grow unregressed.
+
 ## Stale sibling branch (do not delete — hygiene-pass salvage)
 
 `origin/issue-3251-array-descriptor-overlay` (pre-dates this work, from
