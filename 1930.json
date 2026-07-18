@@ -1,8 +1,9 @@
 {
   "id": "1930",
   "assignee": "ttraenkler/opus-dev-a",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-1930-slice3-salvage",
   "claimed_at": "2026-07-18T00:51:49Z",
-  "updated_at": "2026-07-18T00:51:49Z"
+  "updated_at": "2026-07-18T05:27:15Z",
+  "released_at": "2026-07-18T05:27:15Z"
 }
