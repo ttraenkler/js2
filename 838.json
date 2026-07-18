@@ -1,8 +1,9 @@
 {
   "id": "838",
   "assignee": "ttraenkler/opus-dev-b",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-838-bigint-typed-arrays",
   "claimed_at": "2026-07-18T05:40:58Z",
-  "updated_at": "2026-07-18T05:40:58Z"
+  "updated_at": "2026-07-18T06:47:23Z",
+  "released_at": "2026-07-18T06:47:23Z"
 }
