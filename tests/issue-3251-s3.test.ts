@@ -111,6 +111,53 @@ describe("#3251 S3 — ArraySetLength via defineProperty", () => {
   });
 });
 
+describe("#3251 — plural Object.defineProperties over an array target", () => {
+  const MKD = `function mkDescs(): any {
+    const d: any = {};
+    d["0"] = { value: 101 };
+    d["1"] = { value: 202, writable: false };
+    return d;
+  }`;
+
+  it("routes a vec target through the overlay (was TypeError 'unsupported')", async () => {
+    expect(
+      await runStandalone(`${MK}
+        ${MKD}
+        export function test(): number {
+          const arr: any = mkArr();
+          Object.defineProperties(arr, mkDescs());
+          return (arr[0] as number) + (arr[1] as number);
+        }`),
+    ).toBe(303);
+  });
+
+  it("plural-defined writable:false is enforced on later writes", async () => {
+    expect(
+      await runStandalone(`${MK}
+        ${MKD}
+        export function test(): number {
+          const arr: any = mkArr();
+          Object.defineProperties(arr, mkDescs());
+          arr[1] = 999;
+          return arr[1] as number;
+        }`),
+    ).toBe(202);
+  });
+
+  it("plain-object defineProperties is unregressed", async () => {
+    expect(
+      await runStandalone(`function mk(): any { return {}; }
+        export function test(): number {
+          const o: any = mk();
+          const d: any = {};
+          d["x"] = { value: 7 };
+          Object.defineProperties(o, d);
+          return o.x as number;
+        }`),
+    ).toBe(7);
+  });
+});
+
 describe("#3251 S3 — gOPD('length') synthesis", () => {
   it("reports {value, writable: true, enumerable: false, configurable: false} by default", async () => {
     expect(

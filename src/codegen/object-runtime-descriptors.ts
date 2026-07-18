@@ -1235,7 +1235,12 @@ export function buildObjectDescriptorHelpers(ctx: CodegenContext, s: ObjectDescr
 
     const body: Instr[] = [
       // Dynamic Type(O) / ToObject(Properties) checks for the supported native
-      // surface: both must be standalone `$Object`s.
+      // surface: the target must be a standalone `$Object` — or, with the
+      // #3251 overlay reserved, a `$__vec_base` array carrier (pass 2 applies
+      // through `__defineProperty_value`/`_accessor` with the ORIGINAL
+      // externref target, so the singular vec arms own the array semantics;
+      // pass 1 only reads the descriptor map). The Properties map stays
+      // `$Object`-only.
       { op: "local.get", index: 0 },
       { op: "ref.is_null" },
       { op: "if", blockType: { kind: "empty" }, then: throwUnsupported() },
@@ -1243,11 +1248,36 @@ export function buildObjectDescriptorHelpers(ctx: CodegenContext, s: ObjectDescr
       { op: "any.convert_extern" },
       { op: "local.tee", index: L_OBJ_ANY },
       { op: "ref.test", typeIdx: objectTypeIdx },
+      ...(vecOverlay
+        ? ([
+            { op: "local.get", index: L_OBJ_ANY },
+            { op: "ref.test", typeIdx: vecOverlayBaseIdx },
+            { op: "i32.or" },
+          ] satisfies Instr[])
+        : []),
       { op: "i32.eqz" },
       { op: "if", blockType: { kind: "empty" }, then: throwUnsupported() },
-      { op: "local.get", index: L_OBJ_ANY },
-      { op: "ref.cast", typeIdx: objectTypeIdx },
-      { op: "local.set", index: L_OBJ },
+      // L_OBJ (the $Object view) is only valid for object targets; a vec
+      // target skips the cast (L_OBJ stays null — pass 2 never reads it).
+      ...(vecOverlay
+        ? ([
+            { op: "local.get", index: L_OBJ_ANY },
+            { op: "ref.test", typeIdx: objectTypeIdx },
+            {
+              op: "if",
+              blockType: { kind: "empty" },
+              then: [
+                { op: "local.get", index: L_OBJ_ANY },
+                { op: "ref.cast", typeIdx: objectTypeIdx },
+                { op: "local.set", index: L_OBJ },
+              ],
+            },
+          ] satisfies Instr[])
+        : ([
+            { op: "local.get", index: L_OBJ_ANY },
+            { op: "ref.cast", typeIdx: objectTypeIdx },
+            { op: "local.set", index: L_OBJ },
+          ] satisfies Instr[])),
 
       { op: "local.get", index: 1 },
       { op: "ref.is_null" },
