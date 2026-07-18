@@ -503,7 +503,7 @@ export function fillVecOverlayHelpers(ctx: CodegenContext): void {
   if (!ctx.vecOverlayReserved || !ctx.standalone) return;
   const types = ctx.objectRuntimeTypes;
   if (!types) return;
-  const { objectTypeIdx, propEntryTypeIdx } = types;
+  const { objectTypeIdx, propEntryTypeIdx, propMapTypeIdx } = types;
   const anyStrTypeIdx = ctx.anyStrTypeIdx;
   if (anyStrTypeIdx < 0) return;
 
@@ -1934,6 +1934,281 @@ export function fillVecOverlayHelpers(ctx: CodegenContext): void {
                   ],
                 },
               ],
+            },
+          ],
+        },
+      ];
+      fn.body.splice(0, 0, ...prologue);
+    }
+  }
+
+  // ── (#3251 S4) for-in enumeration over an overlaid array ─────────────────
+  // `__object_keys_forin` overlay arm (splice-front — shadows the #3183 vec
+  // arm only when the receiver HAS a companion; otherwise falls through to
+  // the plain 0..len-1 enumeration): index keys are filtered by the
+  // companion entry's FLAG_ENUMERABLE (the verifyProperty enumerability
+  // probe), then enumerable non-index expando keys append in insertion order
+  // (§ OrdinaryOwnPropertyKeys — indices ascending, then strings) via
+  // `__obj_ordered` (already enumerable-filtered; the non-enumerable seeded
+  // "length" entry never appears; index keys are excluded — the loop above
+  // owns them).
+  {
+    const objVecNewIdx = ctx.funcMap.get("__objvec_new");
+    const objVecPushIdx = ctx.funcMap.get("__objvec_push");
+    const objOrderedIdx = ctx.funcMap.get("__obj_ordered");
+    const fn = findFn("__object_keys_forin");
+    if (fn && objVecNewIdx !== undefined && objVecPushIdx !== undefined && objOrderedIdx !== undefined) {
+      const base = 1 + fn.locals.length;
+      const fAny = base;
+      const fComp = base + 1;
+      const fOut = base + 2;
+      const fLen = base + 3;
+      const fK = base + 4;
+      const fE = base + 5;
+      const fPm = base + 6;
+      const fN = base + 7;
+      const fKey = base + 8;
+      fn.locals.push(
+        { name: "__ov_any", type: { kind: "anyref" } },
+        { name: "__ov_comp", type: { kind: "ref_null", typeIdx: objectTypeIdx } },
+        { name: "__ov_out", type: { kind: "externref" } },
+        { name: "__ov_len", type: { kind: "i32" } },
+        { name: "__ov_k", type: { kind: "i32" } },
+        { name: "__ov_e", type: { kind: "ref_null", typeIdx: propEntryTypeIdx } },
+        { name: "__ov_pm", type: { kind: "ref_null", typeIdx: propMapTypeIdx } },
+        { name: "__ov_n", type: { kind: "i32" } },
+        { name: "__ov_key", type: { kind: "anyref" } },
+      );
+      const arm: Instr[] = [
+        { op: "global.get", index: core.stateGlobalIdx },
+        { op: "ref.is_null" },
+        { op: "i32.eqz" },
+        {
+          op: "if",
+          blockType: { kind: "empty" },
+          then: [
+            { op: "local.get", index: 0 },
+            { op: "any.convert_extern" },
+            { op: "local.tee", index: fAny },
+            { op: "ref.test", typeIdx: vecBaseIdx },
+            {
+              op: "if",
+              blockType: { kind: "empty" },
+              then: [
+                { op: "local.get", index: fAny },
+                { op: "call", funcIdx: core.lookupIdx },
+                { op: "local.tee", index: fComp },
+                { op: "ref.is_null" },
+                { op: "i32.eqz" },
+                {
+                  op: "if",
+                  blockType: { kind: "empty" },
+                  then: [
+                    { op: "call", funcIdx: objVecNewIdx },
+                    { op: "local.set", index: fOut },
+                    { op: "local.get", index: fAny },
+                    { op: "ref.cast", typeIdx: vecBaseIdx },
+                    { op: "struct.get", typeIdx: vecBaseIdx, fieldIdx: 0 },
+                    { op: "local.set", index: fLen },
+                    { op: "i32.const", value: 0 },
+                    { op: "local.set", index: fK },
+                    {
+                      op: "block",
+                      blockType: { kind: "empty" },
+                      body: [
+                        {
+                          op: "loop",
+                          blockType: { kind: "empty" },
+                          body: [
+                            { op: "local.get", index: fK },
+                            { op: "local.get", index: fLen },
+                            { op: "i32.ge_s" },
+                            { op: "br_if", depth: 1 },
+                            // e = __obj_find(comp, ToString(k)); enumerable
+                            // unless an entry explicitly clears the flag.
+                            { op: "local.get", index: fComp },
+                            { op: "ref.as_non_null" },
+                            { op: "local.get", index: fK },
+                            { op: "f64.convert_i32_s" },
+                            { op: "call", funcIdx: numToStringIdx },
+                            { op: "call", funcIdx: objFindIdx },
+                            { op: "local.tee", index: fE },
+                            { op: "ref.is_null" },
+                            {
+                              op: "if",
+                              blockType: { kind: "val", type: { kind: "i32" } },
+                              then: [{ op: "i32.const", value: 1 }],
+                              else: [
+                                { op: "local.get", index: fE },
+                                { op: "ref.as_non_null" },
+                                { op: "struct.get", typeIdx: propEntryTypeIdx, fieldIdx: 2 },
+                                { op: "i32.const", value: FLAG_ENUMERABLE },
+                                { op: "i32.and" },
+                                { op: "i32.const", value: 0 },
+                                { op: "i32.ne" },
+                              ],
+                            },
+                            {
+                              op: "if",
+                              blockType: { kind: "empty" },
+                              then: [
+                                { op: "local.get", index: fOut },
+                                { op: "local.get", index: fK },
+                                { op: "f64.convert_i32_s" },
+                                { op: "call", funcIdx: numToStringIdx },
+                                { op: "call", funcIdx: objVecPushIdx },
+                              ],
+                            },
+                            { op: "local.get", index: fK },
+                            { op: "i32.const", value: 1 },
+                            { op: "i32.add" },
+                            { op: "local.set", index: fK },
+                            { op: "br", depth: 0 },
+                          ],
+                        },
+                      ],
+                    },
+                    // enumerable non-index expando keys, insertion order.
+                    { op: "local.get", index: fComp },
+                    { op: "ref.as_non_null" },
+                    { op: "call", funcIdx: objOrderedIdx },
+                    { op: "local.set", index: fPm },
+                    { op: "i32.const", value: 0 },
+                    { op: "local.set", index: fN },
+                    {
+                      op: "block",
+                      blockType: { kind: "empty" },
+                      body: [
+                        {
+                          op: "loop",
+                          blockType: { kind: "empty" },
+                          body: [
+                            { op: "local.get", index: fN },
+                            { op: "local.get", index: fPm },
+                            { op: "ref.as_non_null" },
+                            { op: "array.len" },
+                            { op: "i32.ge_s" },
+                            { op: "br_if", depth: 1 },
+                            { op: "local.get", index: fPm },
+                            { op: "ref.as_non_null" },
+                            { op: "local.get", index: fN },
+                            { op: "array.get", typeIdx: propMapTypeIdx },
+                            { op: "local.tee", index: fE },
+                            { op: "ref.is_null" },
+                            { op: "i32.eqz" },
+                            {
+                              op: "if",
+                              blockType: { kind: "empty" },
+                              then: [
+                                { op: "local.get", index: fE },
+                                { op: "ref.as_non_null" },
+                                { op: "struct.get", typeIdx: propEntryTypeIdx, fieldIdx: 0 },
+                                { op: "local.tee", index: fKey },
+                                { op: "ref.test", typeIdx: anyStrTypeIdx },
+                                {
+                                  op: "if",
+                                  blockType: { kind: "empty" },
+                                  then: [
+                                    // skip canonical index keys (emitted above)
+                                    { op: "local.get", index: fKey },
+                                    { op: "ref.cast", typeIdx: anyStrTypeIdx },
+                                    { op: "call", funcIdx: objIndexOfKeyIdx },
+                                    { op: "i32.const", value: 0 },
+                                    { op: "i32.lt_s" },
+                                    {
+                                      op: "if",
+                                      blockType: { kind: "empty" },
+                                      then: [
+                                        { op: "local.get", index: fOut },
+                                        { op: "local.get", index: fKey },
+                                        { op: "extern.convert_any" },
+                                        { op: "call", funcIdx: objVecPushIdx },
+                                      ],
+                                    },
+                                  ],
+                                },
+                              ],
+                            },
+                            { op: "local.get", index: fN },
+                            { op: "i32.const", value: 1 },
+                            { op: "i32.add" },
+                            { op: "local.set", index: fN },
+                            { op: "br", depth: 0 },
+                          ],
+                        },
+                      ],
+                    },
+                    { op: "local.get", index: fOut },
+                    { op: "return" },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ];
+      fn.body.splice(0, 0, ...arm);
+    }
+  }
+
+  // ── (#3251 S4) __extern_has companion consult ────────────────────────────
+  // The #2066 for-in per-visit liveness guard (and user `in` checks) must see
+  // companion-backed keys — accessor indices, companion-value indices, and
+  // named expandos — as PRESENT. Consult before the #3183 numeric/length arm;
+  // misses fall through unchanged.
+  {
+    const fn = findFn("__extern_has");
+    if (fn) {
+      const base = 2 + fn.locals.length;
+      const hAny = base;
+      const hComp = base + 1;
+      fn.locals.push(
+        { name: "__ov_any", type: { kind: "anyref" } },
+        { name: "__ov_comp", type: { kind: "ref_null", typeIdx: objectTypeIdx } },
+      );
+      const prologue: Instr[] = [
+        { op: "global.get", index: core.stateGlobalIdx },
+        { op: "ref.is_null" },
+        { op: "i32.eqz" },
+        {
+          op: "if",
+          blockType: { kind: "empty" },
+          then: [
+            { op: "local.get", index: 0 },
+            { op: "any.convert_extern" },
+            { op: "local.tee", index: hAny },
+            { op: "ref.test", typeIdx: vecBaseIdx },
+            { op: "local.get", index: 1 },
+            { op: "any.convert_extern" },
+            { op: "ref.test", typeIdx: anyStrTypeIdx },
+            { op: "i32.and" },
+            {
+              op: "if",
+              blockType: { kind: "empty" },
+              then: notLengthWrap(1, [
+                { op: "local.get", index: hAny },
+                { op: "call", funcIdx: core.lookupIdx },
+                { op: "local.tee", index: hComp },
+                { op: "ref.is_null" },
+                { op: "i32.eqz" },
+                {
+                  op: "if",
+                  blockType: { kind: "empty" },
+                  then: [
+                    { op: "local.get", index: hComp },
+                    { op: "ref.as_non_null" },
+                    { op: "local.get", index: 1 },
+                    { op: "call", funcIdx: objFindIdx },
+                    { op: "ref.is_null" },
+                    { op: "i32.eqz" },
+                    {
+                      op: "if",
+                      blockType: { kind: "empty" },
+                      then: [{ op: "i32.const", value: 1 }, { op: "return" }],
+                    },
+                  ],
+                },
+              ]),
             },
           ],
         },
