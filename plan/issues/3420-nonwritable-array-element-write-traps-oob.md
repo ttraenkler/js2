@@ -1,8 +1,7 @@
 ---
 id: 3420
 title: "Write to non-writable/frozen Array element traps oob instead of throwing TypeError (verifyProperty corpus)"
-status: in-progress
-assignee: ttraenkler/senior-dev
+status: ready
 created: 2026-07-18
 priority: high
 feasibility: medium
