@@ -79,3 +79,43 @@ queries).
 Filed per coordinator request as the REAL bug behind the oracle-v8 oob +4 trap flag
 (#3335/#3189). The trap growth itself was within #3370's declared ceiling and
 promoted via a one-time forced refresh; this issue fixes the underlying gap.
+
+## Verify-first findings (2026-07-20, senior-dev, current origin/main @89ce643)
+
+The plan's stated root cause — "array element **store** lowers to a bounds-checked
+`array.set` that traps `oob` on a non-writable/frozen element; fix = throw
+TypeError / no-op on the store path" — **does NOT match current main.** Measured:
+
+**Store-path behavior (the premise):**
+- Typed vec (a real JS `[1,2,3]` array) frozen element write `arr[0]=999` →
+  **silently succeeds** (freeze not honored). NOT oob, NOT TypeError.
+- `any`-scalar-annotated receiver → in-bounds write throws a *catchable* TypeError;
+  out-of-capacity write traps oob. But test262 arrays are vecs, not scalar-any, so
+  this path is not what the corpus exercises.
+- Typed vec OOB write `arr[10]=5` grows correctly (length→11). No trap.
+- ⇒ The store path already does NOT emit an uncatchable oob for frozen/non-writable
+  writes, so a "check [[Writable]] on `array.set`" fix flips ~**0** tests.
+
+**Per-file ground truth (single-file `runTest262File`, JS-host lane):**
+| bucket | files |
+| --- | --- |
+| FAIL-OOB (real, matches issue) | `Array/prototype/filter/target-array-with-non-writable-property.js`, `Array/prototype/map/target-array-with-non-writable-property.js` |
+| PASS (already correct) | splice / slice / concat / flat / flatMap `target-array-with-non-writable-property.js`; `Array/prototype/with/frozen-this-value.js` |
+| FAIL-OTHER (unrelated bug) | `Object/freeze/15.2.3.9-2-c-1.js` — thrown TypeError fails `e instanceof TypeError` on the `delete` path (error-identity, NOT oob) |
+| runner-infra THREW (not a compiler signal) | pop/push/shift/unshift `set-length-array-is-frozen.js` — harness assembly errors ("reading 'text'", "which has only a getter") |
+
+**Real oob mechanism (filter, map only):** both honor `Symbol.species`; the test's
+species returns `q = new Array(0)` then `Object.defineProperty(q, 0, {value,
+writable:false, configurable:true})` (numeric key). filter/map then write results
+into that species-supplied backing (allocated capacity 0) without a grow-safe
+store, so `verifyProperty`'s later read/write of the result element traps oob.
+This is **Symbol.species result-backing consistency**, not store-path writability,
+and it is method-specific (splice/slice/concat/flat already pass). Note:
+`Object.defineProperty(arr, N, {value:V})` on an array index also does not persist
+`V` into the vec backing (reads default), a separate latent gap.
+
+**Assessment:** wall for a focused, net-positive, low-risk PR. The issue-as-scoped
+flips ~0; the true remaining oob is 2 tests requiring risky changes to the core
+`filter`/`map` species-result path (or full extensibility-slot machinery, #2744).
+Escalated to tech lead 2026-07-20 to re-scope (narrow species-backing issue) or
+defer. Not implemented speculatively.
