@@ -54,6 +54,16 @@ status on 2026-07-20.
 - **Biggest single lever overall is RUNNER-only #1 (Temporal, 4190)** — a skip-policy/skip-filter fix, 0 compiler change, ~4k denominator reduction. Bundle with #15 (Stage3 import, 152) and #18 (ShadowRealm, 59) as one "restore skip filters under oracle-v8" task, plus #13 (assert-not-defined, 183), #16 (sig-decl, 122), #17 (module FIXTURE, 111) as a "runner/harness fidelity" task. These are the cheapest pass-rate wins.
 - **#7/#8 blocked on #1350** (resizable-ArrayBuffer/detached, ~1000 combined) — worth escalating #1350's blocker; large ceiling.
 
+## Cluster #9 sub-breakdown (missing built-in, "X is not a function/ctor", by feature)
+After removing eval/dynamic-import (skip): Temporal 64 (→ #1 skip), Atomics 60
+(overlaps #3441 null-receiver), DataView 30 + ArrayBuffer 30 (→ #1350
+resizable/detached), Iterator 50 (**Iterator-helpers: `Iterator.prototype.{map,
+filter,take,drop,flatMap,…}` — coherent FRESH feature cluster**), Array 40,
+String 25, Object 20, TypedArray 17, Promise 16, Math 5 (scattered specific
+methods), DisposableStack 8 + Proxy 7 (skip/deferred). The dispatchable fresh
+slice here is **Iterator helpers (~50)** + a scattered-methods pass over
+Array/String/Object/Promise. The rest fold into #1/#3441/#1350/skip.
+
 ## Method notes
 - Clustered by the pre-computed `error`/`error_category`/`error_signature`
   fields in the jsonl, aggregated with substring matchers, then category- and
