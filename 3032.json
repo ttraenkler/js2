@@ -1,8 +1,9 @@
 {
   "id": "3032",
   "assignee": "ttraenkler/senior-dev-rebase",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-3032-w6-host-lane-laziness",
   "claimed_at": "2026-07-19T06:21:21Z",
-  "updated_at": "2026-07-19T06:21:21Z"
+  "updated_at": "2026-07-19T06:49:47Z",
+  "released_at": "2026-07-19T06:49:47Z"
 }
