@@ -1471,6 +1471,13 @@ export interface CodegenContext {
    */
   vecPropBaseTypeIdx?: number;
   /**
+   * (#3544) Set when `ensureObjectRuntime` reserved the dynamic
+   * `.call`-on-callable dispatch helpers (`__fn_call_name_gate`,
+   * `__is_fn_callable`, `__fn_call_invoke`); filled by `fillFnCallDispatch` at
+   * FINALIZE (needs the complete closure-wrapper type set). Standalone/wasi only.
+   */
+  fnCallDispatchReserved?: boolean;
+  /**
    * (#1100) Set when the standalone Proxy trap-dispatch runtime reserved its
    * `__proxy_call_{get,set,has}` driver placeholders (in `ensureProxyRuntime`).
    * Those drivers invoke the user trap closures through the `__call_fn_method_N`

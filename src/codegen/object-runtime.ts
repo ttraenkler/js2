@@ -83,10 +83,12 @@ import { reserveClosurePropHelpers } from "./closure-props.js"; // (#3468 C-core
 // arms (vec test first, unchanged closure arm as fallthrough).
 import {
   buildVecOrClosurePropGetMissArm,
-  buildVecOrClosurePropMethodCallElseArm,
   buildVecOrClosurePropSetMissArm,
   reserveVecPropHelpers,
 } from "./vec-props.js";
+// (#3544) dynamic `.call`-on-callable dispatch — leading arm of the
+// method-call else chain; wraps the #3537/#3468 composition unchanged.
+import { buildFnCallDispatchElseArm, reserveFnCallDispatch } from "./fn-call-dispatch.js";
 import { ensureSymbolCarrier } from "./symbol-native.js";
 import { reserveArrayToPrimitiveString } from "./array-to-primitive.js";
 import { UNDEF_F64_BITS } from "./value-tags.js";
@@ -849,6 +851,8 @@ export function ensureObjectRuntime(ctx: CodegenContext): ObjectRuntimeTypes {
     // (#3537) reserve the array-expando side table right after — same
     // reserve-before-arms-bake discipline, appended indices only.
     reserveVecPropHelpers(ctx);
+    // (#3544) reserve the `.call`-on-callable dispatch helpers.
+    reserveFnCallDispatch(ctx);
   }
 
   // ── __extern_is_array(externref v) -> i32 ────────────────────────────────
@@ -4055,7 +4059,7 @@ export function ensureObjectRuntime(ctx: CodegenContext): ObjectRuntimeTypes {
         // in the side table — mirror the $Object dispatch for it; other brands
         // ($Vec/string/Map/Set) are the Slice-4 arms → undefined for now (never
         // invalid Wasm).
-        else: buildVecOrClosurePropMethodCallElseArm(ctx, externGetIdx, applyClosureIdx),
+        else: buildFnCallDispatchElseArm(ctx, externGetIdx, applyClosureIdx),
       },
     ];
     registerNative(

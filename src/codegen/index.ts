@@ -149,6 +149,7 @@ import {
 } from "./object-runtime.js";
 import { fillClosurePropHelpers } from "./closure-props.js"; // (#3468 C-core) closure-own-property side table
 import { fillVecPropHelpers } from "./vec-props.js"; // (#3537) array ($Vec) expando side table
+import { fillFnCallDispatch } from "./fn-call-dispatch.js"; // (#3544) dynamic .call-on-callable dispatch
 import { fillDataViewConstructProtoArm, fillTaDynViewMopArms } from "./ta-dyn-mop.js"; // (#3177/#3371) native view prototype arms
 import { fillReflectIsConstructor } from "./reflect-construct-native.js";
 import { fillArrayToPrimitive } from "./array-to-primitive.js";
@@ -3775,6 +3776,10 @@ export function generateModule(
     // object-runtime funcIdxs are all in funcMap by finalize).
     fillVecPropHelpers(ctx);
 
+    // (#3544) Fill the `.call`-on-callable dispatch helpers (needs the
+    // complete closure-wrapper set + __apply_closure/__objvec_* funcIdxs).
+    fillFnCallDispatch(ctx);
+
     // (#3140) Fill the reserved `__bind_dyn` dynamic-bind helper now that every
     // closure root is registered (the callable gate needs the COMPLETE
     // classifier list). No-op when no standalone `.bind`-on-any site reserved it.
@@ -5766,6 +5771,9 @@ export function generateMultiModule(
 
     // (#3537) Same for the array-expando side table.
     fillVecPropHelpers(ctx);
+
+    // (#3544) Same for the `.call`-on-callable dispatch helpers.
+    fillFnCallDispatch(ctx);
 
     // (#3371/#3496) Constructible function-expression wrappers are nominal
     // subtypes of the ordinary closure wrapper. Multi-source harness methods
