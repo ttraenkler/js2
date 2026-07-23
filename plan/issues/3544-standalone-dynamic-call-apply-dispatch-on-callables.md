@@ -1,8 +1,9 @@
 ---
 id: 3544
 title: "standalone: dynamic `.call`/`.apply` on callable values silently answers undefined — gates the entire builtin receiver-validation cluster (~232 projected #3468-cliff tests)"
-status: in-progress
-assignee: ttraenkler/fable-3544
+status: done
+completed: 2026-07-23
+assignee: ttraenkler/fable-3544b
 created: 2026-07-23
 priority: high
 feasibility: hard
@@ -15,7 +16,7 @@ goal: standalone
 umbrella: 2860
 sprint: current
 horizon: m
-related: [3468, 1596, 3140, 2984, 3537]
+related: [3468, 1596, 3140, 2984, 3537, 3554]
 origin: "#3468 cliff clustering (fable-exposed, 2026-07-23): cluster 3 (builtin receiver-validation, 29/458 sampled ≈ 232 projected) concentration scoping — traced to ONE dispatch arm, not 232 per-builtin gaps"
 # (#3102) The substrate is the NEW leaf module src/codegen/fn-call-dispatch.ts;
 # these god-file touches are the unavoidable arm/wiring minimum (mirrors the
@@ -65,6 +66,7 @@ verified working — probe3, 2026-07-23.)
 In `__extern_method_call`'s else-arm chain (COMPOSED like #3537 — do not edit
 closure-props.ts): a new leading arm
 `if (name == "call" && __is_callable(recv)) → __dispatch_fn_call(recv, argvec)`:
+
 - `__is_callable` — the #3140 `buildClosureRefTestArms` callable-gate
   classification already enumerates every funcref-wrapper struct (it powers
   `__bind_dyn`); reuse it.
@@ -84,11 +86,12 @@ Dispatching makes the #2984 **refusal-stub bodies reachable**: today
 `m.call(x)` on an un-wired member silently answers undefined; after the fix it
 THROWS the refusal TypeError. That is spec-directionally better (fail-loud) and
 flips the cluster-3 assert.throws tests green, but any today-passing standalone
-test that *tolerates* the silent undefined would flip pass→fail at module init.
+test that _tolerates_ the silent undefined would flip pass→fail at module init.
 The #2984 comment explicitly measured this class of regression once before
 (`hasOwnProperty.call` idioms rely on the null-return fall-through of
 `emitReflectiveNativeProtoClosureCall` — note that is a DIFFERENT, static
 route; verify it stays untouched). Validation protocol (the #3537 template):
+
 1. stride-8 floor run (main vs main+fix) — regressions MUST be ~0; every
    regression individually triaged (a refusal-throw regression means the
    member needs a real wired body or the arm needs a narrower gate);
@@ -149,7 +152,7 @@ fill (`src/codegen/fn-call-dispatch.ts`), no new modules:
   calls, gOPD descriptor `.get` invokes, `__bind_dyn`) for one dynamic route —
   the discrimination belongs at the one place the convention is ambiguous.
 - **The discrimination set**: `nativeProtoReceiverClosureStructTypes ∩
-  builtinFnMetaByTypeIdx` — meta subtypes ONLY. native-proto.ts registers
+builtinFnMetaByTypeIdx` — meta subtypes ONLY. native-proto.ts registers
   BOTH the base signature wrapper and the meta subtype in the receiver set,
   but base wrappers are signature-SHARED with ordinary user closures (#1712:
   capture structs subtype their signature wrapper), so `ref.test`ing a base
@@ -175,6 +178,107 @@ dynamic `.call` results USED as strings TRAP uncatchably on main
 ("dereferencing a null pointer") — the fix converts those to catchable
 refusal TypeErrors; `hasOwnProperty.call(o, "x")` answered silently-wrong
 `false` for an EXISTING property (only the static syntactic route works).
+
+## Measured validation (2026-07-23, fable-3544b) — the numbers that set the shipped design
+
+All runs: CI-exact worker driver (the m3468 rig), paired against a control
+bundle built from the same `origin/main` (a8228d9e) the branch merged.
+
+**1. Floor, EXACT census — not a sample.** Every pass-baseline standalone test
+whose source contains `.call` (2,242 files) ran on the full-dispatch fix;
+every failure re-ran on the main control (all pass there → true paired
+regressions):
+
+- Full dispatch (refusal stubs dispatchable): **22 pass→fail / 2,242**, all
+  ONE mechanism (deferred/refusal bodies newly reachable): Array.of 4,
+  Array.from 4, Promise.resolve 2, Promise.reject 2, Date.prototype.toJSON 2,
+  String.prototype.valueOf 2, Symbol.prototype.valueOf 2,
+  WeakRef.prototype.deref 1 (= 19 "not yet implemented" refusal stubs), plus
+  3 tests where `new Function("...").call(...)` now dispatches into the
+  deferred dynamic-code-eval throw (13.2-8-s, 13.2-16-s, S15.3.4.4_A6_T4 —
+  honest fail-loud). Net −22 < the −15 merge_group tolerance → unshippable.
+- Independent cross-check: whole-floor stride-8 run (3,582 tests, all
+  categories): 6/3,582 regressions, same mechanism only — no unrelated
+  breakage from the arm/reserve plumbing.
+- **Improvements in CI config: 0 / 1,820 fail-baseline `.call` candidates.**
+
+**2. Truth-harness cliff (458-file #3468 sample, harness-main vs harness-fix):
++14 / −0.** Wins: String slice/concat/search/localeCompare
+this-value-not-obj-coercible, the #3250 refusal getters (ArrayBuffer.detached
+/maxByteLength, %TypedArray%.buffer, SAB.maxByteLength), RegExp compile,
+DisposableStack×3, Promise.resolve context, Array.of return-abrupt.
+
+**3. Key discovery revising the fix-sketch assumption:** `String.prototype
+.slice`/`concat`/… as VALUES are themselves #2984 refusal stubs (WAT-verified:
+the "receiver check" TypeError the cluster tests catch is the refusal throw —
+right constructor, honest error, un-wired body). So a blanket
+"exclude-all-refusal-stubs" gate would forfeit most of the cliff wins.
+**Shipped design: CURATED narrow gate** — exactly the 8 census members above
+are excluded from `__is_fn_callable` (mint-time registration →
+`ctx.fnCallRefusalMetaTypeIdxs`; lists + removal condition in
+`src/codegen/fn-call-dispatch.ts`). Everything else — wired members, all
+other refusal stubs, all refusal getters, user closures — dispatches.
+Expected curated floor cost: only the 3 eval-class tests.
+
+**4. Curated variant re-measurement (the shipped configuration) — prediction
+matched exactly:**
+
+- Floor census (same 4,062 candidates): **3 pass→fail / 2,242** — precisely
+  the 3 eval-class tests (honest fail-loud; `new Function` closures must not
+  silently no-op on `.call`), **0 refusal-member regressions**, 0
+  improvements. CI-visible net = **−3**, well inside the −15 merge_group
+  tolerance.
+- Truth-harness cliff (458): **+12 / −0** (vs +14 for full dispatch — the
+  delta is exactly the two curated-member wins forfeited: Promise.resolve
+  context-non-object, Array.of return-abrupt). Wins kept: String
+  slice/concat/search/localeCompare receiver checks, RegExp compile, the
+  #3250 refusal getters (ArrayBuffer.detached/maxByteLength, SAB
+  .maxByteLength, %TypedArray%.buffer), DisposableStack/AsyncDisposableStack
+  use/adopt/defer.
+
+## ⚠ SYSTEMIC FINDING — the CI floor metric CANNOT see this class of improvement (#3468)
+
+The fix's wins and losses are asymmetrically visible to CI, and the asymmetry
+is a measurement defect, not a property of the fix:
+
+- The ~232-test receiver-validation cluster asserts via
+  `assert.throws(TypeError, () => m.call(bad))`. Under the #3468 vacuity
+  (standalone function objects cannot carry own props → `assert.*` methods are
+  never invoked → the callback never runs), those tests ALREADY "pass"
+  vacuously on main. Fixing dispatch converts them from vacuous-pass to REAL
+  pass — **a truth gain the CI pass-count records as zero change** (measured:
+  0 CI-visible improvements across all 1,820 fail-baseline `.call`
+  candidates; +14 real wins visible only under the truth harness).
+- Meanwhile the ONLY CI-visible effect of dispatching is the loss side: a
+  module-init throw is the one thing that can flip a vacuous floor test to
+  fail (the 19 refusal regressions).
+
+So for any fix in this family, the merge_group floor gate scores truth work
+as pure regression. This is an independent, quantified argument for
+prioritising the #3468 observability program: until assert.\* actually runs
+in standalone, the standalone conformance number cannot credit
+receiver-validation/error-semantics work at all. (Cross-referenced in the
+#3468 issue family; surfaced to the stakeholder by the tech lead
+2026-07-23.)
+
+## Completion (2026-07-23, fable-3544b) — shipped scope + what remains
+
+**Shipped**: the `.call` dispatch arm with convention discrimination (SPLIT
+user closures / FOLDED proto-methods) and the CURATED narrow gate. Tests:
+`tests/issue-3544.test.ts` (8, incl. the deferral-pin). Measured: floor −3
+(eval-class only, honest fail-loud, inside tolerance) / truth cliff +12/−0.
+
+**Remaining, tracked**:
+
+- **Wire-first for the 8 curated members** → #3554 (per-member slice PRs;
+  each wiring deletes its member from the gate list = automatic widening).
+- **`.apply` dispatch** — follow-on slice (array-argument spreading through
+  the same `__fn_call_invoke` shape); NOT yet implemented, `m.apply(...)`
+  still silently answers undefined on the dynamic path. Needs its own issue
+  id (allocator was contended at completion time — flagged to the tech lead
+  in the completion report; do not lose this).
+- **Gate removal** — conditional on the #3468 observability program; see the
+  REMOVAL CONDITION in `src/codegen/fn-call-dispatch.ts`.
 
 ## Measurement infrastructure (reusable, in the fable-exposed worktree)
 
