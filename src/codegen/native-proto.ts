@@ -38,6 +38,7 @@ import { ensureBuiltinFnMetaType } from "./builtin-fn-meta.js";
 import { addStringConstantGlobal } from "./registry/imports.js";
 import { stringConstantExternrefInstrs } from "./native-strings.js";
 import { buildThrowJsErrorInstrs, emitThrowTypeError } from "./js-errors.js"; // (#2984) refusal-body fallback
+import { FN_CALL_REFUSAL_EXCLUDED_PROTO_MEMBERS } from "./fn-call-dispatch.js"; // (#3544) narrow-gate curated list
 import { allocLocal } from "./context/locals.js";
 
 // ── Brand space (shared with #2101 — MUST stay coherent) ──────────────────────
@@ -576,6 +577,20 @@ export function ensureStandaloneNativeMethodClosure(
     if (!ctx.nativeProtoReceiverClosureStructTypes) ctx.nativeProtoReceiverClosureStructTypes = new Set();
     ctx.nativeProtoReceiverClosureStructTypes.add(wrapperTypes.structTypeIdx);
     ctx.nativeProtoReceiverClosureStructTypes.add(metaTypeIdx);
+  }
+
+  // (#3544 narrow gate) A CURATED set of un-wired members whose #2984 refusal
+  // throw would flip currently-passing (vacuous, #3468) floor tests is
+  // excluded from the dynamic `.call` callable gate — measured floor cost:
+  // Date.prototype.toJSON, String/Symbol.prototype.valueOf,
+  // WeakRef.prototype.deref. Every OTHER refusal stub (slice/concat/… as
+  // values) still dispatches: its catchable TypeError is a measured truth win.
+  // Getters never register here — their refusal body is the spec-correct
+  // incompatible-receiver TypeError (#3250). Full census + removal condition:
+  // `FN_CALL_REFUSAL_EXCLUDED_PROTO_MEMBERS` in fn-call-dispatch.ts.
+  if (useRefusalBody && kind === "method" && FN_CALL_REFUSAL_EXCLUDED_PROTO_MEMBERS.has(`${glue.name}.${member}`)) {
+    if (!ctx.fnCallRefusalMetaTypeIdxs) ctx.fnCallRefusalMetaTypeIdxs = new Set();
+    ctx.fnCallRefusalMetaTypeIdxs.add(metaTypeIdx);
   }
 
   return { type: { kind: "ref", typeIdx: metaTypeIdx }, funcIdx };

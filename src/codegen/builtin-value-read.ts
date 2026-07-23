@@ -73,6 +73,7 @@ import { ensureExtrasArgvGlobal } from "./statements/nested-declarations.js";
 import { getArrTypeIdxFromVec } from "./registry/types.js";
 import { ensureAnyFromExternHelper, ensureAnyHelpers, ensureExternStrictEqHelper } from "./any-helpers.js";
 import { sameValueNumberOps } from "./same-value-number-ops.js";
+import { FN_CALL_REFUSAL_EXCLUDED_STATICS } from "./fn-call-dispatch.js"; // (#3544) narrow-gate curated list
 
 export const BUILTIN_CTOR_NAMES = new Set([
   "Object",
@@ -1302,6 +1303,19 @@ export function ensureStandaloneBuiltinStaticMethodClosure(
       meta.name,
       meta.length,
     );
+    // (#3544 narrow gate) A CURATED set of generic-throw statics whose #2984
+    // Phase-3 refusal throw would flip currently-passing (vacuous, #3468)
+    // floor tests is excluded from the dynamic `.call` callable gate —
+    // measured floor cost: Array.of/.from, Promise.resolve/.reject. Every
+    // OTHER generic-throw static still dispatches (catchable refusal
+    // TypeError = measured truth win). Every `genericThrowBody` static comes
+    // from the `BUILTIN_STATIC_METHOD_ARITY` table, so `meta` is always
+    // present here and the exclusion is complete. Full census + removal
+    // condition: `FN_CALL_REFUSAL_EXCLUDED_STATICS` in fn-call-dispatch.ts.
+    if (genericThrowBody && FN_CALL_REFUSAL_EXCLUDED_STATICS.has(key)) {
+      if (!ctx.fnCallRefusalMetaTypeIdxs) ctx.fnCallRefusalMetaTypeIdxs = new Set();
+      ctx.fnCallRefusalMetaTypeIdxs.add(metaTypeIdx);
+    }
     return { type: { kind: "ref", typeIdx: metaTypeIdx }, funcIdx };
   }
 

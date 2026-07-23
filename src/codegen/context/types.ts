@@ -1478,6 +1478,21 @@ export interface CodegenContext {
    */
   fnCallDispatchReserved?: boolean;
   /**
+   * (#3544 narrow gate — MEASURED, do not grow casually) Meta struct typeIdxs
+   * of the CURATED floor-load-bearing builtin closures whose body is the #2984
+   * "not yet implemented" REFUSAL stub (`FN_CALL_REFUSAL_EXCLUDED_*` lists in
+   * `fn-call-dispatch.ts` — 8 members, full census there). `__is_fn_callable`
+   * tests these FIRST and answers 0, so a dynamic `m.call(…)` on them keeps
+   * today's (WRONG but baseline-load-bearing) silent-undefined instead of
+   * newly reaching the refusal throw. Registered at mint time by
+   * `ensureStandaloneNativeMethodClosure` (proto members, `useRefusalBody`)
+   * and `ensureStandaloneBuiltinStaticMethodClosure` (statics,
+   * `genericThrowBody`). All other refusal stubs and every refusal GETTER
+   * (spec-correct receiver error, #3250) stay dispatchable. See the removal
+   * condition in `fn-call-dispatch.ts`.
+   */
+  fnCallRefusalMetaTypeIdxs?: Set<number>;
+  /**
    * (#1100) Set when the standalone Proxy trap-dispatch runtime reserved its
    * `__proxy_call_{get,set,has}` driver placeholders (in `ensureProxyRuntime`).
    * Those drivers invoke the user trap closures through the `__call_fn_method_N`

@@ -34,6 +34,14 @@
  *
  * `.apply` is a follow-on slice (array-argument spreading).
  *
+ * ## Narrow gate (#3544): 8 curated floor-load-bearing refusal stubs do NOT
+ * dispatch. `ctx.fnCallRefusalMetaTypeIdxs` (registered from the curated
+ * `FN_CALL_REFUSAL_EXCLUDED_*` lists below) answer 0 in `__is_fn_callable` — a
+ * measured, documented deferral (silent-undefined is wrong; the floor's #3468
+ * vacuous passes can't absorb the honest throw yet). Every OTHER refusal stub
+ * dispatches and its catchable TypeError is a measured truth win. Census,
+ * member list and removal condition: see the list constants below.
+ *
  * ## Reserve-then-fill (same discipline as closure-props/vec-props)
  * The name gate needs native-string helpers, the callable gate needs the
  * COMPLETE closure-wrapper type set (`collectClosureBaseWrapperTypeIdxs` via
@@ -59,6 +67,56 @@ import { buildVecOrClosurePropMethodCallElseArm } from "./vec-props.js";
 const FN_CALL_NAME_GATE = "__fn_call_name_gate";
 const IS_FN_CALLABLE = "__is_fn_callable";
 const FN_CALL_INVOKE = "__fn_call_invoke";
+
+/**
+ * (#3544 narrow gate) The CURATED floor-load-bearing exclusion lists — the
+ * exact members whose #2984 "not yet implemented" refusal stubs, if dispatched
+ * by the dynamic `.call` arm, throw at module init inside currently-PASSING
+ * standalone-floor tests and regress the merge_group baseline.
+ *
+ * This is a documented, KNOWN-WRONG deferral, not a design: silent-undefined
+ * for `m.call(x)` on these members is a spec violation the compiler is
+ * deliberately keeping (status quo) because the test262 standalone floor still
+ * contains vacuous passes (#3468: assert.* never runs, so a module-init throw
+ * is the only way a floor test can fail) that the honest refusal throw would
+ * flip. Measured 2026-07-23 on the FULL census of pass-baseline standalone
+ * tests containing `.call` (2,242 tests, paired against a main control):
+ * dispatching ALL refusal stubs cost exactly 19 floor tests, wholly
+ * attributable to the 8 members below (Array.of 4, Array.from 4,
+ * Promise.resolve 2, Promise.reject 2, Date.prototype.toJSON 2,
+ * String.prototype.valueOf 2, Symbol.prototype.valueOf 2,
+ * WeakRef.prototype.deref 1) — with ZERO CI-visible wins as offset, because
+ * the receiver-validation wins live entirely inside vacuous-pass territory
+ * (the CI floor metric CANNOT see them; see the #3544 issue file).
+ *
+ * The lists are CURATED (not "every refusal stub") on purpose: refusal stubs
+ * outside this list — e.g. `String.prototype.slice`/`concat` as VALUES, the
+ * DisposableStack methods — DO dispatch, and their catchable refusal TypeError
+ * is a measured truth win (the #3468-cliff receiver-validation tests assert
+ * only the error constructor). Only members with a measured top-level dynamic
+ * `.call` in a currently-passing floor test are pinned here. New floor entries
+ * cannot re-create the hazard after this lands: with dispatch shipped, such a
+ * test enters the baseline as `fail` from the start (no regression event).
+ *
+ * REAL FIX per member: wire its native body (follow-up issues filed from
+ * #3544) and DELETE it from this list — dispatch then widens automatically.
+ * REMOVAL CONDITION for the whole mechanism: once the #3468 observability
+ * work lands and the standalone baseline no longer carries vacuous passes for
+ * these members, delete both lists and the mint-time registrations — the
+ * refusal throw is then a strict truth win the floor can absorb.
+ */
+export const FN_CALL_REFUSAL_EXCLUDED_PROTO_MEMBERS: ReadonlySet<string> = new Set([
+  "Date.toJSON",
+  "String.valueOf",
+  "Symbol.valueOf",
+  "WeakRef.deref",
+]);
+export const FN_CALL_REFUSAL_EXCLUDED_STATICS: ReadonlySet<string> = new Set([
+  "Array.of",
+  "Array.from",
+  "Promise.resolve",
+  "Promise.reject",
+]);
 
 /**
  * `__extern_method_call`'s non-object else arm: `.call`-on-callable dispatch
@@ -184,6 +242,16 @@ export function fillFnCallDispatch(ctx: CodegenContext): void {
   // String.prototype.slice stayed silent while Promise.resolve dispatched), so
   // it must not be the gate here; base arms are still appended for chains whose
   // subtypes are not individually registered.
+  //
+  // ── #3544 NARROW GATE — a documented, KNOWN-WRONG deferral, not a design ──
+  // The CURATED floor-load-bearing refusal stubs
+  // (`ctx.fnCallRefusalMetaTypeIdxs`, registered at mint time from
+  // `FN_CALL_REFUSAL_EXCLUDED_PROTO_MEMBERS` / `…_STATICS` above) are tested
+  // FIRST and answer 0 (NOT callable), so `m.call(x)` on those 8 members keeps
+  // today's silent undefined instead of newly reaching the refusal throw.
+  // Silent-undefined is WRONG; see the census, rationale and removal condition
+  // on the list constants at the top of this module. All other refusal stubs
+  // and every refusal GETTER (spec-correct receiver error, #3250) dispatch.
   {
     const armTypeIdxs = new Set<number>();
     for (const [typeIdx] of ctx.closureInfoByTypeIdx) {
@@ -191,6 +259,20 @@ export function fillFnCallDispatch(ctx: CodegenContext): void {
       if (def?.kind === "struct") armTypeIdxs.add(typeIdx);
     }
     const body: Instr[] = [{ op: "local.get", index: 0 }, { op: "any.convert_extern" }, { op: "local.set", index: 1 }];
+    // Exclusion arms FIRST: a refusal meta is a SUBTYPE of its (possibly
+    // signature-shared) base wrapper, so testing it before the inclusive arms
+    // is what makes the exclusion authoritative.
+    const refusalTypeIdxs = [...(ctx.fnCallRefusalMetaTypeIdxs ?? [])]
+      .filter((typeIdx) => ctx.mod.types[typeIdx]?.kind === "struct")
+      .sort((a, b) => a - b);
+    for (const typeIdx of refusalTypeIdxs) {
+      armTypeIdxs.delete(typeIdx);
+      body.push(
+        { op: "local.get", index: 1 },
+        { op: "ref.test", typeIdx },
+        { op: "if", blockType: { kind: "empty" }, then: [{ op: "i32.const", value: 0 }, { op: "return" }] },
+      );
+    }
     for (const typeIdx of [...armTypeIdxs].sort((a, b) => a - b)) {
       body.push(
         { op: "local.get", index: 1 },
