@@ -2,7 +2,7 @@
 id: 3550
 title: "perf: module-const closure calls pay a per-call unbox + guarded cast after #3534 (+77% rel / ~0.74ns abs per call in hot loops) — cache or dual-store the precise ref for const bindings"
 status: ready
-sprint: Backlog
+sprint: current
 created: 2026-07-23
 priority: low
 horizon: s

@@ -37,6 +37,41 @@ TypeScript-to-WebAssembly compiler using WasmGC.
   - **Front-end**: direct AST→Wasm (legacy, accumulated hacks) vs IR (`src/ir/`, typed representation). IR **replaces the hacks**; it does **not** compete with the backend choice. IR adopts AST node kinds step by step, only for parts that do not yet need to decide between linear and WasmGC lowering. IR-path failures currently demote to a warning channel (#2855 phases this fallback out).
   - Full discussion: [docs/architecture/codegen-axes.md](docs/architecture/codegen-axes.md). Per-AST-kind adoption status: [plan/log/ir-adoption.md](plan/log/ir-adoption.md).
 
+## Measurement discipline (MEASURE, NEVER EXTRAPOLATE)
+
+This rule caught four wrong hypotheses in a single day (2026-07-23) and stopped
+a "~1,200 tests" claim from reaching a PR body. It applies to every agent, every
+issue-sizing, and every PR claim.
+
+1. **Measure before building and again before claiming.** Never size work from a
+   cluster label, category table, or signature share — run the real files and
+   count actual flips. _A 29% signature share once projected ~1,190 flips;
+   measured: 2 of 198._
+2. **"Compiles" ≠ "passes."** Gate every win on measured **runtime PASS**.
+   Turning a compile error into a runtime trap is **%-neutral** — it moves the
+   failure, it does not move the score.
+3. **"Gates N tests" ≠ "flips N tests."** Defects are often layered; even a
+   _measured_ gate can yield zero flips because another layer sits behind it
+   (_311 → fix → 0 flips → second fix → 290_). Only a post-fix re-measure
+   settles it.
+4. **Error signatures lie about their cause.** The message is frequently
+   produced by code _reacting_ to the defect, not by the defect itself. Trace to
+   the emitting site before believing the subsystem named in the error.
+5. **The tech lead's hypotheses get measured like anyone else's.** The lead sees
+   aggregates — the altitude at which "29% of the sample" _feels_ like "29% of
+   the tests". Never defer to a lead hypothesis: prove or disprove it and report
+   which.
+6. **Always report denominators** ("19 of 49", not "19 flips"), and label
+   extrapolations as extrapolations.
+7. **Report the honest split.** Newly-scored tests that now FAIL matter as much
+   as those that pass — never bank only the good half.
+
+**Corollary:** where assertions don't actually run (vacuous passes), a correct
+fix can measure +14 real wins and −22 CI-visible regressions, because
+improvements inside vacuous-pass territory are invisible to the pass count.
+Correct work can score as pure regression — check before concluding a fix is
+bad.
+
 ## Project Structure
 
 - Codegen: `src/codegen/expressions.ts`, `src/codegen/index.ts`, `src/codegen/statements.ts`, `src/codegen/type-coercion.ts`, `src/codegen/peephole.ts`
@@ -310,7 +345,7 @@ The shepherd owns the queue end-to-end:
 
 - **Sweep** `gh pr list -R loopdive/js2wasm --state open` every loop.
 - **One-shot enqueue** every CLEAN, non-`hold`, non-draft PR not already in the queue, via the GraphQL `enqueuePullRequest` mutation with the **user PAT** (NOT `GITHUB_TOKEN`, which suppresses the `merge_group` event; NOT `gh pr merge --auto`, which silently no-ops on an already-green `CLEAN` PR). Verify the PR appears in the queue. **NEVER re-enqueue** — a single one-shot enqueue per PR; re-enqueue loops cancel in-flight `merge_group` runs (see `project_merge_queue_requeue_cancels_run`).
-- **Check every open PR's checks every sweep, not just enqueue candidates (#3121 gap).** A dev correctly goes quiet in CI-wait per its own protocol; if CI resolves (pass OR fail) while it's idle, nothing wakes it back up — a fire-and-forget background watcher inside a dev's own turn does not reliably survive that dev's session going idle. Don't treat "not CLEAN" as "not my problem": `BEHIND`/`BLOCKED` with no failing check is legitimately "wait for auto-refresh," but any PR with a `FAILURE`-conclusion required check is a real finding. If it's not your own PR, diagnose (fetch the job log, name the specific gate + file) and message the owning dev directly with the fix — don't fix it in their branch yourself, and don't just skip it either. This was caught manually by the tech lead on 2026-07-16 after #3114/#3115/#3118 sat failing, unnoticed, for a while.
+- **Check every open PR's checks every sweep, not just enqueue candidates (gap observed 2026-07-16; previously miscited as "#3121", which is an unrelated, done codegen issue).** A dev correctly goes quiet in CI-wait per its own protocol; if CI resolves (pass OR fail) while it's idle, nothing wakes it back up — a fire-and-forget background watcher inside a dev's own turn does not reliably survive that dev's session going idle. Don't treat "not CLEAN" as "not my problem": `BEHIND`/`BLOCKED` with no failing check is legitimately "wait for auto-refresh," but any PR with a `FAILURE`-conclusion required check is a real finding. If it's not your own PR, diagnose (fetch the job log, name the specific gate + file) and message the owning dev directly with the fix — don't fix it in their branch yourself, and don't just skip it either. This was caught manually by the tech lead on 2026-07-16 after #3114/#3115/#3118 sat failing, unnoticed, for a while.
 - **Monitor `merge_group` results** and handle parks/ejections per the auto-park rules below.
 - **Escalate real regressions** to the lead (regressions >10, single bucket >50, or a genuine merged-baseline regression behind a bot park-hold); ordinary drift/flake is the shepherd's to resolve, not an escalation.
 

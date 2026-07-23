@@ -20,27 +20,50 @@ Local validation happens AFTER merging main into your branch, but **full test262
    - Do **not** run local full `test262` as part of completion
 4. [ ] Record local test results in the issue file
 
+## Measurement discipline (see "Measurement discipline" in CLAUDE.md)
+
+5. [ ] Every claimed win is backed by a **MEASURED runtime PASS count with its
+       denominator** ("19 of 49") — not compilation success, not an
+       extrapolation from a cluster label or signature share
+6. [ ] Newly-scored failures are reported alongside newly-scored passes (the
+       honest split — never bank only the good half)
+7. [ ] Any extrapolated number is explicitly labelled as an extrapolation
+
 ## Finalize
 
-5. [ ] Issue file updated with implementation notes
-6. [ ] Issue status set to `in-review` in frontmatter
-7. [ ] Issue frontmatter records the PR number as `pr: <N>` so `scripts/poll-merged-pr-issues.mjs` can mark it done after merge
-8. [ ] File locks removed from `plan/method/file-locks.md`
-9. [ ] Branch pushed to `origin`
-10. [ ] PR opened against `main`
-11. [ ] PR is the canonical place for full validation — wait for GitHub Actions `test262` results there
+8. [ ] Issue file updated with implementation notes
+9. [ ] Issue status: **self-merge path (the common case) → set `status: done` +
+       `completed: <date>` directly in the implementation PR.** Do NOT set
+       `in-review` and plan a later flip — once the queue lands the PR there is
+       no observer to make that flip, which orphans the issue (see
+       #1602/#1603/#1606 and the "Issue status lifecycle" section of CLAUDE.md).
+       `in-review` is ONLY for the handoff/external case where the PR author is
+       NOT the merger.
+10. [ ] Issue frontmatter records the PR number as `pr: <N>`
+11. [ ] File locks removed from `plan/method/file-locks.md`
+12. [ ] Branch pushed to the **`fork`** remote (`git push fork <branch>` — NOT
+        `origin`, which is upstream; see the merge-protocol step 3 in CLAUDE.md)
+13. [ ] PR opened against upstream `main`
+        (`gh pr create -R loopdive/js2 --head ttraenkler:<branch>`)
+14. [ ] PR is the canonical place for full validation — CI validates there
 
-## Terminate after PR open
+## After PR open — background the watcher, pipeline the next slice
 
-12. [ ] Write agent-status file with `state: ci-wait, pr: N` so the dispatch loop sees you as in-flight
-13. [ ] **Terminate** — the monitor watches CI and auto-merges when green. You do not need to wait.
-    - If CI comes back red and needs a fix, the tech lead will respawn you with context from the issue file
-    - Do NOT poll ci-status yourself — the monitor owns that
+15. [ ] Write agent-status file with `state: pr-open, pr: N` so the dispatch
+        loop sees you as in-flight
+16. [ ] Background a CI watcher, then **claim your next task and keep working**
+        (do NOT idle, do NOT terminate mid-session waiting for the merge). When
+        CI is green and `/dev-self-merge` says MERGE, mark the task completed
+        and stand down — the server-side `auto-enqueue.yml` workflow enqueues
+        (#2786); you never touch the merge queue. The retired
+        `.claude/ci-status/pr-<N>.json` feed does not exist for current PRs —
+        use `gh pr checks <N>` / the checks API.
 
 ## What NOT to do
 
 - Do NOT open a PR before merging `origin/main` into your branch
-- Do NOT wait for CI after opening a PR — terminate immediately
+- Do NOT idle in-context waiting for CI — background the watcher and pipeline
+  the next slice (and do NOT enqueue; the server-side workflow owns that)
 - Do NOT use `git rebase` — use `git merge origin/main` instead
 - Do NOT resolve compiler source conflicts (`src/`) inline — create a `[CONFLICT]` priority task for a senior-developer (Opus)
 - Do NOT leave uncommitted changes on your branch
