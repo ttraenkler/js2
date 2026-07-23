@@ -57,6 +57,7 @@
  */
 import type { FieldDef, Instr, ValType, WasmFunction } from "../ir/types.js";
 import { undefinedExternInstrs } from "./any-helpers.js";
+import { collectClosureBaseWrapperTypeIdxs } from "./closure-classifier.js"; // (#3468 truth-harness)
 import type { CodegenContext } from "./context/types.js";
 import { definedFuncAt, mintDefinedFunc, pushDefinedFunc } from "./func-space.js";
 import { addFuncType } from "./registry/types.js";
@@ -235,20 +236,12 @@ export function fillClosurePropHelpers(ctx: CodegenContext): void {
   const getMiss = (): Instr[] => undefinedExternInstrs(ctx) ?? [{ op: "ref.null.extern" }];
 
   // ── __is_closure_prop_carrier(externref value) -> i32 ──
-  // Match only concrete CAPTURING closure structs: they are subtypes with
-  // capture fields beyond the wrapper's field-0 funcref. Do not test the shared
-  // root wrappers here — a root test would also accept every noncapturing
-  // top-level harness function and recreate the measured #3418 floor breach.
-  // Constant 0 when the module has no capturing closures.
+  // (#3468 TRUTH-HARNESS — local measurement only, never push) Un-scope the
+  // carrier set back to EVERY closure base wrapper so top-level noncapturing
+  // harness functions (assert et al.) carry own props and assertions actually
+  // run. This re-exposes the measured vacuous-pass cliff on purpose.
   {
-    const carrierTypeIdxs: number[] = [];
-    for (const [typeIdx, info] of ctx.closureInfoByTypeIdx) {
-      if (!info?.hasCaptures) continue;
-      const typeDef = ctx.mod.types[typeIdx];
-      if (typeDef?.kind === "struct") {
-        carrierTypeIdxs.push(typeIdx);
-      }
-    }
+    const carrierTypeIdxs: number[] = collectClosureBaseWrapperTypeIdxs(ctx);
     const body: Instr[] = [
       { op: "local.get", index: 0 },
       { op: "any.convert_extern" },

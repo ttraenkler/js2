@@ -1580,6 +1580,33 @@ export function collectDeclarations(ctx: CodegenContext, sourceFile: ts.SourceFi
           ctx.moduleInitStatements.push(stmt);
           continue;
         }
+        // (#3468 TRUTH-HARNESS — local measurement only, never push) Re-add
+        // the top-level `F.<name> = …` keep-arm 81b02624a removed, so the
+        // test262 assert-harness shape (`assert.sameValue = function(){…}`)
+        // lands in `__module_init` and the closure-own-property write arm
+        // stores it on the function value.
+        if (
+          ctx.standalone &&
+          ts.isPropertyAccessExpression(expr.left) &&
+          !ts.isPrivateIdentifier(expr.left.name) &&
+          !["name", "length", "call", "apply", "bind", "constructor", "caller", "arguments"].includes(
+            expr.left.name.text,
+          )
+        ) {
+          let sReceiver: ts.Expression = expr.left.expression;
+          while (
+            ts.isParenthesizedExpression(sReceiver) ||
+            ts.isAsExpression(sReceiver) ||
+            ts.isNonNullExpression(sReceiver) ||
+            ts.isTypeAssertionExpression(sReceiver)
+          ) {
+            sReceiver = sReceiver.expression;
+          }
+          if (ts.isIdentifier(sReceiver) && ctx.topLevelFunctionNames.has(sReceiver.text)) {
+            ctx.moduleInitStatements.push(stmt);
+            continue;
+          }
+        }
         // (#2671) `F.<prop> = …` — a STATIC property write on a top-level
         // FUNCTION DECLARATION (`Test262Error.thrower = function () {…}`, the
         // test262 harness-prelude shape every Promise capability test passes
