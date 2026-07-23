@@ -1695,13 +1695,14 @@ export function compileReceiverMethodCall(
       fctx.body.push({ op: "f64.ne" });
       fctx.body.push({ op: "i32.or" });
       {
+        // (#3533-sibling) Throw a real RangeError INSTANCE (not a bare string)
+        // so `assert.throws(RangeError, …)` / `e instanceof RangeError` passes —
+        // mirrors the Number.prototype.toString radix gate (#3175).
         const rangeErrMsg = "RangeError: toString() radix must be between 2 and 36";
-        addStringConstantGlobal(ctx, rangeErrMsg);
-        const tagIdx = ensureExnTag(ctx);
         fctx.body.push({
           op: "if",
           blockType: { kind: "empty" },
-          then: [...stringConstantExternrefInstrs(ctx, rangeErrMsg), { op: "throw", tagIdx }],
+          then: buildThrowJsErrorInstrs(ctx, "RangeError", rangeErrMsg, { flush: fctx }),
           else: [],
         });
       }
@@ -1878,9 +1879,9 @@ export function compileReceiverMethodCall(
 
       // RangeError gate: only when v is finite.
       fctx.body.push({ op: "local.get", index: isFiniteLocal });
+      // (#3533-sibling) Real RangeError INSTANCE (not a bare string) so
+      // `assert.throws(RangeError, …)` passes — mirrors the toFixed gate (#3175).
       const rangeErrMsg = "RangeError: toPrecision() argument must be between 1 and 100";
-      addStringConstantGlobal(ctx, rangeErrMsg);
-      const tagIdx = ensureExnTag(ctx);
       const rangeCheckBody: Instr[] = [];
       // Build: if (p < 1 || p > 100 || p != p) throw RangeError
       rangeCheckBody.push({ op: "local.get", index: precLocal });
@@ -1897,7 +1898,7 @@ export function compileReceiverMethodCall(
       rangeCheckBody.push({
         op: "if",
         blockType: { kind: "empty" },
-        then: [...stringConstantExternrefInstrs(ctx, rangeErrMsg), { op: "throw", tagIdx }],
+        then: buildThrowJsErrorInstrs(ctx, "RangeError", rangeErrMsg, { flush: fctx }),
         else: [],
       });
       fctx.body.push({
@@ -1968,9 +1969,9 @@ export function compileReceiverMethodCall(
       fctx.body.push({ op: "local.set", index: isFiniteLocal });
 
       // Range check gate: only when v is finite.
+      // (#3533-sibling) Real RangeError INSTANCE (not a bare string) so
+      // `assert.throws(RangeError, …)` passes — mirrors the toFixed gate (#3175).
       const rangeErrMsg = "RangeError: toExponential() argument must be between 0 and 100";
-      addStringConstantGlobal(ctx, rangeErrMsg);
-      const tagIdx = ensureExnTag(ctx);
       const rangeCheckBody: Instr[] = [];
       rangeCheckBody.push({ op: "local.get", index: digitsLocal });
       rangeCheckBody.push({ op: "f64.const", value: 0 });
@@ -1982,7 +1983,7 @@ export function compileReceiverMethodCall(
       rangeCheckBody.push({
         op: "if",
         blockType: { kind: "empty" },
-        then: [...stringConstantExternrefInstrs(ctx, rangeErrMsg), { op: "throw", tagIdx }],
+        then: buildThrowJsErrorInstrs(ctx, "RangeError", rangeErrMsg, { flush: fctx }),
         else: [],
       });
       fctx.body.push({ op: "local.get", index: isFiniteLocal });
