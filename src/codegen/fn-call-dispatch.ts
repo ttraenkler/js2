@@ -22,11 +22,15 @@
  * A leading arm in `__extern_method_call`'s non-`$Object` else chain
  * (COMPOSED around the #3537/#3468 arms — neither module is edited):
  * `if (name == "call" && callable(recv)) → invoke(recv, argvec)` where invoke
- * splits argvec into `thisArg = argvec[0]` + `rest = argvec[1..]` and
- * dispatches through `__apply_closure` (the #1888 arity bridge). Bonus: this
- * also fixes `f.call(x)` on ordinary capturing closures through the dynamic
- * path (previously the prop-carrier arm consulted the expando bag and
- * answered undefined).
+ * discriminates the receiver's calling convention (see the `__fn_call_invoke`
+ * fill below): SPLIT closures get `thisArg = argvec[0]` + `rest = argvec[1..]`
+ * through `__apply_closure` (the #1888 arity bridge); FOLDED
+ * this-as-first-param proto-method closures get the ORIGINAL argvec padded to
+ * their declared user-param count (the runtime mirror of the #2193 PR-B
+ * static `m.call(t, a)` → `m(t, a)` rewrite). Bonus: this also fixes
+ * `f.call(x)` on ordinary capturing closures through the dynamic path
+ * (previously the prop-carrier arm consulted the expando bag and answered
+ * undefined).
  *
  * `.apply` is a follow-on slice (array-argument spreading).
  *
@@ -200,8 +204,38 @@ export function fillFnCallDispatch(ctx: CodegenContext): void {
   }
 
   // ── __fn_call_invoke(externref recv, externref args) -> externref ──
-  // thisArg = args[0] (undefined when absent); rest = args[1..] re-pushed into
-  // a fresh $ObjVec; dispatch __apply_closure(recv, thisArg, rest).
+  //
+  // TWO closure calling conventions coexist (the #3544 key discovery), so the
+  // invoke must discriminate the receiver before shaping the arg vector:
+  //
+  //  - SPLIT — ordinary user closures and the static-shape builtin closures:
+  //    lifted sig `(self, ...args)`; `this` flows via the `__current_this`
+  //    global. `.call(t, a…)` splits the argvec: thisArg = argvec[0],
+  //    rest = argvec[1..] → `__apply_closure(m, t, rest)`.
+  //  - FOLDED — builtin proto-method closures (`ensureStandaloneNativeMethod-
+  //    Closure`, native-proto.ts) and the @@species getters: lifted sig
+  //    `(self, THIS-AS-PARAM, ...args)` — the receiver is user param 1. Same
+  //    contract as the STATIC reflective route (`emitReflectiveNativeProto-
+  //    ClosureCall` / the #2193 PR-B `m.call(t, a)` → `m(t, a)` rewrite in
+  //    calls.ts): pass the ORIGINAL argvec `[t, a…]` (this folded as the first
+  //    user arg), PADDED with undefined up to the closure's declared user-param
+  //    count. The pad matters because `__apply_closure` dispatches on the
+  //    VECTOR LENGTH: an under-length vec routes to a smaller
+  //    `__call_fn_method_N` that carries no arm for this closure's func type —
+  //    which was exactly the measured silent-undefined
+  //    (`String.prototype.slice.call(undefined, 0)` → argvec len 2 →
+  //    `__call_fn_method_2`, but the slice closure has 3 user params).
+  //
+  // Discrimination set: `nativeProtoReceiverClosureStructTypes` (#2193 PR-B —
+  // the definitive "first user param IS the receiver" registry) INTERSECTED
+  // with `builtinFnMetaByTypeIdx` (meta subtypes only). The registry also
+  // holds the base signature-wrapper structs (native-proto.ts adds both), but
+  // base wrappers are SHARED with ordinary user closures of the same signature
+  // (#1712: capture structs subtype their signature wrapper), so a `ref.test`
+  // on a base wrapper would mis-fold a user closure's `f.call(x)`. Meta-only is
+  // still COMPLETE: every proto-method VALUE is minted as its unique
+  // per-(brand, member) meta subtype (`ensureStandaloneNativeMethodClosure`
+  // returns the meta type; the #2963 singleton materializer allocates it).
   {
     const applyClosureIdx = ctx.funcMap.get("__apply_closure");
     const objvecNewIdx = ctx.funcMap.get("__objvec_new");
@@ -214,14 +248,33 @@ export function fillFnCallDispatch(ctx: CodegenContext): void {
       objTypes !== undefined
     ) {
       const { objVecTypeIdx, objVecArrTypeIdx } = objTypes;
-      // params: 0=recv 1=args ; locals: 2=any 3=vec 4=len 5=i 6=thisArg 7=rest
+
+      // Folded-convention (this-as-first-param) meta types, with each closure's
+      // declared user-param count (this + arg slots) as the pad target.
+      const foldedMetas: { typeIdx: number; userParamCount: number }[] = [];
+      if (ctx.nativeProtoReceiverClosureStructTypes) {
+        for (const typeIdx of ctx.nativeProtoReceiverClosureStructTypes) {
+          if (!ctx.builtinFnMetaByTypeIdx?.has(typeIdx)) continue; // meta subtypes only — base wrappers are signature-shared
+          const info = ctx.closureInfoByTypeIdx.get(typeIdx);
+          if (!info) continue;
+          const def = ctx.mod.types[typeIdx];
+          if (def?.kind !== "struct") continue;
+          foldedMetas.push({ typeIdx, userParamCount: info.paramTypes.length });
+        }
+        foldedMetas.sort((a, b) => a.typeIdx - b.typeIdx);
+      }
+
+      // params: 0=recv 1=args ;
+      // locals: 2=any 3=vec 4=len 5=i 6=thisArg 7=out 8=recvAny 9=fold
       const locals: { name: string; type: ValType }[] = [
         { name: "__any", type: { kind: "anyref" } },
         { name: "__vec", type: { kind: "ref_null", typeIdx: objVecTypeIdx } },
         { name: "__len", type: { kind: "i32" } },
         { name: "__i", type: { kind: "i32" } },
         { name: "__thisArg", type: { kind: "externref" } },
-        { name: "__rest", type: { kind: "externref" } },
+        { name: "__out", type: { kind: "externref" } },
+        { name: "__recvany", type: { kind: "anyref" } },
+        { name: "__fold", type: { kind: "i32" } },
       ];
       const body: Instr[] = [
         { op: "local.get", index: 1 },
@@ -250,7 +303,28 @@ export function fillFnCallDispatch(ctx: CodegenContext): void {
         { op: "ref.as_non_null" },
         { op: "struct.get", typeIdx: objVecTypeIdx, fieldIdx: 0 },
         { op: "local.set", index: 4 },
-        // thisArg = len > 0 ? vec.data[0] : undefined
+        // fold = -1 (split), or the matched folded closure's user-param count.
+        // Locals default to 0, and 0 is a valid pad target — set -1 explicitly.
+        { op: "i32.const", value: -1 },
+        { op: "local.set", index: 9 },
+        { op: "local.get", index: 0 },
+        { op: "any.convert_extern" },
+        { op: "local.set", index: 8 },
+        ...foldedMetas.flatMap((meta): Instr[] => [
+          { op: "local.get", index: 8 },
+          { op: "ref.test", typeIdx: meta.typeIdx },
+          {
+            op: "if",
+            blockType: { kind: "empty" },
+            then: [
+              { op: "i32.const", value: meta.userParamCount },
+              { op: "local.set", index: 9 },
+            ],
+          },
+        ]),
+        // thisArg = len > 0 ? vec.data[0] : undefined (both conventions:
+        // installed into __current_this by __call_fn_method_N — the split
+        // closures read it there; folded bodies read their param 1 instead).
         { op: "local.get", index: 4 },
         { op: "i32.const", value: 0 },
         { op: "i32.gt_s" },
@@ -267,10 +341,20 @@ export function fillFnCallDispatch(ctx: CodegenContext): void {
           else: [...undefExtern()],
         },
         { op: "local.set", index: 6 },
-        // rest = __objvec_new(); for (i = 1; i < len; i++) push(rest, data[i])
+        // out = __objvec_new(); i = folded ? 0 : 1;
+        // copy loop: while (i < len) push(out, data[i++])
+        //   → folded keeps the this-carrying original argvec, split drops [0].
         { op: "call", funcIdx: objvecNewIdx },
         { op: "local.set", index: 7 },
-        { op: "i32.const", value: 1 },
+        { op: "local.get", index: 9 },
+        { op: "i32.const", value: 0 },
+        { op: "i32.ge_s" },
+        {
+          op: "if",
+          blockType: { kind: "val", type: { kind: "i32" } },
+          then: [{ op: "i32.const", value: 0 }],
+          else: [{ op: "i32.const", value: 1 }],
+        },
         { op: "local.set", index: 5 },
         {
           op: "block",
@@ -300,7 +384,33 @@ export function fillFnCallDispatch(ctx: CodegenContext): void {
             },
           ],
         },
-        // __apply_closure(recv, thisArg, rest)
+        // pad loop (folded only): while (i < fold) push(out, undefined) —
+        // no-op on the split path (i ≥ 0 > fold = -1 exits immediately).
+        {
+          op: "block",
+          blockType: { kind: "empty" },
+          body: [
+            {
+              op: "loop",
+              blockType: { kind: "empty" },
+              body: [
+                { op: "local.get", index: 5 },
+                { op: "local.get", index: 9 },
+                { op: "i32.ge_s" },
+                { op: "br_if", depth: 1 },
+                { op: "local.get", index: 7 },
+                ...undefExtern(),
+                { op: "call", funcIdx: objvecPushIdx },
+                { op: "local.get", index: 5 },
+                { op: "i32.const", value: 1 },
+                { op: "i32.add" },
+                { op: "local.set", index: 5 },
+                { op: "br", depth: 0 },
+              ],
+            },
+          ],
+        },
+        // __apply_closure(recv, thisArg, out)
         { op: "local.get", index: 0 },
         { op: "local.get", index: 6 },
         { op: "local.get", index: 7 },
