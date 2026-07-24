@@ -11,15 +11,19 @@ inferred.
 | -------------------------------------------------------------- | ---------------------------------------------------------- |
 | RC1 fix (top-level `throw`) + test + issue                     | PR **#3583**, branch `issue-3585-toplevel-throw`           |
 | RC2 fix (arity widening) + test — **READY BRANCH, not merged** | branch `issue-3585-apply-closure-arity` (pushed to `fork`) |
-| Full measurement write-up                                      | the `3585-*` issue file on both branches                   |
+| Full measurement write-up                                      | the `3592-*` issue file on both branches                   |
 
-> **Issue-id note:** the id `3585` **collided** — another lane landed
+> **The issue is #3592, not #3585 — the branch NAMES still say 3585.**
+> `claim-issue.mjs --allocate` reserved 3585, but another lane landed
 > `plan/issues/3585-standalone-mapget-call-result-eq-false.md` on `main` while
-> this work was in flight, so the `quality` → "Issue-ID fresh-claim gate (#2531)"
-> job failed on #3583. Per `reference_cross_session_issue_id_collision_renumber_loser`
-> the loser renumbers: re-allocate and `git mv` the file on **both** branches,
-> updating the frontmatter `id:` and the `#3585` references in the source
-> comments and tests. Nothing else about either fix changes.
+> this work was in flight, so `quality` → "Issue-ID fresh-claim gate (#2531)"
+> rejected PR #3583. Per
+> `reference_cross_session_issue_id_collision_renumber_loser` the loser
+> renumbers: both branches now carry `plan/issues/3592-*.md`, `id: 3592`, and
+> `#3592` in the source comments and test filenames. The branch names were left
+> alone (renaming would have meant re-opening the PR). No behavioural change —
+> the collision is only reachable because `--allocate` cannot see an id that
+> lands on `main` after it scans.
 
 ## The method that produced every finding: the A/B wrong-expectation control
 
