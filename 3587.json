@@ -1,8 +1,8 @@
 {
   "id": "3587",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-07-24T22:12:32Z",
-  "updated_at": "2026-07-24T22:12:32Z"
+  "assignee": "ttraenkler/fable-3587",
+  "status": "in-progress",
+  "branch": "issue-3587-async-declined-rejections",
+  "claimed_at": "2026-07-24T22:28:00Z",
+  "updated_at": "2026-07-24T22:28:00Z"
 }
