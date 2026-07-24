@@ -125,3 +125,88 @@ once these arms are small, named helpers — decompose first, then dedup.
   tsc 0, biome + check:godfiles clean. Epic remains open for the arithmetic
   (`__any_to_f64`/`__any_add`/`__any_div`/`__any_mod`/`__any_neg`) and
   `__any_typeof` tail families.
+
+## Tail Slice (arithmetic + `__any_typeof`) — Implementation Map (handoff for a fresh dev)
+
+Committed on branch `issue-3282-arith-typeof` (stacked on Slice B / PR #3543). This
+is the next slice after the equality family: extract the remaining
+`ensureAnyHelpers` helper families into a sibling module (proposed
+`src/codegen/any-arith-helpers.ts`), same byte-identity-guarded pattern as Slices
+A/B (`registerAny…Helpers(addHelper, …deps)`; `prove-emit-identity check` must
+print **IDENTICAL 60/60** across gc/standalone/wasi/linear after every step).
+
+**Line numbers below are on `any-helpers.ts` AS OF PR #3543's tip** (i.e. what main
+looks like once #3543 lands). RE-VERIFY against current `main` before cutting — other
+PRs shift them.
+
+### Critical: the tail is NOT contiguous — it straddles the eq registrar call
+
+Registration ORDER (must be preserved verbatim for funcIdx/byte stability):
+`__any_to_f64 → __any_add → __any_sub → __any_mul → __any_div → __any_mod →
+[registerAnyEqHelpers call] → __any_neg → __any_typeof`.
+
+So there are **4 extraction points**, each a registrar called AT ITS CURRENT
+POSITION (do not lump them — the eq registrar sits between `__any_mod` and
+`__any_neg`):
+
+1. **`registerAnyToF64Helper`** — `__any_to_f64` (addHelper ~1167–1309), called at
+   ~1167 (BEFORE the `toF64Idx`/`boxI32Idx`/`boxF64Idx` consts at 1311–1313, which
+   read it from `funcMap`). **CLEAN.** Deps to thread: `ctx` (uses
+   `ctx.nativeBoxNumberTypeIdx` / `ctx.nativeBoxBooleanTypeIdx`), `addHelper`,
+   `anyRefNull`, `anyTypeIdx`. No closures.
+
+2. **`registerAnyArithmeticHelpers`** — `__any_add` (~1578–1615), the
+   `addNumericBinaryHelper` generator (~1618–1667) + its two calls
+   `__any_sub`/`__any_mul` (~1669–1670), `__any_div` (~1673–1687), `__any_mod`
+   (~1688–~1757), called at ~1578. **MOST ENTANGLED (the delicate part).**
+   - `__any_add` (1578) references closures/values defined in the 1340–1577 region:
+     `concatArm` (an `Instr[]` at ~1465, itself a `anyAddCanConcat ? … : …`
+     conditional capturing `opToAnyString` @1398 + `buildNumericArm` @1433),
+     `stringyOperand` (@1509), `buildNumericArm` (@1433). `__any_div`/`__any_mod`
+     also pull `tag5ToNumber` (@1340) and `tag5ValueEqThen` (@1052) — the SAME two
+     closures Slice B already threads into the eq module.
+   - Two ways to handle these closures, both byte-identical: (a) **thread the
+     finished closures/values as params** (matches Slice B's `tag5ToNumber`/
+     `tag5ValueEqThen` threading — `concatArm` is a value, thread it directly), or
+     (b) **move the `__any_add`-specific closures** (`opToAnyString`,
+     `buildNumericArm`, `concatArm`, `stringyOperand`) into the new module too —
+     but first check what THEY capture (`anyAddCanConcat` flag + consts). Threading
+     (a) is lower-risk. Also thread: `anyRefNull`, `anyRef`, `anyTypeIdx`,
+     `toF64Idx`, `boxI32Idx`, `boxF64Idx`, `strToNumIdx`. ~10–14 params total.
+
+3. **`registerAnyNegHelper`** — `__any_neg` (~1758–~1795), called at ~1758 (AFTER
+   the eq registrar). **CLEAN.** Deps: `addHelper`, `anyRefNull`, `anyRef`,
+   `anyTypeIdx`, `boxI32Idx`, `boxF64Idx`.
+
+4. **`registerAnyTypeofHelper`** — `__any_typeof` (~1813), called at ~1790.
+   **CONDITIONAL** — the whole thing lives inside
+   `if (ctx.nativeStrings && ctx.nativeStrTypeIdx >= 0) { … }` (guard @1790, block
+   ~1790–1911) and contains a nested `nativeStrConstInstrs` closure. Move the guard
+   + nested closure VERBATIM (like Slice B moved the `#2175` standalone/wasi IIFE).
+   Deps: `ctx`, `addHelper`, native-string type idxs (`ctx.nativeStrTypeIdx`,
+   `ctx.nativeStrDataTypeIdx`).
+
+### Gate interactions to expect (learned on Slice B)
+
+- **coercion-sites**: `any-helpers.ts` is in the gate's SANCTIONED set. Moving VOCAB
+  tokens OUT of it into the non-sanctioned new module reads as net growth even for a
+  net-zero relocation (the sanctioned-source decrease is invisible). `__any_to_f64`
+  IS in the VOCAB list → add `coercion-sites-allow: - src/codegen/any-arith-helpers.ts`
+  to this issue's frontmatter (as Slice B did for `any-eq-helpers.ts`). Verify the
+  true net is zero via the probe pattern before allowancing.
+- **check:func-budget (#3400, 300-LOC/function)**: DON'T let any single registrar
+  exceed 300 LOC — split behind a thin exported wrapper (as Slice B split
+  `registerAnyEqHelpers` into loose-eq + strict-eq/relational, both <300). Prefer the
+  split over a `func-budget-allow`; it serves the decomposition goal.
+- **prettier/format:check** uses prettier (not biome) — run `pnpm run format:check`.
+- Run the FULL `quality` set locally before pushing (lint, format:check, typecheck,
+  check:{ir-fallbacks,ir-only,dead-exports,oracle-ratchet,coercion-sites,loc-budget,
+  any-box-sites,func-budget,godfiles,pushraw,codegen-fallbacks,stack-balance,
+  harness-compile-budget}). Slice B ate a CI round-trip by only running biome first.
+
+### Proof protocol
+
+Golden baseline is byte-identical to `origin/main` (Slice B proved #3543 IDENTICAL).
+Capture a fresh golden baseline from the branch base, extract, then
+`npx tsx scripts/prove-emit-identity.mjs check` → must be IDENTICAL 60/60. This slice
+is a PURE refactor — zero conformance delta.
