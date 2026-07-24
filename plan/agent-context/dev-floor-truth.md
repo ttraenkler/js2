@@ -2,8 +2,16 @@
 
 Senior-dev session context. Written for whoever picks up **task #10 (land the
 `__apply_closure` arity widening)** and the **`verifyProperty` root-cause** task.
-Everything below is MEASURED on `origin/main` @ `7652f033` / `b12141da`, not
-inferred.
+Everything below is MEASURED, not inferred.
+
+> **Measurement base — the RC2 numbers are PRE-#2984.** RC1's A/B ran on
+> `bb5b414a`, RC2's on `7652f033`; `main` advanced to `b12141da` mid-session,
+> which brought in `src/codegen/builtin-ctor-own-props.ts` (#2984 ctor-carrier
+> own-props). That is the **same builtin-ctor/`$Object` substrate the
+> closure-own-property path RC2 dispatches through**, so expect the 15/100 figure
+> to move on a re-measure — reconcile that as base drift, not as a contradiction.
+> Task #10 re-measures full-corpus anyway. RC1 is unaffected in substance (an
+> exhaustive census in an unrelated area, and CI is green on the merged state).
 
 ## Deliverables produced
 
@@ -77,6 +85,12 @@ Gainers (both lanes): `language/module-code/eval-self-abrupt.js`,
 `language/line-terminators/comment-single-{cr,lf,ls,ps}.js` — all `negative:`
 tests that scored FAIL _because_ the throw never happened.
 
+Park pre-check: the one new **standalone** signature (`eval-rqstd-abrupt.js`)
+routes to an existing `STANDALONE_ROOT_CAUSE_BUCKETS` entry, so #3439's hard-0
+gate is clear. The two new **host** signatures need no equivalent check —
+`--max-unclassified-root-causes` is wired only to the standalone root-cause map
+and there is no non-standalone bucket set with an unclassified gate.
+
 ## RC2 — under-applied calls never happen (task #10, BLOCKED)
 
 ### Mechanism
@@ -130,6 +144,28 @@ Signature routing of the 15:
 | `uncaught Wasm-GC exception (non-stringifiable payload)`              |  11 | already classified      |
 | `Test262:AsyncTestFailure:Test262Error: …SameValue…`                  |   3 | needs a bucket          |
 | `RuntimeError: illegal cast … ← __call_fn_method_3 ← __apply_closure` |   1 | **BLOCKER — see below** |
+
+The A/B rows themselves lived in `.tmp/` and are gone with the worktree, so the
+**exact 15 flipped files** are listed here (the seed + N above reproduce them,
+but the list saves a re-run just to find the blocker repro):
+
+```
+wasmgc-payload  language/statements/class/dstr/meth-obj-ptrn-prop-obj-init.js
+wasmgc-payload  language/statements/class/dstr/meth-ary-ptrn-elem-id-iter-val-err.js
+wasmgc-payload  language/statements/class/dstr/gen-meth-obj-ptrn-prop-id-get-value-err.js
+wasmgc-payload  language/statements/class/elements/derived-cls-indirect-eval-contains-superproperty-1.js
+wasmgc-payload  language/statements/for-of/dstr/var-obj-ptrn-id-get-value-err.js
+wasmgc-payload  language/expressions/template-literal/tv-hex-escape-sequence.js
+wasmgc-payload  language/expressions/array/spread-err-sngl-err-itr-get-get.js
+wasmgc-payload  built-ins/TypedArrayConstructors/from/BigInt/source-value-is-symbol-throws.js
+wasmgc-payload  built-ins/Iterator/prototype/some/iterator-already-exhausted.js
+wasmgc-payload  built-ins/Set/set-undefined-newtarget.js
+wasmgc-payload  built-ins/Object/assign/strings-and-symbol-order.js
+async-T262Err   language/statements/for-await-of/async-gen-dstr-let-async-ary-ptrn-rest-obj-prop-id.js
+async-T262Err   language/statements/for-await-of/async-func-decl-dstr-array-rest-nested-obj.js
+async-T262Err   language/expressions/async-generator/dstr/dflt-ary-ptrn-rest-obj-prop-id.js
+ILLEGAL-CAST    built-ins/TypedArrayConstructors/ctors-bigint/buffer-arg/byteoffset-is-negative-throws-sab.js   ← BLOCKER REPRO
+```
 
 ### THE BLOCKER — mechanism, precisely
 
