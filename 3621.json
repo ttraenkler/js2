@@ -1,8 +1,9 @@
 {
   "id": "3621",
   "assignee": "ttraenkler/opus-3621",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-3621-representation-assertion-audit",
   "claimed_at": "2026-07-25T13:14:39Z",
-  "updated_at": "2026-07-25T13:14:39Z"
+  "updated_at": "2026-07-25T13:38:08Z",
+  "released_at": "2026-07-25T13:38:08Z"
 }
