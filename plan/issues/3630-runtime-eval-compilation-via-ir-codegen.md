@@ -8,8 +8,8 @@ horizon: xl
 feasibility: hard
 area: codegen, runtime
 goal: es5-complete
-related: [1006, 1054, 1066, 1073, 1102, 2927, 2928]
-blocked-by: [1102, 1066]
+related: [1006, 1054, 1066, 1073, 1102, 2927, 2928, 3631, 3632, 3633]
+blocked-by: [1066]
 ---
 
 # #3630 — runtime eval compilation via acorn + IR→codegen
@@ -20,16 +20,31 @@ capture the design, not to schedule it.
 
 ## Phase ordering (stakeholder-set, 2026-07-25)
 
-1. **Static / ahead-of-time eval compilation — #1102.** Eval strings that are
-   compile-time constants are compiled at build time. No runtime compiler, no
-   linking, no scope marshalling. **Likely covers the majority of the 512
-   eval-dependent test262 failures** — see the measurement below.
+1. **Static / ahead-of-time eval compilation — #1102: already `done`** (landed
+   2026-07-16, PR #3113). Eval strings that are compile-time constants are
+   compiled at build time, by `tryStaticEvalInline` in
+   `src/codegen/expressions/eval-inline.ts`. No runtime compiler, no linking,
+   no scope marshalling. This phase is **not pending** — it shipped, and the
+   `blocked-by` entry for #1102 has been removed accordingly.
+
+   Its measured reach was established by the #3631 partition (2026-07-25,
+   baselines fetched 18:21). Of the 484 not-passing ES5 eval-dependent tests in
+   the host lane, **~475 already carry a constant eval argument that the folder
+   reaches**. So the AOT phase is close to saturated on the constant surface,
+   and the earlier expectation that it "likely covers the majority of the 512
+   failures" did not hold in the way it was meant: the folder _reaches_ them and
+   then declines 380 of them on purpose (the `funcDeclNeedsDynamicEvalPath`
+   AnnexB B.3.3 guard), routing to the dynamic host path. Those 380 are
+   #2200/#2552's work, not eval's. The residual eval-shaped defects are #3631
+   (completion value), #3632 (Script early errors) and #3633 (module bindings
+   invisible to `__extern_eval`).
+
 2. **Dynamic eval via the interpreter — #1066, #2927/#2928.** An interpreter
    over the acorn AST. No codegen, no module instantiation, no host linking,
    and no marshalling of scope across a module boundary — it runs in-process
    and reads the reified scope object directly.
 3. **THIS ISSUE — compile dynamic eval.** Only after (1) and (2). Its only
-   advantage over (2) is *execution speed* of eval'd code, which is irrelevant
+   advantage over (2) is _execution speed_ of eval'd code, which is irrelevant
    for conformance. Do not start it for conformance reasons alone.
 
 ## The idea
@@ -43,16 +58,16 @@ eval string -> acorn (already being dogfooded, #2927) -> AST
             -> codegen -> wasm bytes -> host instantiate -> funcref
 ```
 
-**Why the checker can be dropped:** the type oracle is an *optimiser*, not a
+**Why the checker can be dropped:** the type oracle is an _optimiser_, not a
 correctness requirement. Eval'd code can be compiled fully dynamic (everything
 boxed / `any`); the oracle exists to avoid that path when it can prove better.
 Slower but correct is free for conformance.
 
-**Why the TypeScript parser can be dropped:** eval strings are *JavaScript*, not
+**Why the TypeScript parser can be dropped:** eval strings are _JavaScript_, not
 TypeScript. No annotations to parse. acorn is the right parser and is already
 being compiled to Wasm.
 
-So the runtime payload collapses from *TS parser + checker + IR + codegen* to
+So the runtime payload collapses from _TS parser + checker + IR + codegen_ to
 **acorn + IR builder + codegen**.
 
 ## Two hard constraints
@@ -73,7 +88,7 @@ caller's scope as compiled today. Any function containing a **direct** `eval`
 must have its bindings spilled into a heap-allocated environment record instead
 of Wasm locals — the same deoptimisation production JS engines apply. This also
 solves write-back: sloppy-mode direct eval can introduce `var`/function bindings
-into the *caller's* variable environment, which is impossible against Wasm
+into the _caller's_ variable environment, which is impossible against Wasm
 locals and trivial against a reified environment object.
 
 Cost falls on the **caller**, not the eval: a function containing direct eval
@@ -96,19 +111,47 @@ If the IR is defined as a **stable serialised form**, the same representation
 serves both the ahead-of-time case (#1102) and the runtime case — one format,
 both paths.
 
-## MEASURE FIRST — this is cheap and it may retire the whole issue
+## MEASURED (2026-07-25, #3631) — and it very nearly retires this issue
 
-Partition the **512 eval-dependent ES5 failures** (measured 2026-07-25, #3626;
-826 eval-dependent tests total) three ways:
+The partition this section demanded now exists. Population: ES5-classified
+(post-#3626 classifier), eval-dependent under the exactly-specified rule
+`*/eval-code/` ∪ `built-ins/eval` ∪ source matches `/eval\(/` — **775 tests, 484
+not passing** in the host lane. (The #3626 census's 826/512 used a broader
+eval-detection regex; `/\beval\b/` gives 913/552. ES5 totals reconcile exactly.)
 
-1. **compile-time-constant strings** -> phase 1 (#1102) alone
-2. **indirect eval** -> global scope only, no reification
-3. **direct eval with a runtime string** -> the only case needing this issue
+Dominant eval shape of the 484 failures:
 
-If (1) and (2) dominate — the current expectation, but explicitly UNMEASURED —
-most of the ES5 ceiling lifts without this issue ever being started. **Do not
-size or schedule this work before that partition exists.** Guessing at cluster
-sizes has been wrong repeatedly on this project.
+| shape                                 | tests | needs this issue? |
+| ------------------------------------- | ----- | ----------------- |
+| direct eval, constant string          | 341   | **no** — phase 1  |
+| indirect eval, constant string        | 124   | **no** — phase 1  |
+| `Function(...)` ctor, constant string | 5     | **no** — phase 1  |
+| indirect eval, runtime string         | 11    | no — global scope |
+| **direct eval, runtime string**       | **3** | **yes**           |
+
+**Direct eval with a runtime string is 3 of 484 ES5 failures — 0.6 %.** The
+expectation that (1)+(2) dominate is confirmed, and far more strongly than
+anticipated. This issue's conformance value in the ES5 bucket is ~3 tests.
+Keep it `backlog`/`low`; it exists to capture the design, exactly as filed.
+
+What the 484 actually are:
+
+| bucket                                                          | tests   | owner                                       |
+| --------------------------------------------------------------- | ------- | ------------------------------------------- |
+| `annexB/language/eval-code/*` — AnnexB B.3.3 in an eval wrapper | **380** | #2200 / #2552 (+ #3633 unmasks 184 of them) |
+| eval Script early errors not enforced by the splice             | 16      | #3632                                       |
+| eval completion value                                           | 7       | #3631                                       |
+| `with` inside eval                                              | ~9      | #671                                        |
+| compound-assignment evaluation order                            | ~11     | #2666                                       |
+| missing `String.prototype` generic receivers                    | ~2      | #2742                                       |
+| remainder (diffuse: `this` in eval, codegen crashes, …)         | ~59     | various                                     |
+
+Lane caveat, and it is the one thing that could still justify runtime-eval work:
+in the **standalone** lane a folder bail is fatal rather than harmless. 149
+eval-dependent ES5 tests pass in host and fail standalone, 110 of them with
+literally `dynamic eval is not supported in standalone mode`. That cost belongs
+to **#1066** (the remaining `blocked-by`), not to this issue — the interpreter
+is the cheaper answer there, as the phase ordering above already says.
 
 ## Context
 
