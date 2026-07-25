@@ -108,3 +108,57 @@ path heuristic match. A first attempt here that omitted the `esid` and
 no-frontmatter rules reported **1,545** failures instead of 43 — a 20× error.
 **Validate any re-implementation against the published 273/43 before trusting
 it.**
+
+## SCOPE CORRECTION 2026-07-25 — "≤ES3" is a METADATA BUCKET, not the ES3 language
+
+**Raised by the project lead: "does ES3 not require dynamic eval?" It does — and
+the bucket does not contain it.** This correction is load-bearing; do not read
+"close ≤ES3" as "ES3 is implemented".
+
+`classifyEdition` assigns edition **0** only as a _fall-through_: no `es5id`, no
+`es6id`, no `features:`, **no `esid:`**, frontmatter present, no path-heuristic
+match. Modern test262 files for old features carry `esid:`, so they land in
+**ES2015** — and `es5id:` lands them in **ES5** — regardless of which edition
+actually specified the feature.
+
+Consequence: **core ES3 features are scored in other buckets.** Measured on the
+same force-fetched baseline, host lane (all four are **run and scored — `skip:
+0`**, so this is real behaviour, not a skip filter):
+
+| ES3 feature                                      | classified as    |     total |    pass |                rate |
+| ------------------------------------------------ | ---------------- | --------: | ------: | ------------------: |
+| `eval` (`language/eval-code/**`)                 | ES2015 (`esid:`) |       347 |     135 |          **38.9 %** |
+| `with` (`language/statements/with/**`)           | ES5 (`es5id:`)   |       181 |      37 | **20.4 %** (+12 CE) |
+| `Function` constructor (`built-ins/Function/**`) | ES5/ES2015       |       509 |     215 |          **42.2 %** |
+| global `eval` (`built-ins/eval/**`)              | —                |        10 |       2 |          **20.0 %** |
+| **total**                                        |                  | **1,047** | **389** |           **~37 %** |
+
+`eval`, `with` and the `Function` constructor are all **ES3 §15.1.2.1 / §12.10 /
+§15.3** — first-class ES3 language, and all three are _dynamic code evaluation_,
+the hardest thing for an AOT compiler to support.
+
+### What this changes
+
+- The **43-failure figure and the three owning issues in this file remain
+  correct** — they are exactly the ≤ES3-bucket gap, and #3486 is still 95 % of
+  it. That work is unaffected; proceed.
+- But closing this issue **must not be reported as "ES3 complete"**. The honest
+  claim is: _"the ≤ES3 metadata bucket is closed (273/273); ES3's dynamic-code
+  features are tracked separately at ~37 %."_
+- Real ES3-language completeness is gated on the **`runtime-eval` goal** —
+  #1006 (eval via JS host), #1066 (eval in standalone), and the `with`/`Function`
+  constructor work. Those are the substantive ES3 gap.
+
+### Acceptance amended
+
+- [ ] On closing, state the bucket-vs-language distinction explicitly in the
+      closing note, with the 1,047-test dynamic-code figure alongside.
+- [ ] Do not update any public "ES3 %" claim without that qualification.
+
+### Method warning (generalises beyond ES3)
+
+**Every edition percentage on the landing page carries this artifact.** A test's
+bucket reflects its _frontmatter vintage_, not the edition that specified the
+feature. Treat per-edition rates as "tests whose metadata sorts here", never as
+"share of edition N implemented". Worth a separate issue if anyone wants the
+editions view to reflect the language rather than the metadata.
