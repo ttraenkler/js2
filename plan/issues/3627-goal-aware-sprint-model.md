@@ -180,7 +180,7 @@ dod: # D7 — every goal has a definition of done, of a declared kind
   bucket: "ES5" # MUST state exclusive-vs-cumulative intent explicitly
   target: 100
 partition_of: es5 # subset of the SAME population — expands transitively (D8)
-depends_on: [es3-complete] # ordering edge only — does NOT expand (D8)
+depends_on: [compilable] # ordering edge only — does NOT expand (D8)
 aliases: [] # legacy `goal:` values that resolve here
 ---
 ```
@@ -446,15 +446,15 @@ relations:
 
 | axis           | field                        | means                                                   | expands into the queue? |
 | -------------- | ---------------------------- | ------------------------------------------------------- | ----------------------- |
-| **dependency** | `depends_on: [es3-complete]` | ordering / readiness — an edge in the existing goal DAG | **NO**                  |
+| **dependency** | `depends_on: [compilable]` | ordering / readiness — an edge in the existing goal DAG | **NO**                  |
 | **partition**  | `partition_of: es5` | a scope-restricted subset of the _same_ population      | **YES, transitively**   |
 
 **Why dependency must not expand.** If scheduling `es5` also dragged in
-every member of `es3-complete` — and transitively `compilable`, `core-semantics`,
+every member of `compilable` — and transitively `core-semantics`,
 … — one goal would pull most of the backlog. Dependencies exist to tell you
 _what to schedule first_, which is an operator decision, not an automatic one.
-Adding `es5` while `es3-complete` is unmet should produce a **warning**
-("depends on es3-complete, currently 83 % — schedule that first?"), never a
+Adding `es5` while `compilable` is unmet should produce a **warning**
+("depends on compilable, currently 95 % — schedule that first?"), never a
 silent expansion.
 
 **Why partition must expand.** A subgoal is not separate work; it is a
@@ -480,7 +480,7 @@ the narrower bucket.
   siblings double-count and make the parent's roll-up wrong.
 - A goal may carry both `partition_of` and `depends_on` — they are orthogonal
   (`es5` is not a partition of anything, and depends on
-  `es3-complete`; `es5-static` is a partition of `es5` and inherits
+  `compilable`; `es5-static` is a partition of `es5` and inherits
   nothing from the dependency).
 
 ### D9 — Ordering: "most important and ready first"
@@ -543,7 +543,7 @@ Concretely, three tools must agree that an open goal is uninteresting:
    goals span many windows, "completed goals: 0" would be the answer nearly
    every time and is useless. `sprints/N.md` should carry, per goal in the
    window, the **metric delta over the window** for `measured` goals (e.g.
-   "`es3-complete`: 83 % → 91 %, 47 → 25 failures") and the count of member
+   "`compilable`: 83 % → 91 %, 47 → 25 failures") and the count of member
    issues closed for the others. That requires snapshotting each `measured`
    goal's value at freeze so the next freeze can difference against it — store
    it in `sprints/N.md` itself, so the record is self-contained.
@@ -580,7 +580,7 @@ parallel field.
 **(b) The DAG becomes machine-checkable — but scope the promise.** Once a goal
 can be `done`, `goal-graph.md`'s prose rule ("a goal is activatable when all its
 dependencies are met") becomes computable: `es5` is `activatable` when
-`es3-complete` is `done`. `activatable`/`blocked` therefore become **derived**
+`compilable` is `done`. `activatable`/`blocked` therefore become **derived**
 states, not hand-set ones.
 
 **Verified before promising it:** `plan/goals/goal-graph.md` is
@@ -695,7 +695,7 @@ selector:
   the `standalone` goals**."_ That sentence exists **only** because an issue
   could hold one goal. Under D12 + D14 the standalone ES5 work is simply
   `edition: es5, mode: standalone` and appears in both goals with no retagging.
-- **`es5-static` / `es5-standalone` / `es5-host` / `es3-complete` become free** —
+- **`es5-static` / `es5-standalone` / `es5-host` / `compilable` become free** —
   four goals over one set of issue attributes, which is exactly the partition
   (D8) I previously had to defer to the census.
 
@@ -790,15 +790,15 @@ The stakeholder's instinct (ES3 as a separate goal ES5 depends on) resolves it
 correctly, and decomposes into:
 
 ```
-es3-complete          dod{kind: measured, lane: host, bucket: "≤ ES3", target: 100}
+compilable          dod{kind: measured, lane: host, bucket: "≤ ES3", target: 100}
                       47 failures. Genuinely completable near-term.
 
 es5-static            partition_of: es5
-                      depends_on: [es3-complete]
+                      depends_on: [compilable]
                       dod{kind: measured, lane: host, bucket: "ES5 minus <census predicate>", target: 100}
                       ES5 bucket MINUS interpreter-dependent tests. Reachable now.
 
-es5          depends_on: [es3-complete, runtime-eval]
+es5          depends_on: [compilable, runtime-eval]
                       dod{kind: measured, lane: host, bucket: "ES5", target: 100}
                       The remainder needs eval / new Function ⇒ the interpreter.
 ```
@@ -856,7 +856,7 @@ gap.
   `source`/`bucket` — do it in follow-ups, starting with the ES3/ES5 set, not in
   bulk here.
 
-**File: `plan/goals/es3-complete.md`, `es5-static.md`, `es5.md` (NEW)**
+**File: `plan/goals/compilable.md`, `es5-static.md`, `es5.md` (NEW)**
 
 - Create per the worked example. **Blocked on the `dev-es5-census` output** for
   the exact `es5-static` exclusion predicate — do not guess it.
