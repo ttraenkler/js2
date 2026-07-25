@@ -1,8 +1,9 @@
 {
   "id": "3622",
   "assignee": "ttraenkler/opus-3622",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-3622-merge-test262-lanes",
   "claimed_at": "2026-07-25T13:39:53Z",
-  "updated_at": "2026-07-25T13:39:53Z"
+  "updated_at": "2026-07-25T14:16:38Z",
+  "released_at": "2026-07-25T14:16:38Z"
 }
