@@ -85,12 +85,57 @@ this proves a test went red _before_ the fix.
     deliberately (e.g. most `guard-suite.json` entries) — these are valuable but
     are not regression tests and must declare themselves as such.
     Marker: `// merge-base-red-exempt: <why>` near the top of the file.
-- **Distinguish FAIL from ERROR.** "the assertion failed" is the signal;
-  "the file could not be collected" is not. Only the former counts as red.
+
+### Distinguish FAIL from ERROR — MEASURED, and the part most likely to be got wrong
+
+"The assertion failed" is the signal; "the file could not be collected" is not.
+These are **indistinguishable by vitest's `status` field** — measured against
+the repo's vitest 3.2.4 on 2026-07-25 with three fixtures:
+
+| fixture                          | `status`       | `assertionResults` | `message` |
+| -------------------------------- | -------------- | ------------------ | --------- |
+| assertion fails                  | `"failed"`     | 1                  | `""`      |
+| passes                           | `"passed"`     | 1                  | `""`      |
+| unresolvable import (no collect) | **`"failed"`** | **0**              | 162 chars |
+
+So the discriminator is **`assertionResults.length > 0` — did any test in this
+file actually execute?** Reading `status` alone would certify a test as
+proven-red when nothing ran, which is the very vacuity this gate exists to
+prevent, committed by the gate itself. Implemented in
+`classifyFileResult()` and pinned by
+`tests/issue-3619-merge-base-red.test.ts` with the captured fixtures.
+
+> **Methodological note, kept deliberately.** The first run of that measurement
+> concluded that one uncollectable file zeroes the whole batched report. It was
+> WRONG: the fixtures had been written into `.tmp/`, which vitest does not
+> scan, so every file reported zero rows — **including the one known to pass**.
+> The positive control is what caught it. Batching is fine. Never accept a zero
+> from a tool you have not seen produce a non-zero in that same environment.
+
 - **Advisory first, required later.** Land it as a non-blocking job, collect a
   few weeks of real data on the exemption rate, then promote to required once
   the false-positive rate is known. Promoting a noisy gate straight to required
   is how gates get routed around.
+
+## Progress
+
+**Slice 1 — the pure decision logic — DONE** (`scripts/lib/merge-base-red.mjs`,
+15 unit tests in `tests/issue-3619-merge-base-red.test.ts`, hermetic):
+`classifyFileResult` (the measured FAIL/ERROR/GREEN mapping above),
+`readExemption` (a bare marker with no reason is **not** an exemption),
+`selectCandidateTests` (the #3008 scope), and `evaluateMergeBaseRed` (which
+carries the three must-say-so cases: no new tests, all exempt, all
+inconclusive).
+
+**Slice 2 — the driver + workflow — REMAINING**:
+`scripts/check-merge-base-red.mjs` materialises a merge-base worktree
+(`git worktree add --detach <tmp> $(git merge-base origin/main HEAD)`), symlinks
+`node_modules`/`test262`, copies the PR's new test files in, runs one batched
+`vitest run --reporter=json`, feeds the entries through slice 1, and cleans up.
+Then an advisory (non-blocking) workflow.
+
+Stacked on #3613 because it depends on `scripts/lib/verifier-guard.mjs`; do not
+enqueue until #3613 lands.
 
 ## Acceptance criteria
 
