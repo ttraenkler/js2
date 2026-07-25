@@ -1,8 +1,8 @@
 {
   "id": "3616",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-07-25T10:57:14Z",
-  "updated_at": "2026-07-25T10:57:14Z"
+  "assignee": "ttraenkler/opus-typeerror-lane",
+  "status": "in-progress",
+  "branch": "issue-3616-standalone-bigint-ta-ctor-value",
+  "claimed_at": "2026-07-25T11:02:01Z",
+  "updated_at": "2026-07-25T11:02:01Z"
 }
