@@ -1,9 +1,8 @@
 {
   "id": "3637",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-07-25T19:53:00Z",
-  "updated_at": "2026-07-25T19:53:00Z",
-  "pr_scan": "ok"
+  "assignee": "ttraenkler/opus-loop-b",
+  "status": "in-progress",
+  "branch": "issue-3637-vec-len-discriminator-audit",
+  "claimed_at": "2026-07-25T20:44:54Z",
+  "updated_at": "2026-07-25T20:44:54Z"
 }
