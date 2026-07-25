@@ -1,8 +1,9 @@
 {
   "id": "3610",
   "assignee": "ttraenkler/opus-3610",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-3610-receiver-brand-checks",
   "claimed_at": "2026-07-25T10:22:15Z",
-  "updated_at": "2026-07-25T10:22:15Z"
+  "updated_at": "2026-07-25T12:04:31Z",
+  "released_at": "2026-07-25T12:04:31Z"
 }
