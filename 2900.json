@@ -1,8 +1,9 @@
 {
   "id": "2900",
   "assignee": "ttraenkler/opus-es3",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-2899-2900-es3-stragglers",
   "claimed_at": "2026-07-25T15:43:43Z",
-  "updated_at": "2026-07-25T15:43:43Z"
+  "updated_at": "2026-07-25T19:53:37Z",
+  "released_at": "2026-07-25T19:53:37Z"
 }
