@@ -1,8 +1,9 @@
 {
   "id": "3615",
   "assignee": "ttraenkler/opus-3615",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-3615-accessor-statement-position",
   "claimed_at": "2026-07-25T11:55:15Z",
-  "updated_at": "2026-07-25T11:55:15Z"
+  "updated_at": "2026-07-25T12:40:59Z",
+  "released_at": "2026-07-25T12:40:59Z"
 }
