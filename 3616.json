@@ -1,8 +1,9 @@
 {
   "id": "3616",
   "assignee": "ttraenkler/opus-typeerror-lane",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-3616-standalone-bigint-ta-ctor-value",
   "claimed_at": "2026-07-25T11:02:01Z",
-  "updated_at": "2026-07-25T11:02:01Z"
+  "updated_at": "2026-07-25T12:30:54Z",
+  "released_at": "2026-07-25T12:30:54Z"
 }
