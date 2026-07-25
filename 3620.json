@@ -1,8 +1,9 @@
 {
   "id": "3620",
   "assignee": "ttraenkler/opus-3620",
-  "status": "in-progress",
+  "status": "done",
   "branch": "issue-3620-class-gen-meth-ary-param-default",
   "claimed_at": "2026-07-25T12:14:10Z",
-  "updated_at": "2026-07-25T12:14:10Z"
+  "updated_at": "2026-07-25T12:56:58Z",
+  "released_at": "2026-07-25T12:56:58Z"
 }
