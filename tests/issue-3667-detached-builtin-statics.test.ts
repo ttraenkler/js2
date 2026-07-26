@@ -143,6 +143,62 @@ describe("#3667 detached Object.* statics — defineProperty", () => {
   });
 });
 
+// ⚠️ IDENTITY IS LOAD-BEARING, NOT AN OPTIMISATION.
+//
+// The planned fix intercepts these statics in `__extern_get` and returns a
+// sidecar-aware wrapper. If that wrapper is minted per READ rather than
+// memoized, `Object.keys === Object.keys` becomes false — and test262 harnesses
+// routinely capture a primordial more than once and compare, so a fresh-wrapper
+// implementation would trade one silent breakage for another. These cases pass
+// on the merge base (the raw host function is trivially identity-stable), so
+// they are REGRESSION GUARDS for the fix, not evidence of the current defect.
+describe("#3667 identity stability of builtin statics (guards the fix)", () => {
+  it("Object.getOwnPropertyDescriptor is identity-stable across reads", async () => {
+    const src = `export function run(): string {
+      const a: any = Object.getOwnPropertyDescriptor;
+      const b: any = Object.getOwnPropertyDescriptor;
+      return (a === b) ? 'same' : 'DIFFERENT';
+    }`;
+    expect(await runHost(src)).toBe("same");
+  });
+
+  it("Object.keys is identity-stable across reads", async () => {
+    const src = `export function run(): string {
+      const a: any = Object.keys;
+      const b: any = Object.keys;
+      return (a === b) ? 'same' : 'DIFFERENT';
+    }`;
+    expect(await runHost(src)).toBe("same");
+  });
+
+  it("Object.defineProperty is identity-stable across reads", async () => {
+    const src = `export function run(): string {
+      const a: any = Object.defineProperty;
+      const b: any = Object.defineProperty;
+      return (a === b) ? 'same' : 'DIFFERENT';
+    }`;
+    expect(await runHost(src)).toBe("same");
+  });
+
+  it("distinct statics remain distinct (memoization must be per-key)", async () => {
+    const src = `export function run(): string {
+      const k: any = Object.keys;
+      const g: any = Object.getOwnPropertyDescriptor;
+      return (k === g) ? 'WRONGLY-SAME' : 'distinct';
+    }`;
+    expect(await runHost(src)).toBe("distinct");
+  });
+
+  it("typeof a detached static stays 'function'", async () => {
+    const src = `export function run(): string {
+      const g: any = Object.getOwnPropertyDescriptor;
+      const k: any = Object.keys;
+      return typeof g + '/' + typeof k;
+    }`;
+    expect(await runHost(src)).toBe("function/function");
+  });
+});
+
 describe("#3667 uncurried primordials (already correct — guard against regression)", () => {
   it("uncurried propertyIsEnumerable is correct", async () => {
     const src = `export function run(): string {
