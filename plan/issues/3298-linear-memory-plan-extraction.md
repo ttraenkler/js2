@@ -15,9 +15,8 @@ task_type: architecture
 area: ir, codegen-linear, backend
 language_feature: compiler-internals
 goal: backend-agnostic-ir
-parent: 3288
-depends_on: [3297, 2956]
-related: [3288, 2953, 2956, 3029, 747]
+depends_on: [2956]
+related: [2953, 2956, 3029, 747]
 origin: "#3288 P3 split: independently dispatchable shared linear-memory planning layer"
 claimed_by: backend-codex-developer
 claimed_at: 2026-07-17T14:34:24.198Z
