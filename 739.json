@@ -1,8 +1,9 @@
 {
   "id": "739",
   "assignee": "ttraenkler/opus-loop-e",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-739-s2-descriptor-consult",
   "claimed_at": "2026-07-26T02:11:35Z",
-  "updated_at": "2026-07-26T02:11:35Z"
+  "updated_at": "2026-07-26T02:57:57Z",
+  "released_at": "2026-07-26T02:57:57Z"
 }
