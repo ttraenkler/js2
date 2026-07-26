@@ -267,3 +267,62 @@ Implementation notes:
 - Runtime `_wrapForHost` checks `_prototypeMethodNames` WeakMap before falling back to `_getStructFieldNames` for prototype ownKeys/getOwnPropertyDescriptor traps.
 - `__hasOwnProperty`, `Object_propertyIsEnumerable`, `__propertyIsEnumerable`, `__getOwnPropertyNames` all consult the allowlist before struct-field enumeration.
 - Pre-existing `buildStringConstants` bug fixed: used `{}` instead of `Object.create(null)`, so string constants named `hasOwnProperty` / `toString` / `constructor` were silently dropped via the `s in constants` duplicate check inheriting from `Object.prototype`. First exposed by this fix registering `"hasOwnProperty"` as a string constant.
+
+## ⚠️ RESIDUAL LIVE 2026-07-26 (opus-loop-e, task #31/#32) — 3/3 baseline-passes now FAIL
+
+**This issue is `done` (2026-04-11), and its successor #3512 is `done`
+(2026-07-21) — but the area is still broken.** Measured post-#3603
+de-inflation: **every** test cited by this issue that the baseline records as
+`pass` now fails (**3/3**, the only issue of 48 adjudicated in the #3664 sweep
+with a 100 % rate).
+
+```
+language/expressions/class/elements/after-same-line-gen-literal-names.js
+    obj[m] descriptor should not be enumerable
+language/statements/class/elements/multiple-definitions-grammar-privatename-identifier-semantics-stringvalue.js
+    obj[m] descriptor should not be enumerable
+language/expressions/class/elements/after-same-line-static-gen-literal-names.js
+    obj[a] descriptor value should be undefined; obj[a] value should be undefined
+```
+
+Both trackers being closed means the live residual had **no open owner** at the
+time of measurement.
+
+### It is NOT a `_wrapForHost` for-in defect — measured, with working controls
+
+The obvious reading (host-boundary machinery breaks for-in / enumerability on a
+class prototype) is **refuted**. In an isolated compile every relevant operation
+is correct:
+
+| probe | got | spec |
+| --- | --- | --- |
+| for-in over `{a:1}` (instrument control) | 1 | 1 ✅ |
+| for-in sees an assigned own prop (control) | 1 | 1 ✅ |
+| for-in over `C.prototype` with an assigned prop | 1 | 1 ✅ |
+| …same through an `any`-typed param (propertyHelper shape) | 1 | 1 ✅ |
+| class method must NOT appear in for-in | 0 | 0 ✅ |
+| `propertyIsEnumerable` on a class method | false | false ✅ |
+| `gOPD().enumerable` on a class method | false | false ✅ |
+
+(A negative control was included and correctly reported failure, so the harness
+could distinguish a wrong answer.)
+
+### What that implies
+
+**The defect requires the assembled test262 harness context to manifest.**
+`propertyIsEnumerable` reads *correct* in an isolated compile here, while it
+reads *wrong* under the harness (independently measured by `opus-loop-a` on
+#3647). Same predicate, opposite answers — so the variable is the **harness
+assembly**, not the predicate and not for-in. Worth instrumenting: whether
+`propertyHelper.js` and the test class compile into one module or separate ones,
+and whether the class reaches the predicate host-wrapped rather than as a direct
+struct reference.
+
+### Disposition
+
+**Left `done` with this correction attached; no new tracker filed — that would
+duplicate #3647**, which owns the live mechanism question (class-element
+enumerability under the harness). These three failures carry the enumerability
+signature, so they belong to that population, not to the non-`verifyProperty`
+remainder (#3664 / task #32). Do not treat #1047 or #3512 as evidence this area
+is fixed.
