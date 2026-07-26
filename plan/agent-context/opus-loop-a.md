@@ -150,10 +150,11 @@ Two routes to the same refutation; only the explanation is contested.
 
 ### Reconciliation datum (from loop-e, worth keeping)
 
-**#1047's three failures are enumerability-signature**, so they fall in the
-**734**, not in loop-e's ~332. That is one concrete row where the two
-partitions meet — and the two should sum to 1,066. If they don't, a filter
-doesn't compose, which has now happened twice (see §2).
+**#1047's three failures are enumerability-signature**, so they fall in
+bucket **A (734)**, not in the remainder. (This originally said "not in
+loop-e's ~332" — that set does not exist; see the corrected A/B/C partition
+in §7.) The buckets sum to 1,066; if a partition ever fails to sum, a filter
+doesn't compose, which has now happened twice and both times was mine (§2, §7).
 
 `_wrapForHost` remains the most interesting candidate for what differs in the
 assembled-harness context: it is host-reflection machinery between class
