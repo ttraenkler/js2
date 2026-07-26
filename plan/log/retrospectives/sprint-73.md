@@ -39,7 +39,7 @@ silently omitting parts of the upstream harness.
   standalone WebAssembly GC result.
 - The IR work advanced in bounded slices: the object-runtime self-host family,
   checker-backed multi-module overlays, builtin lowering, and the optional
-  Porffor source-to-native canary all landed without pretending the broader IR
+  external-backend source-to-native canary all landed without pretending the broader IR
   migration is complete.
 - The merge-queue trap ratchet did its job. It rejected a 29-test illegal-cast
   increase caused by a standalone constructor marker changing the JS-host

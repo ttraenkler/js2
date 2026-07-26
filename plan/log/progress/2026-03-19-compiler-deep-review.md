@@ -11,7 +11,7 @@ In-depth analysis of the ts2wasm compiler codebase: correctness, efficiency, cod
 | **StarlingMonkey** (Fastly) | SpiderMonkey interpreter compiled to Wasm + weval AOT | ~8 MB | ~100% ES2023 | Yes |
 | **Javy** (Shopify) | QuickJS interpreter compiled to Wasm | 220B–869KB | ES2020 | Yes |
 | **AssemblyScript** | AOT compiler for TS-like subset | 1–4 KB | 0% (different language) | Yes |
-| **Porffor** | AOT JS→Wasm (linear memory) | <100 KB | ~50% test262 | No |
+| **AOT competitor** (full analysis in labs) | AOT JS→Wasm (linear memory) | <100 KB | ~50% test262 | No |
 | **Static Hermes** (Meta) | AOT JS→C→native/Wasm | ~50 KB native | Partial | No |
 | **ts2wasm** (this project) | AOT TS→WasmGC | 0.2–10 KB | ~68% (curated subset) | No |
 
@@ -19,7 +19,7 @@ In-depth analysis of the ts2wasm compiler codebase: correctness, efficiency, cod
 
 **Interpreter-in-Wasm** (StarlingMonkey, Javy): Compile an existing JS engine to Wasm. Near-100% compatibility but large binaries (869KB–8MB). The engine IS the module.
 
-**AOT compilation** (ts2wasm, Porffor, AssemblyScript, Static Hermes): Compile source code directly to Wasm instructions. Tiny binaries, fast startup, but limited JS compatibility. No eval/dynamic code generation.
+**AOT compilation** (ts2wasm, the AOT competitor, AssemblyScript, Static Hermes): Compile source code directly to Wasm instructions. Tiny binaries, fast startup, but limited JS compatibility. No eval/dynamic code generation.
 
 ### ts2wasm's unique position
 
@@ -27,13 +27,13 @@ ts2wasm is the **only AOT compiler targeting WasmGC** for a JavaScript-family la
 
 1. **Smallest binaries** — no runtime, no GC, no allocator. A function compiles to ~200 bytes. WasmGC structs are managed by the host GC.
 2. **No JS engine dependency** — runs on wasmtime, wasmer (when WasmGC support lands), any Wasm host.
-3. **TypeScript type information** — unlike Porffor (untyped JS), ts2wasm leverages TS types for optimal Wasm type selection.
+3. **TypeScript type information** — unlike the AOT competitor (untyped JS), ts2wasm leverages TS types for optimal Wasm type selection.
 
-### Closest competitor: Porffor
+### Closest competitor (full analysis in labs)
 
-Porffor is the most similar project — AOT JS→Wasm. Key differences:
+The closest competitor is a linear-memory AOT JS→Wasm compiler. Key differences:
 
-| | ts2wasm | Porffor |
+| | ts2wasm | AOT competitor |
 |---|---|---|
 | Target | WasmGC (structs, arrays) | Linear memory |
 | Input | TypeScript (uses type info) | JavaScript (no types) |
@@ -42,7 +42,7 @@ Porffor is the most similar project — AOT JS→Wasm. Key differences:
 | Binary size | ~0.2–10 KB | ~10–100 KB |
 | eval support | Planned (host import, #496) | Never (fundamental limitation) |
 
-Porffor's author explicitly states eval/Function() can never work in their AOT approach. ts2wasm's host-import design (#496) could enable it.
+Its author explicitly states eval/Function() can never work in their AOT approach. ts2wasm's host-import design (#496) could enable it.
 
 ### WasmGC runtime support
 

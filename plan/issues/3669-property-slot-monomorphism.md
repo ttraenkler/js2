@@ -139,7 +139,7 @@ builtin dispatch:
   but is XL and not a prerequisite for a targeted repair.
 
 **Lane note (ruled):** `value-rep-substrate` is nominally Lane B
-(fable/porffor) under `plan/method/lane-partition.md`. The tech lead has ruled
+(fable) under `plan/method/lane-partition.md`. The tech lead has ruled
 that **implementation proceeds in Lane A**: no Lane B agent is active on this,
 so there is nothing to duplicate, and the partition exists to prevent collision
 rather than to route by topic. The defect is also **selective rather than a

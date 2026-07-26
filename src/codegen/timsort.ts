@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Loopdive GmbH. Licensed under Apache-2.0 WITH LLVM-exception.
 /**
  * Timsort for WasmGC native arrays — SELF-HOSTED (#3159, array family
- * slice 1 of the porffor model; algorithm bodies live as ordinary TS
+ * slice 1 of the self-hosted-source model; algorithm bodies live as ordinary TS
  * source in `src/stdlib/array-sort.ts` and compile through the
  * compiler's own pipeline via `src/codegen/stdlib-selfhost.ts`).
  *

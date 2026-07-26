@@ -4,7 +4,7 @@ title: "Close the BackendEmitter pushRaw gap: route unions/closures/refcells/coe
 status: done
 completed: 2026-07-16
 assignee: ttraenkler/opus-1a
-branch: symphony/porffor/2953-after-pr-3146
+branch: symphony/backend/2953-after-pr-3146
 pr: 3159
 sprint: 72
 created: 2026-07-02
@@ -21,7 +21,7 @@ related: [1852, 1713, 2954, 2956, 2949]
 origin: "2026-07-02 July Fable audit §5 (77 pushRaw sites; #1852-G1 slice text had no issue)"
 loc-budget-allow:
   - src/ir/lower.ts
-claimed_by: porffor-codex-developer
+claimed_by: backend-codex-developer
 claimed_at: 2026-07-16T18:05:52.080Z
 last_merged_pr: 3146
 last_ci_retry_head: ad68ab2760e5cb152f05f60420088103aea803da
@@ -100,7 +100,7 @@ value/aggregate families.
       in `lower.ts` from 98 to 95. The existing `ref.func` and `ref.cast` sites stay
       in their dependency-ordered funcref/coercion slices. Golden emitter tests,
       the 31-case IR closure suite, cross-backend proof, equivalence gate, and the
-      56-record byte oracle are green. (porffor-codex-developer)
+      56-record byte oracle are green. (backend-codex-developer)
 - [x] **coercions/null** (`emitNull`/`emitToExternref`/`emitFromExternref`) —
       promoted the three reserved hooks to required, sink-generic primitives and
       restored the audited `emitDowncast` seam for non-extern reference narrowing.
@@ -112,7 +112,7 @@ value/aggregate families.
       reduces `emitter.pushRaw` calls in `lower.ts` from 95 to 86; Promise aggregate
       allocation/field ops remain for their dedicated slice. Golden emitter tests,
       closure + cross-backend suites, equivalence, and the 56-record byte oracle
-      are green. (porffor-codex-developer)
+      are green. (backend-codex-developer)
 - [x] **funcref** (`emitFuncRef`) — promoted the optional, `Instr[]`-specific
       hook to a required sink-generic primitive. `WasmGcEmitter` materializes
       the resolved function index with the canonical `ref.func`; Linear and
@@ -132,7 +132,7 @@ value/aggregate families.
       `emitter.pushRaw` calls in `lower.ts` from 85 to 83; await's raw structured
       `if` remains intentionally out of scope. Golden emitter coverage, the
       86-test focused suite, typecheck, equivalence, and the 56-record byte
-      oracle are green. (porffor-codex-developer)
+      oracle are green. (backend-codex-developer)
 - [x] **ratchet** — added the change-scoped `check:pushraw` quality gate.
       Every newly added or moved `pushRaw(` call must carry a valid
       `// pushraw-ok(#issue)` tag on the same or preceding line, even when the

@@ -99,7 +99,7 @@ export interface PlannedObjectMemoryLowering {
   field(name: string): LinearMemoryFieldLowering;
 }
 
-/** Shared-plan record handle consumed by linear-Wasm and Porffor IR. */
+/** Shared-plan record handle consumed by linear-Wasm and external linear-memory IR consumers. */
 export interface PlannedObjectLowering extends IrObjectStructLowering {
   readonly linearMemory: PlannedObjectMemoryLowering;
 }

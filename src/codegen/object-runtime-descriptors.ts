@@ -2724,7 +2724,7 @@ export function buildObjectDescriptorHelpers(ctx: CodegenContext, s: ObjectDescr
   // entanglement. So they are compiled from ORDINARY TS SOURCE
   // (`src/stdlib/object-runtime.ts`) through the compiler's own IR pipeline
   // via the generalized self-hosting driver (#3161), exactly where the
-  // hand-emitted `Instr[]` bodies used to be pushed — the porffor model.
+  // hand-emitted `Instr[]` bodies used to be pushed — the self-hosted-source model.
   //
   //   - getOwnPropertyDescriptors(obj): fresh object mapping each own key
   //     (from `__getOwnPropertyNames`) to `__getOwnPropertyDescriptor(obj,key)`.

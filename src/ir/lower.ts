@@ -783,7 +783,7 @@ export function lowerIrFunctionBody<S, Slot>(
   // former still drives the existing index-based emitters, while the latter
   // is what TypeConverter must see when assembling backend-neutral metadata.
   // Reconstructing an IrType from a ValType would erase facts such as unsigned
-  // i32/i64, making a materialized Porffor local disagree with the same value
+  // i32/i64, making a materialized external-backend local disagree with the same value
   // when carried as a parameter or result.
   type InternalLocalDef = LocalDef & { readonly logicalType: IrType };
   const locals: InternalLocalDef[] = [];

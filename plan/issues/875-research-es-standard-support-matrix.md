@@ -22,7 +22,7 @@ Our blog comparison table says "test262 ~99%" or "~50%" but doesn't break down *
 3. Javy (inherits QuickJS)
 4. StarlingMonkey (inherits SpiderMonkey)
 5. Static Hermes
-6. Porffor
+6. the AOT competitor (analysis in labs)
 7. js2wasm
 8. JAWSM
 9. AssemblyScript (which JS features does its dialect support?)

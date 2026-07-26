@@ -64,11 +64,6 @@ files, open PRs, TODO/FIXME markers, tests, CI scripts, backend contracts, and
 recent backend-architecture areas. Filed only non-duplicate, independently
 dispatchable gaps:
 
-- [#3336](../3336-linear-memory-plan-target-neutral-ownership.md) - planning:
-  make `LinearMemoryPlan` ownership target-neutral before dispatch. Highest
-  architecture value because the prose invariant already exists, but canonical
-  issue titles/sprints still route target-neutral planner work through the
-  Porffor backend wave.
 - [#3337](../3337-wasi-process-argv-args-get.md) - WASI `process.argv` must
   materialize through `args_get` instead of silently returning an empty,
   import-free vector. A second-pass runtime probe corrected the original

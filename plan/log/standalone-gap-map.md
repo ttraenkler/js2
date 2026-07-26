@@ -17,7 +17,7 @@ Official scope (standard + annex_b, 43,106 tests):
 | fail | 16,396 |
 | compile_error | 1,339 |
 
-Porffor's ~61 % is measured on the host-free axis. Our gap to porffor is
+The AOT competitor's ~61 % is measured on the host-free axis. Our gap to it is
 **~12.6 pts ≈ 5,430 tests**. The leaky-pass column alone is 10.3 pts — the
 single largest lever, and it is almost entirely ONE feature family (below).
 

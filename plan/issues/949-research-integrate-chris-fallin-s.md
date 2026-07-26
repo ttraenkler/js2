@@ -74,13 +74,13 @@ His solution is to keep the full engine and add IC dispatch. Our solution is to 
 
 He also acknowledges direct-compilation projects:
 
-> He lists porffor (39% test262 at time of writing) as a comparable approach, notes its use of core Wasm only, and contrasts it with IC-based specialization. js2wasm's use of Wasm GC proposals is a distinct third path—neither core-Wasm-only (porffor) nor bundled-engine (StarlingMonkey).
+> He lists a leading AOT JS compiler (39% test262 at time of writing) as a comparable approach, notes its use of core Wasm only, and contrasts it with IC-based specialization. js2wasm's use of Wasm GC proposals is a distinct third path—neither core-Wasm-only (the AOT competitor) nor bundled-engine (StarlingMonkey).
 
 ### Competitive Positioning Implications
 
 1. **"Impossible" narrative**: The BA's implicit position that direct JS→Wasm compilation without a bundled runtime is impractical is contradicted by js2wasm's existence and trajectory. Fallin's series makes the strongest *technical* case for why it's hard—but his solution's complexity (weval + Wizer + PBL + IC corpus + SpiderMonkey) is itself evidence that a simpler direct path has value.
 1. **Edge runtime fit**: Fallin acknowledges the per-request isolation model and instant-start requirements. StarlingMonkey's ~8 MB module size is a real constraint for edge platforms with tight limits (e.g., Shopify's 250 KB cap, as noted in Surma's post). js2wasm's zero-runtime approach is structurally better suited.
-1. **Chris as potential ally**: He validated our resource-handle + byte-wise accessor pattern on GitHub issue #626. He's technically sympathetic to novel approaches and now at F5 (which runs Fastly Compute, a primary target platform for js2wasm). His blog explicitly wishes porffor-style projects well.
+1. **Chris as potential ally**: He validated our resource-handle + byte-wise accessor pattern on GitHub issue #626. He's technically sympathetic to novel approaches and now at F5 (which runs Fastly Compute, a primary target platform for js2wasm). His blog explicitly wishes such AOT projects well.
 
 ## Documentation Updates Required
 
@@ -97,7 +97,7 @@ Add or update the "How js2wasm differs" section to reference Fallin's architectu
 Add a "Related Work" or "Landscape" section covering:
 
 - StarlingMonkey + weval (Fallin's series)
-- porffor (core Wasm, no GC)
+- the AOT competitor (core Wasm, no GC)
 - Javy/QuickJS (interpreter-only, no compilation)
 - Static Hermes (type-annotated subset)
 - AssemblyScript (TS-like, not JS)

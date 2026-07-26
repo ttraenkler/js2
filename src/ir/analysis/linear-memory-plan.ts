@@ -5,7 +5,7 @@
 // This module is the middle-end authority for allocation class, record/vector/
 // string layout, pointer maps, lifetime, roots, safepoints, barriers, and
 // relocatable static-storage requirements. It deliberately contains no Wasm
-// instructions or module indices, Porffor representation values, renderer
+// instructions or module indices, external-backend representation values, renderer
 // records, concrete runtime symbol names, or artifact fragments.
 
 import { ALLOC_NAMESPACES, type AllocSite, type AllocSiteRegistry } from "../alloc-registry.js";

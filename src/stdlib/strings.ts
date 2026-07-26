@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Loopdive GmbH. Licensed under Apache-2.0 WITH LLVM-exception.
 /**
- * Self-hosted native-string builtins (#3256 — string family Tier-1, porffor
+ * Self-hosted native-string builtins (#3256 — string family Tier-1, self-hosted-source
  * model, following the #3141 Math pilot and the #3159/#3160 typed-def path).
  *
  * Each builtin is ORDINARY TypeScript source in the IR-claimable subset,

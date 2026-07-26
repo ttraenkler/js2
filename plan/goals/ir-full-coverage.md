@@ -140,7 +140,7 @@ evidence.
 | **3065** | IR: claim non-terminating `if (cond) <stmt>;` guard at non-void body position (select↔builder parity, follow-on #1979) | 71 | done | medium |
 | **3090** | Retire direct front-end after IR-only reachability gates close (~59,676 fn-lines) | Backlog | blocked | high |
 | **3113** | Fix IR->codegen reverse layering: move shared vocabulary (js-tag) below IR; contain the bridge to ir/integration.ts | current | ready | medium |
-| **3141** | Self-hosted stdlib pilot: compile math-helpers as TS builtin source through our own IR pipeline (porffor model) | Backlog | done | high |
+| **3141** | Self-hosted stdlib pilot: compile math-helpers as TS builtin source through our own IR pipeline (self-hosted-source model) | Backlog | done | high |
 | **3142** | IR module-init overlay adoption (claimability milestone; compile-once remains) | 72 | done | high |
 | **3143** | Flip IR-first (JS2WASM_IR_FIRST) to default — clears gate G1 of the legacy-frontend retirement | 71 | done | high |
 | **3144** | IR: instanceof + static method calls + accessor get/set on local classes (claims classes.ts main) | 71 | done | high |

@@ -21,7 +21,7 @@ re-implemented by both lanes — the opus PRs closed as redundant), the
 | Lane | Owns (goals / areas) |
 | --- | --- |
 | **Lane A — lead + opus** (this checkout) | `runtime-eval` (eval ladder #2927/#2928/#3101/#3308/#3343), `error-model`, `self-hosting-dogfood` / `acorn-dogfood`, `core-semantics`, **and all CI / infra / pipeline / tooling** (baseline promote/sync, merge-queue shepherding, test harness) |
-| **Lane B — fable / porffor / symphony** | `backend-agnostic-ir`, `ir-full-coverage` (IR north star), **Porffor backend** (#3288 family, `sprint: porffor-backend`), `value-rep-substrate`, **standalone gap** (#2860 umbrella) |
+| **Lane B — fable / symphony** | `backend-agnostic-ir`, `ir-full-coverage` (IR north star), **external-backend experiment** (#3288 family, moved to labs), `value-rep-substrate`, **standalone gap** (#2860 umbrella) |
 | **Shared / broad** (`test262-conformance`, `spec-completeness`, `builtin-methods`, `property-model`, `class-system`, `npm-library-support`) | **Claim-first-wins** — whoever passes the pre-dispatch gate first owns it; the other lane skips it |
 
 An issue may carry an explicit `lane: A` / `lane: B` frontmatter field to

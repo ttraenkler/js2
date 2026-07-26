@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Loopdive GmbH. Licensed under Apache-2.0 WITH LLVM-exception.
 /**
- * Self-hosted Timsort kernels (#3159 — array family slice 1 of the porffor
+ * Self-hosted Timsort kernels (#3159 — array family slice 1 of the self-hosted-source
  * model, following the #3141 Math pilot).
  *
  * Each kernel is ORDINARY TypeScript source in the IR-claimable subset,

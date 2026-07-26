@@ -131,7 +131,7 @@ describe("#3298 — target-neutral LinearMemoryPlan", () => {
     const plan = planLinearMemory({ functions: [fn] }, registry);
     const serialized = JSON.stringify(plan);
 
-    expect(serialized).not.toMatch(/__malloc|__arr_|funcIdx|typeIdx|WasmFunction|Porffor|renderer|#include/);
+    expect(serialized).not.toMatch(/__malloc|__arr_|funcIdx|typeIdx|WasmFunction|renderer|#include/);
     expect(plan.allocations.flatMap((allocation) => allocation.operations)).toContainEqual({
       family: "memory",
       operation: "allocate",

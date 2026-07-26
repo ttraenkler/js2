@@ -55,7 +55,7 @@ path (`src/codegen/`, accumulated hacks) and the typed IR
 but many units still retain or exclusively use the legacy body. Even an
 IR-emitted unit may have been compiled twice before its slot was patched.
 That duplication is the single biggest reason the compiler is ~6.4× the
-size of a comparable linear-memory TS→Wasm compiler (Porffor: ~32K code
+size of a comparable linear-memory AOT compiler (~32K code
 vs our ~207K).
 
 `#2855` (+ `#2856`–`#2859`) drove a bounded function fallback corpus to zero,
@@ -79,7 +79,7 @@ of FRONTEND-classified files that are really shared emission passes
 (b) offsetting ~15–25K of IR growth needed to finish the remaining
 `mixed`/`direct-only` kinds. That takes `src/` from ~207K → **~155–165K
 code (~20–27% smaller compiler)** with **no capability change** for the
-Phase‑1 slice. It does _not_ close the gap to Porffor — RUNTIME (~40K) and
+Phase‑1 slice. It does _not_ close the gap to the AOT competitor — RUNTIME (~40K) and
 WasmGC substrate (~35K) are intrinsic to targeting WasmGC with a full
 stdlib.
 

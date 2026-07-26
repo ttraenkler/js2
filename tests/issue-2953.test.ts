@@ -8,7 +8,7 @@ describe("#2953 pushRaw escape-hatch ratchet", () => {
   it("recognizes same-line and preceding-line issue tags", () => {
     const scan = scanPushRaw(`
 emitter.pushRaw(out, legacy);
-// pushraw-ok(#3296): Porffor legality rejects this family
+// pushraw-ok(#3296): backend legality rejects this family
 emitter.pushRaw(out, nextLine);
 emitter.pushRaw(out, sameLine); // pushraw-ok(#2952)
 // pushraw-ok(#0): invalid issue number

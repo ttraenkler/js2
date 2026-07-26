@@ -33,8 +33,8 @@ The queue is partitioned by GOAL (see `plan/method/lane-partition.md`). This lan
 (lead + opus) owns: **runtime-eval ladder** (#2927/#2928/#3101/#3308/#3343),
 **error-model**, **self-hosting/acorn-dogfood**, **core-semantics**, and ALL
 **CI/infra/pipeline/tooling** (baseline, merge-queue, shepherding). Do NOT dispatch
-into the fable/porffor lane's goals: **backend-agnostic-ir**, **ir-full-coverage**
-(IR north star), **Porffor backend** (#3288 family, `sprint: porffor-backend`),
+into the fable lane's goals: **backend-agnostic-ir**, **ir-full-coverage**
+(IR north star), **external-backend experiment** (#3288 family, moved to labs),
 **value-rep-substrate**, **standalone gap** (#2860). Shared/broad goals
 (test262-conformance, spec-completeness, builtin-methods, property/class) are
 claim-first-wins — the pre-dispatch gate decides.

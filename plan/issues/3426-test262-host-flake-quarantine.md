@@ -41,7 +41,7 @@ second source of host-lane nondeterminism:
   366 pass↔non-pass flips, and 165 different-non-pass transitions.
 - The exact union is 932 paths; 109 paths are in the intersection and changed
   status in both independent same-SHA canaries.
-- Porffor PR #3287 retry `29641967485` at exact held head
+- External-backend PR #3287 retry `29641967485` at exact held head
   `a69b80aacee99c039d7456c79719822d3207fcc3` showed only 60 non-timeout host
   regressions and 92 pass→compile_timeout transitions. This is smaller than the
   proven same-compiler noise envelope, while all 114 shards and the standalone,

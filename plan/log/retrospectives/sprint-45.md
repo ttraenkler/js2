@@ -49,7 +49,7 @@ session_end: 2026-04-29
 
 2. **IrLowerResolver refactor landed cleanly.** #1185 threaded the resolver through LowerCtx across the entire IR system without regressions, eliminating the per-feature shortcut debt that had been accumulating since slice 1.
 
-3. **Competitive benchmark harness built from scratch.** The `labs/` benchmarks now cover 5 programs × 9 toolchain lanes including Javy static, Javy dynamic, Porffor, AssemblyScript, StarlingMonkey (runtime-eval + ComponentizeJS), js2wasm (Wasmtime + hosted). The Javy dual-mode split and Porffor calling-convention fixes were non-trivial.
+3. **Competitive benchmark harness built from scratch.** The `labs/` benchmarks now cover 5 programs × 9 toolchain lanes including Javy static, Javy dynamic, the AOT competitor, AssemblyScript, StarlingMonkey (runtime-eval + ComponentizeJS), js2wasm (Wasmtime + hosted). The Javy dual-mode split and AOT-competitor calling-convention fixes were non-trivial.
 
 4. **Architecture Decision Records (ADRs) shipped to landing page.** #1202 + #1208 document the 8 core design choices that define js2wasm, with HTML renderings surfaced on the public site. Strong credibility investment.
 

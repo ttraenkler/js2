@@ -7,7 +7,7 @@
  * `lowerFunctionAstToIr` (front-end) → IR hygiene passes →
  * `lowerIrFunctionToWasm` (BackendEmitter) — and registers the result as
  * a defined function, exactly where the hand-emitted `Instr[]` bodies
- * used to be pushed. This is the porffor model: builtins are source the
+ * used to be pushed. This is the self-hosted-source model: builtins are source the
  * compiler precompiles, not hand-assembly.
  *
  * Two-stage split (why it's cheap):

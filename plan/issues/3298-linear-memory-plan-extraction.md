@@ -1,8 +1,8 @@
 ---
 id: 3298
-title: "Porffor backend P3: extract the shared target-neutral LinearMemoryPlan"
+title: "Extract the shared target-neutral LinearMemoryPlan"
 status: done
-sprint: porffor-backend
+sprint: backend-experiment
 created: 2026-07-16
 updated: 2026-07-17
 completed: 2026-07-17
@@ -19,25 +19,25 @@ parent: 3288
 depends_on: [3297, 2956]
 related: [3288, 2953, 2956, 3029, 747]
 origin: "#3288 P3 split: independently dispatchable shared linear-memory planning layer"
-claimed_by: porffor-codex-developer
+claimed_by: backend-codex-developer
 claimed_at: 2026-07-17T14:34:24.198Z
-branch: symphony/porffor/3298-after-pr-3245
+branch: symphony/backend/3298-after-pr-3245
 pr: 3257
 last_merged_pr: 3245
 ---
 
-# #3298 - Porffor backend P3: extract the shared target-neutral LinearMemoryPlan
+# #3298 - Extract the shared target-neutral LinearMemoryPlan
 
 ## Objective
 
 Make JS2's middle end the single owner of allocation class, layout, root, and
 barrier decisions through a backend- and artifact-neutral `LinearMemoryPlan`
-consumed by both linear-Wasm and the optional Porffor backend.
+consumed by both linear-Wasm and optional external linear-memory backends.
 
 ## Scope
 
 1. Define plan and allocator-policy interfaces whose vocabulary remains useful
-   without Porffor or C.
+   without an external backend or C.
 2. Feed the planner from allocation-site IDs and existing escape, ownership,
    encoding, and stack-allocation analyses under `src/ir/analysis/`.
 3. Centralize size, alignment, field-offset, element-stride, pointer-map,
@@ -48,7 +48,7 @@ consumed by both linear-Wasm and the optional Porffor backend.
 
 ## Acceptance criteria
 
-- [x] `LinearMemoryPlan` contains no Wasm instructions/indices, Porffor enums or
+- [x] `LinearMemoryPlan` contains no Wasm instructions/indices, external-backend enums or
       arrays, C fragments, renderer assumptions, or concrete runtime symbols.
 - [x] There is one canonical plan per allocation site/shape shared by initial
       linear-memory consumers.
@@ -56,7 +56,7 @@ consumed by both linear-Wasm and the optional Porffor backend.
       established emitted bytes.
 - [x] Function registration order cannot change symbolic allocator/runtime
       references before module assembly.
-- [x] Removing the optional Porffor adapter requires no planner changes.
+- [x] Removing an optional external-backend adapter requires no planner changes.
 - [x] The issue changes are committed, pushed to `origin`, and published as a
       ready, non-draft PR before completion is reported.
 
@@ -70,14 +70,14 @@ consumed by both linear-Wasm and the optional Porffor backend.
 
 ## Non-goals
 
-- Choosing Porffor's value ABI, object layout, builtins, or GC.
+- Choosing an external backend's value ABI, object layout, builtins, or GC.
 - Implementing a second allocation policy; #3300 owns that proof.
 - Making C the preferred or mandatory output.
 
 ## Handoff
 
 After this PR merges, #3299 lowers representative heap layouts through
-Porffor IR using this plan without re-planning them in the adapter.
+external-backend IR using this plan without re-planning them in the adapter.
 
 ## Implementation record (2026-07-17)
 
@@ -99,7 +99,7 @@ Porffor IR using this plan without re-planning them in the adapter.
   primitive. `LinearEmitter` reads vector offsets, stride, minimum capacity,
   record fields, and symbolic allocation operations from plan-backed handles;
   the default arena adapter retains the prior runtime calls and byte stream.
-- The optional Porffor adapter is not imported by the planner. #3299 can consume
+- The optional external-backend adapter is not imported by the planner. #3299 can consume
   the exported plan and its symbolic operations directly when heap legality is
   added, without duplicating layout or policy decisions.
 

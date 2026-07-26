@@ -65,7 +65,6 @@
     "src/compiler.ts": 1762,
     "src/compiler/early-errors/node-checks.ts": 1866,
     "src/emit/binary.ts": 1989,
-    "src/ir/backend/porffor/assembler.ts": 1507,
     "src/ir/builder.ts": 1769,
     "src/ir/from-ast.ts": 9111,
     "src/ir/integration.ts": 5314,

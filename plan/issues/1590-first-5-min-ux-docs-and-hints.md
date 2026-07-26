@@ -109,12 +109,12 @@ Acceptance criteria:
 - Reads as honest technical positioning, not marketing.
 
 ### 6. Add a "How does this compare to..." section to the README
-The compiler landscape (AssemblyScript, Javy, Porffor, StarlingMonkey + weval)
+The compiler landscape (AssemblyScript, Javy, StarlingMonkey + weval, and other AOT compilers)
 is genuinely distinct in design space. Give a sober comparison.
 
 Acceptance criteria:
 - New README section comparing js2wasm to at least: AssemblyScript, Javy,
-  Porffor, StarlingMonkey + weval.
+  StarlingMonkey + weval, and other AOT compilers.
 - Each comparison is 2-4 sentences, factual and respectful.
 - For each: name its design point in the space, then briefly contrast with
   js2wasm's choice.

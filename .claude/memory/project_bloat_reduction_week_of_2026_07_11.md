@@ -1,6 +1,6 @@
 ---
 name: project_bloat_reduction_week_of_2026_07_11
-description: "Week of 2026-07-11: stakeholder's #1 priority is a bloat-reduction battle plan + execution — src/ is ~320k lines (src/codegen 238k) at 76.0% test262 vs porffor's ~30k lines at comparable pass rate. Burn the weekly Fable budget fast (max parallelism) toward this. Plan doc: plan/bloat-reduction-battle-plan.md."
+description: "Week of 2026-07-11: stakeholder's #1 priority is a bloat-reduction battle plan + execution — src/ is ~320k lines (src/codegen 238k) at 76.0% test262 vs a competing AOT JS compiler at ~30k lines and comparable pass rate. Burn the weekly Fable budget fast (max parallelism) toward this. Plan doc: the bloat-reduction battle plan (labs: labs/docs/bloat-reduction-battle-plan.md)."
 metadata:
   node_type: memory
   type: project
@@ -10,7 +10,7 @@ metadata:
 **Directive (2026-07-11, new week):** burn the weekly Fable budget as fast as
 possible (max parallelism) **until Sunday**; keep the TaskList full the whole
 time; the SINGLE most important deliverable is a **battle plan to reduce codebase
-bloat** and then execute it. Battle plan DELIVERED: `plan/bloat-reduction-battle-plan.md`
+bloat** and then execute it. Battle plan DELIVERED: `the bloat-reduction battle plan (labs: labs/docs/bloat-reduction-battle-plan.md)`
 (PR #2885) + issue stubs #3141 (self-hosting pilot — IN FLIGHT, fable-selfhost),
 #3142 (module-level IR adoption / clears G3), #3143 (IR-first default flip / clears
 G1 → unlocks −60k legacy frontend).
@@ -54,7 +54,7 @@ keep TaskList full (re-run sync if low); (3) shepherd the merge queue (keep it f
 3-deep → ~12/hr); (4) surface the #3141 pilot go/no-go + real escalations to the
 user. Load cap = cores-2 = 6; do NOT raise JS2WASM_MAX_LOAD without user go
 (trades away SSH responsiveness); 6 heavy Fable agents already spike load to 9-15
-in compile bursts — that's the ceiling, spawns gate above it. Framing: porffor
+in compile bursts — that's the ceiling, spawns gate above it. Framing: the leading AOT competitor
 is ~30,000 lines at a comparable-or-better test262 pass rate; ours is ~320,000
 (`src/codegen/` alone 238k) at 76.0% conformance.
 
@@ -80,9 +80,9 @@ array-methods 9.5k / object-runtime 10k / native-strings 7.4k / dataview-native
 3.9k / …) is the flagship for the NEXT window; each family byte-inert-proven via the
 pilot's bit-exact + containment method. Scale-up plan being written by fable-selfhost.
 
-1. **Self-host the stdlib (the porffor model) — highest leverage, PILOT PROVED GO.**
+1. **Self-host the stdlib (the self-hosted-source model) — highest leverage, PILOT PROVED GO.**
    ~50-60k lines are hand-written per-builtin Wasm emission (runtime.ts +
-   *-methods.ts + object-runtime). Porffor writes builtins as a JS/TS subset it
+   *-methods.ts + object-runtime). The AOT competitor writes builtins as a JS/TS subset it
    compiles through its own pipeline (source-data, not compiler-code). Open
    feasibility question: is our self-compile path stable enough to eat the
    stdlib? Architect (fable-architect) scoping a go/no-go.

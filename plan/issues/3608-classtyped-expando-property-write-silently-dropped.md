@@ -65,11 +65,11 @@ receiver simply never routes to it.
    `reference_valid_wasm_is_not_correct_verify_by_value` — "it validates" is not
    "it is correct".
 2. **It invalidates benchmark/conformance comparisons.** Found while benchmarking
-   the Porffor #262 polymorphism benchmark (see below): the benchmark's whole
+   the upstream AOT-competitor polymorphism benchmark (see below): the benchmark's whole
    point is adding properties to class instances to force shape transitions. js2
    dropped every one of those writes, so all 7 FLAG variants compiled to the
    _same_ program and the flat timing curve was an artifact, not a result.
-   Porffor (latest main) is bit-exact with V8 here; js2 is not.
+   The AOT competitor (latest main) is bit-exact with V8 here; js2 is not.
 3. `assert`-style checks that read back an expando pass **vacuously**, the same
    inflation mechanism as #3468 / the standalone-floor vacuity family.
 
@@ -127,9 +127,9 @@ npx tsx src/cli.ts /tmp/probe.ts -o /tmp/out   # warns, compiles
 ## Provenance
 
 Found 2026-07-25 while benchmarking
-<https://github.com/CanadaHonk/porffor/issues/262#issuecomment-5072076826>
+the upstream AOT-competitor bug thread (link kept in the labs competitor notes)
 with js2. Not reported upstream. Full measurement writeup, including the
-three-engine semantics comparison (V8 / Porffor latest main / js2), is in the
+three-engine semantics comparison (V8 / AOT competitor latest main / js2), is in the
 benchmark report produced by that session.
 
 ## Note — renumbered from #3599

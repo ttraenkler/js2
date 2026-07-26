@@ -19,7 +19,7 @@ language_feature: compiler-internals
 es_edition: n/a
 goal: ir-full-coverage
 related: [3090, 2855, 2856, 3518]
-origin: "plan/bloat-reduction-battle-plan.md slice 6; gate G3 in plan/log/3090-phase0-legacy-delete-list.md"
+origin: "the bloat-reduction battle plan (labs: labs/docs/bloat-reduction-battle-plan.md) slice 6; gate G3 in plan/log/3090-phase0-legacy-delete-list.md"
 # Slice 1 adds the module-init claim assessment to the selector; it must live
 # in select.ts because it reads the module-level isPhase1* walk state
 # (earlyReturnLoopDepth / barrier / forInitLeakedNames) that is deliberately

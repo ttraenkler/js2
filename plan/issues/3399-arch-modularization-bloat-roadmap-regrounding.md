@@ -162,7 +162,7 @@ re-own them.
 | E10    | directory re-layout (`git mv` → `src/backend/{gc,linear,bytecode}`) | #3029 S6         | byte-identity (path-only)    | E3/E4; lead-scheduled |
 | E11    | `runtime.ts` decomposition (resolveImport + beyond)                 | #1934 (+§7)      | equivalence; ABI-stable      | —                     |
 | E12    | IR fallback buckets → 0 → STRICT_IR_REASONS; IR-first flip          | #2855 / #2950    | conformance delta 0          | value-rep #745/#2773  |
-| E13    | Porffor backend proof (5-part contract, second real consumer)       | #3288            | its own gates                | in-progress           |
+| E13    | External-backend proof (5-part contract, second real consumer)       | #3288            | its own gates                | in-progress           |
 
 **In-flight collision guards (do not schedule into these until they land):**
 async/generator rewrite #3386–#3391 / #2662 (blocks E7's `call-tail-dispatch`

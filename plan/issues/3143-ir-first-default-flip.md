@@ -17,7 +17,7 @@ language_feature: compiler-internals
 goal: ir-full-coverage
 depends_on: [3167, 3168]
 related: [2138, 3090, 2855, 2856, 3153, 3156]
-origin: "plan/bloat-reduction-battle-plan.md slice 4; gate G1 in plan/log/3090-phase0-legacy-delete-list.md"
+origin: "the bloat-reduction battle plan (labs: labs/docs/bloat-reduction-battle-plan.md) slice 4; gate G1 in plan/log/3090-phase0-legacy-delete-list.md"
 loc-budget-allow:
   - src/codegen/index.ts
   - src/ir/integration.ts

@@ -11,7 +11,7 @@ area: test-infrastructure
 goal: test-infrastructure
 sprint: 72
 horizon: s
-assignee: "loopdive/porffor-scrum"
+assignee: "loopdive/backend-scrum"
 related: [2097, 2961, 3288, 3370]
 origin: "PR #3287's first merge-group run completed all 114 Test262 shards but exposed a stale pre-oracle-v8 standalone high-water mark: current=4508, mark=24946."
 ---
@@ -35,7 +35,7 @@ therefore failed even though every one of the 114 shard jobs passed:
 STANDALONE host-free pass floor breached: 4508 < 24946 - 50
 ```
 
-This is not caused by the Porffor backend in PR #3287. That PR's default Wasm
+This is not caused by the external-backend work in PR #3287. That PR's default Wasm
 emission was verified byte-identical to its base, while the 20,438-count change
 is the intended oracle-v8 reclassification already declared by #3370.
 
@@ -61,7 +61,7 @@ pass.
 - [x] The official count and total come from the same merged report.
 - [x] `check-standalone-highwater.mjs` accepts that report with the standard
       tolerance.
-- [x] No compiler or Porffor implementation code changes.
+- [x] No compiler or external-backend implementation code changes.
 
 ## Verification
 

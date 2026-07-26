@@ -109,8 +109,8 @@ npx tsx src/cli.ts /tmp/b.ts -o /tmp/o          # compiles clean
 ## Provenance
 
 Found 2026-07-25 while benchmarking
-<https://github.com/CanadaHonk/porffor/issues/262#issuecomment-5072076826>
+the upstream AOT-competitor bug thread (link kept in the labs competitor notes)
 with js2 — the benchmark times itself with `console.time('engine')` inside an
 IIFE, so it hit case (b) exactly. Working around it required stripping both
-calls and timing externally. Porffor (latest main) runs the same script's
+calls and timing externally. The AOT competitor (latest main) runs the same script's
 `console.time` path without issue.

@@ -29,7 +29,7 @@ classification, so candidates and the baseline are not directly comparable.
 
 The mismatch produces systemic bidirectional host noise across unrelated PRs:
 
-- Porffor PR #3287 run 29638679403: 109 pass→compile_timeout, 95 non-timeout
+- External-backend PR #3287 run 29638679403: 109 pass→compile_timeout, 95 non-timeout
   regressions, 168 improvements, and aggregate compile time 21.1% faster.
 - Unrelated PR #3345 run 29638556351: 98 pass→compile_timeout, 95 non-timeout
   regressions, 175 improvements, and aggregate compile time 24.1% faster.
@@ -37,7 +37,7 @@ The mismatch produces systemic bidirectional host noise across unrelated PRs:
   compile time 26% faster.
 
 Standalone guards pass, and the repeated cross-PR signature shows an execution
-environment mismatch rather than a Porffor compiler regression.
+environment mismatch rather than a compiler regression in that PR.
 
 ## Root cause
 

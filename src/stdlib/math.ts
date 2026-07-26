@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Loopdive GmbH. Licensed under Apache-2.0 WITH LLVM-exception.
 /**
- * Self-hosted Math builtins (#3141 — the porffor model, pilot).
+ * Self-hosted Math builtins (#3141 — the self-hosted-source model, pilot).
  *
  * Each builtin here is ORDINARY TypeScript source written in the
  * IR-claimable subset (annotated f64 params/locals, if/while/return,

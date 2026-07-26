@@ -18,7 +18,7 @@ standalone + wasi green; **zero dialect gaps**; 3.3× body compression measured
    registered helper by funcMap name via `calleeTypes` — hand-written or
    self-hosted — so every family converts LEAF-FIRST, incrementally, no big-bang.
    Precision-sensitive or rep-heavy kernels can stay hand-written indefinitely
-   (the escape hatch works in both directions, exactly porffor's model inverted).
+   (the escape hatch works in both directions, exactly the AOT competitor's model inverted).
 4. Per-slice gates (unchanged): equivalence probe vs a JS port of the deleted hand
    algorithm (bit-exact, `.tmp/probe-3141.mts` is the template), byte-inertness
    SHA check for non-users, LOC-budget, full CI + `merge_group` net ≥ 0.
@@ -39,7 +39,7 @@ standalone + wasi green; **zero dialect gaps**; 3.3× body compression measured
 
 **Cumulative (1–8): ≈ −34–37k net** from the files above alone; with the long tail of
 smaller emission files (58 files total in the ~76k bucket) the battle plan's **−45–55k**
-holds at the measured 3.3× floor (porffor's 5–8× on large families is upside).
+holds at the measured 3.3× floor (the AOT competitor's 5–8× on large families is upside).
 
 ## Precursors (dispatch as their own small issues, in this order)
 

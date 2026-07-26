@@ -22,7 +22,7 @@ related: [2955, 2956, 1585, 2138, 3640]
 
 Before proposing anything: this repo already has an **active, large-scale
 effort** toward exactly this shape — 35+ issues carry
-`goal: backend-agnostic-ir` (linear-memory backend, Porffor-compatible
+`goal: backend-agnostic-ir` (linear-memory backend, external-backend-compatible
 backend, etc.), and `#2955` states the north star explicitly: **"one
 front-end; backends/modes differ at lowering."** That issue is mid-flight
 (Slice 1 of 5 landed) de-polymorphizing `src/ir/from-ast.ts` on
@@ -37,11 +37,11 @@ effort I haven't seen.
 
 What I believe is genuinely missing, and the reason this is its own issue
 rather than a comment on #2955/#2956: those issues are about making
-**individual backends** (linear, Porffor) consume a shared IR. I did not
+**individual backends** (linear, external) consume a shared IR. I did not
 find an issue for the **entry point** that would actually run one parse +
 type-check + IR-build pass and emit **two WasmGC modules** (`gc` and
 `standalone`) from it in a single `compile()` call. That's a nearer-term,
-smaller-scoped payoff than the linear/Porffor work — both targets are
+smaller-scoped payoff than the linear/external-backend work — both targets are
 already WasmGC, so it doesn't need a second backend built, just the
 front-end shared and a lowering pass run twice.
 
@@ -135,7 +135,7 @@ for actual design work.
 ## Non-goals
 
 - Does not commit to building this — investigation-first, like #2138.
-- Does not extend to the linear-memory/Porffor backends (#1585/#2956/etc.)
+- Does not extend to the linear-memory/external backends (#1585/#2956/etc.)
   — this is scoped narrowly to gc+standalone, both already WasmGC, as the
   nearer-term, smaller payoff. The broader initiative may subsume this
   later; that's fine, this issue's job is just to name the nearer milestone

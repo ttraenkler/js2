@@ -63,11 +63,6 @@ files:
   - src/ir/backend/contract.ts
   - src/ir/backend/legality.ts
   - src/ir/backend/linear-integration.ts
-  - src/ir/backend/porffor/assembler.ts
-  - src/ir/backend/porffor/compat.ts
-  - src/ir/backend/porffor/integration.ts
-  - src/ir/backend/porffor/sink.ts
-  - src/ir/backend/porffor/type-converter.ts
   - src/ir/passes/dead-code.ts
   - src/ir/passes/inline-small.ts
   - src/ir/passes/monomorphize.ts
@@ -145,7 +140,6 @@ loc-budget-allow:
   - src/ir/from-ast.ts
   - src/ir/nodes.ts
   - src/ir/verify.ts
-  - src/ir/backend/porffor/assembler.ts
 # R1 must resolve exact checker declarations to the one authoritative identity
 # inventory. TypeOracle deliberately does not expose ts.Symbol/ts.Type objects,
 # so these two structural joins remain reviewed raw-checker boundaries until
@@ -338,7 +332,7 @@ arrays, so it cannot claim that existing runtime collisions are fixed.
 - Key inlining, recursion/SCC analysis, monomorphization, and clone edit tables
   by identity. A clone receives a derived ID; its display name may retain the
   current format.
-- Make WasmGC, linear integration, and the Porffor adapter consume the same
+- Make WasmGC, linear integration, and external-backend adapters consume the same
   binding identity. Backend-local scratch labels and concrete export strings
   remain explicit labels below the ABI boundary.
 - Keep runtime/helper string references behind a typed intrinsic/import binding
@@ -941,7 +935,7 @@ Stage 9 completes the Commit 3.2 callable-binding checkpoint:
   class dispatch, and monomorphized clone calls retain their structural target
   or provider binding instead of reconstructing identity from a label;
 - WasmGC binds source-unit refs through an exact unit-to-slot table and never
-  falls back to a same-labelled runtime/helper slot. Linear Wasm and Porffor
+  falls back to a same-labelled runtime/helper slot. Linear Wasm and external backends
   bind source units by ID as well; runtime, intrinsic, and import dispatch use
   their structural symbol or module field. The remaining compatibility label
   use is confined to the temporary exact unit/support-to-legacy-slot adapter;
@@ -955,7 +949,7 @@ Stage 9 completes the Commit 3.2 callable-binding checkpoint:
 
 The changed-file matrix passes **115/115** with two intentional skips. The
 binding-aware backend/self-host matrix passes **50/50** with one optional
-Porffor skip; the class inheritance/collision matrix passes **21/21**; and the
+external-backend skip; the class inheritance/collision matrix passes **21/21**; and the
 linear/cross-backend regression matrix passes **35/35**, including all 29
 differential cases. Typecheck and diff checks pass, and the protected Test262
 log and equivalence baseline are unchanged. The LOC allowance records this
@@ -1639,14 +1633,14 @@ The implementing agent owns the files listed in frontmatter for the duration
 of R1. The expanded lock is deliberate: a repository audit found source-unit
 string keys in AST lowering plans, imported/module binding plans,
 promise-delay ownership, IR-first call graphs, analysis passes, overlay
-finalization, and the Porffor adapter in addition to the initially named core
+finalization, and the external-backend adapter in addition to the initially named core
 files. Lock `src/ir/nodes.ts`, every typed-reference consumer, the listed
 passes/backends, and `src/codegen/index.ts` as one identity change. Do not split
 those files across parallel developers.
 
 New identity/ABI modules are preferred over growing `codegen/index.ts`.
 Changes in codegen context are adapter plumbing only. R1 may thread identity
-through backend-linear/Porffor contracts, but it must not change backend
+through backend-linear/external-backend contracts, but it must not change backend
 ownership or lowering behavior; whole-program multi consumption belongs to R5
 and shared backend conversion belongs to R8.
 

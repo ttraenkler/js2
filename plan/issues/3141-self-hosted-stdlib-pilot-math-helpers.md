@@ -1,6 +1,6 @@
 ---
 id: 3141
-title: "Self-hosted stdlib pilot: compile math-helpers as TS builtin source through our own IR pipeline (porffor model)"
+title: "Self-hosted stdlib pilot: compile math-helpers as TS builtin source through our own IR pipeline (self-hosted-source model)"
 status: done
 assignee: ttraenkler/fable-selfhost
 sprint: Backlog
@@ -16,7 +16,7 @@ area: ir, codegen, stdlib
 language_feature: compiler-internals
 goal: ir-full-coverage
 related: [3090, 2855, 2527]
-origin: "plan/bloat-reduction-battle-plan.md §4 — highest-leverage lever (−45–55k net at scale), pilot-gated"
+origin: "the bloat-reduction battle plan (labs: labs/docs/bloat-reduction-battle-plan.md) §4 — highest-leverage lever (−45–55k net at scale), pilot-gated"
 ---
 
 # #3141 — Self-hosted stdlib pilot: `math-helpers.ts` via our own pipeline
@@ -24,11 +24,11 @@ origin: "plan/bloat-reduction-battle-plan.md §4 — highest-leverage lever (−
 ## Problem
 
 ~76k fn-lines of stdlib behavior are hand-emitted as `Instr[]`-building TS
-(`array-methods.ts` 9.6k, `object-runtime.ts` 10.1k, …). Porffor covers the same
+(`array-methods.ts` 9.6k, `object-runtime.ts` 10.1k, …). The leading AOT competitor covers the same
 surface in ~14k lines of **self-hosted TS builtins** its own compiler precompiles at
 build time (measured 2026-07-11: `compiler/builtins/*.ts` + a 307-line
 `precompile.js`; e.g. all of Array = 1,038 lines of TS vs our 9.6k of assembly).
-See `plan/bloat-reduction-battle-plan.md` §2/§4.
+See the bloat-reduction battle plan §2/§4 (labs: labs/docs/bloat-reduction-battle-plan.md).
 
 ## Pilot scope (deliberately minimal)
 
@@ -39,7 +39,7 @@ string-rep interaction, minimal intrinsics surface, dense test262 Math coverage.
 
 ## Implementation Plan (architect)
 
-1. **Intrinsics dialect (main deliverable).** Do NOT copy porffor's raw inline-wasm
+1. **Intrinsics dialect (main deliverable).** Do NOT copy the competitor's raw inline-wasm
    template escape (their flat `(f64,i32)` rep makes it trivial; our WasmGC struct rep
    does not). Define typed intrinsic *functions* (`__f64_reinterpret`, `__tag_of`, …)
    that `src/ir/from-ast.ts` recognizes and lowers as IR nodes so the
@@ -47,7 +47,7 @@ string-rep interaction, minimal intrinsics surface, dense test262 Math coverage.
 2. **Precompile step.** Build-time script compiling `stdlib/*.ts` (new dir) through
    `compileSource` with `experimentalIR` + IR-first for the builtin module; emit a
    linkable core-wasm artifact (or serialized func bodies), commit + hash-verify it;
-   CI recompiles fresh and diffs (porffor's `builtins_precompiled.js` model).
+   CI recompiles fresh and diffs (the competitor's precompiled-builtins model).
 3. **Swap-in.** Route the Math-helper registrations to the precompiled funcs; delete
    the hand-emission bodies from `math-helpers.ts`.
 4. **Measure.** Equivalence suite + full CI + `merge_group` (standalone floor), test262
@@ -117,7 +117,7 @@ every construct on the first run.
 Extrapolation: finishing the math family (sin/cos/exp/log/atan/tan/atan2/pow/
 log2/log10 cores, ~1.05k hand lines remaining, all expressible in the proven
 dialect TODAY) → math-helpers.ts collapses to a ~250-line registration shell,
-net ≈ −0.8k. At the measured 3.3× (conservative vs porffor's 5–8× on larger
+net ≈ −0.8k. At the measured 3.3× (conservative vs the competitor's 5–8× on larger
 families where hand-emission overhead is worse), the ~76k stdlib mass reduces
 by ~45–55k as the battle plan estimated — the pilot CONFIRMS the plan's number.
 

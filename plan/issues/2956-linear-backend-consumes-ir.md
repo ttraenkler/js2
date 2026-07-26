@@ -6,7 +6,7 @@ sprint: current
 created: 2026-07-02
 updated: 2026-07-17
 assignee: ttraenkler/fable-epsilon
-branch: symphony/porffor/2956-after-pr-3203
+branch: symphony/backend/2956-after-pr-3203
 priority: medium
 horizon: xl
 feasibility: hard
@@ -25,7 +25,7 @@ loc-budget-allow:
   - src/codegen-linear/index.ts
 last_ci_retry_head: null
 last_merged_pr: 3203
-claimed_by: porffor-codex-developer
+claimed_by: backend-codex-developer
 claimed_at: 2026-07-17T11:27:47.591Z
 pr: 3232
 ---
@@ -321,7 +321,7 @@ the divergence with #3332-referencing assertions instead of masking it.
 **Remaining after this sub-slice**: refcells + aggregates via `layout.ts`
 (the L2 remainder), L3 strings (after #2955), L4 default-ON flip.
 
-## Execution status — L2 aggregate/ref-cell sub-slice implemented (2026-07-17, porffor-codex-developer)
+## Execution status — L2 aggregate/ref-cell sub-slice implemented (2026-07-17, backend-codex-developer)
 
 Selector-claimed numeric objects now lower through the flag-gated linear-IR
 overlay as i32 arena pointers. The resolver computes field offsets with the
@@ -361,7 +361,7 @@ playground corpus has no aggregate/refcell row, so
 **Remaining after L2:** L3 strings (after #2955) and L4 default-ON + direct
 reject-list folding. The issue remains `in-progress` for those later slices.
 
-## Execution status — L3 strings implemented (2026-07-17, porffor-codex-developer)
+## Execution status — L3 strings implemented (2026-07-17, backend-codex-developer)
 
 Selector-claimed strings now use the direct linear backend's canonical i32
 arena pointer while staying on the shared representation-abstract IR
@@ -393,7 +393,7 @@ The measured linear-IR ratchet improved and was banked:
 folding) is the only issue-defined slice remaining, so status stays
 `in-progress` for the next fresh continuation branch.
 
-## Execution status — L4 default-on + unified fallback ratchet implemented (2026-07-17, porffor-codex-developer)
+## Execution status — L4 default-on + unified fallback ratchet implemented (2026-07-17, backend-codex-developer)
 
 The selector/LinearEmitter overlay is now the default single-module
 `--target linear` path for the numeric/control-flow, fixed-number vec,

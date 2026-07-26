@@ -395,7 +395,7 @@ none):
   via i32.sub; first-clause-wins on duplicate tests). NaN matches nothing
   and -0 === 0 under f64.eq — §7.2.16 for free. The arm is out-of-subset
   (`requireInstrSink`, same as forof.\*): allowed on the WasmGC + linear
-  backends (LinearEmitter's sink IS Instr[]), rejected on porffor/bytecode.
+  backends (LinearEmitter's sink IS Instr[]), rejected on bytecode.
 - **`IrInstrLabeledBlock { label, body }`** — one Wasm `block` binding its
   label BREAK-ONLY; the verifier walk now carries a second `breakOnly` env
   (loop labels bind both modes; block/switch labels reject continue).

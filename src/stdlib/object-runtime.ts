@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Loopdive GmbH. Licensed under Apache-2.0 WITH LLVM-exception.
 /**
- * Self-hosted Object-runtime builtins (#3160 — porffor model, object family
+ * Self-hosted Object-runtime builtins (#3160 — self-hosted-source model, object family
  * slice 1). Ordinary TS source in the IR-claimable subset, compiled through
  * the compiler's own pipeline by the generalized driver
  * (`src/codegen/stdlib-selfhost.ts`) and registered where the hand-emitted

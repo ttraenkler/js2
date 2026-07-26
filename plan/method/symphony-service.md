@@ -55,7 +55,7 @@ the PR head and check rollup:
 - A merged PR for an `in-progress` multi-slice issue clears the old PR, records
   it in `last_merged_pr`, and returns the issue to `ready` for its next slice.
   The next slice always receives a fresh Symphony branch named from the issue
-  and merged PR, such as `symphony/porffor/2953-after-pr-3128`. The durable
+  and merged PR, such as `symphony/backend/2953-after-pr-3128`. The durable
   merge key prevents restart from requeueing the same merged PR, and branch PR
   discovery ignores that already-handled PR so it cannot bind the next slice to
   a stale merged review.
@@ -144,25 +144,16 @@ Use `--dry-run` first. It exercises workflow loading, issue scanning, lane
 selection, and dispatch planning without creating worktrees or launching
 agents.
 
-## Scoped Porffor Workflow
+## Scoped experiment workflows
 
-`WORKFLOW.porffor.md` isolates the optional Porffor backend chain in the
-`porffor-backend` sprint. It uses one `gpt-5.6-sol` lane, a dedicated worktree
-and log root, and initializes only the optional `vendor/Porffor` submodule in
-worker worktrees. Start and inspect it with:
-
-```bash
-pnpm run symphony -- --workflow WORKFLOW.porffor.md --dry-run --json
-pnpm run symphony -- --workflow WORKFLOW.porffor.md
-pnpm run symphony -- --workflow WORKFLOW.porffor.md --status --json
-```
-
-The workflow sets `tracker.include_dependencies: true`,
-`pull_requests.sprint_only: true`, and
-`pull_requests.include_dependencies: true`. Fresh candidate dispatch and PR
-reconciliation therefore include the Porffor sprint plus its transitive
-prerequisites. Symphony can continue multi-slice #2953/#2956 work until P1/P3
-unblock, but it cannot consume unrelated work from the broad `current` sprint.
+A workflow file can isolate an optional experiment chain in its own sprint,
+with one dedicated lane, worktree, and log root. (The external-backend
+experiment previously ran this way via a scoped `WORKFLOW.*.md`; that
+workflow moved with the experiment to the labs repo.) A scoped workflow sets
+`tracker.include_dependencies: true`, `pull_requests.sprint_only: true`, and
+`pull_requests.include_dependencies: true`, so fresh candidate dispatch and PR
+reconciliation include the scoped sprint plus its transitive prerequisites
+while never consuming unrelated work from the broad `current` sprint.
 Workers leave a multi-slice prerequisite `in-progress` while unchecked slices
 remain so each merged PR requeues the next slice; only the final PR uses
 `in-review` and closes the issue on merge. Every continuation slice gets a new

@@ -107,7 +107,7 @@ Context at 73% / weekly budget at 19% when compacting.
 - +554 net test262 tests (baseline 25,276 → 25,830 = 59.8%)
 - IR Phase 4 slices 6–10 all landed: generators (#1169f), destructuring (#1169g), try/catch (#1169h), RegExp/extern-class scaffolding (#1169i step A)
 - IrLowerResolver refactor (#1185) cleared the per-feature shortcut debt across the IR system
-- Competitive benchmark harness built in labs/ — 5 programs × 9 toolchain lanes; Javy static+dynamic split; Porffor and AssemblyScript lanes wired up
+- Competitive benchmark harness built in labs/ — 5 programs × 9 toolchain lanes; Javy static+dynamic split; AssemblyScript and AOT-competitor lanes wired up
 - Architecture Decision Records (#1202) and landing page architecture section (#1208) shipped
 - CI baseline-drift hardening complete (#1076–#1080, #1192, #1191, #1193)
 - #1177 (TDZ closure captures) reverted after 14.7% regressions — deferred to S46
@@ -306,7 +306,7 @@ matching source assembly, fixture graphs, negative-test checks, async completion
 and verdict classification. The stricter oracle exposed silent false passes;
 compiler and runner fixes converted the real supported cases back to passes.
 `@loopdive/js2` gained the reusable `js2-test262` CLI for a first standalone-only
-test262.fyi publication. Early IR/self-host/Porffor integration slices also
+test262.fyi publication. Early IR/self-host/external-backend integration slices also
 landed, while the architecture epics remain open.
 
 The merge queue caught a 29-test illegal-cast regression in the JS-host closure
