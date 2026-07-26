@@ -222,13 +222,13 @@ describe("#3603 S1 — vec-mirror registry survives deletion of WeakMap intrinsi
     let deletionTookEffect = false;
     try {
       // `delete` is the BEHAVIOUR UNDER TEST, not an oversight: test262's
-      // propertyHelper deletes realm intrinsics exactly this way
-      // (`isConfigurable` does `delete obj[name]`), and reproducing that is the
-      // whole point of this case. Suppressions must sit on the line directly
-      // above the offending statement.
-      // biome-ignore lint/performance/noDelete: reproduces test262 realm mutation
+      // propertyHelper mutates realm intrinsics exactly this way
+      // (`isConfigurable` does `delete obj[name]`), which is what broke the
+      // registry. NOTE: a biome-ignore pragma must sit on the line DIRECTLY
+      // above the offending statement — prose in between silences nothing.
+      // biome-ignore lint/performance/noDelete: the test must reproduce verifyProperty deleting the intrinsic.
       delete (WeakMap.prototype as any).get;
-      // biome-ignore lint/performance/noDelete: reproduces test262 realm mutation
+      // biome-ignore lint/performance/noDelete: assigning undefined would not exercise the destructive probe.
       delete (WeakMap.prototype as any).set;
       deletionTookEffect =
         typeof (WeakMap.prototype as any).get === "undefined" && typeof (WeakMap.prototype as any).set === "undefined";
