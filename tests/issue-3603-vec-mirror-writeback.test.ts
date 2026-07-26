@@ -221,9 +221,14 @@ describe("#3603 S1 — vec-mirror registry survives deletion of WeakMap intrinsi
     let thrown: unknown;
     let deletionTookEffect = false;
     try {
-      // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+      // `delete` is the BEHAVIOUR UNDER TEST, not an oversight: test262's
+      // propertyHelper deletes realm intrinsics exactly this way
+      // (`isConfigurable` does `delete obj[name]`), and reproducing that is the
+      // whole point of this case. Suppressions must sit on the line directly
+      // above the offending statement.
+      // biome-ignore lint/performance/noDelete: reproduces test262 realm mutation
       delete (WeakMap.prototype as any).get;
-      // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+      // biome-ignore lint/performance/noDelete: reproduces test262 realm mutation
       delete (WeakMap.prototype as any).set;
       deletionTookEffect =
         typeof (WeakMap.prototype as any).get === "undefined" && typeof (WeakMap.prototype as any).set === "undefined";
