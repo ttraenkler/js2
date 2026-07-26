@@ -1,8 +1,9 @@
 {
   "id": "3647",
   "assignee": "ttraenkler/opus-loop-a",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-3647-propertyisenumerable",
   "claimed_at": "2026-07-26T03:43:47Z",
-  "updated_at": "2026-07-26T03:43:47Z"
+  "updated_at": "2026-07-26T04:20:47Z",
+  "released_at": "2026-07-26T04:20:47Z"
 }
