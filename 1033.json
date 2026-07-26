@@ -1,8 +1,9 @@
 {
   "id": "1033",
   "assignee": "ttraenkler/opus-loop-h",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-1033-react-host-symbol-inbound",
   "claimed_at": "2026-07-26T20:12:06Z",
-  "updated_at": "2026-07-26T20:12:06Z"
+  "updated_at": "2026-07-26T20:13:15Z",
+  "released_at": "2026-07-26T20:13:15Z"
 }
