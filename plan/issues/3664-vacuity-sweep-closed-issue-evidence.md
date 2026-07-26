@@ -162,6 +162,61 @@ pointer (reopening would duplicate). #1334 is the worked example — see its
 "ADJUDICATION" section, which found 11.1 % of its own baseline-passes now failing,
 every one on a descriptor-attribute assertion.
 
+## Addendum 2026-07-26 — the 1,066 partition, reconstructed exactly
+
+**The "~332 unowned non-`verifyProperty` remainder" does not exist.** It was
+computed as `1066 − 734`, i.e. as the complement of a *sole-enumerability-clause*
+filter — but that complement is **not** "non-`verifyProperty`". Most of it is
+still `verifyProperty`-shaped, just failing on other descriptor clauses.
+
+Reconstructed from the merge_group artifact (`test262-merged-report`, run
+30179758665) joined against the baseline on `file`, keeping `base == pass &&
+cand != pass`. **Total reconstructs to 1,066 exactly**, matching the gate, so the
+set is right.
+
+| partition | n | owner |
+| --- | ---: | --- |
+| **A** `verifyProperty`-shaped, **all** failed clauses are enumerability | **734** | the #3647 cohort |
+| **B** `verifyProperty`-shaped, other/mixed clauses | **304** | largely **#3653** (writable/configurable) |
+| **C** **not** `verifyProperty`-shaped | **28** | genuinely unowned |
+| | **1,066** | sum checks ✅ |
+
+**B's clause composition** (a test may fail several):
+
+| clause combination | n |
+| --- | ---: |
+| configurable + enumerable + writable | 69 |
+| configurable + value + writable | 59 |
+| value | 56 |
+| configurable + writable | 32 |
+| writable | 23 |
+| configurable | 18 |
+| configurable + enumerable + value + writable | 17 |
+| value + writable | 10 |
+| remaining combinations | 20 |
+
+`writable` appears in **218** of B and `configurable` in **206** — closely
+matching #3653's independently measured 202 / 134, so **B is substantially that
+issue's population** rather than new work.
+
+**C — the entire genuinely-unowned remainder, 28 tests:**
+
+| signature | n |
+| --- | ---: |
+| `strict rerun: timeout (30s)` | 12 |
+| `Test262:AsyncTestFailure:Test262Error: [object WebAssembly.Exception]` | 8 |
+| `timeout (30s)` | 5 |
+| `obj['property'] value should be N` | 2 |
+| `_vecMirrorSource.get is not a function` | 1 |
+
+**17 of 28 are timeouts** — infrastructure, not semantics. **Unclassified tail:
+zero**; five signatures cover all 28.
+
+**So the actionable statement is: there is no large unowned slice here.** The
+newly-surfaced work is almost entirely already owned by #3647 (734) and #3653
+(304), and the true remainder is 28 tests dominated by timeouts. The single
+non-timeout lead worth pulling is `_vecMirrorSource.get is not a function`.
+
 ## Follow-ups
 
 1. **The ~332 non-`verifyProperty` newly-surfaced failures are unowned** — the
