@@ -1,9 +1,8 @@
 {
   "id": "3668",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-07-26T10:14:33Z",
-  "updated_at": "2026-07-26T10:14:33Z",
-  "pr_scan": "ok"
+  "assignee": "ttraenkler/opus-loop-g",
+  "status": "in-progress",
+  "branch": "issue-3668-harness-flip-instrument",
+  "claimed_at": "2026-07-26T10:15:05Z",
+  "updated_at": "2026-07-26T10:15:05Z"
 }
