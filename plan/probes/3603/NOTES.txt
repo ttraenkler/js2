@@ -38,6 +38,33 @@ check `ls -la test262/ | grep harness` and restore the symlink by hand:
 Nothing here modifies compiler or runner source. There is no committed
 force-disable switch.
 
+DIAGNOSING AN UNCLEAN EXIT — propertyHelper.stock.js is the tell
+----------------------------------------------------------------
+ab.mts backs the STOCK harness up to plan/probes/3603/propertyHelper.stock.js
+while it runs and removes it on a clean exit. So:
+
+  ** the mere PRESENCE of plan/probes/3603/propertyHelper.stock.js is
+     EVIDENCE that an arm exited without restoring. **
+
+It is an untracked file (gitignored-by-convention scratch, byte-identical to
+test262/harness/propertyHelper.js), so it costs nothing and is safe to delete —
+but do not delete it before checking the symlink, because it is the only trace
+left behind that says an arm died mid-run.
+
+Check, then restore:
+
+  ls -ld test262/harness            # a SYMLINK is healthy; a directory is not
+  grep -c '__vpChecks\|__vpFailMsg\|__vpPush' test262/harness/propertyHelper.js
+                                    # non-zero => an INSTRUMENTED harness is live
+
+  rm -rf test262/harness && ln -s /workspace/test262/harness test262/harness
+  rm -f plan/probes/3603/propertyHelper.stock.js
+
+The pre-flight in the sweep already REFUSES to run against a non-symlink or an
+instrumented harness, so a contaminated measurement cannot silently happen
+again. This note makes the DIAGNOSIS self-service too: the artifact states its
+own provenance instead of leaving the next reader to infer it.
+
 WORKTREE-SAFE IS NOT SELF-SAFE (learned the hard way, 2026-07-26)
 ----------------------------------------------------------------
 The swap above protects OTHER AGENTS. It does NOT protect YOU from your own
