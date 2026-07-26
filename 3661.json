@@ -1,8 +1,8 @@
 {
   "id": "3661",
-  "assignee": "ttraenkler/opus-loop-d",
+  "assignee": "ttraenkler/opus-loop-e",
   "status": "in-progress",
-  "branch": "issue-3661-freeze-seal-descriptor-readback",
-  "claimed_at": "2026-07-26T03:48:41Z",
-  "updated_at": "2026-07-26T03:48:41Z"
+  "branch": "issue-3661-writable-enforcement",
+  "claimed_at": "2026-07-26T04:29:44Z",
+  "updated_at": "2026-07-26T04:29:44Z"
 }
