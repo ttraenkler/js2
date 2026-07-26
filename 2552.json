@@ -1,8 +1,9 @@
 {
   "id": "2552",
   "assignee": "ttraenkler/opus-loop-e",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2552-annexb-b33-hoisting",
   "claimed_at": "2026-07-26T00:47:26Z",
-  "updated_at": "2026-07-26T00:47:26Z"
+  "updated_at": "2026-07-26T01:52:10Z",
+  "released_at": "2026-07-26T01:52:10Z"
 }
