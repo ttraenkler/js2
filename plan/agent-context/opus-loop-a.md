@@ -124,10 +124,24 @@ this: `real-shapes.mts`, `predicate.mts` and `uncurried.mts` all call
 `runTest262File` (`grep -c` → 0). Only `realpath.mts` used the harness path.
 
 **So both of us measured an isolated compile of the same predicate and got
-opposite answers.** That is a live contradiction, not a reconciled one. One of:
-different class shapes, different compile options, or a probe bug on one side.
-**Resolve it before treating "both correct in isolation" as established** — the
-conclusion "the defect requires the harness context" currently rests on it.
+opposite answers.** loop-e has since **withdrawn** the harness-context
+explanation, crediting the `grep` verification as what killed it.
+
+**Shape dependence is ALSO refuted.** The obvious follow-up — that the exotic
+shapes in the failing files (`*-gen-*`, `*-static-gen-*`, `*-async-method-*`)
+read wrong while plain methods read correct — was tested by loop-e across nine
+shapes (plain, generator, static, static-generator, async, getter, setter,
+computed name, string-literal name). **All nine read `false|false` on both
+reflective routes**, with a sentinel enumerable own property correctly reading
+`true|true`. Not shape.
+
+Neither is tree drift: loop-e found no fix landing between our bases with an
+obvious message.
+
+**The contradiction remains LIVE and unexplained.** Remaining candidates:
+different compile options, or a probe bug on one side. Do not treat "both
+correct in isolation" as established, and do not build an instrumentation plan
+on it.
 
 What survives regardless: **#3647's mechanism is not the discriminator**,
 because `propertyIsEnumerable` reads identically for passing and failing shapes
@@ -171,11 +185,26 @@ merge_group run, join against a **force-fetched** baseline on `file`, keep
 - **PR #3649** (open, docs-only): #3626 §2.1b normalisation ladder + the
   population trap + two lint lessons in `plan/method/pre-commit-checklist.md` +
   the `propertyHelper.stock.js` diagnostic in `plan/probes/3603/NOTES.txt`.
-- **The ~332 non-`verifyProperty` newly-surfaced failures → loop-e** (agreed
-  explicitly, on the board). This is a **gap in #3603's condition (b)**: my
-  cohort census covered the `verifyProperty` family only, so Proxy, generator
-  brand checks, mapped `arguments`, `delete` and escape-analysis surfaces were
-  never routed to a tracker.
+- **The "~332" DOES NOT EXIST — corrected by loop-e, use this partition.**
+  I derived 332 as `1066 − 734`, i.e. the complement of a _sole-enumerability_
+  filter, and then described it as "non-`verifyProperty`". Those are not the
+  same set. loop-e reconstructed the full 1,066 from the merge_group artifact
+  and partitioned it properly:
+
+  | bucket |         n | what                                                                                        |
+  | ------ | --------: | ------------------------------------------------------------------------------------------- |
+  | **A**  |   **734** | `verifyProperty`-shaped, all clauses enumerability (**my figure, independently confirmed**) |
+  | **B**  |   **304** | `verifyProperty`-shaped, other/mixed clauses — `writable` in 218, `configurable` in 206     |
+  | **C**  |    **28** | genuinely NOT `verifyProperty`-shaped, **17 of them timeouts**                              |
+  |        | **1,066** | ✅ sums                                                                                     |
+
+  **B is largely #3653's population** (loop-d), matching its independently
+  measured 202/134. **The real unowned remainder is 28, with zero unclassified
+  tail.** So the gap I flagged in #3603's condition (b) was **real but small** —
+  worth flagging, not worth the size I implied. This is the second
+  non-composing filter I published (see §2); both times the error was treating
+  a complement as if it were a category.
+
 - **#3646** (gOPD returns null for a class method when the class has
   computed-name fields) — filed, unstarted, and NOT subject to the #3647
   refutation.
