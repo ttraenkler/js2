@@ -1,8 +1,9 @@
 {
   "id": "3661",
   "assignee": "ttraenkler/opus-loop-e",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-3661-writable-enforcement",
   "claimed_at": "2026-07-26T04:29:44Z",
-  "updated_at": "2026-07-26T04:29:44Z"
+  "updated_at": "2026-07-26T10:42:05Z",
+  "released_at": "2026-07-26T10:42:05Z"
 }
