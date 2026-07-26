@@ -244,3 +244,134 @@ read/assignment-read and the mutable-binding read/`f = 123` value semantics
 
 Expected merge_group delta: the -10 recovered, no new regressions → **net ≥ 0**.
 On landing, `#2200` closes (both Annex B phases complete).
+
+## Status reconciliation (2026-07-26, opus-loop-e)
+
+**All of the above LANDED.** Verified on current `main`: `annexBNameObservedOutsideBlock`,
+`annexBNameReassignedInBlock`, `annexBSameNameVarInScope` (all in
+`nested-declarations.ts`), `annexBOuterBindings` in `context/types.ts` /
+`statements.ts` / `typeof-delete.ts`, **and** the bare-value-read interception in
+`expressions/identifiers.ts`. The abandoned branch
+`issue-2552-annexb-phase2-tdz-narrow` has exactly one unique commit (`99843727b`,
+the −10 fix) and it is **redundant with main** — nothing to cherry-pick. The
+`in-progress` frontmatter was stale, not a signal of remaining work.
+
+**The residual 204 failures are a DIFFERENT mechanism** (see below), not this
+issue's hot-path regression.
+
+## ⚠️ METHOD — read this before writing a line of code here
+
+**The negative-control requirement is not boilerplate. It caught a fix that did
+nothing, in this exact area, on 2026-07-26.**
+
+The same swallowed-exception / no-op failure mode appeared at **three levels in a
+single session**, and in every case the *only* thing that caught it was a control
+that **must** report failure:
+
+1. **The #3626 census's own probe** recorded "delete of non-configurable
+   succeeds" for 22 tests. The `delete` actually *throws*, so the expression it
+   read was never evaluated — it measured the throw and reported a defect that
+   does not exist (see #3626 §2.2.1).
+2. **Two ad-hoc probes** in the same session reported clean results that were
+   artifacts — one from `String(boolean)` silently yielding `"0"`, one from an
+   unrelated `typeof e` construct producing "invalid wasm".
+3. **A fix in THIS issue's area changed nothing at all.** A step-ii exclusion was
+   added to the `annexBBlockNestedEligible` chain; the 7-form × 2-scope matrix
+   returned **pass=2 fail=14 with the fix and pass=2 fail=14 with
+   `nested-declarations.ts` reverted to `origin/main` — byte-identical.** The two
+   that passed were **already passing on the merge base**. A test suite written
+   around those two forms would have been green, credible, and worthless.
+
+**Why that fix was a no-op** — and the trap for the next implementer:
+`compileNestedFunctionDeclaration` registers the name via
+`ctx.funcMap.set(funcName, …)` (`nested-declarations.ts`, the reserved-entry
+block) **unconditionally**, independent of every Annex B eligibility decision. A
+bare read of `f` resolves through *that* route. **Gating the outer binding cannot
+help when the name is reachable by a second, unconditional path.** This is the
+third instance of one architectural shape in the codebase — the descriptor
+two-store bug (#739), the vec-mirror/`__vec_len` dual route, and this one — so
+state it as a standing hazard:
+
+> **When a fix gates a write/registration path, check whether a second path can
+> still satisfy the read. A gate is only as good as the completeness of the
+> routes it covers.**
+
+**Required checks for any change here:**
+- Run the **7 early-err forms × 2 scopes** (`early-err`, `-block`, `-for`,
+  `-for-in`, `-for-of`, `-switch`, `-try`; function-code + global-code) and
+  confirm they are **red on the merge base** before claiming anything.
+- **Re-run the identical matrix with the fix AND with the file reverted to
+  `origin/main`, and diff the two.** Byte-identical output is what exposed the
+  no-op; make this the standard check, not a one-off.
+- Keep the **24 `existing-global*`** failures **unmoved** — they are a separate
+  mechanism (`missing_builtin: null is not a function [in __module_init()]`),
+  not step ii.
+- **Do not run a CPU-heavy job (e.g. `tsc --noEmit`) concurrently with the
+  matrix** — it induces `compilation timeout` results that look like
+  regressions. One contaminated run already had to be discarded.
+- `early-err` (the base form) is **not** a step-ii test: it asserts
+  `init === 123` / `after === 123` against a function-scope `let f`, and passes
+  for unrelated reasons. Do not read it as evidence either way.
+
+## The real residual mechanism (2026-07-26 measurement)
+
+Measured from the fresh baseline jsonl, corpus-wide:
+
+| bucket | tests | fail | distinct signatures |
+| --- | --- | --- | --- |
+| `annexB/language/function-code` | 159 | 93 | 12 |
+| `annexB/language/global-code` | 153 | 111 | 9 |
+| **combined** | **312** | **204** | **21** |
+
+- **96** (48 + 48) — *"An initialized binding is not created prior to evaluation —
+  Expected a ReferenceError, none thrown"*. **This is Annex B B.3.3.1 step ii**:
+  the "would replacing the FunctionDeclaration with a `var` produce an Early
+  Error?" exclusion, which is not implemented. When it would, the extension is
+  **not observed** — no binding is created and a function-scope read of `F` must
+  throw. Canonical: `for (let f in {key:0}) { if (true) function f(){} }`.
+- **24** — `missing_builtin: null is not a function [in __module_init()]`,
+  `global-code`/`existing-global*` only. **Different mechanism**, do not conflate.
+- remaining **~84** across 19 signatures.
+
+So **"204 failures, one mechanism" is wrong — the mechanism is 96/204 (47 %)**,
+which is still the best-concentrated currently-actionable ES5 lever measured.
+
+**What varies inside the 96** (checked before counting it as one): it is one rule
+over **7 syntactic forms × 8 block templates × 2 scopes**. One *rule*, seven
+*cases* — the scope walk has to locate a colliding lexical binding in seven
+structurally different hosts (sibling `let` in a block, `for(let f;;)`, for-in and
+for-of heads, a `switch` case clause, a **destructuring** `catch ({ f })`, and the
+base form). Size any claim off a re-run, never off 96.
+
+**A THIRD finding — why routing step ii into the cancel path ALSO fails**
+(2026-07-26, measured). After normalising the B.3.4 implicit block and calling the
+step-ii predicate from `annexBHoistCancels` (so the *cancellation* machinery, not
+the eligibility chain, owns it), the 14 step-ii cases **still fail identically**.
+Reason: `fctx.annexBCancelled` is **function-context-local**, but every one of
+these tests performs the observing read from inside a *nested* function —
+
+```js
+assert.throws(ReferenceError, function() { f; }, '…');
+```
+
+That inner arrow/function compiles in a **different `FunctionContext`**, which has
+no `annexBCancelled` entry, while `ctx.funcMap` is **module-global**. So the read
+resolves through funcMap and no ReferenceError is raised. **Both** existing Annex B
+mechanisms are function-local; the route that actually answers the read is global.
+A working fix therefore needs the cancellation/step-ii state to be visible to
+nested contexts (or the funcMap registration itself to be suppressed for
+step-ii-excluded names) — not another gate in a function-local table.
+
+Three attempts, all measured, all negative: (1) eligibility-chain exclusion —
+byte-identical no-op; (2) cancel-path + B.3.4 implicit-block normalisation — no
+change; (3) both together — no change. None were committed to `src/`. Treat this
+as evidence the fix must be **cross-context**, and start there.
+
+**A second finding that blocks the whole family** (2026-07-26): for the
+`if-decl-*` / `if-stmt-else-decl` templates — most of the generated corpus — the
+declaration is `if (true) function f() {}`, so the parser gives it an
+**IfStatement** parent, not a Block. Both `annexBHoistCancels` and
+`annexBBlockNestedEligible` open with `if (!ts.isBlock(block)) return null`, so
+**neither Annex B path runs at all** for that entire family. Annex B **B.3.4**
+treats an if-clause FunctionDeclaration as implicitly block-wrapped; that implicit
+block has to be normalised before any step-ii logic can even be reached.
