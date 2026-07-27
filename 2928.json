@@ -1,8 +1,9 @@
 {
   "id": "2928",
   "assignee": "ttraenkler/sendev-2928-e6",
-  "status": "in-progress",
+  "status": "released",
   "branch": "issue-2928-e6-test262-provider",
   "claimed_at": "2026-07-26T21:58:24Z",
-  "updated_at": "2026-07-26T21:58:24Z"
+  "updated_at": "2026-07-27T00:37:28Z",
+  "released_at": "2026-07-27T00:37:28Z"
 }
