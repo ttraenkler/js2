@@ -1,9 +1,8 @@
 {
   "id": "3685",
-  "assignee": "",
-  "status": "reserved",
-  "branch": "",
-  "reserved_at": "2026-07-27T18:07:03Z",
-  "updated_at": "2026-07-27T18:07:03Z",
-  "pr_scan": "degraded"
+  "assignee": "ttraenkler/claude-perf",
+  "status": "in-progress",
+  "branch": "claude/acorn-performance-3673-w3tiz9",
+  "claimed_at": "2026-07-27T21:46:00Z",
+  "updated_at": "2026-07-27T21:46:00Z"
 }
