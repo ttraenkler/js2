@@ -11,9 +11,7 @@
   },
   "permissions": {
     "defaultMode": "bypassPermissions",
-    "allow": [
-      "Bash(*)"
-    ]
+    "allow": ["Bash(*)"]
   },
   "hooks": {
     "TeammateIdle": [
@@ -157,6 +155,11 @@
         "matcher": "Bash",
         "if": "Bash(*git push*)",
         "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PROJECT_DIR:-/workspace}\"/.claude/hooks/pre-git-push-lint.sh",
+            "timeout": 120
+          },
           {
             "type": "command",
             "command": "\"${CLAUDE_PROJECT_DIR:-/workspace}\"/.claude/hooks/pre-git-push-loc.sh",
