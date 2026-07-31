@@ -141,9 +141,46 @@ verifyProperty(c, "b", { value: 42, enumerable: true, writable: true, configurab
 ```
 
 with `obj['b'] descriptor should be writable`, and in the `literal-names`
-variant `obj['a'] descriptor value should be undefined`. `b`/`a` are class
-**fields** read off the **instance**, not the prototype — a different receiver,
-a different code path, and nothing this change touches. It was invisible while
+variant `obj['a'] descriptor value should be undefined`.
+
+**Root-caused after the fix landed — and it is NOT what the messages suggest.**
+Probing narrowed it in three steps (`.tmp/3647/probe-field{,2,3,4}.js`,
+`runTest262File`, both lanes):
+
+1. A **plain** class field (`class C { b = 42 }`) is fully correct in both
+   lanes — `hasOwn`, `propertyIsEnumerable` and all four descriptor attributes.
+2. A **computed-name** field (`var x = "b"; class C { [x] = 42 }`) is *also*
+   fully correct on the descriptor **read** path, both lanes. So the defect is
+   not descriptor fidelity at all — the "should be writable" message is
+   `verifyProperty` reporting on state it **mutated**.
+3. Isolating the mutations gives two distinct residuals, exact values measured:
+
+   ```
+   uninit{type=object, isNull=true}
+   delete{before=42, ret=true, after=NaN, afterType=number,
+          hasOwn=false (host) / hasOwn=true (standalone)}
+   ```
+
+   - **Residual A — an uninitialized class field reads `null`, not
+     `undefined`.** `class C { ["not initialized"]; }` → `typeof` is `"object"`
+     and `=== null` is `true`. Both lanes. §10.2.x requires `undefined`. This is
+     the `obj['a'] descriptor value should be undefined` failure, and it is a
+     null/undefined conflation, not a descriptor bug.
+   - **Residual B — after `delete c.b` the field still reads, as `NaN`.**
+     `delete` returns `true`, but the subsequent read yields `NaN` (a **number**)
+     rather than `undefined`: the physical f64 struct field is still being read
+     through. **The lanes diverge on the tombstone**: host correctly reports
+     `hasOwnProperty → false` while still mis-reading the value, whereas
+     standalone reports `hasOwnProperty → true`, i.e. it does not honour the
+     tombstone at all.
+
+**Both residuals affect BOTH lanes** — unlike #3647 itself, which was host-only.
+A fix here must be validated on both, and the standalone `hasOwn` divergence in
+Residual B means one change cannot be assumed to cover both.
+
+`b`/`a` are class **fields** read off the **instance**, not the prototype — a
+different receiver, a different code path, and nothing this change touches. It
+was invisible while
 `m` aborted the test first.
 
 This is the #3468 F1 pattern again: an honest fix **exposes** the next cohort
