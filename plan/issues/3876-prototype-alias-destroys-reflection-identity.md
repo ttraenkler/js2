@@ -84,37 +84,69 @@ By contrast, the ~20 `Object/define*` descriptor rows use
 `Object.defineProperty(Array.prototype, …)` **inline** — all 20 verified, 0
 aliased. They are unaffected by this issue.
 
-## Related but DISTINCT — inline object-literal argument to `gOPD`
+## RETRACTED — the "inline object-literal `gOPD`" defect does not exist
 
-Recorded here deliberately rather than folded in, because it is a separate
-observation.
+An earlier revision of this issue recorded a second defect: that
+`Object.getOwnPropertyDescriptor({a:1},'a')` returns `undefined` on host while
+the variable form returns a real descriptor. **That was a bare-`compile()`
+measurement artifact, not a defect.** Retracted in full, and recorded here
+rather than deleted because the way it was caught is the reusable part.
+
+`dev-es5-coercion` re-ran it under the authoritative harness and it came back
+correct. Re-verified independently with controls (below): on host,
+`gOPD({a:1},'a') !== undefined` is **true**. There is nothing to fix.
+
+**Why bare `compile()` produced a plausible wrong answer.** It mishandles an
+**inline object literal passed directly as an argument** — and it does so
+silently, returning a wrong value rather than erroring. The tell is that a
+control of the same shape fails identically:
 
 ```
-                                              host   standalone
-gOPD   ({a:1},'a') truthy                     0      1     <- WRONG on host
-gOPD   ({a:1},'a') === undefined              1      0     <- WRONG on host
-gOPD   var o={a:1}; gOPD(o,'a') truthy        1      1     <- CORRECT
-gOPD   ({a:1},'zz') === undefined             1      1     <- CORRECT
-hasOwn ({a:1}).hasOwnProperty('a')            1      1     <- CORRECT
-propIsEnum ({a:1}).propertyIsEnumerable('a')  1      1     <- CORRECT
+                                                  host (bare compile)
+Object.keys({a:1,b:2}).length === 2               0    <- CONTROL FAILS
+var o={a:1,b:2}; Object.keys(o).length === 2      1    <- CONTROL PASSES
 ```
 
-`Object.getOwnPropertyDescriptor` with an **inline object literal** argument
-returns `undefined` on host; binding the literal to a variable first returns a
-real descriptor. This is the **same receiver-expression-shape axis, inverted**:
-for built-in prototypes inline works and the variable fails; for an object
-literal argument to `gOPD` inline fails and the variable works.
+Since the control fails in exactly the shape the "defect" was measured in, the
+two are indistinguishable and the reading has to be discarded. It is **not** a
+blanket under-assembly of `Object.*` statics — the variable form is fine.
 
-Two consequences:
+**Instrument rule (the durable finding):** for any `Object.*` / `Reflect.*` /
+prototype-reflection question, measure through `runTest262File` on both lanes,
+and **always include a control that must hold under any spec version** —
+`Object.keys({a:1,b:2}).length === 2` is a good cheap one. If the control
+fails, discard the run rather than reading the result. Bare `compile()` is
+usable for reflection only when no inline object/array literal is passed as an
+argument.
 
-1. It is a real host-lane defect, not a harness limitation.
-2. **Instrument rule**: any probe passing an inline object/array literal
-   directly as an argument is suspect under bare `compile()` — bind it to a
-   variable first. Both of the broken controls that confused this investigation
-   were of exactly this shape.
+Two earlier framings by this author are also withdrawn: "the host lane has
+per-route reflection bugs" (wrong axis) and "it is the same receiver-shape axis,
+inverted" (wrong — there is no second defect to have an axis).
 
-An earlier framing of this as "the host lane has per-route reflection bugs" was
-wrong about the axis: it is receiver expression shape, not route.
+## Verification under the authoritative harness
+
+`runTest262File(abs, cat, 60000)` and `(…, "standalone")` on the same file,
+`.tmp/probe-alias-authoritative.js`. **All four controls pass on both lanes**,
+so these readings are load-bearing:
+
+```
+CONTROLS  CTRL_keys_inline=true  CTRL_keys_var=true  CTRL_ownkey=true  CTRL_bogus=false   (both lanes)
+
+                        host            standalone
+INLINE_arr              true            true
+VAR_arr                 FALSE           FALSE      <- the defect, BOTH lanes
+INLINE_re_exec          true            false      <- standalone: lookup registration
+VAR_re_exec             true            false
+INLINE_gopd_re          true            true
+VAR_gopd_re             true            FALSE      <- the defect, gOPD, standalone
+INLINE_gopd_lit         true            true       <- retracted claim: no defect
+VAR_gopd_lit            true            true
+```
+
+This **confirms and strengthens** the headline: `Array.prototype` aliasing is
+wrong on **both** lanes under the authoritative harness with passing controls,
+and the defect also reaches `getOwnPropertyDescriptor` in standalone
+(`VAR_gopd_re` false, `INLINE_gopd_re` true).
 
 ## Acceptance criteria
 
@@ -122,9 +154,6 @@ wrong about the axis: it is receiver expression shape, not route.
   `X.prototype.hasOwnProperty(k)` for every built-in prototype, on both lanes.
 - `var P = X.prototype; Object.getOwnPropertyDescriptor(P, k)` agrees with the
   inline form.
-- `Object.getOwnPropertyDescriptor({a:1},'a')` returns a real descriptor on
-  host (the related-but-distinct defect above), or that defect is split into its
-  own issue with this one citing it.
 - `tests/issue-3876.test.ts` permanently covers inline-vs-variable receiver
   parity for `hasOwnProperty` and `getOwnPropertyDescriptor` across at least
   `Array.prototype` and `RegExp.prototype`, on both lanes.
