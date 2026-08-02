@@ -1,10 +1,11 @@
 {
   "id": "4086",
   "assignee": "ttraenkler/L-enum",
-  "requested_by": "ttraenkler/L-enum",
-  "status": "in-progress",
+  "requested_by": "git@thomas.traenkler.com",
+  "status": "released",
   "branch": "issue-4086-L-structpred",
   "claimed_at": "2026-08-02T08:43:36Z",
-  "updated_at": "2026-08-02T08:43:36Z",
-  "write_id": "68620-mhg3odoy"
+  "updated_at": "2026-08-02T09:01:41Z",
+  "write_id": "88220-cxv3c3yt",
+  "released_at": "2026-08-02T09:01:41Z"
 }
