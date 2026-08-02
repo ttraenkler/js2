@@ -1,10 +1,11 @@
 {
   "id": "4085",
   "assignee": "ttraenkler/L-enum",
-  "requested_by": "ttraenkler/L-enum",
-  "status": "in-progress",
+  "requested_by": "git@thomas.traenkler.com",
+  "status": "released",
   "branch": "issue-4085-L-json",
   "claimed_at": "2026-08-02T07:50:09Z",
-  "updated_at": "2026-08-02T07:50:09Z",
-  "write_id": "53006-2x17xxuo"
+  "updated_at": "2026-08-02T09:04:56Z",
+  "write_id": "88027-hu84jurk",
+  "released_at": "2026-08-02T09:04:56Z"
 }
