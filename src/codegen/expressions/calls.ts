@@ -251,10 +251,10 @@ import {
   emitStandaloneRegExpToStringFromExpr,
   isGlobalRegExpIdentifier,
   tryCompileStandaloneRegExpExec,
-  tryCompileStandaloneRegExpSymbolCall,
   tryCompileStandaloneRegExpTest,
   tryCompileStandaloneRegExpToString,
 } from "../regexp-standalone.js";
+import { tryCompileStandaloneRegExpSymbolCall } from "../regexp-string-methods.js";
 import {
   buildThrowJsErrorInstrs,
   emitThrowRangeError,

@@ -228,3 +228,43 @@ not apply here.
 - **The `cstm-*` symbol-protocol arm (~40 files, 0 in goal scope)** — genuine
   `GetMethod` dispatch on an arbitrary object. Different mechanism, different
   cost; it is the reason this issue's title says *search-value*, not *RegExp*.
+
+## Implementation note — where this code lives (LOC ratchet, #3102/#3131)
+
+The first green-CI attempt at this fix failed `quality` step 12: the LOC-regrowth
+ratchet, with `regexp-standalone.ts` +255 over its base and `string-ops.ts` +55.
+It was resolved by **extraction, with no `loc-budget-allow:` granted** — both
+files now land *below* their base sizes (regexp-standalone 4,516 → 3,519;
+string-ops 3,850 → 3,735).
+
+**Why extraction was the right answer and not an allowance.** The refusal this
+issue removes (#1474: "not a statically-known RegExp ⇒ needs a JS host") was only
+ever statable at one layer — the point where a `String.prototype` method decides
+whether to dispatch `@@<protocol>` or fall through to `ToString`. That layer had
+no module of its own; it was ~800 lines sitting inside the *engine* file, so the
+new predicate had nowhere to go but on top of a god-file. The growth was a
+symptom of the missing seam, which is exactly what the ratchet is designed to
+surface.
+
+`src/codegen/regexp-string-methods.ts` now owns that layer:
+
+| stays in `regexp-standalone.ts` (the engine) | moves to `regexp-string-methods.ts` (the protocol bridge) |
+| --- | --- |
+| pattern → bytecode, `$NativeRegExp` struct | `String.prototype.search`/`match`/`matchAll`/`replace`/`split` |
+| `RegExp.prototype.test` / `.exec` | `RegExp.prototype[@@match\|@@replace\|@@search\|@@split]` |
+| reflection getters, `lastIndex` | `isPlainToStringSearchValue` + the `RegExpCreate(ToString(x))` emitters |
+
+Dependency direction is one-way (bridge → engine); 18 engine internals became
+`export`. `staticRegExpFlags` deliberately stayed behind — `.test`/`.exec` need
+it too, and moving it would have created a cycle.
+
+Two things worth knowing for anyone auditing this:
+
+- **The move is byte-identical.** All 994 moved lines were verified verbatim
+  against the pre-move file; the only genuinely new function is
+  `tryCompileNativeStringSplit`.
+- **That one function unified all three `split` arms**, which had been three
+  adjacent `if` blocks in `string-ops.ts` duplicating the receiver/limit
+  sequence. They are one decision — §22.1.3.23 step 2, "can this separator carry
+  `@@split`?" — so they are now one function, and the `string-ops.ts` growth
+  disappeared as a side effect rather than being bought off.

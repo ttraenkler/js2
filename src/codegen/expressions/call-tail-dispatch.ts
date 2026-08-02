@@ -27,7 +27,7 @@ import type { ClosureInfo, CodegenContext, FunctionContext } from "../context/ty
 import { getArrTypeIdxFromVec, getOrRegisterVecType, hoistLetConstWithTdz, resolveWasmType } from "../index.js";
 import { objectLiteralTakesStandaloneAnyObjectPath, resolveComputedKeyExpression } from "../literals.js";
 import { emitNullCheckThrow, typeErrorThrowInstrs } from "../property-access.js";
-import { tryCompileStandaloneRegExpSymbolCall } from "../regexp-standalone.js";
+import { tryCompileStandaloneRegExpSymbolCall } from "../regexp-string-methods.js";
 import type { InnerResult } from "../shared.js";
 import { brandExternMethodResult, coerceType, compileExpression, VOID_RESULT } from "../shared.js";
 import { compileStatement, hoistFunctionDeclarations } from "../statements.js";

@@ -30,18 +30,18 @@ import {
 } from "./native-strings.js";
 import { emitBrandCheckTypeError } from "./native-proto.js";
 import { emitNativeNumberFormat } from "./number-format-native.js";
+import { emitStandaloneRegExpToStringFromExpr, isStaticallyUndefinedExpr } from "./regexp-standalone.js";
 import {
-  emitStandaloneRegExpToStringFromExpr,
   isDefinitelyUndefinedExpr,
   isPlainToStringSearchValue,
-  isStaticallyUndefinedExpr,
   searchValueOperand,
   tryCompileStandaloneStringMatch,
   tryCompileStandaloneStringMatchAll,
   tryCompileStandaloneStringReplace,
+  tryCompileNativeStringSplit,
   tryCompileStandaloneStringSearch,
   tryCompileStandaloneStringSplit,
-} from "./regexp-standalone.js";
+} from "./regexp-string-methods.js";
 import { addStringConstantGlobal, ensureExnTag, nextModuleGlobalIdx } from "./registry/imports.js";
 import {
   getArrTypeIdxFromVec,
@@ -3226,143 +3226,28 @@ export function compileNativeStringMethodCall(
     return nativeStringType(ctx);
   }
 
-  // (#2161 B2) split with an UNDEFINED separator — `s.split()`, `s.split(void
-  // 0)`, `s.split(undefined, lim)` — §22.1.3.23 steps 5-8: an undefined
-  // separator never splits, so the result is `[S]` (the whole string), or `[]`
-  // when ToUint32(limit) === 0. The native-helper arm below requires a
-  // string-like separator, so these forms fell through to the host marshal
-  // path, which has no standalone `string_split` and null-deref'd. Handled
-  // natively here: build the one-element vec directly (no engine call).
-  // (#4016) `isDefinitelyUndefinedExpr` widens the compile-time test from the
-  // purely SYNTACTIC `undefined`/`void 0` to any expression whose type is
-  // exactly `undefined`/`void` — test262 spells an undefined separator
-  // `function(){}()` (S15.5.4.14_A1_T9), which the syntactic test misses and
-  // which would otherwise fall into the ToString arm below and split on the
-  // literal text "undefined".
-  if (
-    method === "split" &&
-    ctx.nativeStrings &&
-    ctx.anyStrTypeIdx >= 0 &&
-    (expr.arguments.length === 0 || isDefinitelyUndefinedExpr(ctx, expr.arguments[0]!))
-  ) {
-    const elemType: ValType = { kind: "ref_null", typeIdx: ctx.anyStrTypeIdx };
-    const vecTypeIdx = getOrRegisterVecType(ctx, `ref_${ctx.anyStrTypeIdx}`, elemType);
-    const arrTypeIdx = getArrTypeIdxFromVec(ctx, vecTypeIdx);
-    // Receiver → native-string local (kept nullable; a null receiver would have
-    // thrown at the property access already).
-    const recvLocal = allocLocal(fctx, `__split_recv_${fctx.locals.length}`, nativeStringType(ctx));
-    emitReceiver();
-    fctx.body.push({ op: "local.set", index: recvLocal });
-    // (#4016) The separator's VALUE is unused (undefined never splits), but the
-    // expression that produced it is still evaluated at the call site. The
-    // syntactic forms this arm originally matched (`undefined`, `void 0`) are
-    // side-effect-free and folded away; a type-level `void` one (`f()`) is not,
-    // so evaluate and discard it. Dropping the whole expression would silently
-    // delete the call.
-    if (expr.arguments.length > 0 && !isStaticallyUndefinedExpr(expr.arguments[0]!)) {
-      const sepType = compileExpression(ctx, fctx, expr.arguments[0]!);
-      if (sepType) fctx.body.push({ op: "drop" });
-    }
-    // lim = ToUint32(limit); absent / statically-undefined → unbounded (-1).
-    const limLocal = allocLocal(fctx, `__split_lim_${fctx.locals.length}`, { kind: "i32" });
-    if (expr.arguments.length > 1 && !isStaticallyUndefinedExpr(expr.arguments[1]!)) {
-      compileStringIntegerArg(ctx, fctx, expr.arguments[1]!);
-    } else {
-      fctx.body.push({ op: "i32.const", value: -1 });
-    }
-    fctx.body.push({ op: "local.set", index: limLocal });
-    // lim === 0 ? { length: 0, data: [] } : { length: 1, data: [S] }
-    fctx.body.push({ op: "local.get", index: limLocal });
-    fctx.body.push({ op: "i32.eqz" });
-    fctx.body.push({
-      op: "if",
-      blockType: { kind: "val", type: { kind: "ref", typeIdx: vecTypeIdx } as ValType },
-      then: [
-        { op: "i32.const", value: 0 },
-        { op: "i32.const", value: 0 },
-        { op: "array.new_default", typeIdx: arrTypeIdx },
-        { op: "struct.new", typeIdx: vecTypeIdx },
-      ],
-      else: [
-        { op: "i32.const", value: 1 },
-        { op: "local.get", index: recvLocal },
-        { op: "array.new_fixed", typeIdx: arrTypeIdx, length: 1 },
-        { op: "struct.new", typeIdx: vecTypeIdx },
-      ],
+  // split → native lowering for all three admissible separator shapes. It lives
+  // in `regexp-string-methods.ts` because what makes a separator admissible is a
+  // §22.1.3.23 step-2 protocol question ("can this value carry `@@split`?"), not
+  // a string-lowering one.
+  if (method === "split") {
+    const split = tryCompileNativeStringSplit(ctx, fctx, expr, firstArgIsStringLike, {
+      receiver: emitReceiver,
+      // #2125: limit arg → i32 (ToUint32). Default (absent/undefined) is no
+      // limit, encoded as 0xFFFFFFFF (= -1 as i32), which the helper treats as
+      // unbounded. (#2161 B2) A statically-`undefined` limit takes the
+      // unbounded branch too (§22.1.3.23 step 12) — compiling it lowered to f64
+      // NaN, and ToUint32(NaN) = 0 truncated `"a b".split(" ", undefined)` to
+      // `[]`.
+      limit: () => {
+        if (expr.arguments.length > 1 && !isStaticallyUndefinedExpr(expr.arguments[1]!)) {
+          compileStringIntegerArg(ctx, fctx, expr.arguments[1]!);
+        } else {
+          fctx.body.push({ op: "i32.const", value: -1 });
+        }
+      },
     });
-    return { kind: "ref", typeIdx: vecTypeIdx };
-  }
-
-  // split: native helper, returns native string array
-  if (method === "split" && firstArgIsStringLike) {
-    // (#3901) Deliberately NO `emitFlatten()`: `__str_split` takes `ref
-    // $AnyString` and its preamble already flattens both params (#3673).
-    emitReceiver();
-    // separator arg
-    if (expr.arguments.length > 0) {
-      compileExpression(ctx, fctx, expr.arguments[0]!);
-    } else {
-      // default: empty string separator (split each char) (len=0, off=0, [])
-      fctx.body.push({ op: "i32.const", value: 0 }); // len
-      fctx.body.push({ op: "i32.const", value: 0 }); // off
-      fctx.body.push({ op: "i32.const", value: 0 });
-      fctx.body.push({
-        op: "array.new_default",
-        typeIdx: ctx.nativeStrDataTypeIdx,
-      });
-      fctx.body.push({ op: "struct.new", typeIdx: ctx.nativeStrTypeIdx });
-    }
-    // #2125: limit arg → i32 (ToUint32). Default (absent/undefined) is no limit,
-    // encoded as 0xFFFFFFFF (= -1 as i32) which the helper treats as unbounded.
-    // (#2161 B2) A statically-`undefined` limit takes the unbounded branch too
-    // (§22.1.3.23 step 12) — compiling it lowered to f64 NaN, and ToUint32(NaN)
-    // = 0 truncated `"a b".split(" ", undefined)` to `[]`.
-    if (expr.arguments.length > 1 && !isStaticallyUndefinedExpr(expr.arguments[1]!)) {
-      compileStringIntegerArg(ctx, fctx, expr.arguments[1]!);
-    } else {
-      fctx.body.push({ op: "i32.const", value: -1 });
-    }
-    const splitIdx = ctx.nativeStrHelpers.get("__str_split")!;
-    fctx.body.push({ op: "call", funcIdx: splitIdx });
-    // Return type is ref $vec_nstr — use same key as resolveWasmType for string[]
-    const nstrVecTypeIdx = ctx.vecTypeMap.get(`ref_${ctx.anyStrTypeIdx}`)!;
-    return { kind: "ref", typeIdx: nstrVecTypeIdx };
-  }
-
-  // (#4016) split with a separator the spec resolves by plain ToString —
-  // `s.split(123)`, `s.split(null)`, `s.split(objWithToString)`. §22.1.3.23
-  // step 2 only dispatches `@@split` when the separator HAS that method; when
-  // it provably does not, step 5's `R = ToString(separator)` is the whole of
-  // the semantics and the native `__str_split` above is exactly right. Refusing
-  // this as "needs a JS host" (#1474) conflated "not a string" with "not a
-  // RegExp".
-  //
-  // Emission mirrors the string-like arm operand-for-operand (receiver →
-  // separator → limit) so the ARGUMENT evaluation order is left-to-right, as at
-  // any call site. The only difference is `emitArgAsNativeString` (§7.1.17
-  // ToString, the #2598 engine) in place of a raw `compileExpression`, which
-  // would feed a mistyped ref to a helper expecting `ref $AnyString`.
-  if (
-    method === "split" &&
-    noJsHost(ctx) &&
-    !firstArgIsStringLike &&
-    expr.arguments.length > 0 &&
-    isPlainToStringSearchValue(ctx, expr.arguments[0]!, "split")
-  ) {
-    emitReceiver();
-    // Emit from the same node the admissibility gate proved on — see
-    // `searchValueOperand` (proving on the operand while emitting from the
-    // assertion is a silent wrong answer, not a missed optimisation).
-    emitArgAsNativeString(ctx, fctx, searchValueOperand(expr.arguments[0]!));
-    if (expr.arguments.length > 1 && !isStaticallyUndefinedExpr(expr.arguments[1]!)) {
-      compileStringIntegerArg(ctx, fctx, expr.arguments[1]!);
-    } else {
-      fctx.body.push({ op: "i32.const", value: -1 });
-    }
-    const splitIdx = ctx.nativeStrHelpers.get("__str_split")!;
-    fctx.body.push({ op: "call", funcIdx: splitIdx });
-    const nstrVecTypeIdx = ctx.vecTypeMap.get(`ref_${ctx.anyStrTypeIdx}`)!;
-    return { kind: "ref", typeIdx: nstrVecTypeIdx };
+    if (split !== undefined) return split;
   }
 
   // codePointAt: like charCodeAt but returns f64 (code point value)
