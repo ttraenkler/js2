@@ -1,10 +1,11 @@
 {
   "id": "4071",
   "assignee": "ttraenkler/L-enum",
-  "requested_by": "ttraenkler/L-enum",
-  "status": "in-progress",
+  "requested_by": "git@thomas.traenkler.com",
+  "status": "done",
   "branch": "issue-4071-L-enum",
   "claimed_at": "2026-08-02T05:42:39Z",
-  "updated_at": "2026-08-02T05:42:39Z",
-  "write_id": "14195-rvjp18br"
+  "updated_at": "2026-08-02T08:35:44Z",
+  "write_id": "19788-w427mbkk",
+  "released_at": "2026-08-02T08:35:44Z"
 }
