@@ -1,10 +1,11 @@
 {
   "id": "4091",
   "assignee": "ttraenkler/senior-dev-4091-split",
-  "requested_by": "ttraenkler/senior-dev-4091-split",
-  "status": "in-progress",
+  "requested_by": "git@thomas.traenkler.com",
+  "status": "done",
   "branch": "chore-rescue-workspace-staged",
   "claimed_at": "2026-08-02T11:02:55Z",
-  "updated_at": "2026-08-02T11:02:55Z",
-  "write_id": "71958-e5ledj4x"
+  "updated_at": "2026-08-02T12:09:11Z",
+  "write_id": "60362-740geggn",
+  "released_at": "2026-08-02T12:09:11Z"
 }
