@@ -1,9 +1,10 @@
 {
   "id": "2875",
-  "assignee": "ttraenkler/agent-a993439",
-  "status": "released",
-  "branch": "issue-2875-string-proto-cluster",
-  "claimed_at": "2026-07-01T23:14:13Z",
-  "updated_at": "2026-07-01T23:36:24Z",
-  "released_at": "2026-07-01T23:36:24Z"
+  "assignee": "ttraenkler/L-descriptor",
+  "requested_by": "ttraenkler/L-descriptor",
+  "status": "in-progress",
+  "branch": "issue-2875-standalone-string-cluster",
+  "claimed_at": "2026-08-02T07:33:35Z",
+  "updated_at": "2026-08-02T07:33:35Z",
+  "write_id": "92227-k97y6bgq"
 }
