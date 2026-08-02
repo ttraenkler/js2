@@ -1,10 +1,11 @@
 {
   "id": "3976",
   "assignee": "ttraenkler/senior-dev-3976-class-elements",
-  "requested_by": "ttraenkler/senior-dev-3976-class-elements",
-  "status": "in-progress",
+  "requested_by": "git@thomas.traenkler.com",
+  "status": "done",
   "branch": "issue-3976-class-elements-own-props",
   "claimed_at": "2026-08-02T12:36:26Z",
-  "updated_at": "2026-08-02T12:36:26Z",
-  "write_id": "60140-chn5hkhm"
+  "updated_at": "2026-08-02T14:26:21Z",
+  "write_id": "7416-by4cbrb6",
+  "released_at": "2026-08-02T14:26:21Z"
 }
