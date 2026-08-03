@@ -1,11 +1,10 @@
 {
   "id": "4010",
-  "assignee": "ttraenkler/dev-lever3",
-  "requested_by": "git@thomas.traenkler.com",
-  "status": "released",
-  "branch": "issue-4010-unified-own-property-table",
-  "claimed_at": "2026-08-02T22:05:48Z",
-  "updated_at": "2026-08-03T00:38:12Z",
-  "write_id": "76867-01r5iwda",
-  "released_at": "2026-08-03T00:38:12Z"
+  "assignee": "ttraenkler/dev-4010-s2",
+  "requested_by": "ttraenkler/dev-4010-s2",
+  "status": "in-progress",
+  "branch": "issue-4010-s2-tombstones",
+  "claimed_at": "2026-08-03T00:38:18Z",
+  "updated_at": "2026-08-03T00:38:18Z",
+  "write_id": "78048-0zccbzk5"
 }
