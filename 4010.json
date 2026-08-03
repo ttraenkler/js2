@@ -1,10 +1,11 @@
 {
   "id": "4010",
   "assignee": "ttraenkler/dev-4010-s2",
-  "requested_by": "ttraenkler/dev-4010-s2",
-  "status": "in-progress",
+  "requested_by": "git@thomas.traenkler.com",
+  "status": "released",
   "branch": "issue-4010-s2-tombstones",
   "claimed_at": "2026-08-03T00:38:18Z",
-  "updated_at": "2026-08-03T00:38:18Z",
-  "write_id": "78048-0zccbzk5"
+  "updated_at": "2026-08-03T03:00:45Z",
+  "write_id": "35850-9lbuu5ml",
+  "released_at": "2026-08-03T03:00:45Z"
 }
