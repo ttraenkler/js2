@@ -1,10 +1,11 @@
 {
   "id": "4010",
   "assignee": "ttraenkler/dev-lever3",
-  "requested_by": "ttraenkler/dev-lever3",
-  "status": "in-progress",
+  "requested_by": "git@thomas.traenkler.com",
+  "status": "released",
   "branch": "issue-4010-unified-own-property-table",
   "claimed_at": "2026-08-02T22:05:48Z",
-  "updated_at": "2026-08-02T22:05:48Z",
-  "write_id": "32104-tutlpj0r"
+  "updated_at": "2026-08-03T00:38:12Z",
+  "write_id": "76867-01r5iwda",
+  "released_at": "2026-08-03T00:38:12Z"
 }
