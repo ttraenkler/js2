@@ -1,11 +1,12 @@
 ---
 id: 4098
 title: "standalone: class instance fields are invisible to getOwnPropertyDescriptor/Object.keys and survive delete — the unanimous blocker of #3976's residual (population 124, blocked on #4010)"
-status: ready
+status: in-progress
+assignee: ttraenkler/dev-4098-instance-fields
 blocked_by: []
 sprint: current
 created: 2026-08-02
-updated: 2026-08-02
+updated: 2026-08-03
 priority: high
 feasibility: hard
 reasoning_effort: max
@@ -285,3 +286,97 @@ expect the discount #3976 measured (populations are not flip ceilings).
 `.tmp/probe4098{c,e,f}.mts` (static-vs-dynamic 2×2 and the operation map) in the
 authoring worktree. The 2×2 is the load-bearing one: **any probe of this area
 using a literal property name is measuring the wrong path.**
+
+---
+
+# G1 BASELINE RE-MEASURE, 2026-08-03 (dev-4098-instance-fields)
+
+Re-measured on a base containing `upstream/main` + S3 (`#4091`), **before**
+designing. Instrument: host-free standalone probe (`.tmp/m4098.mts` over
+`.tmp/probe.mts`), every module asserted **0 imports**, `$Object` control green.
+Every key is a **runtime-built variable** (`["f","o","o"].join("")`) — the #4098
+2×2 lesson is load-bearing: a literal key measures the STATIC fast path and
+reports that everything already works.
+
+## The map has FIVE gaps, not three — two are new
+
+| operation (declared instance field, dynamic name) | today | filing said |
+| --- | :---: | --- |
+| `hasOwnProperty` | ✓ | ✓ |
+| dynamic read `o[k]` | ✓ | ✓ |
+| `getOwnPropertyNames` | **✓** | *not stated* |
+| `propertyIsEnumerable` | **✓** | *not stated* |
+| `getOwnPropertyDescriptor` | ✗ undefined | ✗ |
+| `Object.keys` / for-in | ✗ | ✗ |
+| `delete` | ✗ no-op | ✗ |
+| **dynamic write `o[k] = v`** | **✗ DOES NOT LAND** | *not stated* |
+| **`defineProperty` over a declared field** | **✗ silent no-op** | *not stated* |
+
+Two findings the next reader must not have to re-derive:
+
+1. **`getOwnPropertyNames` already includes the field, `Object.keys` does not.**
+   The enumeration surface is **not** uniformly missing — `fillClosedStructOwnPropertyNamesArms`
+   wires `__getOwnPropertyNames` only, and #4071 *deliberately* refused to share
+   those arms with `__object_keys`. So this issue's keys half is a **separate
+   arm behind a screen**, not an extension of an existing one.
+2. **The dynamic WRITE does not land.** `__extern_set` has no closed-struct
+   field arm, so `o[k] = v` on a declared field is silently dropped.
+   `propertyHelper.js`'s `isWritable` therefore fails on its own, independently
+   of gOPD/keys/delete. This was invisible to the original mechanism map because
+   that map only probed read-side operations.
+
+**`delete` is non-vacuous here** (the #4010 vacuity trap): after `delete o[k]`
+BOTH derivations still say present — `hasOwnProperty` is `true` *and* the value
+reads back. The failure is real, not an artifact of an absent predicate.
+
+⚠ **One probe in the matrix is VACUOUSLY GREEN and must not be trusted alone**:
+"delete THEN `defineProperty` restore" reports success only because the `delete`
+never happened, so nothing needed restoring. It is gated on the `delete` cells
+being fixed first; read it only together with them.
+
+## Why the slice cannot be narrowed by SURFACE — only by RECEIVER
+
+`verifyProperty` is **all-or-nothing**: it checks the descriptor, then
+enumerability, then writability, then configurability, and 100 % of the 124
+assert `writable` AND `configurable`. Any subset of the five gaps therefore
+flips **zero** files. And #4010's ordering law forbids the tempting partial —
+gOPD + keys without a real `delete` is exactly the −684 shape, reproduced on
+this issue's own stratum.
+
+So the slice boundary is the **receiver**, not the surface: user-declared class
+instances only, with all five gaps closed for them.
+
+## Unlock — the user-declared-vs-builtin struct predicate DOES exist
+
+#4071 reverted a −5 (letting closed-struct fields into `Object.keys` made
+`Object.keys(new Date(0))` answer `["timestamp"]` and `Object.keys(/ab/)` answer
+7 internal RegExp fields) and recorded that fixing it "needs a principled
+user-declared-vs-builtin struct predicate, which does not exist yet".
+
+**It exists: `ctx.classDeclarationMap`** (`context/types.ts`), written *only* by
+`collectClassDeclaration` (`class-bodies.ts:609`) and keyed by class name — the
+same key space as `ctx.structFields`. A struct name in that map came from a
+user-source `class` declaration or class expression; builtin carriers (Date,
+RegExp, Error) are never in it. That is a **structural** screen, not a name-shape
+heuristic — which is the exact property #4086 records `startsWith("__")` as
+failing to have.
+
+Available as substrate to **#4071** (its deferred `Object.keys` re-share) and
+**#4086** (builtin-carrier screening). Pointer only — neither arm is built here.
+
+## Build order — each prefix independently shippable and non-negative
+
+1. per-instance tombstone store + real `delete` — substrate, ~0 flips, NOT negative
+2. `__extern_set` closed-struct field write arm
+3. `getOwnPropertyDescriptor` arm ⎫ only on top of (1), per the ordering law
+4. `Object.keys` / for-in via `classDeclarationMap` ⎭
+
+Stages 3–4 must never ship without 1. A completed prefix ships with a handoff
+rather than stretching across a budget freeze (the S1′/S2 precedent: substrate
+with 0 flips and 0 regressions is a success, not a failure).
+
+## Reproducing
+
+`.tmp/m4098.mts` (+ `.tmp/probe.mts`, copied from the S3 author's worktree).
+Re-run the **whole** matrix at every stage boundary: it doubles as the control
+set that catches a stage silently breaking an arm an earlier stage fixed.
