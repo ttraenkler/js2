@@ -229,3 +229,60 @@ confirmed **0** stray references to the four privatized symbols remain in
 lines: license header, one `export` keyword, one import block). `tsc --noEmit`:
 clean. `check:loc-budget`: green. `runtime.ts` is host-side JS, not in the Wasm
 emit path, so the split cannot change an emitted byte by construction.
+
+---
+
+## Measured dependency seam — the target tree is NOT reachable leaf-first (2026-08-08)
+
+Every slice landed so far (`legacy-regexp`, `array-proto-sparse`, …) worked
+because its cluster was a **leaf**: it referenced nothing else inside
+`runtime.ts`, so the extraction was one-directional and no cycle was possible.
+That selection rule was the reason those slices were safe, and it is stated
+explicitly in the `array-proto-sparse` note above ("references **nothing**
+outside itself").
+
+Before cutting the next one I measured the outbound closure of three clusters
+named in the Target structure — the identifiers each references that are
+DEFINED elsewhere in `runtime.ts`, and would therefore have to be imported back
+into the new module:
+
+| planned module | anchors (current line numbers) | LOC | outbound deps | call sites into it from outside |
+| --- | --- | ---: | ---: | ---: |
+| `to-primitive.ts` | `_toPrimitive` 2903 · `_toPrimitiveSync` 3142 · `_toPropertyKey` 3190 · `_hostToPrimitive` 3209 | 570 | **9** | 60 |
+| `sidecar.ts` | `_safeGet` 4408 · `_structFieldWriteback` 4606 · `_lookupDescriptorNoProxy` 4630 · `_trySetWasmVecElement` 4645 · `_safeSet` 4682 | ~380 | **24** | — |
+| (JSON serialization, unnamed in the tree) | `_normaliseJsonReplacer` 3788 … `_serializeJSONArray` 4239 | ~560 | **9** | 5 |
+
+**None is a leaf, and two of them form a mutual cycle.** `sidecar.ts`'s closure
+contains `_toPrimitiveSync`; `to-primitive.ts`'s closure contains `_safeGet`,
+`_safeSet` and `_sidecarGet`. So neither can be extracted first — whichever goes
+first has to import from the other, which does not exist yet.
+
+This does not invalidate the Target structure as an end state; it invalidates
+the **order** implied by reading it top to bottom. Three ways forward, in
+increasing cost:
+
+1. **Extract the shared base first.** The JSON cluster's 9 deps
+   (`_isWasmStruct`, `_isWasmVec`, `_getStructFieldNames`, `_wasmStructHasOwn`,
+   `_wasmStructProps`, `_wasmToPlain`, `_unwrapForHost`, `_wrapWasmClosure`,
+   `_denseOwnArgs`) are all *wasm-struct introspection*, a concern
+   `src/runtime/wasm-struct-host-semantics.ts` already partly owns. Completing
+   that module makes the JSON cluster a genuine leaf, and it is the cheapest
+   next slice — 5 outbound call sites is the smallest inbound surface of the
+   three.
+2. **Dependency injection** at the `to-primitive`/`sidecar` boundary: the new
+   module takes its handful of helpers as a parameter object wired once from
+   `runtime.ts`. No cycle, but it touches all 60 `_toPrimitive*` call sites,
+   which is a much larger and more conflict-prone diff than the LOC suggests.
+3. **Accept an ESM cycle.** Works at runtime for hoisted function declarations,
+   but requires `export`ing ~24 currently-private helpers, widening the module's
+   public surface and putting them in front of the `dead-exports` gate. Not
+   recommended as a first resort.
+
+**Recommendation: take option 1 as the next slice** (`json.ts` after finishing
+`wasm-struct-host-semantics.ts`), and do NOT start `to-primitive.ts` or
+`sidecar.ts` until their shared base is out — starting either one first is how
+this stalls.
+
+Reproduce any of these numbers with the dependency probe idiom: slice the
+cluster's line range out of `runtime.ts`, collect `^(export )?(async )?(function|const|let|class) NAME`
+definitions on both sides, and difference the identifier sets.
