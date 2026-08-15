@@ -202,3 +202,7 @@ consumer is exercised by `tests/ir-gvn.test.ts` (#4424).
 - [ ] ~~A dominance-dependent pass with measured emitted-code improvement~~ —
       re-pointed to the structure-substrate follow-ups above, where the
       optimisations actually live under ADR-0018.
+
+Repro/tests: `tests/ir-dominance.test.ts` (13 unit tests — synthetic general
+graphs cross-checked against the naive reference, plus the ADR-0018 producer
+invariant).
