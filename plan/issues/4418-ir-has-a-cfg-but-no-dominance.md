@@ -175,6 +175,10 @@ follow-ups at the structured substrate where they actually live.
    CFG tree, all frontiers empty) so any future join-emitting change to the
    producer flips a test the moment the invariant stops holding.
 
+**Permanent repro/tests:** `tests/ir-dominance.test.ts` (synthetic general
+graphs vs the naive reference + producer invariant); the first optimisation
+consumer is exercised by `tests/ir-gvn.test.ts` (#4424).
+
 **Deliberately NOT in this slice, filed as the honest follow-up shape:**
 
 - Structure-tree GVN (the real optimisation lever under ADR-0018) — needs
