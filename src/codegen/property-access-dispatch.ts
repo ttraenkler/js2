@@ -180,6 +180,7 @@ import {
 import { tryEmitExactStructFieldGet, tryEmitStructuralContractReadFromLocal } from "./property-access-exact-shapes.js";
 import { tryEmitProvenReceiverFieldGet, tryEmitTypedThisFieldGet } from "./typed-this.js"; // (#3683 S2 / #3685 S2) inline field reads
 import { tryEmitFnctorTypedFieldGet } from "./fnctor-typed-reads.js"; // (#4155 Phase 2) struct-typed fnctor receiver
+import { tryEmitFunctionValueConstructorRead } from "./function-intrinsic-carrier.js"; // (#4442) `<fn>.constructor`
 import { emitRuntimeEvalSharedValueUnwrap, runtimeEvalSharedValueUnwrapInstrs } from "./global-environment.js";
 
 /**
@@ -429,6 +430,11 @@ export function tryConstructorPrototypeIdentity(
       if (ctorIdn !== undefined) return ctorIdn;
     }
   }
+
+  // (#4442) `<fn>.constructor` → `%Function%` (§20.2.3.1); the arm and the
+  // emitter the bare `Function` read shares live in function-intrinsic-carrier.ts.
+  const fnValueCtor = tryEmitFunctionValueConstructorRead(ctx, fctx, expr, propName, objType);
+  if (fnValueCtor !== undefined) return fnValueCtor;
 
   // (#3006) Standalone `<Builtin>.prototype.constructor` / `<instance>.constructor`
   // → the GENUINE, identity-stable reified builtin-constructor object (supersedes
@@ -1933,7 +1939,7 @@ export function tryIdentifierNamespaceAndStaticReceiverRead(
       // (same as ClassName.method path at line 992) — avoids generic
       // fallthrough cast of undefined.
       if (ctx.staticMethodSet.has(fullName)) {
-        const funcIdx = ctx.funcMap.get(classMemberFuncKey(ctx, fullName));
+        const funcIdx = ctx.funcMap.get(classMemberFuncKey(ctx, fullName, "static"));
         if (funcIdx !== undefined) {
           fctx.body.push({ op: "ref.null.extern" });
           return { kind: "externref" };
@@ -2045,7 +2051,7 @@ export function tryIdentifierNamespaceAndStaticReceiverRead(
       // unblocking 273 test262 cases for class async-generator yield-star
       // tests that follow this exact extraction pattern.
       if (ctx.staticMethodSet.has(fullName)) {
-        const funcIdx = ctx.funcMap.get(classMemberFuncKey(ctx, fullName));
+        const funcIdx = ctx.funcMap.get(classMemberFuncKey(ctx, fullName, "static"));
         if (funcIdx !== undefined) {
           const closureRef = emitFuncRefAsClosure(ctx, fctx, fullName, funcIdx);
           if (closureRef) {
