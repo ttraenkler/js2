@@ -860,3 +860,25 @@ working): #4491, #4492, #4500.
 
 Duplicates cleaned this pass: #4168 → wont-fix (≡ #4025, done);
 #4171 → wont-fix (≡ #4021). Both edits in this PR.
+
+## Banked slice (measured 2026-08-16, opus-es5-b) — NOT mission-metric work
+
+The `'Array.prototype.<m>' is not yet callable as a value in --target
+standalone` class is **133 rows corpus-wide, 0 of them in the ES5 bucket**
+(edition split: 2015:5, 2016:8, 2019:4, 2020:1, 2022:29, 2023:18,
+untagged(-3):68). One refusal site: `src/codegen/array-object-proto.ts:791`
+(`emitArrayProtoMemberBody`). The substrate to fix it already exists —
+`hof-native.ts`'s `__extern_length`/`__extern_get_idx` array-like loop
+pattern plus the `memberParamSlots` hook in `native-proto.ts` (optional
+trailing-arg ABI). Clean first slice: pure-read members indexOf(12)/
+lastIndexOf(13)/includes(3)/join(4)/at(2)/toString(1) = 35 rows. Belongs to
+an ES2015+/untagged-scoped lane under #1888's umbrella; deliberately NOT
+picked up by the ES5-standalone team.
+
+Instrument note for this container: the QuickJS eval provider cannot be
+built here (no clang-18/cmake, no prebuilt artifact) — the runner fails
+LOUDLY ("provider is not built"), so eval-shaped rows are identifiable and
+must be excluded from local measurements, never counted as failures. Under
+load, local standalone compiles run 30–120 s/file and can hit the compile
+timeout where CI's baseline shows a clean runtime error — trust the baseline
+for the error class and say so.
