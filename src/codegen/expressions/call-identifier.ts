@@ -89,7 +89,11 @@ import { analyzeTdzAccessByPos, emitLocalTdzCheck, emitStaticTdzThrow } from "./
 import { buildThrowJsErrorInstrs, emitThrowReferenceError } from "../js-errors.js"; // undeclared-identifier call → ReferenceError
 import { compileInternalCallArgument } from "./internal-call-argument.js";
 import { isForeignEvalNode } from "./eval-source.js";
-import { resolvesToGlobalFunctionAlias } from "./eval-inline.js";
+import {
+  ensureStandaloneIntrinsicEvalCallable,
+  resolvesToGlobalEvalAlias,
+  resolvesToGlobalFunctionAlias,
+} from "./eval-inline.js";
 import { ensureLateImport, flushLateImportShifts } from "./late-imports.js";
 import {
   calleeIsCapabilityCtorParam,
@@ -163,6 +167,27 @@ function tryCompileStoredStandaloneCarrierCall(
   const storedObjectCall = tryCompileStoredObjectBuiltinCall(ctx, fctx, expr);
   if (storedObjectCall !== undefined) return storedObjectCall;
   if (!calleeIsBoundFunctionVar(ctx.oracle, expr.expression)) return undefined;
+  return tryEmitInlineDynamicCall(ctx, fctx, expr, true) ?? undefined;
+}
+
+/** Pre-register and dispatch the pure-AOT `%eval%` wrapper through a proven
+ * alias. The live binding is still loaded, so reassignment remains observable. */
+function tryCompileStandaloneEvalAliasCall(
+  ctx: CodegenContext,
+  fctx: FunctionContext,
+  expr: ts.CallExpression,
+  isKnownVariable: boolean,
+): InnerResult | undefined {
+  if (
+    !isKnownVariable ||
+    !ctx.standalone ||
+    ctx.runtimeEvalCallableBoundaryEnabled !== true ||
+    !ts.isIdentifier(expr.expression) ||
+    !resolvesToGlobalEvalAlias(expr.expression, ctx.oracle) ||
+    !ensureStandaloneIntrinsicEvalCallable(ctx, fctx)
+  ) {
+    return undefined;
+  }
   return tryEmitInlineDynamicCall(ctx, fctx, expr, true) ?? undefined;
 }
 
@@ -1372,6 +1397,8 @@ export function compileIdentifierCall(
       }
       const storedCarrierCall = tryCompileStoredStandaloneCarrierCall(ctx, fctx, expr, isKnownVariable);
       if (storedCarrierCall !== undefined) return storedCarrierCall;
+      const evalAliasCall = tryCompileStandaloneEvalAliasCall(ctx, fctx, expr, isKnownVariable);
+      if (evalAliasCall !== undefined) return evalAliasCall;
       // `%Function%` is represented by the linked provider's structural
       // callable marker. Calling an alias through the checker-derived
       // FunctionConstructor signature first would compile native-string

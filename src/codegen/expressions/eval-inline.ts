@@ -29,7 +29,13 @@ import { hoistLetConstWithTdz, hoistVarDeclarations } from "../index.js";
 import type { InnerResult } from "../shared.js";
 import { coerceType, compileExpression, compileStatement } from "../shared.js";
 import { emitUndefined, ensureLateImport, flushLateImportShifts } from "./late-imports.js";
-import { collectReferencedIdentifiers, emitFuncRefAsClosure, getFuncSignature } from "../closures.js";
+import {
+  collectReferencedIdentifiers,
+  emitCachedFuncClosureAccess,
+  emitFuncRefAsClosure,
+  ensureFuncClosureSingleton,
+  getFuncSignature,
+} from "../closures.js";
 import { compileAndEmitToString } from "../coercion-engine.js";
 import { compileStringLiteral } from "../string-ops.js";
 import { emitThrowJsError, noJsHost } from "./helpers.js";
@@ -1733,12 +1739,13 @@ export function isGlobalFunctionIdentifier(ident: ts.Identifier, checker: ts.Typ
  * against TypeScript's `FunctionConstructor` signature first can irreversibly
  * cast a native string to an unrelated `$AnyValue` ref and turn it into null.
  */
-export function resolvesToGlobalFunctionAlias(
+function resolvesToGlobalIntrinsicAlias(
   ident: ts.Identifier,
+  intrinsicName: "eval" | "Function",
   oracle: TypeOracle,
   seen: Set<ts.Declaration> = new Set(),
 ): boolean {
-  if (ident.text !== "Function") {
+  if (ident.text !== intrinsicName) {
     const declaration = oracle.valueDeclarationOf(ident);
     if (!declaration || seen.has(declaration)) return false;
     seen.add(declaration);
@@ -1755,11 +1762,30 @@ export function resolvesToGlobalFunctionAlias(
     ) {
       initializer = initializer.expression;
     }
-    return ts.isIdentifier(initializer) && resolvesToGlobalFunctionAlias(initializer, oracle, seen);
+    return ts.isIdentifier(initializer) && resolvesToGlobalIntrinsicAlias(initializer, intrinsicName, oracle, seen);
   }
 
   const declaration = oracle.valueDeclarationOf(ident);
   return declaration === undefined || declaration.getSourceFile().isDeclarationFile;
+}
+
+export function resolvesToGlobalFunctionAlias(
+  ident: ts.Identifier,
+  oracle: TypeOracle,
+  seen: Set<ts.Declaration> = new Set(),
+): boolean {
+  return resolvesToGlobalIntrinsicAlias(ident, "Function", oracle, seen);
+}
+
+/** Follow a variable-alias chain back to the realm's global `%eval%` value.
+ * The call site still loads and dispatches the live binding, so a later write
+ * to a mutable alias keeps ordinary JavaScript semantics. */
+export function resolvesToGlobalEvalAlias(
+  ident: ts.Identifier,
+  oracle: TypeOracle,
+  seen: Set<ts.Declaration> = new Set(),
+): boolean {
+  return resolvesToGlobalIntrinsicAlias(ident, "eval", oracle, seen);
 }
 
 /** Unwrap parens around an expression (local copy of the calls.ts idiom). */
@@ -2020,6 +2046,19 @@ function ensureStandaloneIntrinsicEvalWrapper(
 }
 
 /**
+ * Register the synthetic `%eval%` wrapper's callable shape before compiling a
+ * call through an alias. Function bodies may be hoisted and compiled before a
+ * top-level `var e = eval` initializer materializes the value; without this
+ * planning step the dynamic-call ladder cannot recognize the wrapper and
+ * falls through to its non-callable path.
+ */
+export function ensureStandaloneIntrinsicEvalCallable(ctx: CodegenContext, fctx: FunctionContext): boolean {
+  const wrapper = ensureStandaloneIntrinsicEvalWrapper(ctx, fctx);
+  if (!wrapper) return false;
+  return ensureFuncClosureSingleton(ctx, wrapper.fnName, wrapper.funcIdx) !== null;
+}
+
+/**
  * Materialize the current realm's first-class `%eval%` value for standalone.
  * Construction is pure AOT: merely storing `eval` (Deno primordials does
  * exactly this) must not execute the runtime compiler/interpreter. Calling the
@@ -2028,7 +2067,10 @@ function ensureStandaloneIntrinsicEvalWrapper(
 export function emitStandaloneIntrinsicEvalValue(ctx: CodegenContext, fctx: FunctionContext): ValType | undefined {
   const wrapper = ensureStandaloneIntrinsicEvalWrapper(ctx, fctx);
   if (!wrapper) return undefined;
-  const closureRef = emitFuncRefAsClosure(ctx, fctx, wrapper.fnName, wrapper.funcIdx);
+  // `%eval%` is one intrinsic object per realm. Reuse the ordinary cached
+  // function-value machinery so repeated reads preserve identity as well as
+  // sharing the callable type pre-registered at alias call sites.
+  const closureRef = emitCachedFuncClosureAccess(ctx, fctx, wrapper.fnName, wrapper.funcIdx);
   if (!closureRef) return undefined;
   if (closureRef.kind !== "externref") fctx.body.push({ op: "extern.convert_any" });
   return { kind: "externref" };
