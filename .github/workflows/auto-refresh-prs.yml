@@ -64,6 +64,9 @@ concurrency:
 
 jobs:
   refresh:
+    # This branch automation is meaningful only in the canonical repository.
+    # Forks do not carry the upstream App credentials.
+    if: github.repository == 'loopdive/js2'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

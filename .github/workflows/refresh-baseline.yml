@@ -72,6 +72,9 @@ concurrency:
 jobs:
   validate-inputs:
     name: validate refresh inputs
+    # Baseline promotion is an upstream-only operation; fork runs must not
+    # consume runners or attempt to resolve the upstream deploy key.
+    if: github.repository == 'loopdive/js2'
     runs-on: ubuntu-latest
     steps:
       # #2562 — confirmation is required ONLY for an emergency (forced) dispatch.
@@ -111,6 +114,7 @@ jobs:
   runtime-eval-provider:
     name: build default QuickJS runtime-eval provider
     needs: validate-inputs
+    if: github.repository == 'loopdive/js2'
     runs-on: ubuntu-latest
     timeout-minutes: 12
     env:
@@ -182,6 +186,7 @@ jobs:
   test262-shard:
     name: test262 ${{ matrix.target.name }} shard ${{ matrix.chunk }}
     needs: [validate-inputs, runtime-eval-provider]
+    if: github.repository == 'loopdive/js2'
     runs-on: ubuntu-latest
     timeout-minutes: 90
     strategy:
@@ -388,6 +393,7 @@ jobs:
   merge-and-promote:
     name: merge shards and promote baseline
     needs: test262-shard
+    if: github.repository == 'loopdive/js2'
     runs-on: ubuntu-latest
     # (#3) The main-repo audit-commit push uses the MAIN_DEPLOY_KEY SSH deploy
     # key (the only auth path in the ruleset's bypass_actors — DeployKey:always),

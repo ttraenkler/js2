@@ -78,6 +78,9 @@ concurrency:
 
 jobs:
   enqueue:
+    # This queue automation is meaningful only in the canonical repository.
+    # Forks do not carry the upstream App credentials.
+    if: github.repository == 'loopdive/js2'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5

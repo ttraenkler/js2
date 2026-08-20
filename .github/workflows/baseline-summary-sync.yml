@@ -44,6 +44,9 @@ concurrency:
 
 jobs:
   sync:
+    # The summary is an upstream main-repository artifact and its deploy key is
+    # intentionally unavailable in forks.
+    if: github.repository == 'loopdive/js2'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: baseline-promote
