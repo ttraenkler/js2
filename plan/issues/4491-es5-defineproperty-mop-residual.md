@@ -3461,3 +3461,252 @@ statuses identical row-for-row.** Zero regressions.
   priced (`x[k-2]` must round-trip a value at index `4294967294`). Verified
   unchanged by this slice: same `array element access out of bounds` trap
   before and after.
+
+## Wave-5 lane T5 — slice T5-B: `hasOwnProperty("<index>")` on a numeric vec — ATTEMPTED, NOT LANDED
+
+Base `57ffb4d4b2` (on top of T5-A), `--target standalone`.
+
+The wave-5 seed called this "a missing `$ObjVec` arm for `__hasOwnProperty`".
+**That framing is wrong, and the mis-framing is the finding**: `$ObjVec` has a
+working arm. Measured on this head:
+
+| receiver | `hasOwnProperty("1")` | `1 in x` | gOPD |
+| --- | --- | --- | --- |
+| `Object.keys({a:1,b:2})` (a real `$ObjVec`) | `true` ✓ | `true` | — |
+| `"a,b".split(",")` | `true` ✓ | `true` | — |
+| `[0,1,2]` (a dense literal) | `true` ✓ | `true` | present |
+| `[0,1,2].concat([3,4])` | **`false`** | `true` | **present** |
+| `.concat()` / `.slice()` / `.map()` results likewise | **`false`** | `true` | present |
+
+The affirmative cases are served by two DIFFERENT mechanisms, which is why the
+gap looked like a carrier gap. `Object.keys`/`split` return REFERENCE-element
+vecs, which `compilePropertyIntrospection` (object-ops.ts) already routes to the
+native `__hasOwnProperty` predicate (the `elemIsRef` arm). The dense literal is a
+compile-time constant fold (`provesDenseLiteralOwnIndex`). A NUMERIC-element vec
+the dense proof cannot reach — every method RESULT, a parameter, a reassigned
+binding — matched neither and fell to the generic struct-field path, whose field
+list is `["length","data"]`, so it answered a flat `false` while `in`, gOPD,
+`Object.keys` and `for…in` all answered `true`.
+
+### Why the one-token widening was reverted
+
+Changing that arm's gate from `elemIsRef` to `vecInfo !== null` fixes every row
+in the table (verified) — and **regresses
+`built-ins/Object/defineProperties/15.2.3.7-6-a-161` from pass to fail**, in a
+150-row `hasOwnProperty`-mentioning sample of `built-ins/{Array,Object,String}`
++ `language/statements/for-in` (`120/130 → 119/130`; one row moved, in one
+direction; file-copy A/B against the base `object-ops.ts`). That row is:
+
+```js
+var arr = [0, 1];
+Object.defineProperties(arr, { length: { value: 1 } });  // §10.4.2.1 deletes index 1
+arr.length = 10;                                         // …and re-grows
+arr.hasOwnProperty("1");                                 // must be false
+```
+
+The native predicate answers `true` because its own-index test is
+`min(vec.length, array.len(vec.data))` — the length SHRINK does not truncate the
+backing, and the re-grow copies the stale slot forward. On an f64 vec there is
+no presence bit that could distinguish "deleted at index 1" from "live 0", so
+this is **the f64-hole value-representation wall reached from a new direction**;
+it cannot be patched inside the predicate. The old compile-time `false` was
+right here by accident (the dense proof declines on an intervening reference),
+which is exactly why the widening trades one wrong answer for another.
+
+**Consequence for the concat family:** `concat/S15.4.4.4_A3_T1` needs BOTH this
+and lane J's built-but-dropped prototype-inheritance gate (`arr[1]` is `0`, must
+be `1`), so it stays blocked. `concat/S15.4.4.4_A2_T{1,2}` are unrelated to
+`hasOwnProperty` — they fail on `Array.prototype.concat is not yet callable as a
+value in --target standalone`, the same reify-a-static-method-body slice lane F
+sized as L for `String.fromCharCode`.
+
+## Wave-5 lane T5 — slice T5-C: a PROTOTYPE-installed `toString` never reached ToPrimitive (2026-08-22)
+
+Base `57ffb4d4b2`, `--target standalone`. One layer of the owed #1472 follow-up.
+
+### What was wrong
+
+`__class_to_primitive` (class-to-primitive.ts) dispatches ONLY on the per-struct
+`__call_valueOf` / `__call_toString` arms, and `emitToPrimitiveMethodExports`
+builds those from `ctx.structFields` — the instance struct's OWN fields — plus a
+name-keyed `<Struct>_<method>` body. The ES5 spelling installs the method on the
+PROTOTYPE at runtime:
+
+```js
+function F(v){ this.value = v; }
+F.prototype.toString = function(){ return this.value + ''; };
+var q = new F(7);
+```
+
+That write lowers to `__set_member_nonstrict`, so no struct field carries it, no
+`__call_toString` arm is emitted for the module at all, and the driver returns
+the instance unchanged — which the caller renders as `"[object Object]"`.
+
+The split is why it survived: the DYNAMIC member route already resolved the
+prototype method correctly.
+
+| spelling | before | after |
+| --- | --- | --- |
+| `q["toString"]` → `typeof` | `"function"` | unchanged |
+| `m.call(q)` for that `m` | `"7"` | unchanged |
+| `q.toString()` | `"7"` | unchanged |
+| `String(q)` | **`"[object Object]"`** | `"7"` |
+| `"" + q` | **`"[object Object]"`** | `"7"` |
+
+### The change
+
+New module `src/codegen/proto-method-to-primitive.ts`:
+`protoMethodToPrimitiveTail` asks the same runtime the dynamic member read asks
+— `__extern_get(obj, "toString")` — and only when `__typeof_function` says the
+result is callable, invokes it through `__call_accessor_get(obj, method)` (the
+arity-0 `this`-threading bridge the accessor path already uses), accepting the
+result ONLY if it is a primitive. `class-to-primitive.ts` gains the two scratch
+locals and the tail call in each of its three body shapes — the no-dispatcher
+stub included, because that stub IS the fnctor-prototype module.
+
+**Not a blanket object rule.** Every other outcome falls through to the driver's
+existing "return the input unchanged" tail, so a receiver with no user
+`toString`/`valueOf` is byte-identical — including every non-object carrier that
+reaches this driver (the `$AnyValue` box, a `$PropEntry` slot value,
+`undefined`), which is the action-at-a-distance hazard class-to-primitive.ts
+documents at length. `"[object Object]"` is still minted by the CALLER, which
+knows whether the value is an object; a method returning an OBJECT is refused; a
+null receiver short-circuits before the `__extern_get`. Own methods still win —
+the tail runs after the per-struct dispatchers, which is the chain order.
+
+All four gates clean; no allowance needed.
+
+### Measured — and why this is committed WIP, not integration-ready
+
+Control, file-copy A/B against the base `class-to-primitive.ts`: a 150-row
+deterministic sample of the 645 files under
+`built-ins/String/prototype/{slice,trim,concat,split}`,
+`language/expressions/{addition,template-literal}`,
+`built-ins/Date/prototype/toString`, `built-ins/Error`,
+`built-ins/JSON/stringify`, `built-ins/Array/prototype/join` and
+`built-ins/Object/prototype/toString` — the shared-ToString-terminal neighbours
+slice T4-B used. **103/150 base, 99/150 after.** Three of the four movers
+(`split/{cstm-split-on-number-primitive,separator-regexp,transferred-to-custom}`)
+are runner flakes — re-run individually on the SAME after-tree they all pass.
+The fourth is real:
+
+| row | base | after |
+| --- | --- | --- |
+| `built-ins/Error/prototype/no-error-data` | PASS | FAIL — `Object.prototype.toString is not yet implemented in --target standalone` |
+
+That is a compile-time REFUSAL (`emitProtoMemberBodyRefusal`), not a wrong
+value, so the tail is changing which member bodies get emitted — almost
+certainly through the demand/reservation ordering of `__extern_get` /
+`__call_accessor_get`, which the tail now references from inside
+`fillClassToPrimitive` (including from the no-dispatcher stub branch, which
+previously referenced nothing at all). **Diagnose that ordering before
+integrating.** The likely shape of the fix is a demand gate on the tail — emit
+it only for a module that actually writes `<Ctor>.prototype.{toString,valueOf}`
+— which would also make every unrelated module byte-identical.
+
+### Still blocked, and exactly where
+
+`slice/S15.5.4.13_A3_T4` does NOT flip, and the reason is a **separate**
+action-at-a-distance defect this slice exposes rather than causes:
+
+```js
+__FACTORY.prototype.toString = function(){ return this.value + ''; };
+var __instance = new __FACTORY(void 0);
+var t = __instance.slice(0, 100);        // "[object Object]"  — wrong
+```
+
+…but adding **any** `String(__instance)` elsewhere in the same module makes the
+same `slice` call answer `"undefined"` (correct). So the borrowed-`slice`
+receiver's `ToString(this)` reaches `$__any_to_string` — and therefore this
+slice's fix — only when something ELSE in the module already forced that helper
+into existence. The stored-borrowed-method call path
+(`this.slice = String.prototype.slice`, then `__instance.slice(…)`) has its own
+receiver-ToString lowering that does not demand it. Isolated to a one-line A/B
+(`.tmp/probe/d3i.js` fails, `.tmp/probe/d3j.js` — identical plus one
+`String(__instance)` — passes), not fixed: the fix belongs in that call path's
+receiver coercion, not in the ToPrimitive driver.
+
+`slice/S15.5.4.13_A1_T5` does not flip either, but its error MOVED — from
+`"[object Object]"` to `Function.prototype.toString is not yet implemented in
+--target standalone`, i.e. this slice cleared its first blocker and it now needs
+the #4265 callable-toString work.
+
+### Also measured, NOT fixed — the object-LITERAL `toString` split
+
+```js
+var o = { toString: function(){ return "LIT"; } };
+String(o)      // "LIT"  ✓        "" + o  // "LIT"  ✓        `${o}`  // "LIT"  ✓
+o.toString()   // "[object Object]"  ✗
+```
+
+The direct CALL is the one spelling that reaches the static
+`Object.prototype.toString` arm in `call-receiver-method.ts`, and
+`sourceOverridesMethodOnReceiver` (member-override-scan.ts) does not see the
+override because it matches only WRITES (`o.toString = …`,
+`Object.defineProperty`, `this.x = …` in a ctor, `F.prototype.x = …`) — never a
+member DECLARED in the initializing object literal. The assignment spelling
+(`var p = {}; p.toString = fn; p.toString()`) is already correct, which is what
+makes the literal case easy to miss.
+
+Adding the literal half to that predicate was tried and **reverted**: declining
+routes the call to a path that answers `null`, not `"LIT"`, so the decline
+target needs work first. The predicate half is right; its consumer is not.
+
+## Handover (T5, team-dev-3, 2026-08-22)
+
+Branch `worktree-agent-abfb03fcc1e8b8df1`, worktree
+`/home/user/js2/.claude/worktrees/agent-abfb03fcc1e8b8df1`. Not pushed, no PR.
+
+**INTEGRATION-READY — gates green, control clean**
+
+| slice | rows | control |
+| --- | --- | --- |
+| T5-A module-global array-literal seed | `built-ins/Array/length/S15.4.5.2_A3_T4` fail → **pass** | 150 rows, 93/150 both sides, all 150 statuses identical |
+
+Files: `src/codegen/shape-vec-literal-seed.ts` (new),
+`src/codegen/statements/variables.ts` (dispatch only).
+
+**WIP — do NOT integrate as-is**
+
+| slice | state |
+| --- | --- |
+| T5-C prototype-installed ToPrimitive | behaviour verified (`String(q)` / `"" + q` on an `F.prototype.toString` instance; `slice/S15.5.4.13_A1_T5`'s first blocker cleared), gates green — but the 150-row ToString-terminal control moves `built-ins/Error/prototype/no-error-data` pass → fail with a compile-time REFUSAL. Needs the demand gate described in its section above. |
+
+Files: `src/codegen/proto-method-to-primitive.ts` (new),
+`src/codegen/class-to-primitive.ts` (wiring only). Its pre-edit copy is
+`.tmp/base-class-to-primitive.ts`, so reverting is one `cp`.
+
+**Reverted, with the measurement on record above**: the T5-B `hasOwnProperty`
+numeric-vec index widening — one row regresses, blocked by the f64-hole wall.
+The change itself was a single gate, `elemIsRef` → `vecInfo !== null`, in
+`compilePropertyIntrospection`; `.tmp/base-object-ops.ts` is the pre-edit copy.
+The literal-`toString` predicate half is likewise reverted;
+`.tmp/base-member-override-scan.ts` is its base copy.
+
+**Exact next steps, in value order**
+
+0. **Demand-gate the T5-C tail** (or revert it) — see its section. Until then
+   only T5-A is integrable.
+1. **The borrowed-method receiver-ToString path** — blocks
+   `slice/S15.5.4.13_A3_T4` and its charAt / charCodeAt / indexOf / lastIndexOf /
+   substring siblings (9 `__FACTORY.prototype` files under
+   `built-ins/String/prototype/`). Repro pair is already written:
+   `.tmp/probe/d3i.js` vs `.tmp/probe/d3j.js`. Find why the stored-borrowed-method
+   call does not demand `ensureAnyToStringHelper`.
+2. **The decline target for a literal-declared `toString`** — make the
+   non-static route answer the own slot instead of `null`, then re-apply the
+   predicate half (one function, ~20 lines, drafted and measured).
+3. **Length-shrink element deletion on an f64 vec** is the real blocker under
+   both T5-B and lane J's concat gate; both wait on the value representation.
+
+**Gotchas for the next lane in this worktree**
+
+- `test262/` is restored as an empty real directory by the harness after most
+  tool calls — `.tmp/p.sh` / `.tmp/rl.sh` re-link it on every invocation, so run
+  probes through those, never bare `npx tsx`.
+- `compileSource` rejects `{ standalone: true }`; use `{ target: "standalone" }`
+  (`.tmp/wat.mts` does).
+- Probe harness: `.tmp/run.mts <abs.js | path-under-test262/test>`,
+  `.tmp/runlist.mts <list> <out>`, `.tmp/cmp.mts <base> <after>`,
+  `.tmp/mk-control.mts` / `.tmp/mk-grep.mts` / `.tmp/sample.mts` to build row
+  lists. Every row list and both A/B result sets are left in `.tmp/`.

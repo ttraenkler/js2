@@ -40,7 +40,8 @@
  */
 
 import type { CodegenContext } from "./context/types.js";
-import type { Instr, WasmFunction } from "../ir/types.js";
+import type { Instr, ValType, WasmFunction } from "../ir/types.js";
+import { protoMethodToPrimitiveTail } from "./proto-method-to-primitive.js"; // (#4491 T5) prototype-installed toString/valueOf
 import { addFuncType } from "./registry/types.js";
 import { addStringConstantGlobal, ensureExnTag } from "./registry/imports.js";
 import { stringConstantExternrefInstrs } from "./native-strings.js";
@@ -118,21 +119,46 @@ export function fillClassToPrimitive(ctx: CodegenContext): void {
 
   const callValueOfIdx = ctx.funcMap.get("__call_valueOf");
   const callToStringIdx = ctx.funcMap.get("__call_toString");
+
+  const L_OBJ = 0; // externref param: the candidate class instance
+  const L_HINT = 1; // i32 param: 1 = string hint, 0 = number/default
+  const L_RV = 2; // externref: valueOf dispatcher result
+  const L_RS = 3; // externref: toString dispatcher result
+  const L_PM = 4; // externref: prototype-method scratch (#4491 T5 tail)
+  const L_PR = 5; // externref: prototype-method result (#4491 T5 tail)
+
+  // (#4491 wave-5 T5) The PROTOTYPE half of §7.1.1.1 — `F.prototype.toString =
+  // …` installs the method on the prototype object at runtime, so no struct
+  // field carries it and no `__call_toString` arm exists for it. See
+  // proto-method-to-primitive.ts; `undefined` when a dependency is missing, in
+  // which case every tail below is exactly what it was.
+  const protoTail = protoMethodToPrimitiveTail(ctx, L_OBJ, L_HINT, L_PM, L_PR);
+  const protoLocals: { name: string; type: ValType }[] =
+    protoTail === undefined
+      ? []
+      : [
+          { name: "pm", type: { kind: "externref" } },
+          { name: "pr", type: { kind: "externref" } },
+        ];
+
   if (callValueOfIdx === undefined && callToStringIdx === undefined) {
     // No nominal-struct dispatchers were emitted (no class with valueOf/
     // toString in this module). Leave the unreachable stub: `__to_primitive`'s
     // class arm still routes here, but only after the $Object/$Vec misses, and
     // for a class with no such method the correct result is "unchanged" — so
     // make the stub return the input unchanged rather than trap.
-    fn.locals = [];
-    fn.body = [{ op: "local.get", index: 0 }];
+    //
+    // (#4491 T5) …but consult the PROTOTYPE first. This branch is exactly the
+    // `function F(){}; F.prototype.toString = …` module: the prototype write is
+    // dynamic, so it contributes no dispatcher arm and the module lands here
+    // with no arms at all.
+    fn.locals =
+      protoTail === undefined
+        ? []
+        : [{ name: "rv", type: { kind: "externref" } }, { name: "rs", type: { kind: "externref" } }, ...protoLocals];
+    fn.body = [...(protoTail ?? []), { op: "local.get", index: L_OBJ }];
     return;
   }
-
-  const L_OBJ = 0; // externref param: the candidate class instance
-  const L_HINT = 1; // i32 param: 1 = string hint, 0 = number/default
-  const L_RV = 2; // externref: valueOf dispatcher result
-  const L_RS = 3; // externref: toString dispatcher result
 
   // (#2891) §7.1.1.1 OrdinaryToPrimitive requires "if the method result is not
   // a primitive, try the next method", and a §7.1.1.1 step-6 TypeError when none
@@ -173,7 +199,11 @@ export function fillClassToPrimitive(ctx: CodegenContext): void {
         },
       ];
     };
-    fn.locals = [{ name: "rv", type: { kind: "externref" } }];
+    fn.locals = [
+      { name: "rv", type: { kind: "externref" } },
+      { name: "rs", type: { kind: "externref" } },
+      ...protoLocals,
+    ];
     fn.body = [
       { op: "local.get", index: L_HINT },
       {
@@ -182,6 +212,7 @@ export function fillClassToPrimitive(ctx: CodegenContext): void {
         then: [...tryDispatcher(callToStringIdx), ...tryDispatcher(callValueOfIdx)],
         else: [...tryDispatcher(callValueOfIdx), ...tryDispatcher(callToStringIdx)],
       },
+      ...(protoTail ?? []),
       { op: "local.get", index: L_OBJ },
     ];
     return;
@@ -346,6 +377,7 @@ export function fillClassToPrimitive(ctx: CodegenContext): void {
   fn.locals = [
     { name: "rv", type: { kind: "externref" } },
     { name: "rs", type: { kind: "externref" } },
+    ...protoLocals,
   ];
   fn.body = [
     { op: "local.get", index: L_HINT },
@@ -355,6 +387,11 @@ export function fillClassToPrimitive(ctx: CodegenContext): void {
       then: stringHint,
       else: numberHint,
     },
+    // (#4491 T5) Shared tail: reached when the OWN layer had nothing — consult
+    // the PROTOTYPE before giving up, which is the chain order. Returns only on
+    // a callable member that yielded a primitive; every other outcome falls to
+    // the `local.get L_OBJ` below.
+    ...(protoTail ?? []),
     // Shared tail: reached only when BOTH methods are absent (number hint) —
     // a nominal struct with no valueOf/toString → return the input unchanged,
     // exactly as the pre-#2638 fall-through did (no regression).
