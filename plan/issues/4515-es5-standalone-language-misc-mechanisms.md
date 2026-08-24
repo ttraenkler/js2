@@ -12,6 +12,7 @@ task_type: bug
 area: codegen, runtime
 es_edition: 5
 goal: es5
+related: [2668, 1888, 3626, 2666, 4504]
 loc-budget-allow:
   # 2026-08-19 accessor-pair fix: for an accessor PAIR, TypeScript takes the
   # property type from the GETTER's return and requires the setter's parameter
@@ -21,16 +22,22 @@ loc-budget-allow:
   # module src/codegen/closures/set-accessor-param.ts; the god-file grows by the
   # IMPORT LINE ONLY (+1).
   - src/codegen/closures.ts
-related: [2668, 1888, 3626, 2666, 4504]
-loc-budget-allow:
-  # One import line. The set-accessor parameter predicate + its rationale live
-  # in the new leaf module src/codegen/closures/set-accessor-param.ts; the
-  # widening itself replaces an existing line in computeClosureWrapperSig, so
-  # this is the import and nothing else.
   # One field. The §13 eval completion register is a FunctionContext slot; the
   # register's whole lifecycle and rationale live in the new leaf module
   # src/codegen/statements/eval-completion-value.ts, and eval-inline.ts SHRANK.
   - src/codegen/context/types.ts
+  # The standalone `in` runtime must walk the ordinary-object prototype tail;
+  # this helper extends the existing object runtime rather than introducing a
+  # second object representation or a duplicate property table.
+  - src/codegen/object-runtime.ts
+func-budget-allow:
+  # The new instructions extend the existing `__extern_has` runtime builder so
+  # inherited fnctor properties use the same prototype walk as value reads.
+  - src/codegen/object-runtime.ts::ensureObjectRuntime
+  # Static `in` dispatch now distinguishes ordinary Object.prototype tails,
+  # assignment-updated receivers, and fnctor runtime routes; the analysis
+  # itself lives in the extracted helpers above this dispatcher.
+  - src/codegen/binary-ops-in.ts::compileInOperator
 ---
 
 # ES5 standalone `language/` misc — 110 rows, ~7 mechanisms
@@ -77,6 +84,31 @@ sub-triage table).
   (#4354): `pnpm run build:compiler-bundle && node scripts/build-quickjs-eval-provider.mjs`.
 - An assertion that can throw before the probed value is read measures the
   throw, not the value — run a negative control (#3626 §2.2.1).
+
+## Sub-bucket result: standalone `in` / prototype-chain rows (2026-08-24)
+
+The exact 15 paths in the `types/object + expressions/in` census row were run
+with `runTest262File(..., "standalone")` and a 30-second per-file timeout. On
+the isolated `origin/main` base (`ef5b5d335`), the result was **9/15 pass,
+6/15 fail**. After the focused changes it is **12/15 pass, 3/15 fail**: three
+rows flipped and no previously passing row regressed.
+
+Flipped rows:
+
+- `language/expressions/in/S8.12.6_A2_T1.js` — ordinary open objects inherit
+  `Object.prototype.valueOf`.
+- `language/expressions/in/S11.8.7_A2.4_T1.js` — the evaluated `NUMBER =
+  Number` alias remains object-valued for the `in` check and sees
+  `Number.MAX_VALUE`.
+- `language/expressions/in/S8.12.6_A2_T2.js` — approved fnctor instances walk
+  their per-constructor prototype object for `phylum`.
+
+The remaining three failures are separate object-prototype write/read
+mechanisms (`S8.6.2_A8`, `S8.6.2_A1`, and `S8.6.2_A2`) and are not attributed to
+this `in` slice. The changes are Wasm-native; focused standalone tests confirm
+the ordinary-object and `Object.create(null)` distinction, fnctor prototype
+membership, constructor-alias evaluation, and an empty standalone import
+manifest.
 
 ## 2026-08-19 re-census + dispatch
 
