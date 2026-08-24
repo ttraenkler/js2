@@ -28,6 +28,33 @@ Be concise. Lead with the answer, then only the context needed to act on it.
   first. Internal codenames, gate names, and spec terms only when the reader
   needs to act on them — then with a one-line gloss.
 
+## Ratchet gates — run BEFORE every commit, never after
+
+All source-ratchet gates must be run and read as **exit codes**, chained so a
+failure blocks the commit:
+
+```bash
+node scripts/check-loc-budget.mjs && node scripts/check-func-budget.mjs \
+  && node scripts/check-coercion-sites.mjs && npm run -s check:oracle-ratchet \
+  && npm run -s check:dead-exports && git commit ...
+```
+
+- **Never pipe a gate whose status you need** (`gate | tail` reports `tail`'s
+  status — a red gate reads as green). Run bare, or `>out 2>&1; echo $?`.
+- **Simulate CI's base too.** CI diffs against the merge preview, not your fork
+  point, so a gate can pass locally and still fail `quality`:
+  `LOC_GATE_BASE=$(git rev-parse <upstream-main-tip>) node scripts/check-loc-budget.mjs`
+  (same env var works for check-func-budget). Two failure classes only appear
+  this way: growth whose allowance lives in an issue file this PR does NOT
+  modify (**stranded grants** — restate the grant in an issue file the PR
+  touches), and a ceiling reset by main's post-merge baseline refresh.
+- **Run `check:dead-exports` after any supersede-style merge resolution** —
+  taking upstream's version of a mechanism leaves your twin's exports
+  unreferenced, which fails the `quality` job.
+- Growth allowances go in the PR's own `plan/issues/*.md` YAML frontmatter with
+  a dated rationale; **never** edit `scripts/*-baseline.json` (main is its sole
+  writer).
+
 ## Running Tests
 
 - Run all tests: `npm test` (vitest — may OOM on full suite in constrained envs)
