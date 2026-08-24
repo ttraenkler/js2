@@ -1,0 +1,184 @@
+name: Auto-refresh BEHIND PR branches with main
+
+# WHY (#35 — re-enabled 2026-07-02): a PR whose branch has fallen BEHIND main
+# sits BLOCKED until its branch is updated. This workflow was DISABLED in
+# 6596d55fa (2026-05-23) because it used GITHUB_TOKEN, and GITHUB_TOKEN-authored
+# update-branch commits do NOT trigger downstream workflows (a documented GitHub
+# Actions limitation to prevent recursive runs). So refreshed PRs got a merge
+# commit but no CI ran — they stayed BLOCKED with an EMPTY check set → harmful
+# churn. The same failure mode struck auto-enqueue.yml's opt-in BEHIND-update
+# path on 2026-06-11 (17 PRs stranded via github-actions[bot]).
+#
+# FIX (#35): mint a GitHub App installation token (actions/create-github-app-token,
+# the SAME mechanism auto-enqueue.yml uses to enqueue). A GitHub App is a DISTINCT
+# actor from github-actions[bot]/GITHUB_TOKEN, so its update-branch merge commit
+# DOES fire the PR's `synchronize` event → downstream CI runs → the PR re-validates
+# and can go CLEAN → enqueueable. This App-token mechanism did not exist when the
+# push trigger was removed in May, so re-enabling with it is safe.
+#
+# SCOPE (surgical, mirrors auto-enqueue.yml skip logic):
+#   - only mergeStateStatus == BEHIND PRs (the ones that actually need a refresh);
+#   - skip drafts and hold/do-not-merge/wip/blocked-labelled PRs (WIP is intentional);
+#   - skip PRs already in the merge queue — updating a queued branch changes the
+#     forming merge group's membership, which rebuilds it and CANCELS the head's
+#     in-flight merge_group run (project_merge_queue_requeue_cancels_run, #1758);
+#   - skip DIRTY (conflicting) PRs — update-branch 409s on a real conflict; those
+#     need manual resolution;
+#   - skip PRs whose current head has CI IN FLIGHT (2026-08-15, the #4520
+#     livelock): refreshing a BEHIND PR restarts its ~10-min PR CI from zero,
+#     and on a busy evening main merges faster than that, so the PR's checks
+#     NEVER complete and it is never enqueueable — #4520 cycled 70+ minutes
+#     this way. Behind-ness does NOT block enqueue (#4094: enqueue-green-prs
+#     derives eligibility from checks + mergeable, and the merge queue builds
+#     the group against main anyway), so the right move for an in-flight head
+#     is to LET ITS CI FINISH. A 2-hour staleness bound keeps a wedged run
+#     from suppressing refresh forever;
+#   - skip PRs whose current head is already ALL-GREEN and quiescent — those are
+#     enqueue-eligible RIGHT NOW (#4094 behind-eligible); a refresh would only
+#     knock them back to pending and reopen the livelock window.
+#
+# TRIGGER: cron only (every 20 min) + manual dispatch — NOT push:main. A per-merge
+# push trigger races the SERIAL merge queue's merge_group formation (the churn
+# concern that got the push trigger removed). update-branch self-gates (HTTP 422
+# "already up to date") when a branch isn't actually behind, so a cron sweep over a
+# quiet set of BEHIND PRs does no spurious work.
+
+on:
+  schedule:
+    - cron: "*/20 * * * *"
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: "Why are you manually triggering this?"
+        required: false
+        default: "manual refresh"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  # Single-flight: never let two refresh sweeps overlap and double-update a branch.
+  group: auto-refresh-prs
+  cancel-in-progress: true
+
+jobs:
+  refresh:
+    # Forks inherit the cron trigger but do not have the maintainer App
+    # credentials or a canonical merge queue to refresh.
+    if: github.repository == 'loopdive/js2'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # Mint a GitHub App installation token (#35). Updating a PR branch with
+      # GITHUB_TOKEN does NOT trigger the downstream `synchronize` CI run — the
+      # exact reason this workflow was disabled. A GitHub App is a distinct actor,
+      # so its update-branch commit DOES fire CI. No `|| secrets.GITHUB_TOKEN`
+      # fallback on purpose: a missing/invalid app secret must fail LOUDLY rather
+      # than silently re-introduce the stranding-with-empty-check-set churn.
+      - name: Mint GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.ENQUEUE_APP_ID }}
+          private-key: ${{ secrets.ENQUEUE_APP_PRIVATE_KEY }}
+
+      - name: Update BEHIND PR branches with main (App token → downstream CI fires)
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -uo pipefail
+          owner="${GH_REPO%/*}"
+          name="${GH_REPO#*/}"
+
+          # Merge-queue snapshot: PRs already queued must NOT be touched — updating
+          # a queued branch rebuilds the forming merge group and cancels the head's
+          # in-flight merge_group run (#1758). One GraphQL call lists every queued PR
+          # (gh 2.23's `pr view --json mergeQueueEntry` field does not exist).
+          mapfile -t QUEUED < <(gh api graphql -f query='
+            { repository(owner:"'"$owner"'", name:"'"$name"'") {
+                mergeQueue(branch:"main") { entries(first:100) { nodes { pullRequest { number } } } } } }' \
+            --jq '.data.repository.mergeQueue.entries.nodes[].pullRequest.number' 2>/dev/null || true)
+          is_queued() {
+            local n="$1" q
+            for q in "${QUEUED[@]:-}"; do [ "$q" = "$n" ] && return 0; done
+            return 1
+          }
+
+          # BEHIND, non-draft, non-hold open PRs. The label filter mirrors
+          # auto-enqueue.yml's HOLD_LABELS set. headRefOid rides along so the
+          # in-flight/green-head classification below can query this head's
+          # check runs without a second PR lookup.
+          mapfile -t BEHIND < <(gh pr list --state open --limit 200 \
+            --json number,mergeStateStatus,isDraft,labels,headRefOid \
+            --jq '.[]
+                    | select(.mergeStateStatus == "BEHIND")
+                    | select(.isDraft == false)
+                    | select([.labels[].name]
+                        | any(. == "hold" or . == "do-not-merge" or . == "do not merge" or . == "wip" or . == "blocked")
+                        | not)
+                    | "\(.number) \(.headRefOid)"')
+
+          # CI-in-flight guard (#4520 livelock): count check runs on this head
+          # that are queued/in_progress AND recent (2h bound so one wedged run
+          # cannot suppress refresh forever). >0 ⇒ let CI finish; the enqueue
+          # sweep takes green PRs even when behind (#4094).
+          active_ci() {
+            # NB: `gh api --jq` takes only an expression — no jq --arg — so the
+            # cutoff is interpolated. ISO-8601 UTC strings compare lexically.
+            local sha="$1"
+            local cutoff; cutoff=$(date -u -d '-2 hours' +%Y-%m-%dT%H:%M:%SZ)
+            gh api "/repos/$GH_REPO/commits/$sha/check-runs?per_page=100" \
+              --jq '[.check_runs[] | select((.status == "queued" or .status == "in_progress")
+                                       and ((.started_at // "1970-01-01T00:00:00Z") > "'"$cutoff"'"))] | length' \
+              2>/dev/null || echo 0
+          }
+          # Green-head guard: a quiescent head with check runs present and zero
+          # non-green conclusions is enqueue-eligible as-is — refreshing it only
+          # restarts CI and reopens the livelock window. success/skipped/neutral
+          # count as green (a SKIPPED required check satisfies the ruleset).
+          green_quiescent() {
+            local sha="$1" total notgreen
+            total=$(gh api "/repos/$GH_REPO/commits/$sha/check-runs?per_page=100" \
+              --jq '.check_runs | length' 2>/dev/null || echo 0)
+            [ "$total" -gt 0 ] || return 1
+            notgreen=$(gh api "/repos/$GH_REPO/commits/$sha/check-runs?per_page=100" \
+              --jq '[.check_runs[] | select(.status != "completed"
+                       or ((.conclusion // "none") | IN("success","skipped","neutral") | not))] | length' \
+              2>/dev/null || echo 1)
+            [ "$notgreen" -eq 0 ]
+          }
+
+          echo "queued=[${QUEUED[*]:-}] behind=[${BEHIND[*]:-}]"
+          ok=0; skip=0; fail=0
+          for entry in "${BEHIND[@]:-}"; do
+            [ -n "$entry" ] || continue
+            pr="${entry%% *}"; sha="${entry##* }"
+            if is_queued "$pr"; then
+              echo "skip #$pr (already in merge queue)"
+              skip=$((skip+1)); continue
+            fi
+            if [ "$(active_ci "$sha")" -gt 0 ]; then
+              echo "skip #$pr (CI in flight on $sha — let it finish; enqueue takes green-behind PRs, #4094)"
+              skip=$((skip+1)); continue
+            fi
+            if green_quiescent "$sha"; then
+              echo "skip #$pr (head already all-green — enqueue-eligible as-is, refresh would restart CI)"
+              skip=$((skip+1)); continue
+            fi
+            if out=$(gh api --method PUT "/repos/$GH_REPO/pulls/$pr/update-branch" 2>&1); then
+              echo "updated #$pr (App-token merge commit → CI will fire)"
+              ok=$((ok+1))
+            elif echo "$out" | grep -qiE 'merge conflict|not mergeable|conflict|409'; then
+              echo "skip #$pr (DIRTY/conflict — needs manual resolution)"
+              skip=$((skip+1))
+            elif echo "$out" | grep -qiE 'already up|no new commits|up to date|422'; then
+              echo "skip #$pr (already up to date)"
+              skip=$((skip+1))
+            else
+              echo "fail #$pr: $(printf '%s' "$out" | head -c 200)"
+              fail=$((fail+1))
+            fi
+          done
+          echo "auto-refresh done: updated=$ok skipped=$skip failed=$fail"

@@ -1,0 +1,9 @@
+{
+  "compiled": 8,
+  "buckets": {
+    "select:async-function": 4,
+    "select:body-shape-rejected": 24,
+    "select:call-graph-closure": 11,
+    "select:string-builder-candidate": 2
+  }
+}

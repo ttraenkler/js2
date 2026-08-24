@@ -1,0 +1,130 @@
+name: Auto-enqueue green PRs
+
+# WHY: GitHub has no native "auto-enqueue when checks go green". `gh pr merge
+# --auto` only arms on a check-state TRANSITION, so a PR that is already green
+# by the time anyone acts is never queued; the merge queue also drops a PR when
+# main advances under it. This workflow enqueues open, non-draft, mergeable PRs
+# that aren't already in the queue. The merge queue re-runs the required checks
+# on the merged state before landing, and the script also refuses to enqueue
+# PRs with any visible failing/pending check. Drafts and PRs labelled
+# hold/do-not-merge/wip are skipped.
+#
+# PRIMARY, NOT BACKSTOP (#2786): this workflow is now the SINGLE primary
+# enqueuer. Dev agents no longer self-enqueue (their backgrounded CI watcher
+# died with the agent on stand-down, stranding green PRs — #2225/#2247), and the
+# script's grace window is now 0 so the `workflow_run`-on-completion trigger
+# below enqueues every just-green PR within ~one workflow-startup. The 30-min
+# cron and the tech-lead's per-loop sweep are belt-and-suspenders backstops, not
+# the mechanism.
+#
+# SERIAL-QUEUE INTERACTION (#1758): the merge queue is SERIAL
+# (max_entries_to_build=1). An unconditional, high-frequency enqueue sweep races
+# GitHub's `merge_group` formation — poking the serial head WHILE a merge group
+# is mid-formation wedged the queue twice on 2026-05-30/31 (stuck
+# AWAITING_CHECKS, no merge_group dispatched; only a ~10-min ruleset
+# disable/re-enable reset cleared it). So the sweep is SURGICAL. The script
+# (scripts/enqueue-green-prs.mjs) applies these guards:
+#   1. TRAILING-ADD ONLY (#2560) — it only enqueues PRs NOT already in the queue,
+#      so every add is a trailing append to the queue tail and the forming head's
+#      merge group is never touched (only dequeuing/re-adding the HEAD cancels its
+#      run). It does NOT skip the whole sweep when a head is forming — that old
+#      over-broad back-off meant the serial queue (almost always has a forming
+#      head) was rarely fed and green PRs stranded until a human enqueued them.
+#   2. ALL-CHECKS GREEN — it rejects UNSTABLE PRs and any PR whose `gh pr
+#      checks` table contains a non-pass/non-skipping row.
+#   3. GRACE WINDOW — it only enqueues a PR whose checks have been green for
+#      >= GRACE_MINUTES (default 10), so it never races a fresh dev enqueue and
+#      only catches genuine strays.
+# This workflow reinforces that with a LOWERED cron (~30 min; the
+# workflow_run trigger covers the responsive case) and a single-flight
+# concurrency guard so two sweeps never overlap.
+
+on:
+  # PRIMARY (responsive): fire right after the workflows whose completion can make
+  # a PR enqueueable. "Test262 Sharded" + "CI" cover ALL required checks
+  # (`cheap gate` + `merge shard reports`, and `quality`). With grace 0 (#2786)
+  # this run enqueues every just-green PR; it is the primary enqueue path.
+  #
+  # NOTE — this allowlist is a maintenance trap by construction: it must be kept
+  # in lockstep with the set of workflows whose checks influence
+  # `mergeStateStatus`, and it breaks SILENTLY when a new one is added. The
+  # general fix is to trigger on ANY workflow completion and let the script's
+  # existing CLEAN/HAS_HOOKS guard filter. That is deferred on Actions-quota
+  # grounds only (an any-completion trigger invokes this workflow once per
+  # workflow per push); revisit once quota is healthy. See #3889.
+  workflow_run:
+    workflows: ["Test262 Sharded", "CI"]
+    types: [completed]
+  # Backstop: catch PRs the merge queue dropped when main advanced under them.
+  # Lowered to ~30 min (#1758) — the workflow_run trigger is the responsive path;
+  # the script's back-off + grace-window guards make a high cron cadence
+  # unnecessary and (against a serial queue) harmful.
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  checks: read
+  actions: write # rerun cla-check when its status is stale on the head (#1958a)
+
+concurrency:
+  group: auto-enqueue
+  # Idempotent sweep: the latest run enqueues every mergeable PR, so a burst of
+  # triggers should collapse to the most-recent run rather than serial-running
+  # each one (#2519 — cut redundant workflow runs). Safe to cancel in-flight.
+  cancel-in-progress: true
+
+jobs:
+  enqueue:
+    # Forks inherit scheduled/workflow_run triggers but do not have the
+    # maintainer App credentials or the canonical merge queue. Keep this
+    # automation scoped to the repository that owns those resources.
+    if: github.repository == 'loopdive/js2'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          sparse-checkout: |
+            scripts/enqueue-green-prs.mjs
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+      # Mint a GitHub App installation token (#2523). Enqueuing via GITHUB_TOKEN
+      # does NOT trigger merge_group workflows ("a workflow run cannot trigger
+      # another workflow run"), so the queue head wedges (AWAITING_CHECKS, zero
+      # merge_group runs) — this cost a full night on 2026-06-19/20. A GitHub
+      # App is a distinct actor, so its enqueues DO fire merge_group runs.
+      # No `|| secrets.GITHUB_TOKEN` fallback ON PURPOSE: a missing/invalid app
+      # secret must fail this job LOUDLY, never silently re-introduce the wedge.
+      - name: Mint GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.ENQUEUE_APP_ID }}
+          private-key: ${{ secrets.ENQUEUE_APP_PRIVATE_KEY }}
+      - name: Enqueue green PRs
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_REPO: ${{ github.repository }}
+          # AUTHOR-TRUST GATE (#2549/#2550) — add THIS app to the allowlist.
+          #
+          # `npm-compat-refresh.yml` promotes its artifacts through a PR opened
+          # by this same app, from an UPSTREAM head branch. That PR matches none
+          # of the gate's three layers by default: an app's `authorAssociation`
+          # is not OWNER/MEMBER/COLLABORATOR, its login is not `ttraenkler`, and
+          # its head repo owner is `loopdive` rather than the fork. It would be
+          # skipped `untrusted-author:…` on every sweep, forever — and since a
+          # skip is silent, the symptom would be the npm-compat dashboard
+          # quietly ceasing to move, which is exactly the failure that workflow
+          # exists to prevent.
+          #
+          # Derived from the minted token (`app-slug`), never hardcoded, so it
+          # cannot drift from the app that actually opens the PR. The trust
+          # delta is narrow: the only thing that can make this app author a PR
+          # is a workflow already on `main`, and the app already holds enqueue
+          # authority — an external contributor cannot reach either.
+          TRUSTED_AUTHOR_LOGINS: ttraenkler,${{ steps.app-token.outputs.app-slug }}[bot]
+        run: node scripts/enqueue-green-prs.mjs

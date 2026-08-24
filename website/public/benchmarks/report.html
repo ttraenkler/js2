@@ -1,0 +1,2614 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>js2wasm — ECMAScript conformance</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #060a14;
+        --bg-soft: #0c1220;
+        --surface: rgba(255, 255, 255, 0.05);
+        --surface-hover: rgba(255, 255, 255, 0.08);
+        --border: rgba(255, 255, 255, 0.12);
+        --text: #ffffff;
+        --text-muted: rgba(255, 255, 255, 0.46);
+        --pass: #3fb950;
+        --fail: #f85149;
+        --skip: rgba(255, 255, 255, 0.4);
+        --error: #d29922;
+        --accent: rgba(255, 255, 255, 0.75);
+        --bar-bg: rgba(255, 255, 255, 0.1);
+        --mono: "JetBrains Mono", "SF Mono", SFMono-Regular, Consolas, monospace;
+        --font: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        font-family: var(--font);
+        background: var(--bg);
+        color: var(--text);
+        line-height: 1.5;
+        padding: 2rem;
+        padding-top: 88px;
+        max-width: 1200px;
+        margin: 0 auto;
+      }
+      h1 {
+        font-size: 2.625rem;
+        font-weight: 600;
+        margin-bottom: 0.25rem;
+      }
+      .brand {
+        font-size: 1.5rem;
+        font-weight: 700;
+        margin-bottom: 1.5rem;
+      }
+      h2 {
+        font-size: 1.25rem;
+        font-weight: 600;
+        margin: 2rem 0 1rem;
+        color: var(--text);
+      }
+      h3 {
+        font-size: 1rem;
+        font-weight: 600;
+        margin: 1.5rem 0 0.5rem;
+        color: var(--text-muted);
+      }
+      .timestamp {
+        color: var(--text-muted);
+        font-size: 0.875rem;
+        font-variant-numeric: tabular-nums;
+      }
+      .baseline-age {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.2rem 0.55rem;
+        border-radius: 4px;
+        font-family: var(--mono);
+        font-size: 0.75rem;
+        font-variant-numeric: tabular-nums;
+        border: 1px solid currentColor;
+        color: var(--text-muted);
+        background: rgba(255, 255, 255, 0.02);
+        margin-top: 0.25rem;
+      }
+      .baseline-age.warn {
+        color: #d29922; /* orange */
+        background: rgba(210, 153, 34, 0.08);
+      }
+      .baseline-age.alarm {
+        color: #f85149; /* red */
+        background: rgba(248, 81, 73, 0.1);
+      }
+      .baseline-age a {
+        color: inherit;
+        text-decoration: underline dotted;
+      }
+      .summary {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 1rem;
+        margin-bottom: 2rem;
+        position: relative;
+      }
+      .summary-visuals {
+        display: grid;
+        grid-template-columns: minmax(320px, 390px) minmax(0, 1fr);
+        gap: 3rem;
+        align-items: start;
+      }
+      .summary-visual-panel {
+        min-width: 0;
+      }
+      .summary-donut-panel {
+        display: grid;
+        gap: 1rem;
+        align-content: start;
+      }
+      .summary-donut-panel t262-donut {
+        width: 100%;
+        justify-self: stretch;
+        /* Orbit annotations can overhang the donut host near the 440px
+           breakpoint; keep the lowest label clear of the filter buttons. */
+        margin-bottom: 1rem;
+      }
+      .summary-history-panel {
+        display: grid;
+        gap: 0.875rem;
+        align-content: start;
+      }
+      .summary-meta {
+        position: absolute;
+        right: 0;
+        bottom: -1.5rem;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 0.25rem;
+      }
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        padding: 1rem 1.25rem;
+      }
+      .card .label {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      .card .value {
+        font-size: 1.75rem;
+        font-weight: 700;
+        margin-top: 0.25rem;
+      }
+      .card .pct {
+        font-size: 0.875rem;
+        color: var(--text-muted);
+      }
+      /* Donut chart handled by <t262-donut> web component */
+      .diagram-title {
+        font-size: 0.68rem;
+        font-weight: 600;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        margin: 0 0 1.25rem;
+      }
+      /* The chart and its legend live in <t262-conformance-trend>'s shadow DOM
+         (shared with the landing page); the page only supplies the theme. */
+      .summary-history-chart {
+        --t262-trend-font-mono: var(--mono);
+        --t262-trend-text: var(--text);
+        --t262-trend-text-muted: var(--text-muted);
+        --t262-trend-legend-size: 0.68rem;
+      }
+      .edition-section {
+        margin: -0.35rem 0 2rem;
+        --t262-edition-font-mono: var(--mono);
+        --t262-edition-text: var(--text);
+        --t262-edition-text-muted: var(--text-muted);
+      }
+      /* Edition cards: one large donut per card with the edition name below it
+         (#4362 follow-up). `auto-fit` + a 132px floor keeps two cards per row on
+         a phone (≈358px of content width at the 1rem mobile body padding) and
+         fills wider viewports without a breakpoint. */
+      .edition-legend-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+        gap: 1.1rem 0.6rem;
+        margin-top: 1rem;
+      }
+      /* A card is a <button>: clicking it selects that edition, the same
+         selection the slider makes. Hence the button reset. */
+      .edition-legend-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.5rem;
+        min-width: 0;
+        padding: 0.6rem 0.4rem 0.7rem;
+        border: 0;
+        border-radius: 12px;
+        background: transparent;
+        font: inherit;
+        color: inherit;
+        text-align: center;
+        cursor: pointer;
+        transition:
+          background 0.14s ease,
+          opacity 0.14s ease;
+      }
+      .edition-legend-item:hover {
+        background: rgba(255, 255, 255, 0.05);
+      }
+      .edition-legend-item:focus-visible {
+        outline: 2px solid rgba(255, 255, 255, 0.6);
+        outline-offset: 2px;
+      }
+      .edition-legend-item.active {
+        background: rgba(255, 255, 255, 0.06);
+      }
+      .edition-legend-item.dimmed {
+        opacity: 0.4;
+      }
+      /* Dimmed cards are still selectable — lift them on hover/focus so the
+         affordance survives the 0.4 opacity. */
+      .edition-legend-item.dimmed:hover,
+      .edition-legend-item.dimmed:focus-visible {
+        opacity: 0.75;
+      }
+      .edition-legend-text {
+        display: grid;
+        gap: 0.15rem;
+        min-width: 0;
+        width: 100%;
+      }
+      .edition-legend-name {
+        font-size: 0.92rem;
+        font-weight: 700;
+        letter-spacing: 0;
+        color: var(--text);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .edition-legend-ratio {
+        color: var(--text-muted);
+        font-size: 0.7rem;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .edition-legend-donut {
+        --deg: 0deg;
+        /* Ring thickness scales with the donut so the stroke stays proportional
+           across the clamp() range. */
+        --ring: 11px;
+        position: relative;
+        display: grid;
+        place-items: center;
+        transform: translateZ(0);
+        backface-visibility: hidden;
+        width: clamp(74px, calc(24vw - 4px), 100px);
+        aspect-ratio: 1;
+        margin: 2px;
+        flex-shrink: 0;
+      }
+      .edition-legend-donut-glow {
+        position: absolute;
+        inset: -4px;
+        border-radius: 50%;
+        background: conic-gradient(
+          rgba(255, 255, 255, 0) 0deg,
+          rgba(255, 255, 255, 0.4) var(--deg),
+          rgba(255, 255, 255, 0) calc(var(--deg) + 2deg) 360deg
+        );
+        filter: blur(5px);
+        pointer-events: none;
+      }
+      .edition-legend-donut-ring {
+        position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        transform: translateZ(0);
+        filter: blur(0.2px);
+        background: conic-gradient(#fff 0deg, #fff var(--deg), rgba(255, 255, 255, 0.14) var(--deg) 360deg);
+        -webkit-mask: radial-gradient(
+          farthest-side,
+          transparent calc(100% - var(--ring)),
+          #000 calc(100% - var(--ring))
+        );
+        mask: radial-gradient(farthest-side, transparent calc(100% - var(--ring)), #000 calc(100% - var(--ring)));
+      }
+      .edition-legend-donut-value {
+        position: static;
+        height: auto;
+        font-family: var(--mono);
+        font-size: 1.25rem;
+        font-weight: 700;
+        line-height: 1;
+        color: #fff;
+      }
+      .edition-legend-donut-center {
+        position: absolute;
+        inset: 14% 4px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 0.2rem;
+        z-index: 1;
+        text-align: center;
+        pointer-events: none;
+      }
+      .edition-legend-donut-name {
+        width: 100%;
+        overflow: hidden;
+        color: var(--text-muted);
+        font-family: var(--mono);
+        font-size: 0.56rem;
+        font-weight: 700;
+        line-height: 1;
+        text-align: center;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .edition-legend-item.dimmed .edition-legend-donut-ring {
+        background: conic-gradient(
+          rgba(255, 255, 255, 0.35) 0deg,
+          rgba(255, 255, 255, 0.35) var(--deg),
+          rgba(255, 255, 255, 0.08) var(--deg) 360deg
+        );
+      }
+      .edition-legend-item.dimmed .edition-legend-donut-glow {
+        display: none;
+      }
+      .edition-legend-item.dimmed .edition-legend-donut-value {
+        color: rgba(255, 255, 255, 0.5);
+      }
+      .edition-legend-item.dimmed .edition-legend-donut-name {
+        color: rgba(255, 255, 255, 0.5);
+      }
+      .cat-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.8125rem;
+        font-variant-numeric: tabular-nums;
+      }
+      .cat-table th {
+        text-align: left;
+        padding: 0.5rem 0.75rem;
+        border-bottom: 2px solid var(--border);
+        color: var(--text-muted);
+        font-weight: 600;
+        font-size: 0.6875rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      .cat-table th.num {
+        text-align: right;
+      }
+      .cat-table td {
+        padding: 0.375rem 0.75rem;
+        border-bottom: 1px solid var(--border);
+      }
+      .cat-table td.num {
+        text-align: right;
+        font-family: var(--mono);
+        font-size: 0.75rem;
+      }
+      .cat-table tr:hover {
+        background: var(--surface-hover);
+      }
+      .cat-table .group-header td {
+        padding-top: 1rem;
+        font-weight: 700;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--accent);
+        border-bottom: 1px solid var(--accent);
+      }
+      .bar-container {
+        width: 100%;
+        height: 8px;
+        background: var(--bar-bg);
+        border-radius: 4px;
+        overflow: hidden;
+        display: flex;
+      }
+      .overall-bar {
+        height: 24px;
+        border-radius: 6px;
+        margin-bottom: 2rem;
+      }
+      .timestamp {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        margin-top: 2rem;
+        text-align: center;
+      }
+      .clickable {
+        cursor: pointer;
+        text-decoration: underline;
+        text-decoration-style: dotted;
+        text-underline-offset: 2px;
+      }
+      .clickable:hover {
+        text-decoration-style: solid;
+      }
+      .filter-bar {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        margin-bottom: 1rem;
+        flex-wrap: wrap;
+      }
+      .search-box {
+        flex: 1;
+        min-width: 200px;
+        padding: 0.5rem 0.75rem;
+        border-radius: 6px;
+        border: 1px solid var(--border);
+        background: var(--surface);
+        color: var(--text);
+        font-size: 0.8125rem;
+        outline: none;
+      }
+      .search-box::placeholder {
+        color: var(--text-muted);
+      }
+      .search-box:focus {
+        border-color: var(--accent);
+      }
+      .filter-toggles {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        width: 100%;
+        justify-content: flex-start;
+        align-items: flex-end;
+      }
+      .filter-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.625rem;
+        min-height: 44px;
+        padding: 0 0.95rem;
+        border-radius: 10px;
+        border: 1px solid transparent;
+        background: transparent;
+        color: var(--text-muted);
+        font-family: var(--mono);
+        font-size: 0.75rem;
+        cursor: pointer;
+        user-select: none;
+        transition:
+          border-color 0.15s,
+          background 0.15s,
+          color 0.15s,
+          transform 0.15s;
+      }
+      .filter-toggle:hover {
+        color: rgba(255, 255, 255, 0.72);
+      }
+      .filter-toggle:focus-within {
+        border-color: transparent;
+        box-shadow: none;
+      }
+      .filter-toggle.active {
+        border-color: transparent;
+        background: transparent;
+        color: var(--text);
+      }
+      .filter-toggle input {
+        appearance: none;
+        width: 12px;
+        height: 12px;
+        margin: 0;
+        border-radius: 3px;
+        border: 1px solid rgba(255, 255, 255, 0.24);
+        background: rgba(255, 255, 255, 0.02);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+        transition:
+          border-color 0.15s,
+          background 0.15s,
+          box-shadow 0.15s;
+      }
+      .filter-toggle.active input {
+        border-color: rgba(255, 255, 255, 0.9);
+        background: rgba(255, 255, 255, 0.92);
+        box-shadow:
+          0 0 0 2px rgba(255, 255, 255, 0.08),
+          inset 0 0 0 1px rgba(6, 10, 20, 0.16);
+      }
+      .filter-toggle span {
+        white-space: nowrap;
+      }
+      .card.filter-card {
+        cursor: pointer;
+        user-select: none;
+        transition: border-color 0.15s;
+      }
+      .card.filter-card:hover {
+        border-color: var(--text-muted);
+      }
+      .card.filter-card.active {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 1px var(--accent);
+      }
+      .detail-row td {
+        padding: 0 !important;
+        border-bottom: 1px solid var(--border);
+      }
+      .detail-content {
+        max-height: 300px;
+        overflow-y: auto;
+        padding: 0.5rem 0.75rem;
+        background: rgba(0, 0, 0, 0.2);
+        font-size: 0.6875rem;
+        font-family: var(--mono);
+        scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+      }
+      .detail-content::-webkit-scrollbar {
+        width: 6px;
+      }
+      .detail-content::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      .detail-content::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 3px;
+      }
+      .detail-file {
+        padding: 4px 0;
+        border-bottom: 1px solid var(--border);
+      }
+      .detail-file:last-child {
+        border-bottom: none;
+      }
+      .detail-file-header {
+        display: flex;
+        align-items: baseline;
+        gap: 0.375rem;
+      }
+      .detail-fname {
+        color: var(--accent);
+        word-break: break-all;
+      }
+      .detail-err {
+        color: var(--error);
+        word-break: break-word;
+        white-space: pre-wrap;
+        padding-left: 1.25rem;
+        font-size: 0.625rem;
+        margin-top: 2px;
+      }
+      .detail-status-pass {
+        color: var(--pass);
+      }
+      .detail-status-fail {
+        color: var(--fail);
+      }
+      .detail-status-err {
+        color: var(--error);
+      }
+      .no-data {
+        color: var(--text-muted);
+        font-style: italic;
+        padding: 2rem;
+        text-align: center;
+      }
+      @media (max-width: 980px) {
+        .summary-visuals {
+          grid-template-columns: 1fr;
+          gap: 2rem;
+        }
+      }
+      /* Horizontal-scroll wrapper so wide tables (e.g. "By Category" with its
+         Distribution column) don't overflow the viewport on narrow screens. */
+      .table-scroll {
+        width: 100%;
+        max-width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+      }
+      .table-scroll::-webkit-scrollbar {
+        height: 6px;
+      }
+      .table-scroll::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 3px;
+      }
+      .table-scroll .cat-table {
+        min-width: 540px;
+      }
+      /* Mode switch: Host (JS) vs Standalone (pure Wasm) conformance numbers. */
+      .mode-switch {
+        display: inline-flex;
+        gap: 0.25rem;
+        padding: 0.25rem;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: var(--surface);
+        margin-bottom: 1.5rem;
+      }
+      .mode-switch button {
+        appearance: none;
+        border: 1px solid transparent;
+        background: transparent;
+        color: var(--text-muted);
+        font-family: var(--mono);
+        font-size: 0.78rem;
+        padding: 0.4rem 0.9rem;
+        border-radius: 7px;
+        cursor: pointer;
+        transition:
+          background 0.15s,
+          color 0.15s;
+      }
+      .mode-switch button:hover {
+        color: var(--text);
+      }
+      .mode-switch button.active {
+        background: var(--surface-hover);
+        color: var(--text);
+        border-color: var(--border);
+      }
+      .mode-switch .mode-sub {
+        display: block;
+        font-size: 0.62rem;
+        letter-spacing: 0.03em;
+        opacity: 0.7;
+      }
+      .diff-note {
+        color: var(--text-muted);
+        font-size: 0.75rem;
+        margin: 0.25rem 0 0.75rem;
+      }
+      .rc-issue-link {
+        color: #6db3ff;
+        text-decoration: none;
+        font-size: 0.625rem;
+        margin-left: 0.4rem;
+      }
+      .rc-issue-link:hover {
+        text-decoration: underline;
+      }
+      @media (max-width: 640px) {
+        body {
+          padding: 1rem;
+          padding-top: 80px;
+        }
+        h1 {
+          font-size: 2rem;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <site-nav base="../"></site-nav>
+    <h1 class="brand">ECMAScript conformance</h1>
+    <p style="margin: -0.5rem 0 1.5rem; color: rgba(255, 255, 255, 0.7); font-size: 0.95rem">
+      See also:
+      <a href="./spec-compliance.html" style="color: #6db3ff">Section-by-section spec compliance audit</a>
+      — per-§ status (conforming / partial / not implemented) with linked gap issues.
+    </p>
+    <div id="app"><div class="no-data">Loading report data…</div></div>
+
+    <script src="../components/site-nav.js"></script>
+    <script type="module" src="../components/t262-charts.js"></script>
+    <script src="../components/trend-chart.js"></script>
+    <!-- Plain script (not a module) so the inline page script can call
+         window.t262ViewState synchronously. -->
+    <script src="../components/t262-view-state.js"></script>
+    <script type="module" src="../components/t262-conformance-trend.js"></script>
+    <script>
+      const REPORT_JSON = "results/test262-report.json";
+      const RESULTS_JSONL = "results/test262-results.jsonl";
+      const CATEGORY_EDITIONS_JSON = "results/test262-category-editions.json";
+      // (#2871 follow-up) Per-file edition classification for the non-passing tests:
+      //   { editions: ["ES5", …], files: { "language/…/x.js": <index> } }
+      // Lets the edition slider filter the error-pattern and skipped-test lists
+      // per TEST. The category-level map above is far too coarse for that —
+      // nearly every category contains at least one ES5 test, so filtering by
+      // category left those lists essentially unfiltered.
+      const FILE_EDITIONS_JSON = "results/test262-file-editions.json";
+      // Standalone (pure-Wasm, no JS host) conformance data. Same schema as the
+      // host report; the standalone report additionally carries a curated
+      // `root_cause_map` of failures that are host-dependency gaps — i.e. that
+      // pass in JS-host mode but fail standalone (the differential view, #5).
+      const STANDALONE_REPORT_JSON = "results/test262-standalone-report.json";
+      const STANDALONE_EDITIONS_JSON = "results/test262-standalone-editions.json";
+      const HOST_EDITIONS_JSON = "results/test262-editions.json";
+      const PROPOSAL_LABEL = "Proposals";
+      const BASE_PATH = window.location.pathname.replace(/\/benchmarks\/.*$/, "");
+
+      // Snapshot ?mode=/?edition= BEFORE the first render writes the CURRENT
+      // knobs back to the query string, which would erase an incoming link's
+      // state a moment before it was read. Shared with the landing page —
+      // components/t262-view-state.js.
+      const initialViewState = window.t262ViewState?.read?.() ?? { mode: null, edition: null };
+
+      function assetPath(path) {
+        if (!BASE_PATH) return `/${path}`;
+        return `${BASE_PATH}/${path}`;
+      }
+
+      // If the report.json is empty/corrupt, rebuild it from the JSONL on the fly
+      async function loadReportWithFallback() {
+        const report = await loadJSON(REPORT_JSON);
+        if (report && report.summary && report.summary.total > 0) return report;
+        // Fallback: build report from JSONL
+        console.warn("Report JSON empty/corrupt, rebuilding from JSONL...");
+        try {
+          const resp = await fetch(RESULTS_JSONL);
+          if (!resp.ok) return null;
+          const text = await resp.text();
+          const counts = { pass: 0, fail: 0, compile_error: 0, compile_timeout: 0, skip: 0 };
+          const officialCounts = { pass: 0, fail: 0, compile_error: 0, compile_timeout: 0, skip: 0 };
+          const scopeSummaries = {
+            standard: { pass: 0, fail: 0, compile_error: 0, compile_timeout: 0, skip: 0, total: 0 },
+            annex_b: { pass: 0, fail: 0, compile_error: 0, compile_timeout: 0, skip: 0, total: 0 },
+            proposal: { pass: 0, fail: 0, compile_error: 0, compile_timeout: 0, skip: 0, total: 0 },
+          };
+          const cats = {};
+          const skipReasons = {};
+          const buildSummary = (counter) => ({
+            total: counter.pass + counter.fail + counter.compile_error + counter.skip,
+            pass: counter.pass,
+            fail: counter.fail,
+            compile_error: counter.compile_error,
+            compile_timeout: counter.compile_timeout || 0,
+            skip: counter.skip,
+            compilable: counter.pass + counter.fail,
+            stale: 0,
+          });
+          for (const line of text.split("\n")) {
+            if (!line.trim()) continue;
+            try {
+              const r = JSON.parse(line);
+              const s = r.status;
+              if (s in counts) {
+                counts[s]++;
+                const scope = r.scope || "standard";
+                if (!scopeSummaries[scope]) {
+                  scopeSummaries[scope] = { pass: 0, fail: 0, compile_error: 0, compile_timeout: 0, skip: 0, total: 0 };
+                }
+                scopeSummaries[scope][s]++;
+                scopeSummaries[scope].total++;
+                if (r.scope_official !== false && scope !== "proposal") {
+                  officialCounts[s]++;
+                } else if (r.scope_official === true) {
+                  officialCounts[s]++;
+                }
+                const cat = r.category || "unknown";
+                if (!cats[cat])
+                  cats[cat] = {
+                    name: cat,
+                    pass: 0,
+                    fail: 0,
+                    compile_error: 0,
+                    compile_timeout: 0,
+                    skip: 0,
+                    total: 0,
+                  };
+                cats[cat][s]++;
+                cats[cat].total++;
+                if (s === "skip" && r.error) {
+                  skipReasons[r.error] = (skipReasons[r.error] || 0) + 1;
+                }
+              }
+            } catch {}
+          }
+          const total = Object.values(counts).reduce((a, b) => a + b, 0);
+          if (total === 0) return null;
+          return {
+            timestamp: new Date().toISOString(),
+            summary: buildSummary(officialCounts),
+            official_summary: buildSummary(officialCounts),
+            full_summary: buildSummary(counts),
+            scope_summaries: Object.fromEntries(
+              Object.entries(scopeSummaries).map(([name, counter]) => [name, buildSummary(counter)]),
+            ),
+            categories: Object.values(cats).sort((a, b) => a.name.localeCompare(b.name)),
+            skip_reasons: skipReasons,
+          };
+        } catch {
+          return null;
+        }
+      }
+
+      // Per-file results indexed by category, cached per source URL. The
+      // standalone view has no deployed per-file JSONL, so callers pass its
+      // (null) source and gracefully degrade to the report's aggregate data.
+      const _fileResultsCache = new Map();
+      // The per-file JSONL source for the currently-displayed conformance view
+      // (host vs standalone). Set by renderConformance; read by toggleDetail.
+      let activeFileResultsSrc = RESULTS_JSONL;
+      async function loadFileResults(src = RESULTS_JSONL) {
+        if (!src) return null;
+        if (_fileResultsCache.has(src)) return _fileResultsCache.get(src);
+        try {
+          const resp = await fetch(src);
+          if (!resp.ok) {
+            _fileResultsCache.set(src, null);
+            return null;
+          }
+          const text = await resp.text();
+          const byCategory = new Map();
+          for (const line of text.split("\n")) {
+            if (!line.trim()) continue;
+            const entry = JSON.parse(line);
+            const cat = entry.category;
+            if (!byCategory.has(cat)) byCategory.set(cat, []);
+            byCategory.get(cat).push(entry);
+          }
+          _fileResultsCache.set(src, byCategory);
+          return byCategory;
+        } catch {
+          _fileResultsCache.set(src, null);
+          return null;
+        }
+      }
+
+      // (#2871 follow-up) Load the per-file edition index as a Map: "language/…/x.js" →
+      // "ES5". Returns null when the artifact isn't deployed yet, in which case
+      // callers fall back to the coarser per-category edition filter.
+      let _fileEditionsPromise = null;
+      function loadFileEditions() {
+        if (!_fileEditionsPromise) {
+          _fileEditionsPromise = (async () => {
+            const raw = await loadJSON(FILE_EDITIONS_JSON);
+            if (!raw || !raw.files || !Array.isArray(raw.editions)) return null;
+            const map = new Map();
+            for (const [file, idx] of Object.entries(raw.files)) {
+              const label = raw.editions[idx];
+              if (label) map.set(file, label);
+            }
+            return map;
+          })();
+        }
+        return _fileEditionsPromise;
+      }
+
+      // A result record's `file` is "test/language/…/x.js"; the edition index is
+      // keyed without the "test/" prefix.
+      function fileEditionOf(fileEditions, file) {
+        if (!fileEditions) return null;
+        return fileEditions.get(String(file || "").replace(/^test\//, "")) || null;
+      }
+
+      async function loadJSON(url) {
+        try {
+          const r = await fetch(url);
+          return r.ok ? r.json() : null;
+        } catch {
+          return null;
+        }
+      }
+
+      // The pass-rate-over-time chart (point building, two-lane merge, legend)
+      // now lives in the shared <t262-conformance-trend> component, which the
+      // landing page renders too — see components/t262-conformance-trend.js.
+      const CONFORMANCE_RUNS_BASE = assetPath("benchmarks/results/runs");
+
+      function shortName(cat) {
+        return cat
+          .replace("built-ins/Math/", "Math.")
+          .replace("built-ins/Array/prototype/", "Array.")
+          .replace("built-ins/Number/", "Number.")
+          .replace("built-ins/Object/", "Object.")
+          .replace("built-ins/JSON/", "JSON.")
+          .replace("built-ins/", "")
+          .replace("language/expressions/", "expr/")
+          .replace("language/statements/", "stmt/")
+          .replace("language/types/", "types/");
+      }
+
+      function groupName(cat) {
+        // Language categories
+        if (cat.startsWith("language/expressions")) return "Expressions";
+        if (cat.startsWith("language/statements")) return "Statements";
+        if (cat.startsWith("language/types")) return "Types";
+        if (cat.startsWith("language/literals")) return "Literals";
+        if (cat.startsWith("language/arguments-object")) return "Arguments";
+        if (cat.startsWith("language/destructuring")) return "Destructuring";
+        if (cat.startsWith("language/block-scope")) return "Block Scope";
+        if (cat.startsWith("language/rest-parameters")) return "Rest Params";
+        if (cat.startsWith("language/computed-property")) return "Computed Props";
+        if (cat.startsWith("language/module-code")) return "Modules";
+        if (cat.startsWith("language/eval-code")) return "Eval";
+        if (cat.startsWith("language/function-code")) return "Functions";
+        if (cat.startsWith("language/global-code")) return "Global Code";
+        if (cat.startsWith("language/identifier")) return "Identifiers";
+        if (cat.startsWith("language/")) return "Language (other)";
+        // Built-in categories — use the top-level name
+        if (cat.startsWith("built-ins/")) {
+          const name = cat.replace("built-ins/", "").split("/")[0];
+          return name;
+        }
+        if (cat.startsWith("annexB/")) return "Annex B";
+        return cat;
+      }
+
+      // Edition card: a large gauge with the edition name and pass ratio beneath
+      // it. The per-edition sparkline that used to sit between them is gone —
+      // at card size it read as noise next to the donut, which already carries
+      // the number the card exists to show. The per-edition run history
+      // (runs/editions-index.json and its standalone twin) is no longer fetched
+      // by this page; the overall trend still comes from
+      // <t262-conformance-trend>.
+      // `onSelect(row)` makes each card a button that selects its edition, the
+      // same selection dragging the slider makes — the cards read as the
+      // page's edition picker, so clicking one had to do something.
+      function renderEditionLegend(
+        rows,
+        legendHost,
+        activeEdition = null,
+        dimAfterRank = null,
+        proposalEditionLabels = new Set(),
+        onSelect = null,
+      ) {
+        legendHost.textContent = "";
+        if (!rows || rows.length === 0) return;
+        rows.forEach((row) => {
+          const rowRank = Number.isFinite(row.rank) ? row.rank : Number.MAX_SAFE_INTEGER;
+          const isActive = row.edition === activeEdition;
+          const isDimmed = dimAfterRank !== null && rowRank > dimAfterRank;
+          const label = proposalEditionLabels.has(row.edition)
+            ? PROPOSAL_LABEL
+            : row.edition === "ES3 / Core"
+              ? "ES3"
+              : row.edition || row.rawEdition;
+
+          // Same conic-gradient ring + glow technique as the big <t262-donut>,
+          // just the ring and percentage, no count labels.
+          const donut = document.createElement("div");
+          donut.className = "edition-legend-donut";
+          donut.style.setProperty("--deg", `${Math.max(0, Math.min(100, row.rate)) * 3.6}deg`);
+          donut.appendChild(el("div", { className: "edition-legend-donut-glow" }));
+          donut.appendChild(el("div", { className: "edition-legend-donut-ring" }));
+          donut.appendChild(
+            el(
+              "div",
+              { className: "edition-legend-donut-center" },
+              el("div", { className: "edition-legend-donut-value" }, `${row.rate}%`),
+              el("div", { className: "edition-legend-donut-name" }, label),
+            ),
+          );
+
+          const item = el(
+            "button",
+            {
+              type: "button",
+              className: "edition-legend-item" + (isActive ? " active" : "") + (isDimmed ? " dimmed" : ""),
+              "aria-pressed": isActive ? "true" : "false",
+              title: label === PROPOSAL_LABEL ? "Include proposals" : `Show cumulative conformance through ${label}`,
+            },
+            donut,
+            el(
+              "div",
+              { className: "edition-legend-text" },
+              el(
+                "div",
+                { className: "edition-legend-ratio" },
+                `${row.pass.toLocaleString()} / ${row.total.toLocaleString()}`,
+              ),
+            ),
+          );
+          if (onSelect) item.addEventListener("click", () => onSelect(row));
+
+          legendHost.appendChild(item);
+        });
+      }
+
+      function isProposalSkipReason(reason) {
+        if (!reason) return false;
+        const normalized = String(reason).toLowerCase();
+        return (
+          normalized.includes("proposal") ||
+          normalized.includes("temporal") ||
+          normalized.includes("import defer") ||
+          normalized.includes("source phase imports") ||
+          normalized.includes("set methods") ||
+          normalized.includes("map/weakmap upsert") ||
+          normalized.includes("staging")
+        );
+      }
+
+      // A result record's OWN scope verdict, as written by the runner
+      // (`scope` / `scope_official` in the per-file JSONL). This is the
+      // authority whenever the per-file edition index has no entry for the
+      // file: the index and the JSONL are produced by separate refresh paths,
+      // so a test262 file added since the last index refresh resolves to no
+      // edition at all. Treating that as "unknown, keep it" leaked
+      // proposal-scope tests into EVERY published-edition view — e.g. two
+      // built-ins/Temporal tests surfaced "Temporal is not defined" in the
+      // ES2026 error patterns even though Temporal is not in any published
+      // edition. Mirrors the generator's own rule (generate-editions.ts buckets
+      // `scope_official === false || scope === "proposal"` to `Proposals`), so
+      // the fallback and the index can never disagree about a given record.
+      function isProposalScopeRecord(record) {
+        if (!record) return false;
+        if (record.scope_official === false) return true;
+        // Older JSONL rows predate `scope_official`; `scope` carries the same
+        // verdict (test262 `staging/` is reported as scope "proposal" too).
+        const scope = String(record.scope || "");
+        return scope === "proposal" || scope === "staging";
+      }
+
+      function escapeHtml(str) {
+        if (typeof str !== "string") return str;
+        return str
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#39;");
+      }
+
+      // Source file cache and line fetcher
+      const _srcCache = new Map();
+      const _srcQueue = [];
+      let _srcFetching = 0;
+      const MAX_CONCURRENT_FETCHES = 6;
+      let _srcAvailable = null;
+      let _srcAvailabilityPromise = null;
+
+      function sourceBasePath() {
+        return window.location.pathname.replace(/\/benchmarks\/.*$/, "");
+      }
+
+      function ensureSourceAvailability() {
+        if (_srcAvailable !== null) return Promise.resolve(_srcAvailable);
+        if (_srcAvailabilityPromise) return _srcAvailabilityPromise;
+
+        _srcAvailabilityPromise = fetch(sourceBasePath() + "/api/test262-source-status")
+          .then((r) => {
+            if (!r.ok) throw new Error(r.status);
+            return r.json();
+          })
+          .then((payload) => {
+            _srcAvailable = payload?.available !== false;
+            return _srcAvailable;
+          })
+          .catch(() => {
+            // Preserve legacy behavior when the status endpoint is unavailable.
+            _srcAvailable = true;
+            return true;
+          });
+
+        return _srcAvailabilityPromise;
+      }
+
+      // Returns a placeholder div that will be filled with source context when ready
+      function fetchSourceLines(filePath, errText) {
+        const placeholder = el("div", { className: "src-placeholder" });
+        // Extract line number from various error formats
+        const lineMatch =
+          errText.match(/L(\d+):(\d+)\s/) || // L27:22 (compiler errors)
+          errText.match(/at L(\d+):/) || // [in fn() at L10: code] or [at L10: code]
+          errText.match(/at L(\d+)[^:]/) || // [at wrapped L430]
+          errText.match(/assert #\d+ at L(\d+):/); // assert #1 at L10: code
+        // Extract assert text for source search (fallback when no line number)
+        const assertMatch =
+          !lineMatch &&
+          (errText.match(/assert #\d+ at L\d+:\s*(.+)/) ||
+            errText.match(/assert #\d+:\s*(.+)/) ||
+            errText.match(/first assert:\s*(.+)/));
+        const searchText = assertMatch ? assertMatch[1].trim().substring(0, 60) : null;
+        // Line numbers from errors refer to the WRAPPED source (preamble + test body).
+        // The preamble is ~25-35 lines, so subtract an estimate to get the original line.
+        const rawLineNo = lineMatch ? parseInt(lineMatch[1], 10) : 0;
+        const normalized = filePath.startsWith("test/") ? filePath : "test/" + filePath;
+
+        if (!rawLineNo && !searchText) return placeholder;
+
+        const cached = _srcCache.get(normalized);
+        if (cached !== undefined) {
+          if (cached) {
+            const ln = findBestLine(cached, rawLineNo, errText, searchText);
+            if (ln) renderSrcContext(cached, ln, placeholder);
+          }
+          return placeholder;
+        }
+
+        ensureSourceAvailability().then((available) => {
+          if (!available) return;
+          const url = sourceBasePath() + "/test262/" + normalized;
+          _srcQueue.push({
+            normalized,
+            url,
+            rawLineNo,
+            errText,
+            searchText,
+            placeholder,
+          });
+          _drainSrcQueue();
+        });
+        return placeholder;
+      }
+
+      function findBestLine(src, rawLineNo, errText, searchText) {
+        const lines = src.split("\n");
+        // Strategy 1: search for assert text from error message
+        if (searchText) {
+          for (let i = 0; i < lines.length; i++) {
+            if (lines[i].includes(searchText)) return i + 1;
+          }
+        }
+        // Line numbers are now adjusted at the runner level (bodyLineOffset subtracted).
+        // Use them directly.
+        if (rawLineNo > 0 && rawLineNo <= lines.length) return rawLineNo;
+        return 0;
+      }
+
+      function _drainSrcQueue() {
+        while (_srcFetching < MAX_CONCURRENT_FETCHES && _srcQueue.length > 0) {
+          const job = _srcQueue.shift();
+          const cached = _srcCache.get(job.normalized);
+          if (cached !== undefined) {
+            if (cached) {
+              const ln = findBestLine(cached, job.rawLineNo, job.errText, job.searchText);
+              if (ln) renderSrcContext(cached, ln, job.placeholder);
+            }
+            continue;
+          }
+          _srcFetching++;
+          fetch(job.url)
+            .then((r) => {
+              if (!r.ok) throw new Error(r.status);
+              return r.text();
+            })
+            .then((t) => {
+              _srcCache.set(job.normalized, t);
+              const ln = findBestLine(t, job.rawLineNo, job.errText, job.searchText);
+              if (ln) renderSrcContext(t, ln, job.placeholder);
+            })
+            .catch(() => {
+              _srcCache.set(job.normalized, null);
+            })
+            .finally(() => {
+              _srcFetching--;
+              _drainSrcQueue();
+            });
+        }
+      }
+      function renderSrcContext(src, lineNo, container) {
+        if (!src || lineNo < 1) return;
+        const lines = src.split("\n");
+        if (lineNo > lines.length) return;
+        const start = Math.max(0, lineNo - 2);
+        const end = Math.min(lines.length, lineNo + 3);
+        container.style.cssText =
+          "font-family: 'SF Mono', SFMono-Regular, Consolas, monospace; font-size: 0.625rem; padding: 4px 8px 4px 1.25rem; margin-top: 2px; background: rgba(0,0,0,0.2); border-radius: 3px; white-space: pre; overflow-x: auto; max-width: 100%; line-height: 1.4;";
+        container.textContent = "";
+        for (let i = start; i < end; i++) {
+          const isTarget = i === lineNo - 1;
+          const row = el("div", {
+            style: { background: isTarget ? "rgba(248,81,73,0.08)" : "none" },
+          });
+          row.appendChild(
+            el(
+              "span",
+              {
+                style: {
+                  color: isTarget ? "var(--error)" : "var(--text-muted)",
+                  marginRight: "0.75rem",
+                  userSelect: "none",
+                  display: "inline-block",
+                  width: "3ch",
+                  textAlign: "right",
+                },
+              },
+              String(i + 1),
+            ),
+          );
+          row.appendChild(
+            el(
+              "span",
+              {
+                style: {
+                  color: isTarget ? "var(--text)" : "var(--text-muted)",
+                },
+              },
+              lines[i],
+            ),
+          );
+          container.appendChild(row);
+        }
+      }
+
+      function pct(n, d) {
+        return d > 0 ? Math.round((n / d) * 1000) / 10 : 0;
+      }
+      function fmt(ms) {
+        if (ms < 0.001) return "<0.001ms";
+        if (ms < 1) return ms.toFixed(3) + "ms";
+        if (ms < 100) return ms.toFixed(1) + "ms";
+        return Math.round(ms) + "ms";
+      }
+
+      function el(tag, attrs, ...children) {
+        const e = document.createElement(tag);
+        if (attrs)
+          for (const [k, v] of Object.entries(attrs)) {
+            if (k === "style" && typeof v === "object") Object.assign(e.style, v);
+            else if (k === "className") e.className = v;
+            else e.setAttribute(k, v);
+          }
+        for (const c of children) {
+          if (typeof c === "string") e.appendChild(document.createTextNode(c));
+          else if (c) e.appendChild(c);
+        }
+        return e;
+      }
+
+      // Format baseline age as a coloured badge: < 6h normal, ≥ 6h orange, ≥ 24h red.
+      // Surfaces drift in the committed test262 baseline — see issue #1079.
+      function buildBaselineAgeBadge(generatedAt, sha) {
+        if (!generatedAt) return null;
+        const generated = new Date(generatedAt);
+        if (Number.isNaN(generated.getTime())) return null;
+        const ageMs = Date.now() - generated.getTime();
+        const totalMinutes = Math.max(0, Math.floor(ageMs / 60000));
+        const hours = Math.floor(totalMinutes / 60);
+        const minutes = totalMinutes % 60;
+        const ageText = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+
+        let severity = "ok";
+        if (ageMs >= 24 * 3600 * 1000) severity = "alarm";
+        else if (ageMs >= 6 * 3600 * 1000) severity = "warn";
+
+        const shortSha = typeof sha === "string" && sha ? sha.slice(0, 7) : "";
+        const generatedIso = generated.toISOString();
+        const tooltip =
+          `baseline generated at ${generatedIso}` +
+          (sha ? ` from commit ${sha}` : "") +
+          (severity === "alarm"
+            ? "\n⚠ baseline is more than 24h old — consider refreshing via workflow_dispatch"
+            : severity === "warn"
+              ? "\n⚠ baseline is more than 6h old — consider refreshing via workflow_dispatch"
+              : "");
+
+        const badge = el(
+          "div",
+          { className: "baseline-age" + (severity === "ok" ? "" : " " + severity), title: tooltip },
+          document.createTextNode(`Baseline age: ${ageText}`),
+        );
+        if (shortSha) {
+          badge.appendChild(document.createTextNode(" · "));
+          // Link to the commit on GitHub when a full SHA is available
+          if (sha && /^[a-f0-9]{7,40}$/i.test(sha)) {
+            badge.appendChild(
+              el(
+                "a",
+                {
+                  href: `https://github.com/loopdive/js2wasm/commit/${sha}`,
+                  target: "_blank",
+                  rel: "noopener",
+                },
+                shortSha,
+              ),
+            );
+          } else {
+            badge.appendChild(document.createTextNode(shortSha));
+          }
+        }
+        return badge;
+      }
+
+      function makeBar(passW, failW, errW, extraClass) {
+        const container = el("div", {
+          className: "bar-container" + (extraClass ? " " + extraClass : ""),
+        });
+        container.appendChild(
+          el("div", {
+            style: { width: passW + "%", background: "var(--pass)" },
+          }),
+        );
+        container.appendChild(
+          el("div", {
+            style: { width: failW + "%", background: "var(--fail)" },
+          }),
+        );
+        container.appendChild(
+          el("div", {
+            style: { width: errW + "%", background: "var(--error)" },
+          }),
+        );
+        return container;
+      }
+
+      function makeCard(label, value, colorVar, subtext) {
+        const card = el("div", { className: "card" });
+        card.appendChild(el("div", { className: "label" }, label));
+        const valEl = el("div", { className: "value", style: { color: colorVar || "inherit" } }, String(value));
+        card.appendChild(valEl);
+        if (subtext) card.appendChild(el("div", { className: "pct" }, subtext));
+        return card;
+      }
+
+      // Gauge card replaced by <t262-donut> web component
+
+      function makeScopeSummary(...parts) {
+        const summary = {
+          pass: 0,
+          fail: 0,
+          compile_error: 0,
+          compile_timeout: 0,
+          skip: 0,
+          total: 0,
+          compilable: 0,
+          stale: 0,
+        };
+        for (const part of parts) {
+          if (!part) continue;
+          summary.pass += part.pass || 0;
+          summary.fail += part.fail || 0;
+          summary.compile_error += part.compile_error || 0;
+          summary.compile_timeout += part.compile_timeout || 0;
+          summary.skip += part.skip || 0;
+          summary.total += part.total || 0;
+          summary.compilable += part.compilable || 0;
+          summary.stale += part.stale || 0;
+        }
+        return summary;
+      }
+
+      function toggleDetail(row, catName, statusFilter) {
+        const existing = row.nextElementSibling;
+        if (existing && existing.classList.contains("detail-row")) {
+          existing.remove();
+          return;
+        }
+        // Remove any other open detail rows in this table
+        row
+          .closest("tbody")
+          .querySelectorAll(".detail-row")
+          .forEach((r) => r.remove());
+
+        const detailRow = el("tr", { className: "detail-row" });
+        const detailCell = el("td", { colspan: "7" });
+        const content = el("div", { className: "detail-content" }, "Loading…");
+        detailCell.appendChild(content);
+        detailRow.appendChild(detailCell);
+        row.after(detailRow);
+
+        if (!activeFileResultsSrc) {
+          content.textContent = "Per-file detail is only available for host mode.";
+          return;
+        }
+        loadFileResults(activeFileResultsSrc).then((map) => {
+          if (!map) {
+            content.textContent = "No file-level data available.";
+            return;
+          }
+          const files = map.get(catName) || [];
+          const filtered = statusFilter ? files.filter((f) => f.status === statusFilter) : files;
+          if (filtered.length === 0) {
+            content.textContent = "No matching files.";
+            return;
+          }
+          content.textContent = "";
+          // Sort: compile_error first, then fail, then pass
+          const order = { compile_error: 0, fail: 1, pass: 2, skip: 3 };
+          filtered.sort((a, b) => (order[a.status] ?? 4) - (order[b.status] ?? 4));
+          for (const f of filtered) {
+            const fname = f.file.replace("test/", "");
+            const safeFname = escapeHtml(fname);
+            const safeError = f.error ? escapeHtml(f.error) : "";
+            const fileEl = el("div", { className: "detail-file" });
+            const statusCls =
+              f.status === "pass"
+                ? "detail-status-pass"
+                : f.status === "fail"
+                  ? "detail-status-fail"
+                  : "detail-status-err";
+            const hdr = el("div", { className: "detail-file-header" });
+            hdr.appendChild(
+              el(
+                "span",
+                { className: statusCls, style: { flexShrink: "0" } },
+                f.status === "pass" ? "\u2713" : f.status === "fail" ? "\u2717" : "\u26A0",
+              ),
+            );
+            hdr.appendChild(el("span", { className: "detail-fname" }, safeFname));
+            fileEl.appendChild(hdr);
+            if (f.error) {
+              const errDiv = el("div", { className: "detail-err" }, f.error);
+              fileEl.appendChild(errDiv);
+              fileEl.appendChild(fetchSourceLines(f.file, f.error));
+            }
+            content.appendChild(fileEl);
+          }
+        });
+      }
+
+      function renderConformance(view, container, preservedState = null) {
+        const data = view.report;
+        // Point per-file detail/error-pattern lookups at this view's source.
+        activeFileResultsSrc = view.fileResultsSrc;
+        const scopeSummaries = data.scope_summaries || {};
+        const standardSummary = scopeSummaries.standard || data.summary;
+        const legacySummary = scopeSummaries.annex_b || null;
+        const fullSummary = data.full_summary || data.summary;
+        const scoreState = {
+          includeLegacy: preservedState?.includeLegacy ?? true,
+          editionScope: preservedState?.editionTimeline?.value || "overall",
+        };
+        let editionDetail = null;
+        // Assigned when the history panel is built below; declared here so
+        // applyEditionScope() can push the slider's scope into it.
+        let historyTrendChart = null;
+
+        let summaryStamp = null;
+        if (data.timestamp || data.baseline_generated_at) {
+          const metaChildren = [];
+          if (data.timestamp) {
+            const dt = new Date(data.timestamp);
+            const stamp = `${dt.toLocaleDateString("de-DE", { day: "numeric", month: "numeric", year: "2-digit" })}, ${dt.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}`;
+            metaChildren.push(el("div", { className: "timestamp" }, stamp));
+          }
+          const ageBadge = buildBaselineAgeBadge(data.baseline_generated_at, data.baseline_sha);
+          if (ageBadge) metaChildren.push(ageBadge);
+          if (metaChildren.length > 0) {
+            summaryStamp = el("div", { className: "summary-meta" }, ...metaChildren);
+          }
+        }
+
+        const summary = el("div", { className: "summary" });
+        const summaryVisuals = el("div", { className: "summary-visuals" });
+        const donutPanel = el("div", { className: "summary-visual-panel summary-donut-panel" });
+        // Reuse the live chart elements when switching between the JS-host and
+        // standalone views. The donut owns its in-flight animation state and
+        // the timeline owns its selected scope; rebuilding either component
+        // would make the report jump back to its initial state.
+        const donutEl = preservedState?.donut || document.createElement("t262-donut");
+        donutEl.id = "donut-chart";
+        donutEl.style.setProperty("--t262-bg", "#060a14");
+        const controlsHost = el("div", { className: "filter-toggles", style: { marginTop: "1rem" } });
+        // Strict mode toggle — checked by default, persisted in localStorage
+        const strictToggle = el("label", { className: "filter-toggle", "data-report-toggle": "strict" });
+        const strictDefault = preservedState?.strictOnly ?? localStorage.getItem("t262-strict-only") === "true";
+        const strictCheckbox = el("input", { type: "checkbox" });
+        if (strictDefault) strictCheckbox.setAttribute("checked", "checked");
+        strictCheckbox.checked = strictDefault;
+        strictToggle.appendChild(strictCheckbox);
+        strictToggle.appendChild(el("span", null, "strict mode"));
+        const legacyToggle = el("label", { className: "filter-toggle", "data-report-toggle": "legacy" });
+        const legacyCheckbox = el("input", { type: "checkbox" });
+        legacyCheckbox.checked = preservedState?.includeLegacy ?? true;
+        if (legacyCheckbox.checked) legacyCheckbox.setAttribute("checked", "checked");
+        legacyToggle.appendChild(legacyCheckbox);
+        legacyToggle.appendChild(el("span", null, "legacy (Annex B)"));
+        controlsHost.appendChild(strictToggle);
+        controlsHost.appendChild(legacyToggle);
+        const editionSection = el("div", { className: "edition-section" });
+        const editionTimeline = preservedState?.editionTimeline || document.createElement("t262-edition-timeline");
+        editionTimeline.setAttribute("src", view.editionsSrc);
+        if (data.timestamp) {
+          editionTimeline.setAttribute("reference-timestamp", data.timestamp);
+        }
+        const editionLegendHost = el("div", { className: "edition-legend-grid" });
+        editionSection.appendChild(editionTimeline);
+        editionSection.appendChild(editionLegendHost);
+
+        function syncToggleStyles() {
+          const editionFiltered = scoreState.editionScope !== "overall";
+          legacyToggle.classList.toggle("active", legacyCheckbox.checked);
+          strictToggle.classList.toggle("active", strictCheckbox.checked);
+          strictToggle.style.display = editionFiltered ? "none" : "";
+          legacyToggle.style.display = editionFiltered || strictCheckbox.checked ? "none" : "";
+        }
+
+        function setDonutSummary(summary, captionMain = "ECMAScript") {
+          const ce =
+            Number(summary?.ce ?? 0) + Number(summary?.compile_error ?? 0) + Number(summary?.compile_timeout ?? 0);
+          donutEl.setAttribute("pass", String(summary?.pass || 0));
+          donutEl.setAttribute("fail", String(summary?.fail || 0));
+          donutEl.setAttribute("ce", String(ce));
+          donutEl.setAttribute("skip", String(summary?.skip || 0));
+          donutEl.setAttribute("total", String(summary?.total || 0));
+          donutEl.setAttribute("caption-main", captionMain);
+          // Same caption wording as the landing page: the sub-line names the
+          // lane and the strict filter, so a standalone or strict number is
+          // never presented as if it were the plain host one. This matters
+          // more now that standalone is the default view.
+          donutEl.setAttribute("caption-sub", conformanceCaptionSub());
+        }
+
+        // Mirrors the landing page's `conformanceOptions().captionSub`.
+        function conformanceCaptionSub() {
+          const strictOnly = strictCheckbox.checked;
+          const standalone = view.mode === "standalone";
+          if (strictOnly && standalone) return "strict standalone conformance";
+          if (strictOnly) return "strict conformance";
+          return standalone ? "standalone conformance" : "conformance";
+        }
+
+        // The scope value the slider would land on for a given legend row.
+        // Slider stops carry `value` (the raw edition label, e.g. "ES2018", or
+        // the collapsed legacy row's own raw label), so match on `rawEdition`
+        // rather than the display label — "ES3 / Core" is normalized and would
+        // never match a stop by name. Rows past the latest published edition
+        // are the proposal tail, whose only stop is the shared
+        // "overall+proposal".
+        function editionScopeForRow(row) {
+          if (!row) return null;
+          if (editionDetail?.proposalEditionLabels?.has(row.edition)) {
+            return editionDetail.proposalStop ? "overall+proposal" : null;
+          }
+          const stops = editionDetail?.editionSliderStops || [];
+          const stop = stops.find((candidate) => candidate.rawEdition === row.rawEdition);
+          return stop?.value ?? row.rawEdition ?? null;
+        }
+
+        function renderEditionSection() {
+          if (!editionDetail?.rows?.length) {
+            editionLegendHost.style.display = "none";
+            editionLegendHost.textContent = "";
+            return;
+          }
+          editionLegendHost.style.display = "grid";
+          renderEditionLegend(
+            editionDetail.rows,
+            editionLegendHost,
+            editionDetail.activeEdition,
+            editionDetail.limitRank,
+            editionDetail.proposalEditionLabels,
+            (row) => {
+              const scope = editionScopeForRow(row);
+              // Setting `value` drives the timeline exactly as a drag does: it
+              // moves the thumb, then emits edition-change, which re-renders
+              // the donut, category table, error patterns and ?edition=.
+              if (scope && scope !== editionDetail?.scope) editionTimeline.value = scope;
+            },
+          );
+        }
+
+        function applyEditionScope(detail = editionDetail) {
+          if (detail) {
+            editionDetail = detail;
+          }
+          scoreState.editionScope = detail?.scope || "overall";
+          syncToggleStyles();
+          renderSummaryCard();
+          renderEditionSection();
+          // The shared trend chart follows the slider, like the donut does.
+          historyTrendChart?.setAttribute("scope", scoreState.editionScope);
+          // Keep ?mode=/?edition= in step so the view can be linked to —
+          // shared with the landing page (components/t262-view-state.js).
+          window.t262ViewState?.write({ mode: view.mode, edition: scoreState.editionScope });
+          // (#1398) Re-filter the category table when the edition scope
+          // changes. `applyFilters` is hoisted (declared via function
+          // statement later in this scope) so it's safe to call here even
+          // before the table is built — the first call is a no-op until
+          // `rowsByGroup` is populated.
+          if (typeof applyFilters === "function") applyFilters();
+          // (#2871 #4) Re-render the error-pattern section so it only counts
+          // failures whose category falls in the selected edition range.
+          if (typeof rerenderErrorPatterns === "function") rerenderErrorPatterns();
+          // (#2871 follow-up) Same for the skipped-test table — its counts are per
+          // edition too once the slider leaves "overall".
+          if (typeof rerenderSkipReasons === "function") rerenderSkipReasons();
+        }
+
+        function renderSummaryCard() {
+          if (scoreState.editionScope === "overall") {
+            // Plain "ECMAScript" at overall scope, matching the landing page.
+            // The slider's own caption for this stop names the latest published
+            // edition ("ECMAScript 2026"), which reads as an edition FILTER
+            // rather than the unfiltered headline this scope actually is.
+            const overallCaption = "ECMAScript";
+            if (strictCheckbox.checked && data.strict_summary) {
+              setDonutSummary(data.strict_summary, overallCaption);
+            } else {
+              setDonutSummary(
+                makeScopeSummary(standardSummary, scoreState.includeLegacy ? legacySummary : null),
+                overallCaption,
+              );
+            }
+            return;
+          }
+          if (scoreState.editionScope === "overall+proposal") {
+            // "ECMAScript + proposals", matching the landing page — the scope is
+            // the standard PLUS proposals, not proposals alone (which is what
+            // the bare slider label PROPOSAL_LABEL suggests).
+            setDonutSummary(fullSummary, "ECMAScript + proposals");
+            return;
+          }
+          const scope =
+            editionDetail?.scopeMap instanceof Map ? editionDetail.scopeMap.get(scoreState.editionScope) : null;
+          if (!scope) {
+            setDonutSummary(
+              makeScopeSummary(standardSummary, scoreState.includeLegacy ? legacySummary : null),
+              editionDetail?.captionMain || "ECMAScript",
+            );
+            return;
+          }
+          setDonutSummary(scope.summary, scope.captionMain);
+        }
+
+        legacyCheckbox.addEventListener("change", () => {
+          scoreState.includeLegacy = legacyCheckbox.checked;
+          syncToggleStyles();
+          renderSummaryCard();
+        });
+        strictCheckbox.addEventListener("change", () => {
+          localStorage.setItem("t262-strict-only", String(strictCheckbox.checked));
+          syncToggleStyles();
+          renderSummaryCard();
+        });
+
+        syncToggleStyles();
+        renderSummaryCard();
+        renderEditionSection();
+        donutPanel.appendChild(donutEl);
+        donutPanel.appendChild(controlsHost);
+        summaryVisuals.appendChild(donutPanel);
+
+        const historyPanel = el("div", { className: "summary-visual-panel summary-history-panel" });
+        historyPanel.appendChild(el("h3", { className: "diagram-title" }, "Test Pass Rate Over Time"));
+        // Shared with the landing page. Both lanes are plotted; `mode` picks
+        // which one is the thick white line, and `scope` follows the edition
+        // slider — the chart used to ignore both, showing the js-host overall
+        // curve even in the standalone view at an ES2015 selection.
+        historyTrendChart =
+          preservedState?.historyTrendChart ||
+          el("t262-conformance-trend", {
+            className: "summary-history-chart",
+            height: "260",
+            mode: view.mode,
+            scope: scoreState.editionScope,
+            "runs-base": CONFORMANCE_RUNS_BASE,
+          });
+        if (preservedState?.historyTrendChart) {
+          historyTrendChart.setAttribute("mode", view.mode);
+          historyTrendChart.setAttribute("scope", scoreState.editionScope);
+        }
+        historyPanel.appendChild(historyTrendChart);
+        summaryVisuals.appendChild(historyPanel);
+
+        summary.appendChild(summaryVisuals);
+        if (summaryStamp) summary.appendChild(summaryStamp);
+
+        // Stale results indicator
+        if (data.summary.stale > 0) {
+          const staleCard = makeCard(
+            "Stale",
+            data.summary.stale.toLocaleString(),
+            "var(--text-muted)",
+            "from previous runs",
+          );
+          staleCard.style.borderColor = "var(--error)";
+          staleCard.style.borderStyle = "dashed";
+          summary.appendChild(staleCard);
+        }
+
+        const officialSummary = makeScopeSummary(standardSummary, scoreState.includeLegacy ? legacySummary : null);
+        const ceValue = (summary) =>
+          Number(summary?.ce ?? 0) + Number(summary?.compile_error ?? 0) + Number(summary?.compile_timeout ?? 0);
+        const proposalDiffers =
+          Number(fullSummary?.pass ?? 0) !== Number(officialSummary?.pass ?? 0) ||
+          Number(fullSummary?.fail ?? 0) !== Number(officialSummary?.fail ?? 0) ||
+          Number(fullSummary?.skip ?? 0) !== Number(officialSummary?.skip ?? 0) ||
+          ceValue(fullSummary) !== ceValue(officialSummary) ||
+          Number(fullSummary?.total ?? 0) !== Number(officialSummary?.total ?? 0);
+        if (proposalDiffers) {
+          editionTimeline.setAttribute("show-proposals", "");
+        } else {
+          editionTimeline.removeAttribute("show-proposals");
+        }
+        // (?edition=) Apply the incoming URL scope once the timeline has
+        // published its own scope map, and VALIDATE against it — an unknown
+        // value would leave the slider on a selection the donut, category
+        // table and trend chart all ignore. The snapshot is taken in main()
+        // before any render writes the query string back.
+        let urlEditionApplied = Boolean(preservedState?.editionTimeline);
+        const applyUrlEditionOnce = (detail) => {
+          if (urlEditionApplied) return;
+          urlEditionApplied = true;
+          const edition = initialViewState.edition;
+          if (!edition) return;
+          const scopeMap = detail?.scopeMap;
+          const isKnownScope =
+            edition === "overall" ||
+            edition === "overall+proposal" ||
+            (scopeMap instanceof Map && scopeMap.has(edition));
+          if (isKnownScope && edition !== detail?.scope) editionTimeline.value = edition;
+        };
+
+        const editionChangeHandler = (event) => {
+          applyEditionScope(event.detail);
+          applyUrlEditionOnce(event.detail);
+        };
+        const previousEditionChangeHandler = editionTimeline.__reportEditionChangeHandler;
+        if (previousEditionChangeHandler) {
+          editionTimeline.removeEventListener("edition-change", previousEditionChangeHandler);
+        }
+        editionTimeline.addEventListener("edition-change", editionChangeHandler);
+        editionTimeline.__reportEditionChangeHandler = editionChangeHandler;
+        if (!preservedState?.editionTimeline) editionTimeline.setAttribute("value", "overall");
+
+        // (#1398/#2871) Compute the set of category names that have at least
+        // one test in the editions ≤ the slider's selected edition. Returns
+        // `null` when no edition filter should apply — either the slider is at
+        // "overall", or the per-category×edition data isn't available (the
+        // standalone view ships no category-editions file, so we can't filter
+        // precisely and must show everything rather than blank the table).
+        // Shared by the category table (applyFilters) and the error-pattern
+        // section so both respect the slider (#2871 #4).
+        // (#2871 follow-up) The edition NAMES at or below the slider's selected rank —
+        // e.g. selecting ES2015 yields {ES5, ES2015}. `null` means "no edition
+        // filter" (slider at overall / overall+proposal, or no edition data).
+        // This is the precise filter: it applies to a single test's edition
+        // classification, unlike computeAllowedCategories below which can only
+        // ask whether a whole category has ANY test in range.
+        function computeAllowedEditions() {
+          const editionFilterActive =
+            scoreState.editionScope !== "overall" && scoreState.editionScope !== "overall+proposal";
+          if (!editionFilterActive) return null;
+          const limitRank = editionDetail?.limitRank;
+          if (typeof limitRank !== "number") return null;
+          const rows = editionDetail?.rows || [];
+          if (rows.length === 0) return null;
+          return new Set(
+            rows.filter((r) => typeof r.rank === "number" && r.rank <= limitRank).map((r) => r.rawEdition || r.edition),
+          );
+        }
+
+        function computeAllowedCategories() {
+          const allowedEditionNames = computeAllowedEditions();
+          if (!allowedEditionNames) return null;
+          const categoryEditions = view.categoryEditions;
+          if (!categoryEditions || Object.keys(categoryEditions).length === 0) return null;
+          const allowed = new Set();
+          for (const [catName, byEdition] of Object.entries(categoryEditions)) {
+            if (byEdition && Object.keys(byEdition).some((ed) => allowedEditionNames.has(ed))) allowed.add(catName);
+          }
+          return allowed;
+        }
+
+        function applyFilters() {
+          const query = searchInput.value.toLowerCase().trim();
+          tbody.querySelectorAll(".detail-row").forEach((r) => r.remove());
+
+          const allowedCats = computeAllowedCategories();
+
+          for (const [group, { groupRow, catRows }] of rowsByGroup) {
+            let groupVisible = false;
+            for (const { row, cat } of catRows) {
+              const nameMatch =
+                !query || cat.name.toLowerCase().includes(query) || shortName(cat.name).toLowerCase().includes(query);
+              // Show the row only if one of its edition buckets is within the
+              // allowed (≤ selected rank) set; `null` means no edition filter.
+              const editionMatch = !allowedCats || allowedCats.has(cat.name);
+              const visible = nameMatch && editionMatch;
+              row.style.display = visible ? "" : "none";
+              if (visible) groupVisible = true;
+            }
+            groupRow.style.display = groupVisible ? "" : "none";
+          }
+        }
+
+        container.appendChild(summary);
+        container.appendChild(editionSection);
+
+        // --- Skipped tests (skip reasons) ---
+        // (#2871 follow-up) Re-rendered on every slider move: when an edition is
+        // selected the counts are recomputed from the per-file JSONL, keeping
+        // only tests classified into that edition or earlier. With the slider
+        // at "overall" (or without per-file data) the report's aggregate
+        // `skip_reasons` are shown unchanged.
+        const skipSectionContainer = el("div", { style: { marginBottom: "24px" } });
+        container.appendChild(skipSectionContainer);
+        let skipRenderToken = 0;
+        async function rerenderSkipReasons() {
+          const token = ++skipRenderToken;
+          const allowedEditions = computeAllowedEditions();
+          let entries = null;
+          if (allowedEditions && view.fileResultsSrc) {
+            const [map, fileEditions] = await Promise.all([loadFileResults(view.fileResultsSrc), loadFileEditions()]);
+            if (token !== skipRenderToken) return;
+            if (map && fileEditions) {
+              const counts = new Map();
+              for (const files of map.values()) {
+                for (const f of files) {
+                  if (f.status !== "skip" || !f.error) continue;
+                  const ed = fileEditionOf(fileEditions, f.file);
+                  if (!ed || !allowedEditions.has(ed)) continue;
+                  counts.set(f.error, (counts.get(f.error) || 0) + 1);
+                }
+              }
+              entries = [...counts.entries()];
+            }
+          }
+          // Fell back to the report's aggregate counts (standalone ships no
+          // per-file JSONL) — say so rather than claiming an edition scope the
+          // numbers don't have.
+          const editionScoped = entries !== null;
+          if (!entries) entries = Object.entries(data.skip_reasons || {});
+          entries = entries.filter(([reason]) => !isProposalSkipReason(reason)).sort((a, b) => b[1] - a[1]);
+          if (token !== skipRenderToken) return;
+
+          skipSectionContainer.textContent = "";
+          if (entries.length === 0) return;
+          skipSectionContainer.appendChild(el("h3", null, "Skipped Tests"));
+          skipSectionContainer.appendChild(
+            el(
+              "div",
+              { className: "pct", style: { marginBottom: "0.75rem" } },
+              editionScoped
+                ? "Non-proposal skip reasons in the selected edition range."
+                : allowedEditions
+                  ? "Non-proposal skip reasons in the official scope (no per-test data for this view — not filtered by edition)."
+                  : "Non-proposal skip reasons in the official scope.",
+            ),
+          );
+          const skipTable = el("table", { className: "cat-table" });
+          const skipHead = el("thead");
+          const skipHR = el("tr");
+          skipHR.appendChild(el("th", null, "Feature / Reason"));
+          skipHR.appendChild(el("th", { className: "num" }, "Tests Skipped"));
+          skipHead.appendChild(skipHR);
+          skipTable.appendChild(skipHead);
+          const skipBody = el("tbody");
+          for (const [reason, count] of entries) {
+            const row = el("tr");
+            row.appendChild(el("td", null, reason));
+            row.appendChild(el("td", { className: "num" }, count.toLocaleString()));
+            skipBody.appendChild(row);
+          }
+          skipTable.appendChild(skipBody);
+          skipSectionContainer.appendChild(skipTable);
+        }
+        rerenderSkipReasons();
+
+        // --- Search / filter bar ---
+        const filterBar = el("div", { className: "filter-bar" });
+        const searchInput = el("input", {
+          className: "search-box",
+          type: "text",
+          placeholder: "Search categories...",
+        });
+        searchInput.addEventListener("input", applyFilters);
+        filterBar.appendChild(searchInput);
+        container.appendChild(filterBar);
+
+        // --- Error Patterns section (between filters and category table) ---
+        // (#2871) Re-rendered whenever the edition slider moves (#4) or the
+        // differential toggle flips (#5). Differential state is per-view.
+        const errorPatternsContainer = el("div");
+        container.appendChild(errorPatternsContainer);
+        const errorPatternState = { differentialOnly: false };
+        // (#2871 follow-up) Monotonic token: the render is async (it awaits the per-file
+        // JSONL), and the slider fires an edition-change right after the first
+        // render, so two renders could be in flight at once. Both cleared the
+        // container BEFORE awaiting and appended AFTER, which is why the whole
+        // Error Patterns section was rendered twice on page load. A stale
+        // render now bails instead of appending a second copy.
+        let errorPatternToken = 0;
+        function rerenderErrorPatterns() {
+          const token = ++errorPatternToken;
+          renderErrorPatterns(errorPatternsContainer, {
+            view,
+            allowedCategories: computeAllowedCategories(),
+            allowedEditions: computeAllowedEditions(),
+            isCurrent: () => token === errorPatternToken,
+            differentialOnly: errorPatternState.differentialOnly,
+            setDifferential: (next) => {
+              errorPatternState.differentialOnly = next;
+              rerenderErrorPatterns();
+            },
+          });
+        }
+        rerenderErrorPatterns();
+
+        container.appendChild(el("h3", null, "By Category"));
+
+        const table = el("table", { className: "cat-table" });
+        const thead = el("thead");
+        const headerRow = el("tr");
+        for (const [text, cls] of [
+          ["Category", ""],
+          ["Pass", "num"],
+          ["Fail", "num"],
+          ["Err", "num"],
+          ["Skip", "num"],
+          ["Rate", "num"],
+          ["Distribution", ""],
+        ]) {
+          headerRow.appendChild(el("th", cls ? { className: cls } : null, text));
+        }
+        thead.appendChild(headerRow);
+        table.appendChild(thead);
+
+        const tbody = el("tbody");
+
+        // Group categories
+        const groups = new Map();
+        for (const cat of data.categories) {
+          const g = groupName(cat.name);
+          if (!groups.has(g)) groups.set(g, []);
+          groups.get(g).push(cat);
+        }
+
+        // Track rows for filtering
+        const rowsByGroup = new Map();
+
+        for (const [group, cats] of groups) {
+          const gPass = cats.reduce((a, c) => a + c.pass, 0);
+          const gTotal = cats.reduce((a, c) => a + c.pass + c.fail + c.skip + c.compile_error, 0);
+
+          const groupRow = el("tr", { className: "group-header" });
+          groupRow.appendChild(el("td", { colspan: "7" }, group + " (" + gPass + " pass / " + gTotal + " total)"));
+          tbody.appendChild(groupRow);
+
+          const catRows = [];
+
+          for (const cat of cats) {
+            const total = cat.pass + cat.fail + cat.skip + cat.compile_error;
+            const compilable = cat.pass + cat.fail;
+            const catPct = pct(cat.pass, compilable);
+
+            const row = el("tr");
+            const nameCell = el("td", { className: "cat-name clickable" }, shortName(cat.name));
+            nameCell.addEventListener("click", () => toggleDetail(row, cat.name, null));
+            row.appendChild(nameCell);
+
+            const passCell = el(
+              "td",
+              {
+                className: "num" + (cat.pass ? " clickable" : ""),
+                style: { color: "var(--pass)" },
+              },
+              String(cat.pass),
+            );
+            if (cat.pass)
+              passCell.addEventListener("click", (e) => {
+                e.stopPropagation();
+                toggleDetail(row, cat.name, "pass");
+              });
+            row.appendChild(passCell);
+
+            const failCell = el(
+              "td",
+              {
+                className: "num" + (cat.fail ? " clickable" : ""),
+                style: {
+                  color: cat.fail ? "var(--fail)" : "var(--text-muted)",
+                },
+              },
+              String(cat.fail),
+            );
+            if (cat.fail)
+              failCell.addEventListener("click", (e) => {
+                e.stopPropagation();
+                toggleDetail(row, cat.name, "fail");
+              });
+            row.appendChild(failCell);
+
+            const errCell = el(
+              "td",
+              {
+                className: "num" + (cat.compile_error ? " clickable" : ""),
+                style: {
+                  color: cat.compile_error ? "var(--error)" : "var(--text-muted)",
+                },
+              },
+              String(cat.compile_error),
+            );
+            if (cat.compile_error)
+              errCell.addEventListener("click", (e) => {
+                e.stopPropagation();
+                toggleDetail(row, cat.name, "compile_error");
+              });
+            row.appendChild(errCell);
+
+            row.appendChild(el("td", { className: "num", style: { color: "var(--text-muted)" } }, String(cat.skip)));
+            row.appendChild(el("td", { className: "num" }, compilable > 0 ? catPct + "%" : "\u2014"));
+
+            const barCell = el("td", { style: { width: "120px" } });
+            barCell.appendChild(makeBar(pct(cat.pass, total), pct(cat.fail, total), pct(cat.compile_error, total)));
+            row.appendChild(barCell);
+
+            tbody.appendChild(row);
+            catRows.push({ row, cat });
+          }
+
+          rowsByGroup.set(group, { groupRow, catRows });
+        }
+
+        table.appendChild(tbody);
+        // (#2871 #2) Wrap in a horizontal-scroll container so the wide table
+        // (Distribution column) doesn't overflow the viewport on mobile.
+        const tableScroll = el("div", { className: "table-scroll" });
+        tableScroll.appendChild(table);
+        container.appendChild(tableScroll);
+      }
+
+      // (#2871) Renders the failure-analysis section. In host mode this is the
+      // per-file "Error Patterns" view (grouped by normalized message); in
+      // standalone mode there is no deployed per-file JSONL, so it renders the
+      // report's curated `root_cause_map` buckets instead. Both honor the
+      // edition slider (#4) and the standalone differential filter (#5).
+      //   opts = { view, allowedCategories: Set|null, differentialOnly, setDifferential }
+      async function renderErrorPatterns(container, opts = {}) {
+        const {
+          view = { mode: "host", fileResultsSrc: RESULTS_JSONL },
+          allowedCategories = null,
+          allowedEditions = null,
+          isCurrent = () => true,
+        } = opts;
+        container.textContent = "";
+        if (view.mode === "standalone") {
+          renderStandaloneRootCauses(container, opts);
+          return;
+        }
+        return renderHostErrorPatterns(container, view.fileResultsSrc, allowedCategories, allowedEditions, isCurrent);
+      }
+
+      // Buckets in the standalone root_cause_map that are, by construction,
+      // host-dependency gaps: they fail in pure-Wasm standalone mode but pass
+      // when a JS host supplies the missing capability. Used by the #5
+      // "differential" filter to show only standalone-specific failures.
+      const HOST_DEPENDENT_BUCKET_IDS = new Set([
+        "leaked-host-import",
+        "late-import-index-shift",
+        "binary-emit-u32-out-of-range",
+        "standalone-json-codec",
+        "standalone-regexp",
+        "standalone-regexp-phase-2d",
+        "standalone-regexp-phase-2b",
+        "standalone-regexp-string-protocol",
+        "standalone-regexp-native-engine",
+        "standalone-dynamic-object-property",
+        "standalone-reflect-refusal",
+        "standalone-iterator-protocol",
+        "standalone-getter-callback-bridge",
+        "issamevalue-invalid-wasm",
+        "object-to-primitive",
+        "extern-class-metadata",
+      ]);
+
+      function renderStandaloneRootCauses(container, opts) {
+        const {
+          view,
+          allowedCategories = null,
+          allowedEditions = null,
+          differentialOnly = false,
+          setDifferential,
+        } = opts;
+        const rcMap = view.report.root_cause_map;
+        if (!rcMap || !Array.isArray(rcMap.buckets)) {
+          container.appendChild(el("div", { className: "no-data" }, "No standalone root-cause data available."));
+          return;
+        }
+
+        container.appendChild(el("h2", null, "Standalone Failure Root Causes"));
+
+        // Differential toggle (#5).
+        const toggleWrap = el("div", { className: "filter-toggles", style: { marginBottom: "0.5rem" } });
+        const diffToggle = el("label", { className: "filter-toggle" + (differentialOnly ? " active" : "") });
+        const diffCheckbox = el("input", { type: "checkbox" });
+        diffCheckbox.checked = differentialOnly;
+        if (differentialOnly) diffCheckbox.setAttribute("checked", "checked");
+        diffCheckbox.addEventListener("change", () => setDifferential && setDifferential(diffCheckbox.checked));
+        diffToggle.appendChild(diffCheckbox);
+        diffToggle.appendChild(el("span", null, "Standalone-only (not in JS host)"));
+        toggleWrap.appendChild(diffToggle);
+        container.appendChild(toggleWrap);
+        container.appendChild(
+          el(
+            "div",
+            { className: "diff-note" },
+            differentialOnly
+              ? "Showing host-dependency gaps: failures that occur in pure-Wasm standalone mode but pass with a JS host."
+              : "Failures grouped by root cause. Toggle above to isolate standalone-only (host-dependency) gaps.",
+          ),
+        );
+
+        // Edition filter. The standalone view ships no per-file JSONL, so the
+        // page cannot classify these failures itself — instead each bucket
+        // carries a `by_edition` breakdown baked in by build-test262-report.mjs
+        // (#2871 follow-up). When it's present, the bucket count is re-scoped
+        // to the selected edition range and empty buckets drop out. Older
+        // reports without it fall back to the coarse sample-file/category
+        // heuristic, which only ever hides whole buckets.
+        const editionBreakdown = rcMap.has_edition_breakdown === true;
+        let buckets = rcMap.buckets.slice();
+        if (differentialOnly) {
+          buckets = buckets.filter((b) => HOST_DEPENDENT_BUCKET_IDS.has(b.id));
+        }
+        const scopedCount = (b) => {
+          if (!allowedEditions || !editionBreakdown) return b.count || 0;
+          let n = 0;
+          for (const [edition, count] of Object.entries(b.by_edition || {})) {
+            if (allowedEditions.has(edition)) n += count;
+          }
+          return n;
+        };
+        if (allowedEditions && editionBreakdown) {
+          buckets = buckets.filter((b) => scopedCount(b) > 0);
+        } else if (allowedCategories) {
+          buckets = buckets.filter((b) => bucketTouchesCategories(b, allowedCategories));
+        }
+        buckets.sort((a, b) => scopedCount(b) - scopedCount(a));
+
+        const totalShown = buckets.reduce((a, b) => a + scopedCount(b), 0);
+        container.appendChild(
+          el(
+            "div",
+            {
+              className: "subtitle",
+              style: { color: "var(--text-muted)", fontSize: "0.75rem", marginBottom: "0.75rem" },
+            },
+            buckets.length +
+              " root-cause buckets · " +
+              totalShown.toLocaleString() +
+              " failures" +
+              (allowedEditions
+                ? editionBreakdown
+                  ? " · filtered to the selected edition range"
+                  : " · edition filter unavailable for this report (showing all editions)"
+                : ""),
+          ),
+        );
+
+        if (buckets.length === 0) {
+          container.appendChild(el("div", { className: "no-data" }, "No matching failures for the current filters."));
+          return;
+        }
+
+        const list = el("div", { style: { display: "flex", flexDirection: "column", gap: "0.5rem" } });
+        for (const b of buckets) {
+          const card = el("div", { className: "card", style: { cursor: "pointer" } });
+          const header = el("div", {
+            style: { display: "flex", alignItems: "baseline", gap: "0.75rem", flexWrap: "wrap" },
+          });
+          header.appendChild(
+            el(
+              "span",
+              {
+                style: {
+                  background: "var(--error)",
+                  color: "var(--bg)",
+                  fontWeight: "700",
+                  fontSize: "0.75rem",
+                  padding: "2px 8px",
+                  borderRadius: "10px",
+                  flexShrink: "0",
+                },
+              },
+              scopedCount(b).toLocaleString(),
+            ),
+          );
+          header.appendChild(
+            el("span", { style: { fontSize: "0.8125rem", wordBreak: "break-word" } }, b.label || b.id),
+          );
+          // These ids are THIS project's markdown issues (plan/issues/<id>-<slug>.md),
+          // not GitHub issues. The repo has no GitHub issues at all, and issue
+          // ids share one number sequence with PRs — so linking to
+          // github.com/loopdive/js2wasm/issues/<id> did not 404, it silently
+          // redirected to an unrelated PULL REQUEST (e.g. the Temporal bucket's
+          // #661 opened "docs(#1632): escalate Function.bind/toString"). Point
+          // at the dashboard's markdown viewer instead, which resolves a bare
+          // id — including suffixed ones like 1326c — via plan/issues/index.json.
+          for (const issue of b.issues || []) {
+            const num = String(issue).replace(/^#/, "");
+            header.appendChild(
+              el(
+                "a",
+                {
+                  className: "rc-issue-link",
+                  href: assetPath("dashboard/issue.html?id=" + encodeURIComponent(num)),
+                  target: "_blank",
+                  rel: "noopener",
+                },
+                "#" + num,
+              ),
+            );
+          }
+          card.appendChild(header);
+
+          const detail = el("div", {
+            style: { display: "none", marginTop: "0.5rem", borderTop: "1px solid var(--border)", paddingTop: "0.5rem" },
+          });
+          for (const f of b.sample_files || []) {
+            detail.appendChild(
+              el(
+                "div",
+                { className: "detail-fname", style: { fontSize: "0.6875rem", padding: "2px 0" } },
+                (f || "").replace("test/", ""),
+              ),
+            );
+          }
+          for (const sig of b.sample_signatures || []) {
+            if (!sig) continue;
+            detail.appendChild(el("div", { className: "detail-err", style: { paddingLeft: "0" } }, sig));
+          }
+          if ((b.sample_files || []).length === 0 && (b.sample_signatures || []).length === 0) {
+            detail.appendChild(
+              el("div", { style: { color: "var(--text-muted)", fontSize: "0.625rem" } }, "No samples recorded."),
+            );
+          }
+          card.appendChild(detail);
+          card.addEventListener("click", () => {
+            detail.style.display = detail.style.display === "none" ? "block" : "none";
+          });
+          list.appendChild(card);
+        }
+        container.appendChild(list);
+      }
+
+      // Derive whether a root-cause bucket touches any allowed category, from
+      // its sample file paths (e.g. "test/built-ins/RegExp/..." → category
+      // prefix "built-ins/RegExp"). Coarse but consistent with the category
+      // table's edition filter. Buckets with no usable samples are kept (we
+      // can't prove they're outside the range).
+      function bucketTouchesCategories(bucket, allowedCategories) {
+        const samples = bucket.sample_files || [];
+        if (samples.length === 0) return true;
+        for (const f of samples) {
+          const rel = String(f).replace(/^test\//, "");
+          for (const cat of allowedCategories) {
+            if (rel.startsWith(cat + "/") || rel.startsWith(cat)) return true;
+          }
+        }
+        return false;
+      }
+
+      async function renderHostErrorPatterns(
+        container,
+        fileResultsSrc,
+        allowedCategories,
+        allowedEditions = null,
+        isCurrent = () => true,
+      ) {
+        const loadingEl = el(
+          "div",
+          { style: { color: "var(--text-muted)", padding: "1rem" } },
+          "Loading error patterns...",
+        );
+        container.appendChild(loadingEl);
+        try {
+          // (#2871 follow-up) The per-file edition index is what makes the slider useful
+          // here. Filtering by category is a near no-op — almost every category
+          // holds at least one ES5 test, so "ES5" showed the whole list.
+          const [map, fileEditions] = await Promise.all([
+            loadFileResults(fileResultsSrc),
+            allowedEditions ? loadFileEditions() : Promise.resolve(null),
+          ]);
+          // A newer render (slider moved) owns the container now — bail rather
+          // than appending a duplicate section.
+          if (!isCurrent()) return;
+          loadingEl.remove();
+          if (!map) {
+            container.appendChild(el("div", { className: "no-data" }, "No file-level data for error patterns"));
+            return;
+          }
+
+          // Group errors by normalized message
+          const patterns = new Map(); // message -> { count, files: [{file, error, status}] }
+          for (const [cat, files] of map) {
+            // (#2871 #4) Honor the edition slider. Prefer the precise per-file
+            // edition index; fall back to the coarse per-category filter only
+            // when that artifact isn't deployed yet.
+            if (allowedCategories && !fileEditions && !allowedCategories.has(cat)) continue;
+            for (const f of files) {
+              if (f.status !== "compile_error" && f.status !== "fail") continue;
+              if (allowedEditions && fileEditions) {
+                const ed = fileEditionOf(fileEditions, f.file);
+                if (ed) {
+                  // Classified: drop it when it sits outside the selection.
+                  if (!allowedEditions.has(ed)) continue;
+                } else if (isProposalScopeRecord(f)) {
+                  // Not in the index — which lags the JSONL whenever test262
+                  // gains files — but the record's own scope says proposal, and
+                  // no proposal is part of any published edition. Without this
+                  // the leftovers surfaced in every edition (see the helper).
+                  continue;
+                }
+                // Still unclassified and standard-scope ⇒ can't prove it's out
+                // of range, so keep it rather than blanking a real failure.
+              }
+              const err = f.error || "";
+              if (!err) continue;
+              // Normalize: strip line numbers, file-specific details
+              let key = err
+                .replace(/L\d+:\d+/g, "L*:*")
+                .replace(/#\d+/g, "#*")
+                .replace(/"[^"]{20,}"/g, '"..."')
+                .replace(/\d{3,}/g, "*");
+              // Truncate to first error (before semicolon) for grouping
+              const semi = key.indexOf(";");
+              if (semi > 0) key = key.substring(0, semi).trim();
+              if (key.length > 120) key = key.substring(0, 120) + "...";
+
+              if (!patterns.has(key)) patterns.set(key, { count: 0, status: f.status, files: [] });
+              const p = patterns.get(key);
+              p.count++;
+              if (p.files.length < 50) p.files.push({ file: f.file, error: err });
+            }
+          }
+
+          // Sort by count descending
+          const sorted = [...patterns.entries()].sort((a, b) => b[1].count - a[1].count);
+
+          container.appendChild(el("h2", null, "Error Patterns"));
+          if (sorted.length === 0) {
+            container.appendChild(
+              el("div", { className: "no-data" }, "No fail/compile-error patterns in the selected edition range."),
+            );
+            return;
+          }
+          container.appendChild(
+            el(
+              "div",
+              { className: "subtitle" },
+              sorted.length +
+                " distinct patterns across " +
+                sorted.reduce((a, [, v]) => a + v.count, 0) +
+                " errors" +
+                (allowedEditions && fileEditions ? " · filtered to the selected edition range" : ""),
+            ),
+          );
+
+          const patternList = el("div", {
+            style: { display: "flex", flexDirection: "column", gap: "0.5rem" },
+          });
+
+          // Show top 50 patterns
+          for (const [pattern, data] of sorted.slice(0, 50)) {
+            const card = el("div", {
+              className: "card",
+              style: { cursor: "pointer" },
+            });
+            const headerRow = el("div", {
+              style: {
+                display: "flex",
+                alignItems: "baseline",
+                gap: "0.75rem",
+              },
+            });
+
+            const countBadge = el(
+              "span",
+              {
+                style: {
+                  background: data.status === "compile_error" ? "var(--error)" : "var(--fail)",
+                  color: "var(--bg)",
+                  fontWeight: "700",
+                  fontSize: "0.75rem",
+                  padding: "2px 8px",
+                  borderRadius: "10px",
+                  flexShrink: "0",
+                },
+              },
+              String(data.count),
+            );
+            headerRow.appendChild(countBadge);
+
+            const statusLabel = el(
+              "span",
+              {
+                style: {
+                  color: "var(--text-muted)",
+                  fontSize: "0.625rem",
+                  flexShrink: "0",
+                },
+              },
+              data.status === "compile_error" ? "CE" : "FAIL",
+            );
+            headerRow.appendChild(statusLabel);
+
+            const msgEl = el(
+              "span",
+              {
+                style: {
+                  fontFamily: "'SF Mono', SFMono-Regular, Consolas, monospace",
+                  fontSize: "0.6875rem",
+                  wordBreak: "break-word",
+                },
+              },
+              pattern,
+            );
+            headerRow.appendChild(msgEl);
+
+            card.appendChild(headerRow);
+
+            // Expandable file list (hidden by default)
+            const fileList = el("div", {
+              style: {
+                display: "none",
+                marginTop: "0.5rem",
+                borderTop: "1px solid var(--border)",
+                paddingTop: "0.5rem",
+              },
+            });
+
+            for (const f of data.files) {
+              const fileEntry = el("div", { className: "detail-file" });
+              const fname = (f.file || "").replace("test/", "");
+
+              const fhdr = el("div", { className: "detail-file-header" });
+              const lineMatch = f.error.match(/L(\d+):(\d+)\s/);
+              const lineInfo = lineMatch ? ":" + lineMatch[1] : "";
+              fhdr.appendChild(el("span", { className: "detail-fname" }, fname + lineInfo));
+              fileEntry.appendChild(fhdr);
+
+              // Source context placeholder
+              fileEntry.appendChild(fetchSourceLines(f.file, f.error));
+              fileList.appendChild(fileEntry);
+            }
+            if (data.count > data.files.length) {
+              fileList.appendChild(
+                el(
+                  "div",
+                  {
+                    style: {
+                      color: "var(--text-muted)",
+                      fontSize: "0.625rem",
+                      padding: "4px 0",
+                    },
+                  },
+                  "... and " + (data.count - data.files.length) + " more files",
+                ),
+              );
+            }
+
+            card.appendChild(fileList);
+
+            // Toggle expand on click
+            card.addEventListener("click", () => {
+              const isOpen = fileList.style.display !== "none";
+              fileList.style.display = isOpen ? "none" : "block";
+            });
+
+            patternList.appendChild(card);
+          }
+
+          if (sorted.length > 50) {
+            patternList.appendChild(
+              el(
+                "div",
+                {
+                  style: {
+                    color: "var(--text-muted)",
+                    textAlign: "center",
+                    padding: "0.5rem",
+                  },
+                },
+                "... " + (sorted.length - 50) + " more patterns",
+              ),
+            );
+          }
+
+          container.appendChild(patternList);
+        } catch (e) {
+          loadingEl.textContent = "Error loading patterns: " + e.message;
+        }
+      }
+
+      // Rewrite every summary-shaped node in a standalone report so `pass`
+      // counts only host-free passes (leaky passes → fail). Mutates in place;
+      // the standalone report object is not shared with the host report.
+      function applyStandaloneHostFree(node) {
+        if (Array.isArray(node)) {
+          node.forEach(applyStandaloneHostFree);
+          return;
+        }
+        if (!node || typeof node !== "object") return;
+        if (typeof node.host_free_pass === "number" && typeof node.total === "number") {
+          const hf = node.host_free_pass;
+          const ce = Number(node.ce) || Number(node.compile_error || 0) + Number(node.compile_timeout || 0);
+          const skip = Number(node.skip) || 0;
+          node.pass = hf;
+          node.fail = Math.max(0, node.total - hf - ce - skip);
+        }
+        for (const key of Object.keys(node)) applyStandaloneHostFree(node[key]);
+      }
+
+      async function main() {
+        // The overall pass-rate history is fetched by the shared
+        // <t262-conformance-trend> component itself. The per-lane per-edition
+        // history (runs/editions-index.json + its standalone twin, #4362) is no
+        // longer fetched here: it only fed the edition-card sparklines, which
+        // the donut-first card layout dropped.
+        const [conformance, standaloneReport, categoryEditions] = await Promise.all([
+          loadReportWithFallback(),
+          loadJSON(STANDALONE_REPORT_JSON),
+          loadJSON(CATEGORY_EDITIONS_JSON),
+        ]);
+        const app = document.getElementById("app");
+        app.textContent = "";
+
+        // Standalone honesty (host-free): a "leaky pass" passed only because the
+        // compiled Wasm still reached for a JS-host import, so it is NOT a true
+        // standalone pass. Count host_free_pass as pass across every
+        // summary-shaped node (overall / official / strict / full / per-scope /
+        // by_category), pushing leaky passes into fail. Keeps the standalone
+        // headline consistent with the honest host-free number (matches the
+        // per-edition slider, which is already generated with --host-free).
+        applyStandaloneHostFree(standaloneReport);
+
+        if (conformance) {
+          // (#2871 #1) Host (JS) vs Standalone (pure Wasm) views. Both share the
+          // same report schema; standalone ships no per-file JSONL, so the
+          // per-test error-pattern list degrades to the root-cause buckets.
+          //
+          // The per-category×edition map is SHARED, not host-only. An edition is
+          // a property of the test file's frontmatter, not of the compile
+          // target, and the category-table filter reads only this map's edition
+          // KEYS (`computeAllowedCategories`), never its host pass/fail counts —
+          // so pointing the standalone view at it cannot leak host numbers.
+          // Passing `null` here used to make `computeAllowedCategories` bail out
+          // and return null, which `applyFilters` reads as "no edition filter":
+          // every standalone category row stayed visible at every slider
+          // position, so selecting ES2026 still listed `built-ins/Temporal`
+          // (4,603 proposal tests). The only standalone categories absent from
+          // the map are `built-ins/Temporal` and `built-ins/AbstractModuleSource`
+          // (both Proposals) plus `built-ins/undefined` and `language/export`
+          // (both Unclassified) — none is a published edition, so hiding them
+          // under a published-edition selection is correct and makes the two
+          // views behave the same way.
+          const hostView = {
+            mode: "host",
+            report: conformance,
+            editionsSrc: HOST_EDITIONS_JSON,
+            categoryEditions: categoryEditions || null,
+            fileResultsSrc: RESULTS_JSONL,
+          };
+          const standaloneView = standaloneReport
+            ? {
+                mode: "standalone",
+                report: standaloneReport,
+                editionsSrc: STANDALONE_EDITIONS_JSON,
+                categoryEditions: categoryEditions || null,
+                fileResultsSrc: null,
+              }
+            : null;
+
+          // Mode switch (only shown when standalone data is available).
+          // ?mode= wins over the remembered choice: an explicit link should
+          // show what it says regardless of what this browser last looked at.
+          // Standalone (pure Wasm, no JS host imports) is the DEFAULT lane on
+          // both surfaces — the honest floor of what the compiler produces on
+          // its own. Host mode is the opt-in, via the switch, `?mode=host`, or
+          // a remembered choice. It still falls back to host when no standalone
+          // report was published.
+          const conformanceHost = el("div");
+          const preferredMode = initialViewState.mode || localStorage.getItem("t262-mode") || "standalone";
+          let activeMode = standaloneView && preferredMode !== "host" ? "standalone" : "host";
+          const renderActive = () => {
+            const filterInputs = {
+              strict: conformanceHost.querySelector('[data-report-toggle="strict"] input'),
+              legacy: conformanceHost.querySelector('[data-report-toggle="legacy"] input'),
+            };
+            const preservedState = {
+              donut: conformanceHost.querySelector("t262-donut"),
+              editionTimeline: conformanceHost.querySelector("t262-edition-timeline"),
+              historyTrendChart: conformanceHost.querySelector("t262-conformance-trend.summary-history-chart"),
+              strictOnly: filterInputs.strict?.checked,
+              includeLegacy: filterInputs.legacy?.checked,
+            };
+            conformanceHost.textContent = "";
+            const view = activeMode === "standalone" && standaloneView ? standaloneView : hostView;
+            renderConformance(view, conformanceHost, preservedState);
+          };
+          if (standaloneView) {
+            const modeSwitch = el("div", { className: "mode-switch" });
+            const mkBtn = (mode, main, sub) => {
+              const b = el(
+                "button",
+                { className: mode === activeMode ? "active" : "" },
+                main,
+                el("span", { className: "mode-sub" }, sub),
+              );
+              b.addEventListener("click", () => {
+                if (activeMode === mode) return;
+                activeMode = mode;
+                localStorage.setItem("t262-mode", mode);
+                window.t262ViewState?.write({ mode });
+                modeSwitch.querySelectorAll("button").forEach((x) => x.classList.remove("active"));
+                b.classList.add("active");
+                renderActive();
+              });
+              return b;
+            };
+            modeSwitch.appendChild(mkBtn("host", "Host mode", "JS runtime imports"));
+            modeSwitch.appendChild(mkBtn("standalone", "Standalone", "pure Wasm, no JS host"));
+            app.appendChild(modeSwitch);
+          }
+          app.appendChild(conformanceHost);
+          renderActive();
+        } else {
+          app.appendChild(
+            el("div", { className: "no-data" }, "No test262 report found. Run: npx vitest run tests/test262.test.ts"),
+          );
+        }
+
+        // Timestamp is now rendered inside renderConformance
+      }
+
+      main();
+    </script>
+  </body>
+</html>

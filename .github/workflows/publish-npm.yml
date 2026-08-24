@@ -1,0 +1,230 @@
+name: publish
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: "Run pack/publish as dry-run (no uploads)"
+        required: false
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
+
+permissions:
+  contents: read
+  id-token: write # for npm provenance + JSR OIDC
+
+jobs:
+  # Guard against the drift bug (loopdive/js2wasm#389): a `v*` tag is cut as a bare
+  # lightweight tag that never bumps package.json, so publish-npm would publish
+  # whatever stale version package.json happens to carry. This job fails the
+  # publish unless BOTH package.json versions and the proxy's canonical-package
+  # dependency equal the tag version. It only runs on the real publish path
+  # (tag push); the workflow_dispatch dry-run has no version tag in
+  # github.ref_name, so it is skipped there.
+  verify-version:
+    name: verify tag matches package.json versions
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Check tag == package versions
+        run: |
+          tag="${{ github.ref_name }}"
+          version="${tag#v}"
+          root_version=$(node -p "require('./package.json').version")
+          proxy_version=$(node -p "require('./packages/js2wasm/package.json').version")
+          proxy_dependency=$(node -p "require('./packages/js2wasm/package.json').dependencies['@loopdive/js2']")
+          echo "tag=$tag → version=$version"
+          echo "root package.json: $root_version"
+          echo "proxy package.json (packages/js2wasm): $proxy_version"
+          echo "proxy dependency on @loopdive/js2: $proxy_dependency"
+          fail=0
+          if [ "$root_version" != "$version" ]; then
+            echo "::error::root package.json version ($root_version) does not match tag version ($version)."
+            fail=1
+          fi
+          if [ "$proxy_version" != "$version" ]; then
+            echo "::error::proxy package.json version ($proxy_version) does not match tag version ($version)."
+            fail=1
+          fi
+          if [ "$proxy_dependency" != "$version" ]; then
+            echo "::error::proxy dependency on @loopdive/js2 ($proxy_dependency) does not match tag version ($version)."
+            fail=1
+          fi
+          if [ "$fail" -ne 0 ]; then
+            echo "::error::Refusing to publish. Run 'node scripts/release.mjs <x.y.z>' to bump both package manifests and the proxy dependency in lockstep, land it as a release PR, then tag the merge commit. See docs/releasing.md."
+            exit 1
+          fi
+          echo "Tag, package versions, and proxy dependency match ($version) — proceeding to publish."
+
+  # Three independent publish targets, each gated ONLY on verify-version so a
+  # not-yet-configured registry can't block the others (e.g. a missing js2wasm
+  # trusted publisher must not skip the JSR publish). The shared gate: on a tag
+  # push, require verify-version to have passed; on workflow_dispatch it is
+  # skipped (no version tag), so `always() && result != failure/cancelled` lets
+  # a skipped dependency through while still blocking on a real failure.
+  publish-npm:
+    name: npm publish (@loopdive/js2)
+    runs-on: ubuntu-latest
+    needs: verify-version
+    if: |
+      always() &&
+      needs.verify-version.result != 'failure' &&
+      needs.verify-version.result != 'cancelled'
+    steps:
+      - uses: actions/checkout@v5
+
+      # No `version:` here on purpose — package.json pins pnpm via the
+      # "packageManager" field, and passing both makes pnpm/action-setup@v4
+      # fail with ERR_PNPM_BAD_PM_VERSION (it killed the v0.56.0 and v0.57.0
+      # publish runs). Let action-setup read the pinned version instead.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          registry-url: "https://registry.npmjs.org"
+          cache: "pnpm"
+
+      # OIDC trusted publishing requires npm >= 11.5.1; Node 20 ships npm 10.x.
+      - name: Upgrade npm for OIDC trusted publishing
+        run: npm install -g npm@latest
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm run build
+
+      - name: Pack @loopdive/js2 (dry-run preview)
+        run: npm pack --dry-run
+
+      # Tokenless OIDC trusted publishing — no NODE_AUTH_TOKEN. npm authenticates
+      # to npmjs via the GitHub Actions OIDC token (id-token: write is granted at
+      # the workflow level), using the trusted publisher configured for
+      # @loopdive/js2. Provenance is attested automatically under OIDC.
+      - name: Publish @loopdive/js2
+        if: github.event_name == 'push' || inputs.dry-run == 'false'
+        run: npm publish --provenance --access public
+
+  # The unscoped js2wasm proxy re-exports @loopdive/js2 for discoverability
+  # (`npm install js2wasm`). It ships static committed files (index.js, cli.js,
+  # index.d.ts) — no build step needed. Its package.json version tracks the
+  # canonical package in lockstep (scripts/release.mjs) and its dependency pins
+  # the matching @loopdive/js2 version. Runs as its OWN job so a missing trusted
+  # publisher can't red the canonical or JSR publishes.
+  # Requires an npm trusted publisher configured for the `js2wasm` package (same
+  # GitHub OIDC provider as @loopdive/js2). See loopdive/js2wasm#389.
+  publish-npm-proxy:
+    name: npm publish (js2wasm proxy)
+    runs-on: ubuntu-latest
+    needs: verify-version
+    if: |
+      always() &&
+      needs.verify-version.result != 'failure' &&
+      needs.verify-version.result != 'cancelled'
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          registry-url: "https://registry.npmjs.org"
+
+      # OIDC trusted publishing requires npm >= 11.5.1; Node 20 ships npm 10.x.
+      - name: Upgrade npm for OIDC trusted publishing
+        run: npm install -g npm@latest
+
+      - name: Pack js2wasm proxy (dry-run preview)
+        working-directory: packages/js2wasm
+        run: npm pack --dry-run
+
+      - name: Publish js2wasm proxy
+        if: github.event_name == 'push' || inputs.dry-run == 'false'
+        working-directory: packages/js2wasm
+        run: npm publish --provenance --access public
+
+  publish-jsr:
+    name: JSR publish (@loopdive/js2)
+    runs-on: ubuntu-latest
+    # Independent of the npm jobs — JSR is a separate registry and must publish
+    # even if an npm trusted publisher isn't configured yet. Tokenless OIDC:
+    # jsr publish authenticates via the workflow's id-token (id-token: write is
+    # granted at the workflow level). Requires the JSR package `@loopdive/js2`
+    # to exist and be linked to this GitHub repo on jsr.io (Settings → link a
+    # GitHub repository) so OIDC publishing is authorized. jsr.json carries the
+    # version (kept in lockstep with the npm packages by scripts/release.mjs).
+    needs: verify-version
+    if: |
+      always() &&
+      needs.verify-version.result != 'failure' &&
+      needs.verify-version.result != 'cancelled' &&
+      (github.event_name == 'push' || inputs.dry-run == 'false')
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: "pnpm"
+
+      # `jsr publish` runs `deno publish --unstable-byonm` (bring-your-own-node-
+      # modules), which type-resolves the published source (src/**/*.ts). That
+      # source imports `typescript` (src/ts-api.ts), so node_modules must exist
+      # or Deno fails with "Could not find typescript in a node_modules folder".
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      # --allow-slow-types: the exported API has many inferred types; JSR's
+      # slow-type check would otherwise reject the publish.
+      - name: Publish to JSR
+        run: npx jsr publish --allow-slow-types
+
+  # Publish (or create) the GitHub Release for the tag so it goes live
+  # automatically alongside the npm/JSR pushes. Previously the GH release object
+  # was created by hand and left in DRAFT state — v0.62.0 published to npm+JSR
+  # but sat as a draft on GitHub until a manual undraft (2026-07-19). This job
+  # closes that gap: on a real tag push, once version verification passes, it
+  # marks the release published + latest (or creates it with auto-generated
+  # notes if it doesn't exist yet). Gated on verify-version success only — a
+  # transient registry hiccup in an individual publish job must not block the
+  # release from going live (each publish target is independent + re-runnable).
+  publish-github-release:
+    name: publish GitHub release
+    runs-on: ubuntu-latest
+    needs: [verify-version, publish-npm, publish-npm-proxy, publish-jsr]
+    # Job-level permissions REPLACE the workflow-level set, so this grants the
+    # contents:write needed for `gh release` (the workflow default is
+    # contents:read); id-token is not needed here.
+    permissions:
+      contents: write
+    if: |
+      always() &&
+      github.event_name == 'push' &&
+      needs.verify-version.result == 'success'
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Publish or create the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${{ github.ref_name }}"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $tag exists — undrafting and marking latest."
+            gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --draft=false --latest
+          else
+            echo "Creating published release $tag with auto-generated notes."
+            gh release create "$tag" --repo "$GITHUB_REPOSITORY" \
+              --title "$tag" --generate-notes --latest
+          fi
+          echo "GitHub release $tag is published and marked latest."

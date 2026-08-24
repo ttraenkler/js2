@@ -1,0 +1,71 @@
+{
+  "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
+  "organizeImports": {
+    "enabled": true
+  },
+  "files": {
+    "include": ["src/**/*.ts", "tests/**/*.ts", "scripts/**/*.ts"],
+    "ignore": [
+      "**/node_modules/**",
+      "**/dist/**",
+      "**/vendor/**",
+      "test262/**",
+      "tests/dogfood/.acorn/**",
+      "tests/dogfood/.marked/**",
+      "tests/dogfood/.acorn-test-suite/**",
+      "tests/dogfood/.clsx/**",
+      "tests/dogfood/.cookie/**",
+      "tests/dogfood/.eslint/**",
+      "tests/dogfood/.eslint-upstream-suite/**",
+      "tests/dogfood/.prettier/**",
+      "tests/dogfood/.react/**",
+      "tests/dogfood/.react-dom-upstream-suite-impl/**",
+      "tests/dogfood/.react-upstream-suite/**",
+      "tests/dogfood/.lit-upstream-suite/**",
+      "tests/dogfood/.hono-upstream-suite/**",
+      "tests/dogfood/.lodash-upstream-suite/**",
+      "tests/dogfood/.moment-upstream-suite/**",
+      "tests/dogfood/.lit-implementation/**",
+      "tests/dogfood/.npm-compat/**",
+      "tests/dogfood/.npm-upstream-suites/**"
+    ]
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true,
+      "complexity": {
+        "noForEach": "off",
+        "noBannedTypes": "off",
+        "useLiteralKeys": "off",
+        "useOptionalChain": "off"
+      },
+      "suspicious": {
+        "noExplicitAny": "warn",
+        "noThenProperty": "off",
+        "noAssignInExpressions": "off",
+        "noImplicitAnyLet": "off",
+        "noGlobalIsNan": "off",
+        "noApproximativeNumericConstant": "off"
+      },
+      "style": {
+        "noNonNullAssertion": "off",
+        "useNumberNamespace": "off",
+        "useTemplate": "off",
+        "noUnusedTemplateLiteral": "off",
+        "noParameterAssign": "off",
+        "noUselessElse": "off",
+        "noInferrableTypes": "off",
+        "useSingleVarDeclarator": "off",
+        "useNodejsImportProtocol": "off",
+        "useImportType": "off",
+        "useExponentiationOperator": "off"
+      }
+    }
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2
+  }
+}

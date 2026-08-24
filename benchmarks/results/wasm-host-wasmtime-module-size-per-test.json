@@ -1,0 +1,86 @@
+[
+  {
+    "name": "AOT compiled",
+    "path": "fib",
+    "value": 104,
+    "label": "0.1 kB",
+    "jsUs": 98
+  },
+  {
+    "name": "Interpreter",
+    "path": "fib",
+    "value": 889,
+    "label": "0.9 kB",
+    "jsUs": 98
+  },
+  {
+    "name": "Engine",
+    "path": "fib",
+    "value": 14792119,
+    "label": "14.8 MB",
+    "jsUs": 98
+  },
+  {
+    "name": "AOT compiled",
+    "path": "fib-recursive",
+    "value": 120,
+    "label": "0.1 kB",
+    "jsUs": 86
+  },
+  {
+    "name": "Interpreter",
+    "path": "fib-recursive",
+    "value": 815,
+    "label": "0.8 kB",
+    "jsUs": 86
+  },
+  {
+    "name": "Engine",
+    "path": "fib-recursive",
+    "value": 14795111,
+    "label": "14.8 MB",
+    "jsUs": 86
+  },
+  {
+    "name": "AOT compiled",
+    "path": "array-sum",
+    "value": 111,
+    "label": "0.1 kB",
+    "jsUs": 143
+  },
+  {
+    "name": "Interpreter",
+    "path": "array-sum",
+    "value": 1036,
+    "label": "1.0 kB",
+    "jsUs": 143
+  },
+  {
+    "name": "Engine",
+    "path": "array-sum",
+    "value": 14793998,
+    "label": "14.8 MB",
+    "jsUs": 143
+  },
+  {
+    "name": "AOT compiled",
+    "path": "string-hash",
+    "value": 689,
+    "label": "0.7 kB",
+    "jsUs": 238
+  },
+  {
+    "name": "Interpreter",
+    "path": "string-hash",
+    "value": 1368,
+    "label": "1.4 kB",
+    "jsUs": 238
+  },
+  {
+    "name": "Engine",
+    "path": "string-hash",
+    "value": 14797652,
+    "label": "14.8 MB",
+    "jsUs": 238
+  }
+]

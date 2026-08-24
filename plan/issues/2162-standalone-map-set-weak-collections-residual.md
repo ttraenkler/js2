@@ -1,0 +1,413 @@
+---
+id: 2162
+title: "Standalone Map/Set/WeakMap/WeakSet conformance residual (~532 tests)"
+status: done
+completed: 2026-06-23
+sprint: 65
+created: 2026-06-15
+updated: 2026-06-23
+reconcile_note: "DRAINED 2026-06-23 — all 4 Set sub-issues merged (#2604/#2607 PR#1926, #2605/#2606 #1937); Map/WeakMap/WeakSet proven zero-gap. Residual is substrate-deferred (#2580/#2104 value-rep, #1472/#2158 reflection, #2622 collection-subclass)."
+priority: high
+feasibility: medium
+reasoning_effort: medium
+task_type: conformance
+area: standalone
+language_feature: collections
+goal: standalone-mode
+parent: 1103
+---
+
+# Standalone Map/Set/Weak collections conformance residual
+
+## Problem
+
+Wasm-native Map/Set/WeakMap collections landed in #1103 (`done`, sprint 58).
+The host-vs-standalone baseline diff (sha `31fa7e099`, 2026-06-15) shows
+**532 tests pass in host mode but fail standalone**, attributed to the
+collection types — currently **untracked/unscheduled**.
+
+## Evidence
+
+- Gap categories: `built-ins/Set` 286, `built-ins/Map` 148,
+  `built-ins/WeakMap` 101, plus WeakSet/WeakRef/FinalizationRegistry tails.
+- `Set_new` and related host-import leaks plus `(none)`-leak compile errors.
+
+## Acceptance criteria
+
+- Standalone pass count for Map/Set/WeakMap/WeakSet rises toward host parity.
+- No collection host-import leak (e.g. `Set_new`) for the covered cases.
+- Gap-diff repros added as standalone equivalence tests.
+
+## Notes
+
+Parent (done): #1103. Part of sprint-62 standalone catch-up (rank 7 by gap
+impact).
+
+## Triage (2026-06-16)
+
+Probed each collection in standalone (`target: standalone`). Findings:
+
+- **Map is already fully functional** in standalone — `new/set/get/has/
+delete/size/clear` all return correct values when the result is read into a
+  typed binding. The apparent Map failures in casual probing were
+  `m.get(k) === <literal>` confounds (the `any === literal` boxed-compare gap,
+  owned by value-rep #2104/#2106, not Map). No Map work needed for the core
+  methods.
+- **Set had NO native standalone runtime** — leaked `Set_new`/`Set_add`/… host
+  imports, so every Set program failed (`built-ins/Set` ≈ 286, the dominant
+  slice). Same for WeakMap/WeakSet (101+).
+
+## Slice 1 — native Set runtime (PR #1510, merged)
+
+A Set is a Map with `value === key`, so the entire #1103a Map backing store
+(ordered hash table, SameValueZero key equality, tombstone deletion) is reused.
+New `src/codegen/set-runtime.ts` adds only `__set_add(m, v) = __map_set(m, v, v)`
+and the dispatch interceptors; `has`/`delete`/`clear`/`size` route to `__map_*`.
+Wiring mirrors Map: `new Set()` → `__map_new` (new-super.ts); methods →
+`tryCompileNativeSetMethodCall` (extern.ts); `.size` →
+`tryCompileNativeSetSizeGet` (property-access.ts); `Set` resolves to `ref $Map`
+(index.ts); externClass skipped under `nativeStrings`. Host/gc unchanged.
+**Verified** `tests/issue-2162-standalone-set.test.ts` 6/6.
+
+## Slice 2 — native WeakMap/WeakSet runtime (this PR)
+
+`new WeakMap()` / get/set/has/delete and `new WeakSet()` / add/has/delete now
+host-import-free in standalone (~101+ tests). New
+`src/codegen/weak-collections-runtime.ts` reuses the Map backing store with
+**object-identity keys** (the Map runtime already compares object keys by
+`ref.eq`) and adds only `__weakset_add(m,v)=__map_set(m,v,v)`; the rest route to
+`__map_*`. Wiring mirrors Map/Set: `new` → `__map_new` (new-super.ts); methods →
+`tryCompileNativeWeakMethodCall` (extern.ts); `WeakMap`/`WeakSet` resolve to
+`ref $Map` (index.ts); externClass skipped under `nativeStrings`. Weak
+collections have **no iteration and no `.size`** (spec), so none is wired. The
+_weak_ (collectable) reference is not modelled — WasmGC has no weak refs, so
+entries are strongly retained; a memory property, not observable (only WeakRef/
+FinalizationRegistry liveness, skip-filtered, could tell). Host/gc unchanged.
+**Verified** (`tests/issue-2162-standalone-weak.test.ts`, 6/6, `--target wasi`,
+zero `WeakMap_*`/`WeakSet_*`/`Map_*` imports): WeakMap set+get / has / distinct
+keys / overwrite / delete; WeakSet add+has / delete / chained add.
+
+## Slice — Map/Set `keys()`/`values()` + for-of iteration (this PR)
+
+`keys()` / `values()` and bare `for-of` over a native Map/Set now lower without
+a `Map_*`/`Set_*` host import. The projection is materialized eagerly into a
+**canonical externref `$Vec`** (mirroring the array `.values()`/`.keys()` path,
+`array-methods.ts`): a new `emitCollectionIteratorVec` (map-runtime.ts) walks the
+entries vector once, sizing the result to `liveCount` and skipping tombstones,
+and projects each live entry to its key (`keys`) or value (`values` — for a Set,
+key === value). The for-of array fast path then drives it, so `for (const v of
+m.values())`, `for (const k of m.keys())`, `for (const v of set)` and `[…]`
+indexing all work.
+
+**Latent bug fixed:** the `$Map` struct's `entries` field is a ref-to-array, so
+`getArrTypeIdxFromVec($Map)` returns a valid array index — which made
+`arrayIteratorReceiverForForOf` misidentify a native Map/Set as a plain vec and
+iterate its raw struct as garbage. `compileForOfStatement` now intercepts native
+collections (`compileForOfNativeCollection`) **before** the array-receiver
+detection.
+
+`Set.forEach` (the shared `tryCompileNativeCollectionForEach` helper, previously
+only wired for Map) is enabled here too.
+
+**Verified** (`tests/issue-2162-iterators.test.ts`, 7/7, `--target wasi`, zero
+`Map_*`/`Set_*` imports): Map/Set `keys()`/`values()` for-of, bare Set for-of,
+tombstone-skip, Set.forEach.
+
+## Slice 3 — native Set.forEach (PR, dev-1, 2026-06-17)
+
+`Set.prototype.forEach` produced **invalid Wasm** standalone (the call fell
+through `tryCompileNativeSetMethodCall`'s `add/has/delete/clear` gate to the
+generic host path). Fixed by routing `forEach` to the shared
+`tryCompileNativeCollectionForEach(..., isSet=true)` — the SAME entries-vector
+drive Map.forEach (#1527) already uses, which already had the `isSet` branch
+(passes the value as both `value` and `key` per spec 24.2.3.6). One import + a
+3-line dispatch route in `set-runtime.ts`; no new runtime helper. Verified
+standalone (empty-`{}` instantiate, zero `Set_*`/`Map_*` imports): count, sum,
+value===key, tombstone-skip after delete, insertion order, empty-set no-op.
+Test: `tests/issue-2162-set-foreach.test.ts` (6/6).
+
+## Slice 4 — `new Set([...])` / `new Map([[k,v],...])` from array literal (PR, dev-1, 2026-06-17)
+
+The constructor-from-iterable forms fell through to the host path:
+`new Set([1,2,3])` leaked `env.*` imports, `new Map([[1,10]])` was a hard
+"Unsupported new expression". Fixed in `new-super.ts` for the **array-literal**
+argument (the dominant iterable form): build the empty `$Map` (`__map_new`),
+then seed element-by-element — each Set element via `__set_add` (dedups through
+the shared insert), each Map `[k,v]` pair via `__map_set`. Keys/values boxed via
+`coerceMapKeyToAnyref`; the no-arg forms are unchanged. A non-array-literal
+iterable (spread, a variable, a non-pair Map element) still falls back to the
+empty collection (the general iterator drive is the remaining slice below).
+Verified standalone (empty-`{}` instantiate, zero `Set_*`/`Map_*` imports): seed
++ size, dedup, has(), empty literal, seeded-forEach, Map pair overwrite, no-arg
+control. Test: `tests/issue-2162-collection-from-array.test.ts` (10/10).
+
+### Remaining slices (issue stays in-progress)
+
+- ~~**`entries()` `[k, v]`-pair iteration**~~ — **done** in the entries-for-of
+  slice below.
+- **value/key/entries SPREAD** (`[...set]`, `[...map.values()]`,
+  `[...map.entries()]`) — the array-spread consumer reads the canonical externref
+  vec but stores into a scalar-typed array (externref↔f64 mismatch ⇒ invalid
+  Wasm). A separate spread-consumer slice; the for-of path is unaffected.
+- `new Map(iterable)` / `new Set(iterable)` over a NON-literal iterable — needs
+  the general iterator drive (Slice 4 from-array covers only array literals).
+- ES2025 set-algebra: `union`/`intersection`/`difference`/
+  `symmetricDifference`/`isSubsetOf`/`isSupersetOf`/`isDisjointFrom` — **done**
+  (see the set-algebra slice).
+- The `Set === literal` / collection-of-`any` comparison confounds depend on the
+  value-rep work (#2104/#2106), out of scope here.
+
+## Slice — native Map/Set `entries()` `[k, v]` for-of (PR, dev cs-2163, 2026-06-18)
+
+`for (const [k, v] of map.entries())` and the bare `for (const [k, v] of map)`
+(Map default → entries) — plus the Set `[v, v]` form — now iterate host-import-
+free standalone. Previously the bare-Map for-of CE'd ("element is not an array
+type"); routing it through the `$ObjVec` pair projection + generic `[k, v]`
+destructuring leaked `__array_from_iter_n` / `__get_undefined` / `__extern_get`
+(the pair element was read via the host extern-index arm).
+
+**Fix** — new `compileForOfNativeMapEntries` (`src/codegen/statements/loops.ts`):
+a dedicated native walk over the `$Map` entries vector that binds the STORED
+key/value DIRECTLY into the `[k, v]` targets per live entry (skipping tombstones)
+— no intermediate pair object, no host import. It mirrors
+`tryCompileNativeCollectionForEach`'s tombstone-skipping entry walk (cursor
+advanced before the body so a `continue`/tombstone-skip never re-reads a slot)
+and `compileForOfArray`'s block/loop/body-block break/continue depth
+bookkeeping. Entry fields are externalized (`extern.convert_any`) then coerced to
+the bound local's type via the shared `coercionInstrs` (numeric key → f64, string
+→ native string ref, etc.). The `$Map`/`$MapEntry` field layout is exported from
+`map-runtime.ts` as `MAP_LAYOUT` so the driver doesn't re-derive the constants.
+`compileForOfNativeCollection` now dispatches the `entries` kind here (the
+non-`[k,v]` shapes — single-identifier binding, holes, rest, assignment targets —
+fall back to the generic path). Gated on `ctx.nativeStrings`; host/gc unchanged
+(verified host Map entries for-of still returns the same value).
+
+**Verified** (`tests/issue-2162-entries-foreach.test.ts`, 9/9, `target:
+standalone`, ZERO host imports): explicit `.entries()` and bare-Map `[k, v]`
+for-of, Set `[v, v]` entries, numeric + string keys, tombstone-skip after delete,
+insertion order, `break`, `continue`, empty collection. tsc + lint +
+format:check clean; all prior #2162 standalone suites (iterators, set-foreach,
+collection-from-array, set-algebra, standalone-set, standalone-weak,
+weak-mapHelpers-shift = 50 tests) unaffected.
+
+## Slice — ES2025 Set set-algebra (PR, dev-1, 2026-06-17)
+
+All 7 ES2025 Set set-algebra methods are now Wasm-native standalone/WASI (they
+leaked `Set_*` host imports before). New `src/codegen/set-algebra.ts`:
+`union`/`intersection`/`difference`/`symmetricDifference` return a new Set;
+`isSubsetOf`/`isSupersetOf`/`isDisjointFrom` return a boolean. Each builds on the
+shared `$Map` backing store — walk one operand's entries vector (the same
+insertion-ordered, tombstone-skipping walk `forEach`/`__map_iter_next` use) and
+consult the other via `__map_has`, accumulating into a fresh Set (`__map_new` +
+`__set_add`) or an i32 flag. Dispatched from `extern.ts` when BOTH the receiver
+and the single argument type as `Set` (a genuine Set `b`; a Set-LIKE arg / the
+GetSetRecord path is a follow-up). No host import, no iterator object.
+
+Verified standalone (empty-`{}`/wasi, zero `Set_*`/`Map_*` imports): all 7 ops,
+true+false predicate cases, content checks, dedup. Test:
+`tests/issue-2162-set-algebra.test.ts` (10/10, operands built via `.add()` so the
+slice is independent of the `new Set([...])` constructor slice). tsc + prettier
+clean; Set Slice-1 unaffected.
+
+## Slice — WeakMap/WeakSet stale-`mapHelpers`-index fix (PR, dev-mech1, 2026-06-17)
+
+Standalone WeakMap/WeakSet **construction + methods already existed** upstream
+(`new WeakMap()`/`new WeakSet()` → `__map_new`; get/set/has/delete/add via
+`tryCompileNativeWeakMethodCall`, reusing the `$Map` backing store). But on the
+`standalone:true, nativeStrings:true` path they emitted **invalid Wasm**: e.g.
+`wm.has(k)` validated-failed with `if[0] expected i32, found call of anyref`.
+
+**Root cause** (not weak-specific — a latent bug in the function-index shift
+machinery): `shiftLateImportIndices` (`expressions/late-imports.ts`) and the two
+`addUnionImports` shift sites (`index.ts`) keep `funcMap` / `nativeStrHelpers`
+(#1677) / `nativeRegexHelpers` (#1913) in lockstep with the defined-function
+shift, but **never shifted `ctx.mapHelpers`**. So when a late import
+(`__box_number`, pulled in to coerce a numeric key/value) lands BETWEEN a
+map-helper's registration and its `call` site, every defined function moves up by
+`added` but the `mapHelpers` entries stay stale-low — `wm.has` then emits a
+`call` to `__map_get` (the function one slot lower, returning `anyref` where an
+`i32` boolean was expected) → invalid Wasm. WeakMap exposed it because its first
+method call is often the first `__box_number` trigger; plain Map/Set hit the same
+window whenever a numeric key/value forces a late box. `--target wasi` dodged it
+(box helpers import eagerly), which is why the wasi-compiled
+`issue-2162-standalone-weak` suite passed before.
+
+**Fix** (mirrors #1677/#1913 exactly): add a `mapHelpers` lockstep shift at all
+three shift sites. After the fix, all weak methods produce valid Wasm and correct
+runtime values (get=42, has/miss/delete correct, add/has/delete correct).
+
+Tests: `tests/issue-2162-weak-mapHelpers-shift.test.ts` (5/5) — compiles each
+WeakMap/WeakSet/Map case `standalone+nativeStrings` and asserts valid Wasm; the
+assertion is `false` without the three-site fix (verified by reverting). tsc
+clean; existing Map/Set/Weak standalone suites (34) + shift-sensitive #2131 +
+foreach/algebra (29) unaffected.
+
+## Slice — `new Set(nonLiteralArray)` constructor (PR, dev-carla, 2026-06-21)
+
+The prior from-array slice seeded `new Set([1,2,3])` only from an array
+**literal**; a non-literal array-typed argument (`new Set(arr)` where `arr` is a
+variable / call result) fell through to the host path and **leaked env imports**
+(`env: module is not an object or function` on instantiate). Now seeded
+host-import-free.
+
+**Fix** — `seedNativeSetFromArrayArg` (`src/codegen/expressions/new-super.ts`):
+when the single `new Set(...)` argument is a checker-confirmed array/tuple type
+(`isArrayTypedArg`) that is NOT an array literal, compile it to its `$Vec`
+(`{length: i32, data: (ref $arr)}`), then emit a counted Wasm `block`/`loop` that
+walks `data[i]`, boxes each element to anyref via the existing
+`coerceMapKeyToAnyref` (spliced into the loop body), and calls `__set_add`. The
+element `array.get` uses the per-kind sign-extension (`array.get_u`/`_s` for
+packed i8/i16). On a non-vec / unsupported-element arg the helper gracefully
+leaves the empty Set on the stack — never a host-import leak or CE. Gated on
+`ctx.nativeStrings`; gc/host mode untouched.
+
+**Verified** (`tests/issue-2162-nonliteral-set-ctor.test.ts`, 7/7, `target:
+wasi`, ZERO `Set_*`/`Map_*` imports): numeric-array-variable seed + dedup,
+membership hit/miss, string-array seed + dedup, function-returned-array seed, and
+the no-arg + array-literal forms unaffected. tsc + prettier clean; all prior
+#2162 standalone suites (23 across set/iterators/collection-from-array) green.
+
+**Still open (this slice's siblings):** `new Map(pairsVariable)` — the inner
+`[K,V]` pair lowers to a typed tuple *struct* (`$__tuple_<n>`), not an inner vec,
+so its extraction is a distinct shape (per-field `struct.get`, varying field
+types) and falls through to an empty Map for now. `[...collection]`
+spread-of-Set/Map and `new Set(iterableNonArray)` (general iterator drive) also
+remain.
+
+## Finding (2026-06-21, during #2586): entries-mode materialization late-registration desync
+
+While wiring `Array.from(Map)` (#2586) onto `emitCollectionIteratorVec` in
+`"entries"` mode, found that the **entries** projection has a latent
+late-registration desync that the stricter targets surface — DO NOT fix in
+#2586; logged here as the entries-mode substrate follow-up:
+
+- `"entries"` mode calls `ensureObjVecBuilders` → `ensureObjectRuntime`
+  (`$ObjVec` pair builders). When that registration runs deep inside a function
+  body, a previously-baked object-runtime funcidx (`__defineProperty_value`)
+  goes stale → emit-time `function index out of range — undefined at function
+  '__defineProperty_value'` (the #2043 late-import-shift class).
+- Under `--target wasi` (strict-no-host) there is ALSO a `global_Array`
+  declared-global request that the host-import allowlist rejects.
+
+**Both reproduce on `main` independently of #2586** for
+`[...m.entries()]` consumed in an array context (`const a = [...m.entries()]`)
+under `--target wasi`. `[...m]` spread and `for (… of map)` work (they do NOT go
+through this entries-pair `emitCollectionIteratorVec` path). So the gap is
+specifically the entries-mode `$ObjVec` materialization registering object
+runtime late without a `flushLateImportShifts` re-resolve.
+
+`--target standalone` does NOT enforce the strict allowlist and lowers the
+entries path to a zero-import module, so #2586 ships standalone-only and gates
+out wasi/nativeStrings-with-host. The proper fix is to make
+`emitCollectionIteratorVec`'s entries branch register its builders/helpers
+before any shiftable funcidx is baked (or re-resolve `__defineProperty_value` by
+name after the registration), then it can be un-gated for wasi. Owner: whoever
+takes the entries-mode substrate slice (#2162 / #2542 family).
+
+## RE-MEASUREMENT (2026-06-22, architect) — Map/WeakMap/WeakSet CLOSED; residual is ALL Set
+
+Re-ran the FULL host-vs-standalone diff on main `6d76f5b2d` over every
+`built-ins/{Map,Set,WeakMap,WeakSet}` test262 file (813 total) via
+`runTest262File(..., "standalone")` host vs standalone:
+
+```
+bothPass = 79   hostFail = 494 (out-of-scope: fail in host too)   GAP = 240
+```
+
+**The host-pass / standalone-fail gap is 240, and ALL 240 are in `Set`.**
+Map, WeakMap, WeakSet have **zero** host-pass/standalone-fail rows — the landed
+slices closed them. The original 532-row estimate (`Set` 286, `Map` 148,
+`WeakMap` 101) is stale: Map/Weak are done; the live residual is the Set tail.
+
+### Verified Set buckets (root cause probed, not guessed)
+
+| Bucket | Rows | Tractable? | Slice |
+|---|---|---|---|
+| `[[SetData]]` brand-check: `Set.prototype.METHOD.call(nonSet)` must throw TypeError | ~84 | YES (needs native `.call` dispatch + `ref.test $Map` guard) | **#2604** |
+| `x instanceof Set/Map/Weak` → false for native collections | ~21 | YES (add `ref.test $Map` arm to `compileInstanceOf`) | **#2605** |
+| `s.add(null)`/`s.has(null/undefined)` invalid-Wasm + `extends Set` `MySet_size -1` late-import desync | ~14 | YES (pure compiler bugs) | **#2606** |
+| set-algebra GetSetRecord ARG validation (TypeError on primitive/array/non-Set arg) | ~8–10 | YES (validation/throw half) | **#2607** |
+| **DEFER → value-rep substrate (#2580 M2)** | | | |
+| `assert.sameValue(s.has(0), true)` boxed-bool / boxed-value `=== literal` confounds (s.has/predicate `compares-*` all PASS natively — probed) | ~40 | NO — value-rep | #2580 / #2104 |
+| set-algebra over a genuine *set-like object* (read `.size`/`.has`/`.keys` from `any`) — `allows-set-like-object`, `set-like-class-mutation`, `compares-Map`, `converts-negative-zero` | ~12 | NO — `__dyn_get` dynamic read | #2580 M2 |
+| `Symbol.species`/`Symbol.iterator`/`Symbol.toStringTag`/`__get_builtin`/`Set.name`/`Set.length`/`size` descriptor reflection | ~20 | NO — #1472 Phase B / #1888/#1907 / #2158 | #1472 / #2158 |
+| `set.entries()`/`set.values()` returning a real **iterator object** with `.next()` (currently `Cannot convert object to primitive value`) | ~5 | substrate-ish (needs a standalone Set/Map iterator-result object) | #2162 follow-up |
+
+### Verification probes (key root-cause confirmations)
+- `new Set(); s.add(0); s.has(0)` → **111 (true)** standalone — Set core SameValueZero works. The `has/returns-*` test262 fails are the boxed `assert.sameValue(.., true)` confound (value-rep), NOT a Set bug. **Do not slice.**
+- `s1.isSubsetOf(s2)` with typed Sets → **true** standalone — predicate core works; `compares-*` fails are the same boxed-bool confound. **Do not slice.**
+- `Set.prototype.has.call(realSet, 5)` → no-op sentinel — the `.call` form does NOT reach the native runtime (root cause for the brand-check cluster, #2604).
+- `Set.prototype.has.call(null, 1)` → returns 0, **no throw** — confirms the missing brand check (#2604).
+
+### New slices (this PR)
+- **#2604** — Set.prototype.METHOD.call(nonSet) native dispatch + brand-check TypeError (~84, the big one; needs `calls.ts` `.call` path — possibly senior-dev)
+- **#2605** — native-collection `instanceof` (~21, easy, `typeof-delete.ts`)
+- **#2606** — null-element coercion + `extends Set` late-import compile errors (~14, pure bugs)
+- **#2607** — set-algebra GetSetRecord arg-validation throws (~8–10; sequence after #2604 for the shared brand-check helper)
+
+Combined tractable reachable: **~125–130 Set rows.** The remaining ~75 Set rows
+are value-rep substrate (#2580 M2) / reflection (#1472/#2158) / iterator-object —
+**deferred, not sliced here.**
+
+---
+
+## Umbrella reconciliation (2026-06-23, architect) — drained; residual is substrate-deferred
+
+Re-verified against current main (`b4ed81215`): **all 4 dev-tractable Set
+sub-issues are landed.** #2604 (brand-check `.call`), #2605 (instanceof),
+#2606 (null-element coercion + `extends Set` compile errors), #2607 (GetSetRecord
+arg-validation) are all `status: done` on `origin/main` (PRs incl. #1915's
+`fix(#2605,#2606)` and the brand-check work). Map/WeakMap/WeakSet were already
+closed (the RE-MEASUREMENT above proved zero host-pass/standalone-fail rows for
+them). The ~75 deferred Set rows remain on their tracked substrates:
+
+- boxed `assert.sameValue(s.has(0), true)` confounds → **#2580 M2 / #2104** value-rep
+  (the Set core is correct; only the boxed `=== literal` compare fails).
+- set-algebra over a genuine set-**like** object (`__dyn_get` dynamic read) →
+  **#2580 M2**.
+- `Symbol.species`/`Symbol.iterator`/`@@toStringTag`/descriptor reflection →
+  **#1472 / #2158**.
+- `set.entries()`/`.values()` returning a real iterator OBJECT with `.next()` →
+  the #2162 iterator-object follow-up (needs a standalone Set/Map iterator-result
+  object; substrate-ish, pairs with the entries-mode materialization
+  late-registration note above).
+
+**Disposition:** #2162's dev-tractable surface is **exhausted**. Recommend closing
+the umbrella as `done` once the 4 sub-issues are confirmed merged (they are), with
+the residual carried by #2580/#2104 (value-rep), #1472/#2158 (reflection),
+#2622 (native subclass), and the iterator-object follow-up. No new dev slice from
+this architect pass — do NOT re-dispatch #2162 as fresh dev work.
+
+## Re-measurement (2026-07-01, sdev-tail) — residual leaks are NOT pass-convertible; no follow-up filed
+
+A "round-2 residual" of ~33 sole leaks (`WeakMap_new`/`WeakSet_new`/`Set_new`/
+`Set_forEach`/`Set_entries`) was floated as a candidate follow-up. **Measured on
+current main** (`a8dba40bc`) — leak probe (env-import section of the emitted
+standalone module) + host-vs-standalone `runTest262File` pass/fail:
+
+| Leak class | leaks | of those, host-pass AND standalone-fail (convertible) |
+|---|---|---|
+| `WeakMap_new` (ctor-with-iterable) | 23 | **2** (`empty-iterable`, `get-set-method-failure`) |
+| `WeakSet_new` (ctor-with-iterable) | 13 | **0** convertible (1 host-pass but sa=compile_error) |
+| `Set_forEach`/`Set_entries`/`Set_new` | ~10 | **0** convertible (all host=compile_error except 1) |
+
+**~30 of the ~33 leaking tests are `host=compile_error`** — they do not compile in
+**host** mode either (they use custom-iterator / `$262` / Symbol.iterator-protocol
+harness objects the compiler doesn't yet accept). They are therefore **not
+leaky-passes**: removing the host-import leak cannot convert them to
+host-free-pass, because they never passed. This is the exact "host-free ≠ pass"
+trap — the leak is real but the pass-conversion is not. The ~3 genuinely
+host-passing candidates each need bespoke constructor-iterable / error-path
+semantics and even then land as `compile_error`/`fail` standalone (the native
+side CEs, not merely leaks) — marginal value for the substrate cost.
+
+The big Set leak clusters (`__gen_create_buffer`/`__create_generator`/
+`__get_caught_exception`, ~38 each) are the **set-like-object dynamic-read**
+family (`prototype/{difference,isSubsetOf,…}/allows-set-like-object`) — the
+value-rep / `__dyn_get` substrate already tracked to **#2580 M2**, not a native
+body.
+
+**Disposition:** no new follow-up issue filed — it would be a stale front. The
+collection residual is substrate-deferred (#2580/#2104, #1472/#2158) exactly as
+the umbrella reconciliation above concluded; this pass confirms it with concrete
+leaky-vs-convertible counts.

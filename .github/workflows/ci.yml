@@ -1,0 +1,826 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  merge_group:
+    branches: [main]
+    types: [checks_requested]
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+permissions:
+  contents: write
+
+jobs:
+  # #2239 follow-up — detect whether this PR touches compiler/test/build source.
+  # The heavy compile-and-run suites (equivalence-shard, equivalence-gate,
+  # linear-tests) only matter when codegen or tests change; a docs/planning-only
+  # PR (.claude/**, plan/**, docs/**, *.md) was needlessly running all 8
+  # equivalence shards + linear-tests. They are NOT required checks, so gating
+  # them to "skipped" on docs-only PRs never blocks merge. `quality` stays
+  # unconditional (it gates markdown format, issue integrity, and link checks
+  # that DO apply to docs). Defensive default: any uncertainty => code=true.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.detect.outputs.code }}
+      npm_compat_only: ${{ steps.npm_compat.outputs.only }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Classify and validate an npm-compat artifact-only change
+        id: npm_compat
+        run: node scripts/check-npm-compat-promotion.mjs --base HEAD^ --github-output "$GITHUB_OUTPUT"
+      - id: detect
+        env:
+          EVENT: ${{ github.event_name }}
+          NPM_COMPAT_ONLY: ${{ steps.npm_compat.outputs.only }}
+        run: |
+          set -uo pipefail
+          # The six npm-compat JSON files were already generated, mirrored and
+          # structurally validated by npm-compat-refresh.yml. The classifier
+          # above repeats the cheap validation on the exact tree that would
+          # merge. Any missing/extra file selects the normal conservative path.
+          if [ "$NPM_COMPAT_ONLY" = "true" ]; then
+            echo "npm-compat artifact-only diff -> skip compile-and-run suites"
+            echo "code=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Only path-gate pull_request. push (to main) and merge_group always
+          # run the heavy suites — they validate the integrated state.
+          if [ "$EVENT" != "pull_request" ]; then
+            echo "non-PR event ($EVENT) -> run heavy suites"
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git fetch --no-tags --depth=200 origin main 2>/dev/null \
+            || git fetch --no-tags origin main 2>/dev/null || true
+          BASE=$(git merge-base origin/main HEAD 2>/dev/null || true)
+          if [ -z "$BASE" ]; then
+            echo "no merge-base resolvable -> run heavy suites (safe default)"
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          CHANGED=$(git diff --name-only "$BASE"...HEAD)
+          echo "Changed files:"; echo "$CHANGED"
+          # Run the heavy suites iff any compiler / test / build-config path changed.
+          if echo "$CHANGED" | grep -qE '^(src/|tests/|scripts/|package\.json$|pnpm-lock\.yaml$|tsconfig.*\.json$|vitest\.config\.ts$|\.github/actions/setup-node-pnpm/action\.yml$|\.github/workflows/ci\.yml$)'; then
+            echo "code/test/build paths changed -> run heavy suites"
+            echo "code=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "docs/planning-only diff -> skip heavy suites"
+            echo "code=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # (#3131) depth 2 exposes HEAD^1 — on pull_request/merge_group/push
+          # the checked-out HEAD is GitHub's synthetic merge commit whose FIRST
+          # parent is the exact base tree of this change-set. The change-scoped
+          # ratchet gates (check:loc-budget, check:coercion-sites) diff against
+          # it, so they judge exactly this change-set's own delta with no
+          # committed-baseline involvement and no origin/main fetch race.
+          fetch-depth: 2
+
+      - name: Classify and validate an npm-compat artifact-only change
+        id: npm_compat
+        run: node scripts/check-npm-compat-promotion.mjs --base HEAD^ --github-output "$GITHUB_OUTPUT"
+
+      - name: Skip explicit base-ancestry check (handled by simulated merge / queue)
+        if: steps.npm_compat.outputs.only != 'true' && (github.event_name == 'pull_request' || github.event_name == 'merge_group')
+        run: |
+          # GitHub Actions checks out refs/pull/N/merge (a simulated merge of
+          # the PR's HEAD into the PR's BASE) for pull_request, and the queue
+          # ref for merge_group. Both inherently include the base in history.
+          # The previous explicit "git merge-base --is-ancestor origin/main HEAD"
+          # check had a TOCTOU race (false positives when main moved between
+          # checkout and the check), and using PR base.sha tripped over the
+          # shallow checkout's missing ancestry graph. Both contexts already
+          # guarantee base-ancestry by construction — no extra check needed.
+          echo "✓ ${{ github.event_name }} ref already includes base by construction"
+
+      - name: Setup Node and pnpm (cached)
+        if: steps.npm_compat.outputs.only != 'true'
+        uses: ./.github/actions/setup-node-pnpm
+
+      - if: steps.npm_compat.outputs.only != 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint, format, and typecheck (parallel)
+        if: steps.npm_compat.outputs.only != 'true'
+        run: |
+          # These checks are independent and read-only. Running them as three
+          # lanes keeps the required `quality` context intact while bounding
+          # this stage by the slowest lane instead of their sum.
+          #
+          # (#1029) `typecheck` is tsgo (TypeScript 7) since 2026-08-14 — same
+          # src/ tree, zero diagnostics, ~21s vs ~122s for TS5, so typecheck is
+          # no longer the long pole. TS5 remains available as
+          # `pnpm run typecheck:ts5`, and `prepublishOnly` still runs the full
+          # build (vite-plugin-dts emits declarations with TS5), so TS5's
+          # opinion still gates anything that reaches npm.
+          set +e
+          tmp_dir=$(mktemp -d)
+
+          pnpm run lint > "$tmp_dir/lint.log" 2>&1 &
+          lint_pid=$!
+          pnpm run format:check > "$tmp_dir/format.log" 2>&1 &
+          format_pid=$!
+          pnpm run typecheck > "$tmp_dir/typecheck.log" 2>&1 &
+          typecheck_pid=$!
+
+          wait "$lint_pid"; lint_rc=$?
+          wait "$format_pid"; format_rc=$?
+          wait "$typecheck_pid"; typecheck_rc=$?
+          set -e
+
+          for lane in lint format typecheck; do
+            echo "--- $lane ---"
+            cat "$tmp_dir/$lane.log"
+          done
+
+          if [ "$lint_rc" -ne 0 ] || [ "$format_rc" -ne 0 ] || [ "$typecheck_rc" -ne 0 ]; then
+            echo "::error::quality lanes failed (lint=$lint_rc, format=$format_rc, typecheck=$typecheck_rc)"
+            exit 1
+          fi
+
+      - name: IR core/dialect boundary gate (#3954 phase 2)
+        if: steps.npm_compat.outputs.only != 'true'
+        run: pnpm run check:ir-dialect
+
+      - name: IR per-kind neutrality verdict gate (#4551)
+        if: steps.npm_compat.outputs.only != 'true'
+        run: pnpm run check:ir-kind-neutrality
+
+      - name: IR JsTag seam ratchet (#3954 phase 1)
+        if: steps.npm_compat.outputs.only != 'true'
+        run: pnpm run check:jstag-seam
+
+      - name: IR->codegen layering ratchet (#3113)
+        if: steps.npm_compat.outputs.only != 'true'
+        # The intended layering is emit <- ir <- codegen. It regrew ~4x (25 ->
+        # 96 import lines) in the six weeks after #3113 slice 1 because nothing
+        # enforced it. Ratchet, not emptiness check: containing the 7k-LOC
+        # ir/integration.ts bridge (#3113 S3) is blocked on #3520/#3521, so the
+        # reachable invariant is "no growth, ratchet toward zero".
+        run: pnpm run check:ir-layering
+
+      - name: IR fallback gate (#1376)
+        if: steps.npm_compat.outputs.only != 'true'
+        run: pnpm run check:ir-fallbacks
+
+      - name: Native-first host semantic debt gate (#4401)
+        # The artifact-only guard is load-bearing: the slim path above skips
+        # pnpm setup entirely, so an unguarded pnpm step dies with exit 127 in
+        # the merge_group and auto-parks every npm-compat refresh PR (#4431
+        # was the first, 2026-08-13). An artifact-only diff touches no source,
+        # so the host-import policy has nothing to judge anyway.
+        if: steps.npm_compat.outputs.only != 'true'
+        run: pnpm run check:host-import-policy
+
+      - name: IR-only readiness instrumentation (#3519)
+        if: steps.npm_compat.outputs.only != 'true'
+        # Hybrid policy is the bounded migration ratchet: Unsupported rows are
+        # measured, while any invariant, missing unit, or compile failure is
+        # fatal. R9 promotes the strict IR-only policy once blockers reach zero.
+        run: pnpm run check:ir-only -- --policy=hybrid
+
+      - name: Standalone IR cutover corpus gate (#4583/#4588)
+        if: steps.npm_compat.outputs.only != 'true'
+        # The package command first pins the exact manifest/digest, then checks
+        # the raw generator stream at 5 successful sources / 47 units while
+        # requiring every physical route to be IR-owned.
+        run: pnpm run check:standalone-ir-cutover-corpus
+
+      - name: Dead-export gate (#3090 Phase 2)
+        if: steps.npm_compat.outputs.only != 'true'
+        # Fails when a NEW unreferenced top-level function appears in
+        # src/codegen/ vs scripts/dead-export-baseline.json (call-graph
+        # reachability; disappearing entries are deletion progress). Refresh
+        # with `node scripts/audit-legacy-reachability.mjs --update`. If a
+        # flagged function is referenced only from tests/ or class-method
+        # bodies (audit blind spots), verify with grep and bank it via
+        # --update with a PR note. Delete-list + method:
+        # plan/log/3090-phase0-legacy-delete-list.md.
+        run: pnpm run check:dead-exports
+
+      - name: Oracle ratchet (#1930/#3273)
+        if: steps.npm_compat.outputs.only != 'true'
+        # CHANGE-SCOPED (#3273, same rework as check:loc-budget /
+        # check:coercion-sites): fails only when THIS change-set grows its NET
+        # (per-field, summed over the changed files) direct-checker count under
+        # src/codegen/ — new code must query ctx.oracle (src/checker/oracle.ts).
+        # A god-file split that relocates existing sites into a new module is
+        # net-neutral and passes; scoping to the change-set's own base (HEAD^1
+        # of the synthetic merge commit — see the checkout's fetch-depth
+        # comment) keeps an unrelated main advance from re-flagging a sibling
+        # split module the PR never touched (the #3069/#3067/#3066 wedge). The
+        # committed baseline (scripts/oracle-ratchet-baseline.json) is NOT read
+        # on this path and PRs must NOT commit changes to it. Intentional net
+        # growth is granted via an `oracle-ratchet-allow:` frontmatter list in
+        # the PR's own plan/issues/*.md file. The origin/main fetch only feeds
+        # the merge-base fallback for non-synthetic checkouts; best-effort.
+        run: |
+          git fetch --no-tags --depth=200 origin main 2>/dev/null || true
+          pnpm run check:oracle-ratchet
+
+      - name: BackendEmitter pushRaw ratchet (#2953)
+        if: steps.npm_compat.outputs.only != 'true'
+        # Change-scoped: every pushRaw call added by this change-set must carry
+        # `// pushraw-ok(#issue)` on the same or preceding line. Tagged growth
+        # is explicit reviewed debt; untagged additions fail even when another
+        # raw site is removed. The committed baseline is only the no-git / --all
+        # dashboard fallback, so unrelated main advances cannot wedge a merge
+        # group.
+        run: pnpm run check:pushraw
+
+      - name: LOC-regrowth ratchet (#3102/#3131)
+        if: steps.npm_compat.outputs.only != 'true'
+        # CHANGE-SCOPED AND SELF-CONTAINED: fails only when THIS change-set
+        # grows a src file that was already over the 1,500 LOC threshold at
+        # its own base (HEAD^1 of the synthetic merge commit — see the
+        # checkout's fetch-depth comment), newly crosses the threshold, or is
+        # net-additive beyond the total headroom. Scoping to the change-set's
+        # own base keeps an unrelated main advance from wedging the
+        # merge_group on a file the PR never touched (the #2808 wedge). The
+        # committed baseline (scripts/loc-budget-baseline.json) is NOT read on
+        # this path and PRs must NOT commit changes to it — the per-PR bump
+        # merge-conflicted every open PR on every main advance (#3131; the
+        # #2835 stack needed 4 re-merges for +12 LOC). Intentional growth is
+        # granted via a `loc-budget-allow:` frontmatter list in the PR's own
+        # plan/issues/*.md file. The origin/main fetch only feeds the
+        # merge-base fallback for non-synthetic checkouts; best-effort. The
+        # god-file splits (#3103/#3104/…) never stick without this brake —
+        # see plan/log/compiler-consolidation-plan.md.
+        run: |
+          git fetch --no-tags --depth=200 origin main 2>/dev/null || true
+          pnpm run check:loc-budget
+
+      - name: Per-function LOC-ceiling ratchet (#3400 / R-FUNC)
+        if: steps.npm_compat.outputs.only != 'true'
+        # Function-granularity twin of check:loc-budget (#3102 slice 2): the same
+        # change-scoped, shrink-only ratchet, but keyed on FUNCTIONS over 300 LOC
+        # (measured via the TS AST). FAILS when this change-set grows a function
+        # already over 300 at its base, newly pushes one over 300, or adds a
+        # brand-new over-300 function. Grandfathers the 185-entry baseline —
+        # demands zero refactoring to land; #3108/#3111 shrink entries and the
+        # post-merge --update-on-decrease banks each drop. Intentional growth is
+        # granted per change-set via a `func-budget-allow:` frontmatter key in
+        # this PR's own plan/issues/*.md. The committed baseline
+        # (scripts/func-budget-baseline.json) is NOT read on this path and PRs
+        # must NOT commit changes to it.
+        run: |
+          git fetch --no-tags --depth=200 origin main 2>/dev/null || true
+          pnpm run check:func-budget
+
+      - name: test262 harness compile-time budget gate (#3437)
+        if: steps.npm_compat.outputs.only != 'true'
+        # DETERMINISTIC, load-independent pre-merge budget for source-scan compile
+        # WORK: compiles a FIXED representative harness-shaped assembly and counts
+        # shared-forEachChild traversals (src/ts-api.ts). The oracle-v8 harness
+        # switch tanked CI via an O(call-sites × file-size) per-file scan (#3433,
+        # fixed by #3374) that was INVISIBLE until the merge queue crawled. Unlike
+        # the wall-clock #1942 guard (flaky, post-merge), this count is a pure
+        # function of the AST + scans, so it gates that regression class HERE,
+        # before the queue. Rebank an intentional slowdown with
+        # `pnpm run check:harness-compile-budget -- --update`. Budget:
+        # scripts/harness-compile-budget.json (set from post-#3433 main).
+        run: pnpm run check:harness-compile-budget
+
+      - name: IR adoption table freshness (#2145)
+        if: steps.npm_compat.outputs.only != 'true'
+        # Fails when plan/log/ir-adoption.md drifts from its generator data or
+        # from the IrFallbackReason union in src/ir/select.ts. Regenerate with
+        # `pnpm run gen:ir-adoption`.
+        run: pnpm run check:ir-adoption
+
+      - name: Stack-balance fixup ratchet (#1918)
+        if: steps.npm_compat.outputs.only != 'true'
+        # Each stack-balance fixup repairs an emitter bug. Fails when any fixup
+        # bucket grows vs. scripts/stack-balance-baseline.json — a new fixup
+        # means new wrong codegen reached the safety net (some arms are lossy:
+        # a missing/wrong-typed branch value patched with a const default ships
+        # a silently-wrong runtime value). Shrink the producing codegen, not
+        # the gate. See plan/issues/1918-stack-balance-strict-mode-fixup-ratchet.md.
+        run: pnpm run check:stack-balance
+
+      - name: Codegen silent-fallback gate (#2089)
+        if: steps.npm_compat.outputs.only != 'true'
+        run: pnpm run check:codegen-fallbacks
+
+      - name: AnyValue box-site gate (#2104)
+        if: steps.npm_compat.outputs.only != 'true'
+        run: pnpm run check:any-box-sites
+
+      - name: Speculative-rollback gate (#1919)
+        if: steps.npm_compat.outputs.only != 'true'
+        # Fails when a raw `fctx.body.length = <savedLen>` rollback appears under
+        # src/codegen/ outside the transactional helper
+        # (src/codegen/context/speculative.ts). A bare body truncation restores
+        # only the body and leaks the locals / late imports / errors the probe
+        # allocated (the #1919 / #1916 phantom-import heisenbug). Route the probe
+        # through snapshotSpeculative/rollbackSpeculative instead.
+        run: pnpm run check:speculative-rollback
+
+      - name: Coercion-site drift gate (#2108/#3131/#3279)
+        if: steps.npm_compat.outputs.only != 'true'
+        # Fails when the JS-semantic coercion vocabulary (ToString/ToNumber/
+        # ToPrimitive/equality/ToBoolean) is hand-rolled at a NEW site outside
+        # the coercion engine (see plan/log/analysis-2026-06/03-coercion-engine
+        # -spec.md §5). CHANGE-SCOPED like check:loc-budget (#3131) AND
+        # NET-PER-VOCABULARY (#3279, mirroring check:oracle-ratchet #3070/#3273):
+        # judged against this change-set's own base (HEAD^1 of the synthetic
+        # merge); fails only when the change-set's NET count per vocabulary token
+        # (summed over the changed files) grew. A god-file split that relocates
+        # existing coercion sites into a new sibling module is net-neutral and
+        # passes with NO allowance (the #3076 treadmill). No committed-baseline
+        # read, no per-PR baseline bump (bump commits merge-conflicted with the
+        # post-merge refreshes on main). Intentional migration-step growth:
+        # `coercion-sites-allow:` frontmatter in the PR's own issue file. Fetch
+        # feeds the merge-base fallback only.
+        run: |
+          git fetch --no-tags --depth=200 origin main 2>/dev/null || true
+          pnpm run check:coercion-sites
+
+      - name: Issue integrity + link gate (#1616)
+        if: steps.npm_compat.outputs.only != 'true'
+        # Fails on duplicate IDs, filename/frontmatter ID mismatch, dangling
+        # depends_on, or broken plan/issues/<id>-<slug>.md links in tracked *.md.
+        run: pnpm run check:issues
+
+      - name: Issue-ID fresh-claim gate (#2531)
+        if: steps.npm_compat.outputs.only != 'true'
+        # Rejects a PR that introduces a plan/issues/<id>-*.md whose id already
+        # exists on origin/main under a different filename — the merge-queue-wedge
+        # collision (#2530/#2531). Allocation must go through
+        # `claim-issue.mjs --allocate` (atomic against main ∪ open PRs ∪ the
+        # reservation ref); this gate is the required-CI enforcement. Needs the
+        # base ref for the merge-base diff; skips cleanly if it can't be fetched.
+        # merge_group already carries base ancestry, so the fetch is best-effort.
+        run: |
+          git fetch --no-tags --depth=50 origin main 2>/dev/null || true
+          GATE_BASE=origin/main pnpm run check:issue-ids:against-main
+      - name: Issue-ID open-PR collision gate (#3598)
+        # PR-vs-PR half of the id defence: two open PRs adding the same
+        # plan/issues/<id>-*.md are BOTH green against main (neither file is on
+        # main yet); the collision then surfaces only when the first merges —
+        # at best a late red re-check, at worst a merge_group auto-park (#2547)
+        # that strands the loser behind a `hold`. This step compares the
+        # branch's introduced issue files against every OTHER open PR's added
+        # issue files, via the SAME batched scan `claim-issue.mjs --allocate`
+        # uses (scripts/lib/open-pr-issue-files.mjs). Same filename in both PRs
+        # = a modification, NOT flagged; only same id under a different
+        # filename fails. FAIL-OPEN (warn, exit 0) when the scan can't run — a
+        # network-dependent gate must not be able to freeze every PR on a
+        # GitHub blip; the merge_group duplicate-id gate stays the hard
+        # backstop. pull_request only: in the merge_group the head already
+        # contains main and the dup gate above re-validates the merged tree.
+        if: steps.npm_compat.outputs.only != 'true' && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CLAIM_PR_REPO: ${{ github.repository }}
+          GATE_PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          git fetch --no-tags --depth=50 origin main 2>/dev/null || true
+          GATE_BASE=origin/main pnpm run check:issue-ids:against-open-prs
+      - name: Issue integrity vs. merged main (#2530)
+        # Stale-base dup-ID gate. The check above runs on the PR's OWN tip, which
+        # was cut from an older main; an id that a sibling PR has since merged is
+        # invisible there, so it passes — and the collision only surfaces in the
+        # merge_group (main + PR), failing `quality` there and WEDGING the queue
+        # with "N duplicate IDs" (see project_merge_queue_dup_issue_id_churn).
+        # This step fetches fresh origin/main and runs the committed-integrity
+        # check against the SIMULATED MERGE of main into the PR head (via
+        # `git merge-tree --write-tree`, no index/worktree mutation), so the
+        # collision fails the PR's OWN checks before it can reach the queue.
+        # Skips cleanly on push/merge_group (the head already contains main) and
+        # whenever origin/main can't be resolved.
+        if: steps.npm_compat.outputs.only != 'true' && github.event_name == 'pull_request'
+        run: |
+          # Deepen so the real merge base between origin/main and the PR head is
+          # present and merge-tree can do a true 3-way merge. The script falls
+          # back to --allow-unrelated-histories (tree-union) if the base is still
+          # out of range, so the depth is a quality knob, not a correctness one.
+          git fetch --no-tags --depth=200 origin main 2>/dev/null || git fetch --no-tags origin main 2>/dev/null || true
+          node scripts/check-merged-issue-integrity.mjs origin/main HEAD
+
+      - name: Issue→probe coverage gate (#2093)
+        if: steps.npm_compat.outputs.only != 'true'
+        # A bugfix issue (created on/after the cutoff) cannot flip to
+        # `status: done` without a permanent probe/test reference — either a
+        # tests/issue-<id>.test.ts file or a cited tests/…test… / test262/… path.
+        # WARNING-only at `ready`; HARD FAIL on the done-flip. Diffs the changed
+        # issue files against the PR base so only this PR's flips are gated.
+        # Skips cleanly when no diff base resolves (never blocks a build it can't
+        # reason about). Needs the base ref present for the diff.
+        run: |
+          git fetch --no-tags --depth=1 origin main 2>/dev/null || true
+          ISSUE_COVERAGE_BASE=origin/main pnpm run check:issue-spec-coverage
+
+      - name: Done-status integrity gate (#3474)
+        if: steps.npm_compat.outputs.only != 'true'
+        # Sibling to #2093. CHANGE-SCOPED: for each plan/issues/*.md this PR
+        # touches that is `status: done` and not `done_cited_ok: true`, counts
+        # the LIVE test262 failures citing its #NNNN across both baseline lanes
+        # (keyed on code state, not a commit-message grep, so it catches
+        # status-drift even when the fix didn't cite the issue). HARD FAILS when
+        # a done issue still has > DONE_CITE_THRESHOLD live citations — reopen it
+        # or mark it exempt. A PR touching no `done` issue does ZERO network
+        # work; a baseline-fetch failure WARNS and PASSES (safety net, never
+        # wedges the queue on a 3rd-party network blip).
+        run: |
+          git fetch --no-tags --depth=1 origin main 2>/dev/null || true
+          pnpm run check:done-status-integrity
+
+      - name: Verdict-logic must bump oracle_version (#3003)
+        if: steps.npm_compat.outputs.only != 'true'
+        # A test262 VERDICT-LOGIC change (how a per-test result is SCORED:
+        # test262-worker.mjs / test262-shared.ts / negative-verdict.mjs / the
+        # runners) diffs new-policy-vs-old-policy as a mass pass→fail cluster.
+        # If it does NOT bump ORACLE_VERSION (#2096) the #1668 catastrophic guard
+        # fails the push-to-main run, promote-baseline never runs, and the merge
+        # queue WEDGES against the un-promotable old-policy baseline — this
+        # happened TWICE in 2026-07 (the −439 strict-negative-verdict change and
+        # PR #2463's vacuity scorer; see #3003). This gate fails a verdict-signal
+        # change that neither bumps the oracle nor carries an in-diff
+        # `oracle-version-exempt:` override. Runs on the same origin/main diff
+        # base as the issue-ID gates; skips cleanly when no base resolves.
+        run: |
+          git fetch --no-tags --depth=50 origin main 2>/dev/null || true
+          VERDICT_ORACLE_BASE=origin/main pnpm run check:verdict-oracle
+
+      - name: Host-import allowlist + strict-mode gate (#1524)
+        if: steps.npm_compat.outputs.only != 'true'
+        env:
+          # PRs that intentionally grow the allowlist must include
+          # `[allowlist-grow]` in the PR description. We forward the flag to
+          # the budget test so the ratchet check accepts the growth.
+          ALLOWLIST_GROW: ${{ contains(github.event.pull_request.body, '[allowlist-grow]') && '1' || '' }}
+        run: |
+          # `pnpm test --` doesn't forward args correctly — pnpm consumes the
+          # trailing test filenames and vitest ends up running the entire suite
+          # (OOMs after ~9 min). Invoke vitest directly to scope it to the 2 gate
+          # files. See PR #432 investigation 2026-05-23.
+          pnpm exec vitest run tests/host-import-allowlist-budget.test.ts tests/host-import-allowlist-gate.test.ts
+
+      - name: test262 regression-gate excusal tests (#3004, #3303)
+        if: steps.npm_compat.outputs.only != 'true'
+        # The diff-test262 regression-gate logic (net/ratio/bucket + the #2879
+        # leaky and #2940 vacuity excusals) is load-bearing for the merge queue
+        # but sat outside CI — exactly the "gate logic runs nowhere" gap called
+        # out below (#1974 class). Run the excusal tests directly so a break of
+        # the vacuity excusal (or its TEMPORARY removal in #3001) is caught here.
+        # issue-3303 pins the PR-scoped regressions-allow ceiling (rebase-mode
+        # only, ceiling-exact, trap-ratchet-immune) AND executes the #1668/#1897
+        # guard bash from test262-sharded.yml against canned diff outputs, so a
+        # workflow edit that breaks the exit-code-authoritative contract fails
+        # here instead of silently re-wedging the queue.
+        run: pnpm exec vitest run tests/issue-3004.test.ts tests/issue-3303.test.ts
+
+      - name: IR alloc-provenance checker (#1586)
+        if: steps.npm_compat.outputs.only != 'true'
+        # Runs the AllocSiteRegistry + provenance tests with the debug-mode
+        # invariant checker enabled, so a pass that loses allocation-site
+        # provenance fails CI here.
+        run: pnpm run test:ir:alloc
+
+      - name: Benchmark staleness gate (#1580)
+        if: steps.npm_compat.outputs.only != 'true'
+        # Fails if the committed Wasmtime hot-runtime benchmark JSON regresses
+        # to Interpreter-class string-hash numbers — the silent-staleness mode
+        # that let the pre-#1580 63.7 ms warm value sit on the landing page for
+        # 9 days after the fix merged (no CI regenerates that JSON; it's a
+        # manual `pnpm run refresh:benchmarks:wasmtime`). Scoped to the one
+        # guard test so it stays cheap; the full assertions also run in the
+        # equivalence shards.
+        run: pnpm exec vitest run tests/issue-1580.test.ts
+
+      - name: Prepare Test262 harness inputs for changed root tests
+        if: steps.npm_compat.outputs.only != 'true' && github.event_name == 'pull_request'
+        run: |
+          # The root-test gate below executes Test262 integration tests when a
+          # PR changes them. Keep the regular checkout lightweight, but prepare
+          # both pinned harness inputs and the worker bundles before that gate.
+          # --checkout intentionally overrides test262-fyi/data's optional
+          # update=none setting for this explicit CI consumer.
+          git submodule update --init --checkout test262
+          git submodule update --init --checkout test262-fyi/data
+          pnpm run build:compiler-bundle
+          pnpm exec esbuild src/runtime.ts --bundle --platform=node --format=esm --outfile=scripts/runtime-bundle.mjs --external:typescript --external:binaryen
+          # Changed root tests that run eval-mentioning test262 files need the
+          # runtime-eval REFUSAL provider linked, or instantiate fails with
+          # 'Import "js2wasm:runtime-eval": module is not an object' (#4234).
+          node scripts/build-runtime-eval-provider.mjs --refusal-only
+
+      - name: Changed root test files must pass (#3008)
+        # Per-PR half of the #3008 wiring (the post-merge half is
+        # .github/workflows/issue-tests.yml): any tests/*.test.ts file this PR
+        # ADDS or MODIFIES must pass, so a per-issue regression test cannot be
+        # born broken (and touching a rotted one means fixing it — the
+        # fix-on-touch ratchet). Root files only; tests/equivalence/ has its
+        # own gate (#1659) and linear-*/c-abi/simd* run in `linear-tests`.
+        # Mass edits (>20 files, e.g. a repo-wide reformat) skip with a
+        # warning — the post-merge detector covers them.
+        if: steps.npm_compat.outputs.only != 'true' && github.event_name == 'pull_request'
+        env:
+          # Keep this broad, toolchain-light gate on the native engine. The
+          # dedicated QuickJS artifact workflow exercises the default engine;
+          # the selector tests below still delete this env to prove the default.
+          JS2WASM_EVAL_ENGINE: interpreter
+        run: |
+          git fetch --no-tags --depth=200 origin main 2>/dev/null || true
+          pnpm run test:changed-root
+
+      - name: Required guard suite (#3552)
+        if: steps.npm_compat.outputs.only != 'true'
+        # Untouched root test files do NOT run at PR time — the #3008
+        # two-layer design runs only PR-touched tests/*.test.ts per PR and
+        # defers the full ~2,100-file suite (~9 CPU-hours) to the post-merge
+        # issue-tests.yml detector, which detects but does not enforce. #3503
+        # proved the gap on 2026-07-23: it regressed tests/issue-3471.test.ts
+        # WITHOUT touching it — green PR, red main, fixed forward in #3551.
+        # This step runs the SMALL curated manifest of invariant-guard tests
+        # (tests/guard-suite.json — entry criteria in its $comment: <60s per
+        # file, no test262 harness inputs, green on main, guards a prior
+        # silent main regression) on every PR, merge group, and push. Total
+        # budget ~2 minutes; it is NOT the full-suite gate #3008 rejected.
+        run: node scripts/run-guard-suite.mjs
+
+      - name: Conformance numbers in sync (#1522)
+        if: steps.npm_compat.outputs.only != 'true'
+        run: pnpm run sync:conformance:check
+
+      - name: Feature-support badges in sync with test262
+        if: steps.npm_compat.outputs.only != 'true'
+        # Landing-page feature badges (#2665) must match the committed
+        # website/public/feature-examples.json per-feature pass rates. The bake
+        # and this check read the SAME committed file, so they are consistent by
+        # construction; re-derived + staged atomically by promote-baseline
+        # post-merge (test262-sharded.yml), so this never wedges in-flight PRs.
+        run: pnpm run generate:feature-badges:check
+
+      - name: Fetch runs/index.json from baselines repo
+        if: steps.npm_compat.outputs.only != 'true' && github.event_name == 'push'
+        continue-on-error: true
+        run: |
+          # runs/index.json moved from LFS to js2wasm-baselines to avoid bandwidth exhaustion
+          # Sparse + blob-filtered clone (#3028): a plain --depth=1 clone pulls
+          # every tip blob incl. the ~500 MB runs/ tree — minutes for one file.
+          { git clone --depth=1 --filter=blob:none --no-checkout https://github.com/loopdive/js2wasm-baselines.git /tmp/js2wasm-baselines \
+            && git -C /tmp/js2wasm-baselines sparse-checkout set --no-cone /runs/index.json /runs/editions-index.json /runs/standalone-index.json /runs/standalone-editions-index.json \
+            && git -C /tmp/js2wasm-baselines checkout main; } 2>/dev/null || true
+          if [ -f /tmp/js2wasm-baselines/runs/index.json ]; then
+            mkdir -p benchmarks/results/runs
+            cp /tmp/js2wasm-baselines/runs/index.json benchmarks/results/runs/index.json
+          fi
+          [ -f /tmp/js2wasm-baselines/runs/editions-index.json ] && \
+            mkdir -p benchmarks/results/runs && \
+            cp /tmp/js2wasm-baselines/runs/editions-index.json benchmarks/results/runs/editions-index.json
+          [ -f /tmp/js2wasm-baselines/runs/standalone-index.json ] && \
+            mkdir -p benchmarks/results/runs && \
+            cp /tmp/js2wasm-baselines/runs/standalone-index.json benchmarks/results/runs/standalone-index.json
+          # (#4362) Per-edition STANDALONE trend series — the host-free twin of
+          # editions-index.json. The landing-page conformance chart plots both
+          # lanes at once, so a missing file here silently drops the standalone
+          # curve from every per-edition view.
+          [ -f /tmp/js2wasm-baselines/runs/standalone-editions-index.json ] && \
+            mkdir -p benchmarks/results/runs && \
+            cp /tmp/js2wasm-baselines/runs/standalone-editions-index.json \
+               benchmarks/results/runs/standalone-editions-index.json
+
+      - name: Regenerate planning artifacts
+        if: steps.npm_compat.outputs.only != 'true' && github.event_name == 'push'
+        run: |
+          if [ -d plan ] || [ -d dashboard ]; then
+            pnpm run build:planning-artifacts
+          else
+            echo "No private planning artifacts in this checkout; skipping regeneration."
+          fi
+
+      # DISABLED (post #491): The main branch ruleset enforces the merge
+      # queue, so direct `git push` from this workflow fails with
+      # `GH013: Changes must be made through the merge queue`. The whole
+      # auto-commit step is commented out; the typecheck/lint/format/IR
+      # gates above still RUN on every push and PR — only the
+      # auto-regeneration of planning artifacts back into main is disabled.
+      # Planning artifacts are regenerated locally by tech-lead-driven
+      # PRs (`pnpm run build:planning-artifacts`) instead.
+      # - name: Commit regenerated planning artifacts
+      #   if: github.event_name == 'push'
+      #   run: |
+      #     if [ -d plan ] || [ -d dashboard ]; then
+      #       if ! git diff --quiet -- plan/goals plan/issues/sprints dashboard/data.js dashboard/data public/graph-data.json; then
+      #         git config user.name "github-actions[bot]"
+      #         git config user.email "github-actions[bot]@users.noreply.github.com"
+      #         git add -f plan/goals plan/issues/sprints dashboard/data.js dashboard/data public/graph-data.json
+      #         git commit -m "chore(planning-artifacts): regen after merge [skip ci]"
+      #         git push
+      #       fi
+      #     fi
+
+  # Keep Test262 parallel on the green path: making it depend on `quality`
+  # would add the full quality duration to every successful merge group. On a
+  # quality failure, however, the Test262 result cannot make the group
+  # mergeable. Cancel only the exact sibling run so a failing group stops
+  # consuming the large shard matrix while later groups keep running.
+  cancel-test262-on-quality-failure:
+    name: Cancel Test262 after quality failure
+    needs: quality
+    if: ${{ always() && github.event_name == 'merge_group' && needs.quality.result == 'failure' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Cancel the exact Test262 sibling
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          set -uo pipefail
+
+          # One exact-SHA lookup, with no polling or retry loop. Treat API
+          # trouble as a warning: quality is already the authoritative failure,
+          # and this best-effort job must not obscure its diagnostics.
+          CANDIDATES=$(gh api \
+            "repos/${GITHUB_REPOSITORY}/actions/runs?event=merge_group&head_sha=${HEAD_SHA}&per_page=100" \
+            --jq '.workflow_runs[] | [.id, .name, .path, .head_sha, .event, .status] | @tsv' \
+            2>&1) || {
+            echo "::warning::Could not list Test262 siblings; quality has already failed."
+            printf '%s\n' "$CANDIDATES"
+            exit 0
+          }
+
+          REQUESTED=0
+          while IFS=$'\t' read -r run_id run_name run_path run_sha run_event run_status; do
+            [ -n "${run_id:-}" ] || continue
+            [ "$run_name" = "Test262 Sharded" ] || continue
+            [ "$run_path" = ".github/workflows/test262-sharded.yml" ] || continue
+            [ "$run_sha" = "$HEAD_SHA" ] || continue
+            [ "$run_event" = "merge_group" ] || continue
+            case "$run_status" in
+              queued|in_progress) ;;
+              *) continue ;;
+            esac
+
+            echo "Cancelling Test262 run ${run_id} for failed merge-group SHA ${HEAD_SHA}."
+            if gh api -X POST \
+              "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/cancel" >/dev/null 2>&1; then
+              REQUESTED=$((REQUESTED + 1))
+            else
+              echo "::warning::GitHub rejected cancellation of Test262 run ${run_id}."
+            fi
+          done <<< "$CANDIDATES"
+
+          if [ "$REQUESTED" -eq 0 ]; then
+            echo "No queued or in-progress Test262 sibling matched this merge-group SHA."
+          else
+            echo "Requested cancellation of ${REQUESTED} Test262 sibling run(s)."
+          fi
+
+  # #4448 — Run the `tests/issue-*.test.ts` files a PR actually touches, plus a
+  # tiny pinned set. NO required check executes that suite (equivalence-gate =
+  # tests/equivalence/, quality = lint/ratchets/named files, test262 jobs =
+  # conformance, linear-tests = the linear subset), so a file can be BORN red
+  # (#4430's was) or go red later (`6203320a` silently reddened 3 tests for two
+  # days) with every gate green.
+  #
+  # Deliberately NOT a required check, NOT the whole suite, and split in two:
+  #
+  #   * PINNED files are verified green on main, so a failure is a genuine
+  #     regression -> that step is FATAL.
+  #   * CHANGED files have unknown health on main (the suite is NOT clean today:
+  #     a #4448 sample found 8 pre-existing failures across
+  #     issue-3522-ir-class-compile-once, issue-3529-dataflow-outcomes and
+  #     issue-3529-integration-preflight) -> that step is ADVISORY
+  #     (continue-on-error). A red NON-required check makes the PR UNSTABLE,
+  #     which `auto-enqueue` skips outright (#3878/#3904); stranding a PR behind
+  #     a test that was already red would be worse than the gap this closes.
+  #
+  # Grow the pinned list as files are verified green; promote the whole job to
+  # required once the suite is clean.
+  # Measured 2026-08-15 on the 4-core dev box: ~45 s of vitest for the pinned
+  # file, so a typical PR (pinned + 1-2 touched files) stays far under the cap.
+  issue-tests:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Setup Node and pnpm (cached)
+        uses: ./.github/actions/setup-node-pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Run pinned issue tests (fatal)
+        run: |
+          set -uo pipefail
+          node scripts/select-changed-issue-tests.mjs --pinned > /tmp/issue-tests-pinned.txt || {
+            echo "::error::could not select pinned issue tests"
+            exit 1
+          }
+          if [ ! -s /tmp/issue-tests-pinned.txt ]; then
+            echo "No pinned issue test files."
+            exit 0
+          fi
+          cat /tmp/issue-tests-pinned.txt
+          mapfile -t FILES < /tmp/issue-tests-pinned.txt
+          # Single-fork keeps peak RAM ~1 GB, matching the equivalence shards.
+          pnpm exec vitest run "${FILES[@]}" \
+            --pool=forks --poolOptions.forks.singleFork=true --no-file-parallelism
+      - name: Run issue tests this PR touched (advisory)
+        continue-on-error: true
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          MERGE_GROUP_BASE_SHA: ${{ github.event.merge_group.base_sha }}
+        run: |
+          set -uo pipefail
+          node scripts/select-changed-issue-tests.mjs --changed > /tmp/issue-tests-changed.txt || {
+            echo "::warning::could not select changed issue tests"
+            exit 0
+          }
+          if [ ! -s /tmp/issue-tests-changed.txt ]; then
+            echo "This PR touches no tests/issue-*.test.ts file."
+            exit 0
+          fi
+          cat /tmp/issue-tests-changed.txt
+          mapfile -t FILES < /tmp/issue-tests-changed.txt
+          pnpm exec vitest run "${FILES[@]}" \
+            --pool=forks --poolOptions.forks.singleFork=true --no-file-parallelism
+
+  # #2139 — Execute the linear-backend (linear-memory lowering), C-ABI, and
+  # SIMD test suites in CI. These 20 files (tests/linear-*.test.ts,
+  # tests/c-abi.test.ts, tests/simd*.test.ts) sat at tests/ root with NO CI
+  # job running them: the equivalence shards only run tests/equivalence/ and
+  # the `quality` job only runs lint/typecheck/gates plus a few named files.
+  # That gap is why #1974/#1975/#1976/#1977 (linear-backend bugs) shipped
+  # silently — nothing executed linear output after merge. All 20 files pass
+  # on main, so this runs them directly (no baseline-gate needed); any failure
+  # is a genuine regression and blocks the PR. Single-fork keeps peak RAM low.
+  linear-tests:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Setup Node and pnpm (cached)
+        uses: ./.github/actions/setup-node-pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Run linear-backend, C-ABI, and SIMD tests
+        run: |
+          # Invoke vitest directly (not `pnpm test --`) so the trailing file
+          # globs are scoped to vitest and not consumed by pnpm. Single-fork +
+          # no file-parallelism keeps peak RAM ~1 GB (same pattern as the
+          # equivalence shards). See #2139.
+          pnpm exec vitest run \
+            tests/linear-*.test.ts tests/c-abi.test.ts tests/simd.test.ts tests/simd-wat.test.ts \
+            --pool=forks --poolOptions.forks.singleFork=true --no-file-parallelism
+
+  # #1659 — Run tests/equivalence/ in CI. Previously skipped because the full
+  # suite OOMed under file-parallelism. Each shard runs single-fork (peak
+  # ~1 GB RAM, ~1-3 min) and gates its own failures against
+  # scripts/equivalence-baseline.json. The final required context is only a
+  # status fan-in: regression membership is independent per test, so shipping
+  # eight partial artifacts to repeat the same set comparison adds no safety.
+  equivalence-shard:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
+    steps:
+      - uses: actions/checkout@v5
+      - name: Setup Node and pnpm (cached)
+        uses: ./.github/actions/setup-node-pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Run and gate equivalence shard ${{ matrix.shard }}/8
+        env:
+          SHARD: ${{ matrix.shard }}/8
+        run: node scripts/equivalence-gate.mjs
+
+  equivalence-gate:
+    needs: [changes, equivalence-shard]
+    if: always() && needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify every equivalence shard passed its baseline gate
+        env:
+          SHARD_RESULT: ${{ needs.equivalence-shard.result }}
+        run: |
+          if [ "$SHARD_RESULT" != "success" ]; then
+            echo "::error::one or more equivalence shards failed their local baseline gate (matrix result: $SHARD_RESULT)"
+            exit 1
+          fi
+          echo "All equivalence shards passed their local baseline gates."

@@ -1,0 +1,751 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>js2wasm — Performance benchmarks</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #060a14;
+        --bg-soft: #0c1220;
+        --surface: rgba(255, 255, 255, 0.05);
+        --surface-hover: rgba(255, 255, 255, 0.08);
+        --border: rgba(255, 255, 255, 0.12);
+        --text: #ffffff;
+        --text-muted: rgba(255, 255, 255, 0.46);
+        --pass: #3fb950;
+        --fail: #f85149;
+        --skip: rgba(255, 255, 255, 0.4);
+        --error: #d29922;
+        --accent: rgba(255, 255, 255, 0.75);
+        --bar-bg: rgba(255, 255, 255, 0.1);
+        --mono: "JetBrains Mono", "SF Mono", SFMono-Regular, Consolas, monospace;
+        --font: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        font-family: var(--font);
+        background: var(--bg);
+        color: var(--text);
+        line-height: 1.5;
+        padding: 2rem;
+        padding-top: 88px;
+        max-width: 1200px;
+        margin: 0 auto;
+      }
+      h1 {
+        font-size: 2.625rem;
+        font-weight: 600;
+        margin-bottom: 0.25rem;
+      }
+      .brand {
+        font-size: 1.5rem;
+        font-weight: 700;
+        margin-bottom: 1.5rem;
+      }
+      h2 {
+        font-size: 1.25rem;
+        font-weight: 600;
+        margin: 2rem 0 1rem;
+        color: var(--text);
+      }
+      h3 {
+        font-size: 1rem;
+        font-weight: 600;
+        margin: 1.5rem 0 0.5rem;
+        color: var(--text-muted);
+      }
+      .intro {
+        color: rgba(255, 255, 255, 0.7);
+        font-size: 0.95rem;
+        margin: -0.25rem 0 1.5rem;
+        max-width: 70ch;
+      }
+      .back-link {
+        display: inline-block;
+        margin-bottom: 1.5rem;
+        color: #6db3ff;
+        text-decoration: none;
+        font-size: 0.9rem;
+      }
+      .back-link:hover {
+        text-decoration: underline;
+      }
+      .no-data {
+        color: var(--text-muted);
+        font-style: italic;
+        padding: 2rem;
+        text-align: center;
+      }
+      .legend {
+        display: flex;
+        gap: 1.5rem;
+        margin-bottom: 1rem;
+        font-size: 0.75rem;
+        color: var(--text-muted);
+      }
+      .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 0.375rem;
+      }
+      .legend-dot {
+        width: 18px;
+        height: 0;
+        border-top: 1px solid var(--legend-color);
+        flex-shrink: 0;
+      }
+      .legend-dot.legend-js {
+        border-top-style: dashed;
+        opacity: 0.62;
+      }
+      .legend-dot.legend-gc-native {
+        border-top-width: 3px;
+      }
+      .bench-section {
+        max-width: 1200px;
+        margin: 0 auto;
+      }
+      .bench-snippet-grid {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        align-items: flex-start;
+        gap: 1rem;
+        margin-top: 1rem;
+      }
+      .bench-snippet-card {
+        display: inline-block;
+        flex: 1 1 560px;
+        min-width: 320px;
+        max-width: 100%;
+        overflow: visible;
+      }
+      .bench-snippet-head {
+        padding: 0 0 0.75rem;
+        font-size: 0.8rem;
+        font-weight: 600;
+      }
+      .bench-example-chart {
+        margin: 0 0 1rem;
+        min-width: 0;
+        max-width: calc(40ch + 76px);
+      }
+      .bench-snippet-card pre {
+        margin: 0;
+        overflow-x: auto;
+      }
+      .report-code-block {
+        display: inline-block;
+        min-width: 0;
+        width: max-content;
+        max-width: calc(40ch + 76px);
+        overflow-x: auto;
+        padding: 34px 38px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: #0c1220;
+        font-family: var(--mono);
+        font-size: 14px;
+        line-height: 1.8;
+        color: rgba(255, 255, 255, 0.72);
+        margin: 0;
+      }
+      .bench-name {
+        font-weight: 600;
+        font-size: 0.875rem;
+        margin-bottom: 0.75rem;
+      }
+      .trend-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+        gap: 1rem;
+      }
+      .trend-card {
+        min-width: 0;
+        padding: 0 0 1rem;
+      }
+      .trend-card .bench-name {
+        margin-bottom: 0.5rem;
+      }
+      .trend-card svg {
+        display: block;
+        width: 100%;
+      }
+      .trend-meta {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.6875rem;
+        color: var(--text-muted);
+        margin-top: 0.375rem;
+        font-family: var(--mono);
+      }
+      .trend-delta {
+        font-weight: 600;
+      }
+      .trend-delta.improved {
+        color: var(--pass);
+      }
+      .trend-delta.regressed {
+        color: var(--fail);
+      }
+      .trend-delta.neutral {
+        color: var(--text-muted);
+      }
+      .eval-benchmark {
+        margin: 1.5rem 0 3rem;
+        padding: clamp(1.25rem, 3vw, 2rem);
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        background: radial-gradient(circle at 85% 0%, rgba(88, 166, 255, 0.11), transparent 38%), var(--bg-soft);
+      }
+      .eval-eyebrow {
+        display: block;
+        margin-bottom: 0.45rem;
+        color: #6db3ff;
+        font-family: var(--mono);
+        font-size: 0.7rem;
+        font-weight: 600;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+      .eval-benchmark h2 {
+        margin: 0 0 0.5rem;
+        font-size: clamp(1.35rem, 3vw, 1.75rem);
+      }
+      .eval-summary {
+        max-width: 78ch;
+        color: rgba(255, 255, 255, 0.68);
+        font-size: 0.9rem;
+      }
+      .eval-chart-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 1rem;
+        margin-top: 1.5rem;
+      }
+      .eval-chart-card {
+        min-width: 0;
+        padding: 1rem;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.025);
+      }
+      .eval-chart-card p {
+        margin: -0.65rem 0 0.85rem;
+        color: var(--text-muted);
+        font-size: 0.72rem;
+      }
+      .eval-chart-card perf-benchmark-chart {
+        --surface: rgba(255, 255, 255, 0.07);
+        --fg-soft: rgba(255, 255, 255, 0.65);
+        --fg-faint: rgba(255, 255, 255, 0.42);
+      }
+      .eval-takeaway {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 0.8rem;
+        align-items: start;
+        margin-top: 1rem;
+        padding: 0.9rem 1rem;
+        border-left: 2px solid #6db3ff;
+        background: rgba(109, 179, 255, 0.07);
+        color: rgba(255, 255, 255, 0.7);
+        font-size: 0.82rem;
+      }
+      .eval-takeaway strong {
+        color: var(--text);
+      }
+      .eval-methodology {
+        margin-top: 1rem;
+        color: var(--text-muted);
+        font-size: 0.78rem;
+      }
+      .eval-methodology summary {
+        width: fit-content;
+        cursor: pointer;
+        color: rgba(255, 255, 255, 0.68);
+        font-weight: 600;
+      }
+      .eval-methodology p {
+        max-width: 90ch;
+        margin-top: 0.75rem;
+      }
+      .eval-methodology a {
+        color: #6db3ff;
+      }
+      @media (max-width: 640px) {
+        body {
+          padding: 1rem;
+          padding-top: 80px;
+        }
+        h1 {
+          font-size: 2rem;
+        }
+        .eval-takeaway {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <site-nav base="../"></site-nav>
+    <h1 class="brand">Performance benchmarks</h1>
+    <p class="intro">
+      How js2wasm-compiled WebAssembly performs against plain JavaScript across a set of representative workloads —
+      runtime speed per benchmark, plus how those numbers have trended across benchmark runs over time.
+    </p>
+    <a class="back-link" href="../#benchmarks">← Back to home</a>
+
+    <section class="eval-benchmark" aria-labelledby="eval-benchmark-title">
+      <span class="eval-eyebrow">Dynamic code evaluation</span>
+      <h2 id="eval-benchmark-title">Bytecode interpreter vs QuickJS vs AOT</h2>
+      <p class="eval-summary">
+        The same dynamically assembled function sums
+        <code>i % 7</code>
+        over 10,000 iterations. Every measured sample returned the expected value, 29,994. Lower is better; factors are
+        relative to the fastest lane in each panel.
+      </p>
+
+      <div class="eval-chart-grid">
+        <article class="eval-chart-card">
+          <perf-benchmark-chart
+            src="./results/runtime-eval-engines.json"
+            src-filter="cold process"
+            mode="absolute-lower-better"
+            title="Cold process"
+            legend="Fresh Node process, engine state, Wasm instances and first eval"
+            baseline-label="fastest"
+            show-delta
+            delta-kind="factor"
+          ></perf-benchmark-chart>
+          <p>Includes engine loading and the first parse or compilation. Prebuilt provider artifacts remain cached.</p>
+        </article>
+
+        <article class="eval-chart-card">
+          <perf-benchmark-chart
+            src="./results/runtime-eval-engines.json"
+            src-filter="hot eval"
+            mode="absolute-lower-better"
+            title="Hot eval"
+            legend="Warm engine; parse or compile and execute on every call"
+            baseline-label="fastest"
+            show-delta
+            delta-kind="factor"
+          ></perf-benchmark-chart>
+          <p>
+            This is actual repeated
+            <code>eval(source)</code>
+            : compilation happens again for every measured call.
+          </p>
+        </article>
+
+        <article class="eval-chart-card">
+          <perf-benchmark-chart
+            src="./results/runtime-eval-engines.json"
+            src-filter="hot prepared"
+            mode="absolute-lower-better"
+            title="Hot prepared"
+            legend="Compile once before timing; execute only"
+            baseline-label="fastest"
+            show-delta
+            delta-kind="factor"
+          ></perf-benchmark-chart>
+          <p>Models a cached function or tier-up: only execution of the prepared result is timed.</p>
+        </article>
+      </div>
+
+      <div class="eval-takeaway">
+        <strong>Two different winners.</strong>
+        <span>
+          QuickJS-NG has the lowest latency for cold and repeated eval. The AOT side module is fastest once its compiled
+          result is reused; its displayed lane is unoptimized so the deterministic loop is not folded away by
+          <code>wasm-opt</code>
+          .
+        </span>
+      </div>
+
+      <details class="eval-methodology">
+        <summary>Methodology and provenance</summary>
+        <p>
+          Measured 12 August 2026 on an Apple M4 with Node 24.4.1. Cold results are medians of 7 interleaved fresh
+          processes. Hot eval uses 3 warmups and 9 measured calls. Prepared execution uses 5 warmups and 15 calibrated
+          measured batches. Filesystem caches were not flushed. All three lanes run under the same Node host; the AOT
+          proof of concept uses the Node-hosted js2wasm compiler. See the
+          <a href="./results/runtime-eval-engines.json">raw samples and artifact hashes</a>
+          , the
+          <a href="https://github.com/loopdive/js2wasm/commit/71d379293c22411578f49b4ab8b12d61f3e011fb">
+            interpreter and QuickJS revision
+          </a>
+          , and the
+          <a href="https://github.com/loopdive/js2wasm/commit/786ac78e773942f7f651289fe152310eadbb3e88">
+            AOT side-module revision
+          </a>
+          .
+        </p>
+      </details>
+    </section>
+
+    <div id="app"><div class="no-data">Loading benchmark data…</div></div>
+
+    <script type="module" src="../components/perf-benchmark-chart.js"></script>
+    <script src="../components/site-nav.js"></script>
+    <script>
+      const BENCH_SUITE_FILES = [
+        "benchmarks/suites/strings.ts",
+        "benchmarks/suites/arrays.ts",
+        "benchmarks/suites/dom.ts",
+        "benchmarks/suites/mixed.ts",
+      ];
+      const BASE_PATH = window.location.pathname.replace(/\/benchmarks\/.*$/, "");
+
+      function assetPath(path) {
+        if (!BASE_PATH) return `/${path}`;
+        return `${BASE_PATH}/${path}`;
+      }
+
+      async function loadJSON(url) {
+        try {
+          const r = await fetch(url);
+          return r.ok ? r.json() : null;
+        } catch {
+          return null;
+        }
+      }
+
+      function el(tag, attrs, ...children) {
+        const e = document.createElement(tag);
+        if (attrs)
+          for (const [k, v] of Object.entries(attrs)) {
+            if (k === "style" && typeof v === "object") Object.assign(e.style, v);
+            else if (k === "className") e.className = v;
+            else e.setAttribute(k, v);
+          }
+        for (const c of children) {
+          if (typeof c === "string") e.appendChild(document.createTextNode(c));
+          else if (c) e.appendChild(c);
+        }
+        return e;
+      }
+
+      function makeLegend(items) {
+        const legend = el("div", { className: "legend" });
+        for (const [label, color, strategy] of items) {
+          const dot = el("div", {
+            className: `legend-dot legend-${strategy}`,
+            style: { "--legend-color": color },
+          });
+          const item = el("div", { className: "legend-item" }, dot, " " + label);
+          legend.appendChild(item);
+        }
+        return legend;
+      }
+
+      let prettierBundlePromise = null;
+      async function formatBenchmarkSnippet(source) {
+        try {
+          prettierBundlePromise ||= Promise.all([
+            import("https://esm.sh/prettier@3.8.1/standalone"),
+            import("https://esm.sh/prettier@3.8.1/plugins/typescript"),
+            import("https://esm.sh/prettier@3.8.1/plugins/estree"),
+          ]);
+          const [{ format }, tsPlugin, estreePlugin] = await prettierBundlePromise;
+          return await format(source, {
+            parser: "typescript",
+            plugins: [tsPlugin.default ?? tsPlugin, estreePlugin.default ?? estreePlugin],
+            printWidth: 40,
+            semi: true,
+          });
+        } catch {
+          return source;
+        }
+      }
+
+      async function loadBenchmarkSnippets() {
+        const snippets = new Map();
+        await Promise.all(
+          BENCH_SUITE_FILES.map(async (path) => {
+            try {
+              const resp = await fetch(assetPath(path));
+              if (!resp.ok) return;
+              const source = await resp.text();
+              const pattern = /name:\s*"([^"]+)"[\s\S]*?source:\s*`([\s\S]*?)`,/g;
+              for (const match of source.matchAll(pattern)) {
+                const name = match[1];
+                const rawSnippet = match[2].replace(/^\n+|\n+$/g, "");
+                const snippet = await formatBenchmarkSnippet(rawSnippet);
+                if (name && snippet) snippets.set(name, snippet);
+              }
+            } catch {
+              // Keep the benchmark cards visible even if snippet files are unavailable.
+            }
+          }),
+        );
+        return snippets;
+      }
+
+      async function highlightReportCode() {
+        try {
+          const { codeToHtml } = await import("https://esm.sh/shiki@4.0.2/bundle/web");
+          const pres = document.querySelectorAll(".report-code-block");
+          for (const pre of pres) {
+            if (pre.dataset.highlighted === "true") continue;
+            const code = pre.textContent || "";
+            if (!code.trim()) continue;
+            const html = await codeToHtml(code.trim(), { lang: "typescript", theme: "material-theme-ocean" });
+            const match = html.match(/<code[^>]*>([\s\S]*)<\/code>/);
+            if (match) {
+              pre.innerHTML = match[1];
+              pre.dataset.highlighted = "true";
+            }
+          }
+        } catch {
+          // Keep plain code blocks if the highlighter fails to load.
+        }
+      }
+
+      function renderBenchmarks(snippets, container) {
+        const section = el("div", { className: "bench-section" });
+        section.appendChild(el("h2", null, "Performance Benchmarks"));
+        const snippetEntries = [...snippets.entries()];
+        if (snippetEntries.length > 0) {
+          section.appendChild(el("h3", null, "Benchmark Code Examples"));
+          const snippetGrid = el("div", { className: "bench-snippet-grid" });
+          for (const [name, snippet] of snippetEntries) {
+            const card = el("div", { className: "bench-snippet-card" });
+            card.appendChild(el("div", { className: "bench-snippet-head" }, name.split("/")[1] || name));
+            const runtimeChart = document.createElement("perf-benchmark-chart");
+            runtimeChart.className = "bench-example-chart";
+            runtimeChart.setAttribute("src", assetPath("benchmarks/results/latest.json"));
+            runtimeChart.setAttribute("mode", "benchmark-runtime");
+            runtimeChart.setAttribute("benchmark", name);
+            runtimeChart.setAttribute("title", "Runtime Speed");
+            runtimeChart.setAttribute("legend", "Wasm runtime speed relative to JS (larger is better, whisker = ±1σ)");
+            card.appendChild(runtimeChart);
+            card.appendChild(el("pre", { className: "report-code-block" }, snippet));
+            snippetGrid.appendChild(card);
+          }
+          section.appendChild(snippetGrid);
+        }
+        container.appendChild(section);
+      }
+
+      const STRAT_COLORS = {
+        js: "#8b949e",
+        "host-call": "#58a6ff",
+        "gc-native": "#3fb950",
+        "linear-memory": "#d29922",
+      };
+
+      function renderTrends(history, container) {
+        if (!history || history.length < 2) return;
+
+        container.appendChild(el("h2", null, "Performance Trends"));
+        container.appendChild(el("div", { className: "subtitle" }, history.length + " benchmark runs"));
+        container.appendChild(
+          makeLegend([
+            ["JavaScript (V8)", STRAT_COLORS.js, "js"],
+            ["Host-call", STRAT_COLORS["host-call"], "host-call"],
+            ["GC-native", STRAT_COLORS["gc-native"], "gc-native"],
+            ["Linear-memory", STRAT_COLORS["linear-memory"], "linear-memory"],
+          ]),
+        );
+
+        // Collect all benchmark names that appear in at least 2 runs
+        const allNames = new Set();
+        for (const run of history) {
+          for (const name of Object.keys(run.benchmarks)) allNames.add(name);
+        }
+
+        const benchGroups = new Map();
+        for (const name of [...allNames].sort()) {
+          const group = name.split("/")[0];
+          if (!benchGroups.has(group)) benchGroups.set(group, []);
+          benchGroups.get(group).push(name);
+        }
+
+        for (const [group, names] of benchGroups) {
+          container.appendChild(el("h3", null, group.charAt(0).toUpperCase() + group.slice(1)));
+          const grid = el("div", { className: "trend-grid" });
+
+          for (const name of names) {
+            // Collect data points per strategy
+            const stratData = {};
+            for (let i = 0; i < history.length; i++) {
+              const b = history[i].benchmarks[name];
+              if (!b) continue;
+              for (const [strat, ms] of Object.entries(b)) {
+                if (!stratData[strat]) stratData[strat] = [];
+                stratData[strat].push({ idx: i, ms });
+              }
+            }
+
+            // Skip if fewer than 2 data points for all strategies
+            const hasData = Object.values(stratData).some((d) => d.length >= 2);
+            if (!hasData) continue;
+
+            const card = el("div", { className: "trend-card" });
+            const shortN = name.split("/")[1] || name;
+            const nameEl = el("div", { className: "bench-name" }, shortN);
+            card.appendChild(nameEl);
+
+            // SVG sparkline chart
+            const W = 300,
+              H = 80,
+              PAD = 4;
+            const svgNS = "http://www.w3.org/2000/svg";
+            const svg = document.createElementNS(svgNS, "svg");
+            svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+            svg.setAttribute("preserveAspectRatio", "none");
+            svg.style.height = H + "px";
+
+            const gcPoints = stratData["gc-native"];
+            if (gcPoints?.length >= 2) {
+              const gradientId = `gc-fill-${name.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}`;
+              const defs = document.createElementNS(svgNS, "defs");
+              const gradient = document.createElementNS(svgNS, "linearGradient");
+              gradient.setAttribute("id", gradientId);
+              gradient.setAttribute("x1", "0");
+              gradient.setAttribute("y1", "0");
+              gradient.setAttribute("x2", "0");
+              gradient.setAttribute("y2", "1");
+              const topStop = document.createElementNS(svgNS, "stop");
+              topStop.setAttribute("offset", "0%");
+              topStop.setAttribute("stop-color", STRAT_COLORS["gc-native"]);
+              topStop.setAttribute("stop-opacity", "0.24");
+              const bottomStop = document.createElementNS(svgNS, "stop");
+              bottomStop.setAttribute("offset", "100%");
+              bottomStop.setAttribute("stop-color", STRAT_COLORS["gc-native"]);
+              bottomStop.setAttribute("stop-opacity", "0");
+              gradient.append(topStop, bottomStop);
+              defs.appendChild(gradient);
+              svg.appendChild(defs);
+            }
+
+            // Find global min/max across all strategies for this benchmark
+            let globalMin = Infinity,
+              globalMax = 0;
+            for (const pts of Object.values(stratData)) {
+              for (const p of pts) {
+                if (p.ms < globalMin) globalMin = p.ms;
+                if (p.ms > globalMax) globalMax = p.ms;
+              }
+            }
+            if (globalMax === globalMin) globalMax = globalMin + 1;
+            // Add 10% padding
+            const range = globalMax - globalMin;
+            globalMin = Math.max(0, globalMin - range * 0.1);
+            globalMax = globalMax + range * 0.1;
+
+            const xScale = (idx) => PAD + (idx / (history.length - 1)) * (W - 2 * PAD);
+            const yScale = (ms) => PAD + (1 - (ms - globalMin) / (globalMax - globalMin)) * (H - 2 * PAD);
+
+            // Draw the GC-native area below every line, then draw GC-native last
+            // so it remains the one visually dominant series.
+            if (gcPoints?.length >= 2) {
+              const gradientId = `gc-fill-${name.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}`;
+              let fillD = "";
+              for (let i = 0; i < gcPoints.length; i++) {
+                const x = xScale(gcPoints[i].idx);
+                const y = yScale(gcPoints[i].ms);
+                fillD += (i === 0 ? "M" : "L") + x.toFixed(1) + "," + y.toFixed(1);
+              }
+              fillD += `L${xScale(gcPoints.at(-1).idx).toFixed(1)},${H - PAD}`;
+              fillD += `L${xScale(gcPoints[0].idx).toFixed(1)},${H - PAD}Z`;
+              const fill = document.createElementNS(svgNS, "path");
+              fill.setAttribute("d", fillD);
+              fill.setAttribute("fill", `url(#${gradientId})`);
+              svg.appendChild(fill);
+            }
+
+            const strategies = Object.entries(stratData).sort(([left], [right]) => {
+              if (left === "gc-native") return 1;
+              if (right === "gc-native") return -1;
+              return 0;
+            });
+            for (const [strat, pts] of strategies) {
+              if (pts.length < 2) continue;
+              const color = STRAT_COLORS[strat] || "#888";
+
+              let d = "";
+              for (let i = 0; i < pts.length; i++) {
+                const x = xScale(pts[i].idx);
+                const y = yScale(pts[i].ms);
+                d += (i === 0 ? "M" : "L") + x.toFixed(1) + "," + y.toFixed(1);
+              }
+
+              const path = document.createElementNS(svgNS, "path");
+              path.setAttribute("d", d);
+              path.setAttribute("fill", "none");
+              path.setAttribute("stroke", color);
+              path.setAttribute("stroke-width", strat === "gc-native" ? "2.75" : strat === "js" ? "0.9" : "1.1");
+              path.setAttribute("opacity", strat === "gc-native" ? "1" : strat === "js" ? "0.62" : "0.7");
+              if (strat === "js") path.setAttribute("stroke-dasharray", "4 5");
+              path.setAttribute("stroke-linecap", "round");
+              path.setAttribute("stroke-linejoin", "round");
+              svg.appendChild(path);
+            }
+
+            card.appendChild(svg);
+
+            // Match the visual hierarchy: GC-native is the primary trend when available.
+            const primaryStrat = stratData["gc-native"] ? "gc-native" : stratData["host-call"] ? "host-call" : "js";
+            const pts = stratData[primaryStrat];
+            if (pts && pts.length >= 2) {
+              const first = pts[0].ms;
+              const last = pts[pts.length - 1].ms;
+              const delta = ((last - first) / first) * 100;
+              const meta = el("div", { className: "trend-meta" });
+
+              const firstDate = history[pts[0].idx].timestamp.split("T")[0];
+              const lastDate = history[pts[pts.length - 1].idx].timestamp.split("T")[0];
+              meta.appendChild(el("span", null, firstDate + " → " + lastDate));
+
+              const deltaClass = delta < -5 ? "improved" : delta > 5 ? "regressed" : "neutral";
+              const deltaText = delta > 0 ? "+" + delta.toFixed(0) + "%" : delta.toFixed(0) + "%";
+              meta.appendChild(
+                el("span", { className: "trend-delta " + deltaClass }, deltaText + " (" + primaryStrat + ")"),
+              );
+
+              card.appendChild(meta);
+            }
+
+            grid.appendChild(card);
+          }
+          container.appendChild(grid);
+        }
+      }
+
+      async function main() {
+        const [benchmarkHistory, snippets] = await Promise.all([
+          loadJSON(assetPath("benchmarks/results/history.json")),
+          loadBenchmarkSnippets(),
+        ]);
+        const app = document.getElementById("app");
+        app.textContent = "";
+
+        renderBenchmarks(snippets, app);
+        await highlightReportCode();
+
+        if (benchmarkHistory && benchmarkHistory.length >= 2) {
+          renderTrends(benchmarkHistory, app);
+        } else {
+          app.appendChild(
+            el("div", { className: "no-data" }, "Not enough benchmark history yet to plot performance trends."),
+          );
+        }
+      }
+
+      main();
+    </script>
+  </body>
+</html>

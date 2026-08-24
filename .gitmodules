@@ -1,0 +1,14 @@
+[submodule "test262"]
+	path = test262
+	url = https://github.com/tc39/test262.git
+	ignore = untracked
+[submodule "porffor"]
+	path = vendor/Porffor
+	url = https://github.com/CanadaHonk/porffor.git
+	update = none
+	ignore = dirty
+[submodule "test262-fyi/data"]
+	path = test262-fyi/data
+	url = https://github.com/test262-fyi/data.git
+	update = none
+	ignore = all

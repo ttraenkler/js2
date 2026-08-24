@@ -1,0 +1,959 @@
+name: Baseline Refresh (scheduled + emergency)
+
+# Two modes (#1078 emergency; #2562 scheduled anti-staleness):
+#
+#   1. SCHEDULED (cron) — a NORMAL baseline promote of current main's ACTUAL
+#      test262 state, run on a timer so the baseline never goes content-stale
+#      during a stretch of docs/CI-only merges (which advance main but never
+#      re-promote, because the test262-sharded.yml promote-baseline job only
+#      fires on test262-relevant pushes). This is NOT a force/emergency refresh:
+#      it records main's true current conformance (main is already-merged code,
+#      so recording its state never "bakes in" a regression past a PR gate). It
+#      requires no confirmation. Cadence: every 8h, offset from the top-of-hour
+#      Actions rush.
+#
+#   2. EMERGENCY (workflow_dispatch with force_baseline_refresh=true + confirm
+#      _force="YES") — disaster-recovery UNCONDITIONAL promote that ignores the
+#      regression gate. Both inputs are required; the confirmation prevents
+#      accidental forced overwrites.
+#
+# Both modes run test262 on current `main` and promote the result to the
+# committed baseline + the loopdive/js2wasm-baselines repo. An audit commit
+# records who/what triggered the refresh and the pass/total numbers; the commit
+# subject distinguishes a scheduled-normal refresh from a forced one.
+#
+# Usage (emergency): Actions → Baseline Refresh → Run workflow
+#   force_baseline_refresh: true
+#   confirm_force: "YES"
+# Usage (scheduled): automatic; or Run workflow with force_baseline_refresh:false
+#   for a manual NORMAL refresh of current main (no confirmation needed).
+
+on:
+  schedule:
+    # Every 8 hours, offset to :17 to avoid the top-of-hour Actions rush and to
+    # not collide with baseline-summary-sync (:37) / floor-staleness (:23).
+    - cron: "17 */8 * * *"
+  workflow_dispatch:
+    inputs:
+      force_baseline_refresh:
+        description: "EMERGENCY: force unconditional baseline promotion (ignores regressions). Leave false for a normal refresh of current main."
+        required: false
+        default: false
+        type: boolean
+      confirm_force:
+        description: 'Type "YES" to confirm an EMERGENCY (forced) refresh. Not needed for a normal refresh.'
+        required: false
+        default: ""
+        type: string
+      compiler_pool_size:
+        description: "Compiler workers per shard runner"
+        required: false
+        default: "4"
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  # #2562 — a run is FORCED (emergency) only on a confirmed workflow_dispatch.
+  # schedule (and a non-forced dispatch) are NORMAL refreshes. Computed once
+  # here so every job/step can branch on the SAME definition.
+  IS_FORCED: ${{ github.event_name == 'workflow_dispatch' && inputs.force_baseline_refresh == true && inputs.confirm_force == 'YES' }}
+
+concurrency:
+  # Both modes promote main's baseline — a scheduled run and an emergency run
+  # must never race each other, so they share one group. cancel-in-progress is
+  # false so a refresh always runs to completion (latest-wins is handled by the
+  # promote step's fetch+re-anchor retry loops, mirrored from promote-baseline).
+  group: baseline-refresh
+  cancel-in-progress: false
+
+jobs:
+  validate-inputs:
+    name: validate refresh inputs
+    # Scheduled baseline promotion is owned by the canonical repository. A
+    # fork has no baseline-promote credentials and should not launch the full
+    # refresh matrix only to fail at the final promotion step.
+    if: github.repository == 'loopdive/js2'
+    runs-on: ubuntu-latest
+    steps:
+      # #2562 — confirmation is required ONLY for an emergency (forced) dispatch.
+      # A scheduled run, or a non-forced manual dispatch, is a NORMAL refresh and
+      # needs no confirmation. Reject the dangerous half-states: force requested
+      # without "YES", or "YES" given without force.
+      - name: Validate emergency confirmation (forced dispatch only)
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          FORCE: ${{ inputs.force_baseline_refresh }}
+          CONFIRM: ${{ inputs.confirm_force }}
+        run: |
+          if [ "$EVENT_NAME" = "schedule" ]; then
+            echo "✓ Scheduled NORMAL baseline refresh — records main's current test262 state (no force, no confirmation needed)."
+            exit 0
+          fi
+          if [ "$FORCE" = "true" ]; then
+            if [ "$CONFIRM" != "YES" ]; then
+              echo "ERROR: an EMERGENCY (forced) refresh requires confirm_force=\"YES\" (got: '$CONFIRM')."
+              echo "This prevents accidental forced baseline overwrites that ignore the regression gate."
+              exit 1
+            fi
+            echo "✓ EMERGENCY (forced) baseline refresh confirmed — promotes unconditionally."
+          else
+            if [ -n "$CONFIRM" ] && [ "$CONFIRM" != "" ]; then
+              echo "::warning::confirm_force=\"$CONFIRM\" was supplied but force_baseline_refresh is false — running a NORMAL refresh (the confirmation is ignored)."
+            fi
+            echo "✓ Manual NORMAL baseline refresh — records main's current test262 state (no force)."
+          fi
+
+  # (#4242/#4354) Build the default QuickJS provider pair ONCE and fan it out
+  # to all 57 standalone shards, exactly as test262-sharded.yml does.
+  #
+  # The first cut of this fix built it per standalone shard. That is correct
+  # but wasteful: the native interpreter build cost ~5 min and ~3 GB per cell;
+  # the same one-build/fan-out rule remains load-bearing for QuickJS.
+  runtime-eval-provider:
+    name: build default QuickJS runtime-eval provider
+    needs: validate-inputs
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      JS2WASM_EVAL_ENGINE: quickjs
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Setup Node and pnpm (cached)
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Compute QuickJS artifact cache key (#4242)
+        id: quickjs-key
+        run: |
+          set -euo pipefail
+          ARTIFACT_KEY="$(node --input-type=module -e '
+            import { quickjsArtifactCacheKey } from "./scripts/quickjs-eval-provider.mjs";
+            process.stdout.write(quickjsArtifactCacheKey());
+          ')"
+          CLANG_V="$(clang-18 --version | head -1)"
+          CACHE_HASH="$(printf '%s|%s' "$ARTIFACT_KEY" "$CLANG_V" | sha256sum | cut -d' ' -f1)"
+          echo "cache_hash=$CACHE_HASH" >> "$GITHUB_OUTPUT"
+
+      - name: Restore QuickJS WASI artifact (#4242)
+        id: quickjs-cache
+        uses: actions/cache@v4
+        with:
+          path: .tmp/quickjs-artifact
+          key: quickjs-wasi-${{ steps.quickjs-key.outputs.cache_hash }}
+
+      - name: Install QuickJS wasm toolchain on cache miss (#4242)
+        if: steps.quickjs-cache.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-18 lld-18 llvm-18 cmake
+
+      - name: Build QuickJS WASI artifact on cache miss (#4242)
+        if: steps.quickjs-cache.outputs.cache-hit != 'true'
+        env:
+          JOBS: "4"
+          OUT_DIR: .tmp/quickjs-artifact
+        run: bash scripts/quickjs-artifact/build.sh
+
+      - name: Build and verify default QuickJS provider pair (#4242)
+        env:
+          JS2WASM_QUICKJS_ARTIFACT_DIR: .tmp/quickjs-artifact
+          NODE_OPTIONS: --max-old-space-size=3072
+        run: |
+          pnpm run build:compiler-bundle
+          node scripts/build-quickjs-eval-provider.mjs
+
+      - name: Upload default QuickJS provider pair
+        uses: actions/upload-artifact@v6
+        with:
+          name: runtime-eval-provider-${{ github.run_id }}
+          path: |
+            .test262-cache/quickjs-artifact-*/
+            .test262-cache/quickjs-eval-adapter-*.wasm
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+
+  test262-shard:
+    name: test262 ${{ matrix.target.name }} shard ${{ matrix.chunk }}
+    needs: [validate-inputs, runtime-eval-provider]
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        chunk:
+          [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31,
+            32,
+            33,
+            34,
+            35,
+            36,
+            37,
+            38,
+            39,
+            40,
+            41,
+            42,
+            43,
+            44,
+            45,
+            46,
+            47,
+            48,
+            49,
+            50,
+            51,
+            52,
+            53,
+            54,
+            55,
+            56,
+            57,
+          ]
+        # #3381 — second matrix dimension so each chunk runs BOTH host and
+        # standalone, mirroring test262-sharded.yml's 57x2 matrix. Without this
+        # the scheduled/emergency refresh produced HOST results only, so the
+        # public standalone report had no refresh path and stranded stale
+        # (2026-07-17: 57.3% for ~7h while host was fresh). 57 chunks x 2 targets
+        # = 114 jobs; acceptable because this workflow runs at most every 8h (or
+        # on manual dispatch), NOT per-PR.
+        target:
+          - name: js-host
+            test262_target: gc
+            result_prefix: test262
+          - name: standalone
+            test262_target: standalone
+            result_prefix: test262-standalone
+
+    env:
+      COMPILER_POOL_SIZE: ${{ inputs.compiler_pool_size || '4' }}
+      # Keep the baseline producer on the same Test262 parent-fork memory
+      # contract as merge-group candidates. Compiler workers keep their
+      # independent 512 MiB cap.
+      VITEST_FORK_MAX_OLD_SPACE_SIZE: "1024"
+      TEST262_INCLUDE_PROPOSALS: "1"
+      # #3381 — select host (gc) vs standalone lane; the runner reads these to
+      # pick the compile target and name its JSONL (tests/test262-shared.ts).
+      TEST262_TARGET: ${{ matrix.target.test262_target }}
+      TEST262_RESULT_PREFIX: ${{ matrix.target.result_prefix }}
+      JS2WASM_EVAL_ENGINE: ${{ matrix.target.test262_target == 'standalone' && 'quickjs' || '' }}
+      # Namespace by target so host + standalone shards for the same chunk never
+      # collide on the JSONL path / blob outfile / artifact name.
+      RUN_TIMESTAMP: ${{ github.run_id }}-${{ matrix.target.name }}-chunk${{ matrix.chunk }}
+      # Harmless under QuickJS; load-bearing when a developer explicitly runs
+      # this lane with the native interpreter selector.
+      TEST262_FULL_RUNTIME_EVAL: ${{ matrix.target.test262_target == 'standalone' && '1' || '' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          ref: main
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 25
+
+      - name: Setup pnpm via Corepack
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.30.2 --activate
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Cache test262 incremental cache
+        uses: actions/cache@v5
+        with:
+          path: |
+            .test262-cache
+            benchmarks/results/test262-cache.json
+          key: test262-cache-v2-${{ hashFiles('src/**/*.ts', 'scripts/test262-worker.mjs', 'scripts/compiler-fork-worker.mjs') }}-${{ matrix.target.name }}-chunk-${{ matrix.chunk }}
+          restore-keys: |
+            test262-cache-v2-${{ hashFiles('src/**/*.ts', 'scripts/test262-worker.mjs', 'scripts/compiler-fork-worker.mjs') }}-
+
+      - name: Build compiler bundles
+        run: |
+          pnpm run build:compiler-bundle
+          ./node_modules/.bin/esbuild src/runtime.ts --bundle --platform=node --format=esm \
+            --outfile=scripts/runtime-bundle.mjs --external:typescript --external:binaryen
+
+      # Built ONCE by the provider job above and downloaded here. A shard only
+      # verifies the keyed pair; it never builds or falls back to another
+      # engine, so the promoted baseline cannot be mislabeled.
+      - name: Download default QuickJS runtime-eval provider (#4242/#4354)
+        if: matrix.target.test262_target == 'standalone'
+        uses: actions/download-artifact@v7
+        with:
+          name: runtime-eval-provider-${{ github.run_id }}
+          path: .test262-cache
+
+      - name: Verify shared QuickJS provider cache (#4242/#4354)
+        if: matrix.target.test262_target == 'standalone'
+        run: node scripts/build-quickjs-eval-provider.mjs --require-cache
+
+      - name: Run shard
+        run: |
+          mkdir -p vitest-blob
+          set +e
+          node node_modules/vitest/dist/cli.js run tests/test262-chunk${{ matrix.chunk }}.test.ts \
+            --reporter=blob \
+            --outputFile=vitest-blob/blob-${{ matrix.target.name }}-${{ matrix.chunk }}.json
+          exit_code=$?
+          set -e
+          if [ "$exit_code" -ne 0 ] && [ "$exit_code" -ne 1 ]; then
+            echo "Vitest exited with unexpected code $exit_code"
+            exit "$exit_code"
+          fi
+          completion_marker="benchmarks/results/${TEST262_RESULT_PREFIX}-results-${RUN_TIMESTAMP}.jsonl.complete.json"
+          if [ ! -s "$completion_marker" ]; then
+            echo "::error::Test262 shard did not reach afterAll; refusing partial JSONL evidence"
+            exit 2
+          fi
+
+      - name: Upload shard artifacts
+        id: upload_shard
+        uses: actions/upload-artifact@v6
+        if: always()
+        # #3404 — continue on a transient upload flake so the retry below can
+        # run; only if BOTH attempts fail does the shard (and thus the
+        # merge-and-promote job that `needs:` it) fail. Observed 2026-07-18:
+        # standalone shard 49's upload timed out (ETIMEDOUT on CreateArtifact)
+        # and aborted the entire standalone-heal promote until a human reran it.
+        continue-on-error: true
+        with:
+          retention-days: 1
+          name: emergency-${{ matrix.target.name }}-shard-${{ matrix.chunk }}
+          path: |
+            benchmarks/results/${{ matrix.target.result_prefix }}-results-${{ env.RUN_TIMESTAMP }}.jsonl
+            benchmarks/results/${{ matrix.target.result_prefix }}-results-${{ env.RUN_TIMESTAMP }}.jsonl.complete.json
+          if-no-files-found: warn
+
+      # #3404 — retry a transient artifact-upload flake once. Idempotent +
+      # `overwrite` clears any partially finalized artifact. A genuinely empty
+      # shard (no result file) is a `warn`, not a failure, so it never triggers
+      # this retry and the merge step's incomplete-data guard still catches a
+      # real missing chunk.
+      - name: Retry shard artifact upload on transient flake (#3404)
+        if: always() && steps.upload_shard.outcome == 'failure'
+        uses: actions/upload-artifact@v6
+        with:
+          retention-days: 1
+          name: emergency-${{ matrix.target.name }}-shard-${{ matrix.chunk }}
+          overwrite: true
+          path: |
+            benchmarks/results/${{ matrix.target.result_prefix }}-results-${{ env.RUN_TIMESTAMP }}.jsonl
+          if-no-files-found: warn
+
+  merge-and-promote:
+    name: merge shards and promote baseline
+    needs: test262-shard
+    runs-on: ubuntu-latest
+    # (#3) The main-repo audit-commit push uses the MAIN_DEPLOY_KEY SSH deploy
+    # key (the only auth path in the ruleset's bypass_actors — DeployKey:always),
+    # because the GITHUB_TOKEN origin push is rejected by ruleset GH013. The key
+    # is gated behind the `baseline-promote` Environment (deployment branch
+    # restricted to `main`), exactly like test262-sharded.yml's promote-baseline
+    # and baseline-summary-sync.yml. Declaring the environment is what makes the
+    # ENVIRONMENT-scoped secret resolvable here.
+    environment: baseline-promote
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          ref: main
+          submodules: recursive
+          # #3370 — resolve the landed merge's issue-scoped oracle allowance
+          # from HEAD^1 during normal scheduled/manual promotion.
+          fetch-depth: 2
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 25
+
+      - name: Setup pnpm via Corepack
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.30.2 --activate
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Download shard artifacts
+        uses: actions/download-artifact@v7
+        with:
+          path: shard-artifacts
+          pattern: emergency-*-shard-*
+          merge-multiple: false
+
+      - name: Merge JS-host test262 JSONL results
+        run: |
+          mkdir -p merged-reports
+          find shard-artifacts/emergency-js-host-shard-* -name 'test262-results-*.jsonl' -print0 | sort -z | xargs -0 cat > merged-reports/test262-results-merged.jsonl
+          test -s merged-reports/test262-results-merged.jsonl
+
+      - name: Merge standalone test262 JSONL results
+        run: |
+          # #3381 — mirror test262-sharded.yml's standalone merge. The standalone
+          # artifacts carry the `test262-standalone-results-*.jsonl` prefix, so
+          # this find never picks up host rows (and vice-versa).
+          mkdir -p merged-reports
+          find shard-artifacts/emergency-standalone-shard-* -name 'test262-standalone-results-*.jsonl' -print0 | sort -z | xargs -0 cat > merged-reports/test262-standalone-results-merged.jsonl
+          test -s merged-reports/test262-standalone-results-merged.jsonl
+
+      - name: Build merged test262 report
+        run: |
+          # --baseline-sha records the main commit this baseline was generated
+          # from into the report's `baseline_sha` field, matching the
+          # test262-sharded.yml promote-baseline path. The #1668 stale-baseline
+          # guard and the #2562 src-aware drift gate both parse this main-sha
+          # (from the baselines-repo commit subject below) — without it, a
+          # refreshed baseline can't be proven content-current.
+          node scripts/build-test262-report.mjs \
+            --input merged-reports/test262-results-merged.jsonl \
+            --output merged-reports/test262-report-merged.json \
+            --baseline-sha "${{ github.sha }}" \
+            --include-proposals
+
+      - name: Build merged standalone test262 report
+        run: |
+          # #3381 — mirror test262-sharded.yml's standalone report build.
+          # --target standalone selects the standalone classifier;
+          # --max-unclassified-root-causes 0 matches the promote path's strict
+          # bucketing. --baseline-sha records the main commit for the #1668/#2562
+          # stale/drift guards, same as the host build above.
+          node scripts/build-test262-report.mjs \
+            --input merged-reports/test262-standalone-results-merged.jsonl \
+            --output merged-reports/test262-standalone-report-merged.json \
+            --target standalone \
+            --max-unclassified-root-causes 0 \
+            --baseline-sha "${{ github.sha }}" \
+            --include-proposals
+
+      - name: Sanity check reports (host + standalone)
+        run: |
+          PASS=$(node -e "console.log(JSON.parse(require('fs').readFileSync('merged-reports/test262-report-merged.json','utf8')).summary.pass)")
+          TOTAL=$(node -e "console.log(JSON.parse(require('fs').readFileSync('merged-reports/test262-report-merged.json','utf8')).summary.total)")
+          echo "HOST PASS=$PASS TOTAL=$TOTAL"
+          if [ "$PASS" -lt 1000 ] || [ "$TOTAL" -lt 40000 ]; then
+            echo "ABORT: host report looks corrupt (pass=$PASS total=$TOTAL). Not promoting."
+            echo "Even emergency refreshes reject obviously corrupt data."
+            exit 1
+          fi
+          # #3381 — MANDATORY standalone sanity guard, mirroring the host floor.
+          # NEVER force-promote empty/corrupt standalone data to the public page,
+          # even on an emergency refresh. A YAML/logic slip here would publish a
+          # corrupt public standalone number.
+          SPASS=$(node -e "console.log(JSON.parse(require('fs').readFileSync('merged-reports/test262-standalone-report-merged.json','utf8')).summary.pass)")
+          STOTAL=$(node -e "console.log(JSON.parse(require('fs').readFileSync('merged-reports/test262-standalone-report-merged.json','utf8')).summary.total)")
+          echo "STANDALONE PASS=$SPASS TOTAL=$STOTAL"
+          if [ "$SPASS" -lt 1000 ] || [ "$STOTAL" -lt 40000 ]; then
+            echo "ABORT: standalone report looks corrupt (pass=$SPASS total=$STOTAL). Not promoting."
+            echo "Even emergency refreshes reject obviously corrupt standalone data."
+            exit 1
+          fi
+          echo "pass=$PASS" >> "$GITHUB_OUTPUT"
+          echo "total=$TOTAL" >> "$GITHUB_OUTPUT"
+          echo "standalone_pass=$SPASS" >> "$GITHUB_OUTPUT"
+          echo "standalone_total=$STOTAL" >> "$GITHUB_OUTPUT"
+        id: sanity
+
+      # Records main's current test262 state. On a scheduled/normal refresh this
+      # is just the true conformance of already-merged main (no PR gate to
+      # bypass); on a forced/emergency refresh it is the disaster-recovery
+      # unconditional promote. Either way it never compares against a baseline.
+      - name: Promote merged report to baseline
+        run: |
+          mkdir -p benchmarks/results website/public/benchmarks/results public/benchmarks/results
+          rm -f benchmarks/results/test262-current.jsonl \
+            benchmarks/results/test262-current.json \
+            benchmarks/results/test262-report.json \
+            benchmarks/results/test262-results.jsonl
+          cp merged-reports/test262-results-merged.jsonl benchmarks/results/test262-current.jsonl
+          cp merged-reports/test262-report-merged.json benchmarks/results/test262-current.json
+          cp merged-reports/test262-report-merged.json benchmarks/results/test262-report.json
+          cp merged-reports/test262-results-merged.jsonl benchmarks/results/test262-results.jsonl
+          cp merged-reports/test262-report-merged.json website/public/benchmarks/results/test262-report.json
+          cp merged-reports/test262-results-merged.jsonl website/public/benchmarks/results/test262-results.jsonl
+          # #3381 — promote the STANDALONE report alongside host, mirroring
+          # test262-sharded.yml's promote-baseline. public/benchmarks/results/
+          # test262-standalone-report.json is the exact file
+          # baseline-summary-sync.yml sparse-checkouts + diffs to keep the public
+          # page fresh, so it MUST land on main.
+          rm -f benchmarks/results/test262-standalone-current.jsonl \
+            benchmarks/results/test262-standalone-current.json \
+            benchmarks/results/test262-standalone-report.json \
+            benchmarks/results/test262-standalone-results.jsonl
+          cp merged-reports/test262-standalone-results-merged.jsonl benchmarks/results/test262-standalone-current.jsonl
+          cp merged-reports/test262-standalone-report-merged.json benchmarks/results/test262-standalone-current.json
+          cp merged-reports/test262-standalone-report-merged.json benchmarks/results/test262-standalone-report.json
+          cp merged-reports/test262-standalone-results-merged.jsonl benchmarks/results/test262-standalone-results.jsonl
+          cp merged-reports/test262-standalone-report-merged.json public/benchmarks/results/test262-standalone-report.json
+          # …and the SERVED copy under website/public (the vite publicDir since
+          # #1656), mirroring the host line above. The landing page reads this
+          # path FIRST for its standalone donut — the default lane now — so a
+          # committed copy that never refreshes is a stale-headline trap
+          # whenever a deploy's baselines fetch fails.
+          mkdir -p website/public/benchmarks/results
+          cp merged-reports/test262-standalone-report-merged.json \
+            website/public/benchmarks/results/test262-standalone-report.json
+
+      - name: Raise standalone pass-count high-water mark (#2097)
+        run: |
+          # #3381 — mirror test262-sharded.yml promote-baseline: RAISE the #2097
+          # absolute standalone high-water mark when this refresh improved
+          # standalone conformance. Raise-only (never lowers) and non-blocking
+          # (|| true) — a NORMAL refresh just records main's true current state
+          # and must never fail on the floor here (the ASSERT lives in the
+          # merge-report gate, not in a promote path).
+          node scripts/check-standalone-highwater.mjs \
+            --report benchmarks/results/test262-standalone-current.json \
+            --update --sha "${{ github.sha }}" || true
+
+      - name: Regenerate edition buckets
+        run: |
+          node --experimental-strip-types scripts/generate-editions.ts --results benchmarks/results/test262-current.jsonl
+          # (#4362) The STANDALONE twin. This job — not promote-baseline — is
+          # what actually lands runs/editions-index.json in the baselines repo
+          # (measured 2026-08-14: every commit touching that file is a
+          # "scheduled baseline refresh", ~3/day, while promote-baseline's
+          # baselines push is superseded by the per-SHA promote job and drops).
+          # So the standalone per-edition history can only accrue if it is
+          # generated and appended HERE too; without it the landing page and
+          # report page have no standalone curve to draw at any ES edition, and
+          # the sparse-checkout fix alone never gets a file to preserve.
+          # Best-effort, mirroring promote-baseline: a missing/corrupt
+          # standalone JSONL must skip, never fail the refresh.
+          if [ -f benchmarks/results/test262-standalone-current.jsonl ]; then
+            node --experimental-strip-types scripts/generate-editions.ts \
+              --results benchmarks/results/test262-standalone-current.jsonl \
+              --output website/public/benchmarks/results/test262-standalone-editions.json \
+              --host-free \
+              --feature-examples-out website/public/feature-examples-standalone.json \
+              || echo "::warning::standalone edition buckets failed (non-fatal)"
+          else
+            echo "no standalone baseline JSONL on disk — skipping standalone edition buckets"
+          fi
+
+      - name: Deploy to baselines repo
+        env:
+          BASELINE_DEPLOY_KEY: ${{ secrets.BASELINE_DEPLOY_KEY }}
+          # (#3335) Trap-growth gate tolerance — see check-baseline-trap-growth.ts.
+          BASELINE_TRAP_GROWTH_ALLOW: ${{ vars.BASELINE_TRAP_GROWTH_ALLOW || '0' }}
+          NTFY_URL: ${{ secrets.NTFY_URL }}
+        run: |
+          PASS=${{ steps.sanity.outputs.pass }}
+          TOTAL=${{ steps.sanity.outputs.total }}
+          STANDALONE_PASS=${{ steps.sanity.outputs.standalone_pass }}
+          STANDALONE_TOTAL=${{ steps.sanity.outputs.standalone_total }}
+          # #3381 — re-assert the MANDATORY sanity floor right before the PUBLIC
+          # push: NEVER promote empty/corrupt host OR standalone data to the
+          # baselines repo (the source of truth baseline-summary-sync serves).
+          if [ "$PASS" -lt 1000 ] || [ "$TOTAL" -lt 40000 ]; then
+            echo "ABORT: host report looks corrupt (pass=$PASS total=$TOTAL). Not pushing."
+            exit 1
+          fi
+          if [ "$STANDALONE_PASS" -lt 1000 ] || [ "$STANDALONE_TOTAL" -lt 40000 ]; then
+            echo "ABORT: standalone report looks corrupt (pass=$STANDALONE_PASS total=$STANDALONE_TOTAL). Not pushing."
+            exit 1
+          fi
+
+          # Set up SSH deploy key for baselines repo push
+          eval "$(ssh-agent -s)"
+          echo "$BASELINE_DEPLOY_KEY" | ssh-add -
+          mkdir -p ~/.ssh
+          ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
+
+          # (#3392) Metadata-only clone + sparse materialization of just the
+          # files this step reads/rewrites — the runs/ per-SHA cache history
+          # pushed a full-blob clone past the step timeout (see the identical
+          # fix in test262-sharded.yml promote-baseline). New runs/<sha> files
+          # are staged via `git add -A --sparse`.
+          git clone --depth=1 --filter=blob:none --no-checkout git@github.com:loopdive/js2wasm-baselines.git /tmp/js2wasm-baselines
+          git -C /tmp/js2wasm-baselines sparse-checkout set --no-cone '/*' '!/runs/*' '/runs/index.json' '/runs/editions-index.json' '/runs/standalone-index.json' '/runs/standalone-editions-index.json'
+          git -C /tmp/js2wasm-baselines checkout main
+
+          # (#3335) Trap-growth gate: refuse to bake a main-side increase of any
+          # uncatchable-trap category into the baseline (it silently raises the
+          # #3189 ratchet floor — the 2026-07-17 45→51 oob flap). FORCED
+          # (emergency) refreshes bypass by design; intentional
+          # reclassifications set the repo var BASELINE_TRAP_GROWTH_ALLOW for
+          # one cycle.
+          if [ "${IS_FORCED}" != "true" ] && [ -f /tmp/js2wasm-baselines/test262-current.jsonl ]; then
+            npx tsx scripts/check-baseline-trap-growth.ts \
+              --baseline /tmp/js2wasm-baselines/test262-current.jsonl \
+              --candidate merged-reports/test262-results-merged.jsonl \
+              --allow "${BASELINE_TRAP_GROWTH_ALLOW:-0}"
+          fi
+
+          # Copy fresh artifacts (JSONL lives here, not in the main repo)
+          cp merged-reports/test262-results-merged.jsonl /tmp/js2wasm-baselines/test262-current.jsonl
+          cp merged-reports/test262-report-merged.json   /tmp/js2wasm-baselines/test262-current.json
+          cp merged-reports/test262-results-merged.jsonl /tmp/js2wasm-baselines/test262-results.jsonl
+          # #3381 — standalone artifacts under the exact filenames the pipeline
+          # already uses: test262-standalone-report.json is what
+          # baseline-summary-sync.yml sparse-checkouts; test262-standalone-current.jsonl
+          # is what the #1897 / #2097 gates diff.
+          cp merged-reports/test262-standalone-results-merged.jsonl /tmp/js2wasm-baselines/test262-standalone-current.jsonl
+          cp merged-reports/test262-standalone-report-merged.json   /tmp/js2wasm-baselines/test262-standalone-current.json
+          cp merged-reports/test262-standalone-report-merged.json   /tmp/js2wasm-baselines/test262-standalone-report.json
+          cp merged-reports/test262-standalone-results-merged.jsonl /tmp/js2wasm-baselines/test262-standalone-results.jsonl
+
+          # Update runs/index.json (trend graph history lives in baselines)
+          node -e "
+          const fs = require('fs');
+          const report = JSON.parse(fs.readFileSync('/tmp/js2wasm-baselines/test262-current.json', 'utf8'));
+          const indexPath = '/tmp/js2wasm-baselines/runs/index.json';
+          fs.mkdirSync('/tmp/js2wasm-baselines/runs', { recursive: true });
+          const idx = fs.existsSync(indexPath) ? (() => { try { return JSON.parse(fs.readFileSync(indexPath, 'utf8')); } catch { return []; } })() : [];
+          const entry = {
+            timestamp: new Date().toISOString().replace(/[-:]/g, '').replace('T', '-').substring(0, 15),
+            pass: report.summary.pass,
+            fail: report.summary.fail,
+            ce: report.summary.compile_error || 0,
+            skip: report.summary.skip || 0,
+            total: report.summary.total,
+            strict_pass: (report.strict_summary || {}).pass || 0,
+            strict_total: (report.strict_summary || {}).total || 0,
+            gitHash: '${{ github.sha }}'.substring(0, 8),
+          };
+          const last = idx[idx.length - 1];
+          if (!last || last.pass !== entry.pass || last.total !== entry.total) {
+            idx.push(entry);
+            fs.writeFileSync(indexPath, JSON.stringify(idx, null, 2));
+            console.log('Appended to runs/index.json:', entry.pass, '/', entry.total);
+          } else {
+            console.log('Skipped duplicate entry');
+          }
+          "
+
+          # Append per-ES-edition + standalone trend history (landing-page
+          # mini graphs). Both editions.json (regenerated above) and the
+          # standalone report are already fresh on disk in this job.
+          # Best-effort — never blocks the baseline refresh pipeline.
+          node scripts/append-run-history.mjs \
+            --runs-dir /tmp/js2wasm-baselines/runs \
+            --editions website/public/benchmarks/results/test262-editions.json \
+            --standalone-editions website/public/benchmarks/results/test262-standalone-editions.json \
+            --standalone-report /tmp/js2wasm-baselines/test262-standalone-current.json \
+            --sha "${{ github.sha }}" || echo "::warning::append-run-history failed (non-fatal)"
+
+          # Commit and push to baselines repo
+          cd /tmp/js2wasm-baselines
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A --sparse
+          if git diff --cached --quiet; then
+            echo "No baseline changes to push."
+          else
+            ACTOR="${{ github.actor }}"
+            # #2562 — record the main-sha in the commit subject (matching the
+            # promote-baseline format "... (<sha>)") so the #1668 stale-baseline
+            # guard and the #2562 src-aware drift gate can parse the main commit
+            # this baseline was generated from. NORMAL (scheduled / non-forced)
+            # vs FORCED (emergency) is reflected in the wording so the audit log
+            # is unambiguous. Host + standalone counts are both recorded, matching
+            # test262-sharded.yml's "N/T host, N/T standalone (<sha>)" format.
+            if [ "${IS_FORCED}" = "true" ]; then
+              git commit -m "chore(test262): FORCED baseline refresh by ${ACTOR} — ${PASS}/${TOTAL} host, ${STANDALONE_PASS}/${STANDALONE_TOTAL} standalone (${{ github.sha }})"
+            else
+              git commit -m "chore(test262): scheduled baseline refresh by ${ACTOR} — ${PASS}/${TOTAL} host, ${STANDALONE_PASS}/${STANDALONE_TOTAL} standalone (${{ github.sha }})"
+            fi
+            # (#3382 / #2942) Resilient push. A concurrent test262-sharded
+            # promote-baseline can advance js2wasm-baselines between our clone and
+            # push, so a single `git push` is rejected non-fast-forward and this
+            # BACKSTOP refresh fails exactly when it is most needed. Mirror
+            # promote-baseline's Option-A re-anchor loop (generated files must
+            # never be line-merged): snapshot the files we promoted, hard-reset
+            # onto the fresh remote tip, re-apply wholesale, re-commit, push. 8
+            # attempts, capped backoff. Ordering guard: if the remote tip already
+            # promotes a main SHA that DESCENDS from ours, a newer promote landed —
+            # drop ours (never clobber fresher public data with older).
+            BR=$(git rev-parse --abbrev-ref HEAD)
+            OUR_COMMIT=$(git rev-parse HEAD)
+            MSG=$(git log -1 --format=%s)
+            SNAP=$(mktemp -d)
+            git diff-tree --no-commit-id --name-only -r "$OUR_COMMIT" | while IFS= read -r f; do
+              if [ -f "$f" ]; then
+                mkdir -p "$SNAP/$(dirname "$f")"
+                cp "$f" "$SNAP/$f"
+              fi
+            done
+            # Deepen MAIN-repo history once so the ancestry guard can resolve
+            # ancestor checks (the workspace checkout is depth-1).
+            git -C "$GITHUB_WORKSPACE" fetch --depth=200 --filter=blob:none origin main 2>/dev/null || true
+            BASELINE_PUSHED=0
+            for attempt in 1 2 3 4 5 6 7 8; do
+              if git push origin "HEAD:$BR"; then
+                echo "Pushed baselines (attempt ${attempt})."
+                BASELINE_PUSHED=1
+                break
+              fi
+              echo "baselines push race lost (attempt ${attempt}) — re-anchoring on the fresh remote tip"
+              git fetch origin "$BR" || { SLEEP=$((attempt * 5)); [ "$SLEEP" -gt 30 ] && SLEEP=30; sleep "$SLEEP"; continue; }
+              # Ordering guard: baseline commit subjects end with the promoted main
+              # SHA. If OUR sha is an ancestor of the remote tip's promoted sha, a
+              # newer promote already landed — ours is superseded. Fail-open
+              # (proceed with the overwrite) when either sha is unresolvable.
+              REMOTE_MSHA=$(git log -1 --format=%s "origin/$BR" | grep -oE '[0-9a-f]{7,40}' | tail -1 || true)
+              if [ -n "$REMOTE_MSHA" ] \
+                && git -C "$GITHUB_WORKSPACE" cat-file -e "${REMOTE_MSHA}^{commit}" 2>/dev/null \
+                && git -C "$GITHUB_WORKSPACE" merge-base --is-ancestor "${{ github.sha }}" "$REMOTE_MSHA" 2>/dev/null; then
+                echo "Remote baseline already promotes ${REMOTE_MSHA} (descendant of ${{ github.sha }}) — this refresh is superseded; dropping."
+                BASELINE_PUSHED=1
+                break
+              fi
+              git checkout -f -B "$BR" "origin/$BR"
+              (cd "$SNAP" && find . -type f | sed 's|^\./||') | while IFS= read -r f; do
+                mkdir -p "$(dirname "$f")"
+                cp "$SNAP/$f" "$f"
+              done
+              git add -A --sparse
+              if git diff --cached --quiet; then
+                echo "Re-anchored tree identical to remote tip — nothing left to promote."
+                BASELINE_PUSHED=1
+                break
+              fi
+              git commit -m "$MSG"
+              SLEEP=$((attempt * 5)); [ "$SLEEP" -gt 30 ] && SLEEP=30; sleep "$SLEEP"
+            done
+            if [ "$BASELINE_PUSHED" != "1" ]; then
+              echo "::error::Failed to push baselines after 8 re-anchor attempts (persistent, not a transient race)."
+              exit 1
+            fi
+          fi
+
+      # (#3) Push the audit commit to main over the SSH deploy-key remote — that
+      # auth path is in the ruleset's bypass_actors (DeployKey: always), so it is
+      # NOT rejected by GH013 the way the GITHUB_TOKEN `origin` push is. The
+      # previous `git pull --rebase origin main && git push` here authenticated
+      # with the checkout's GITHUB_TOKEN and was BLOCKED by GH013, freezing the
+      # committed baseline even on this emergency-recovery workflow (the exact
+      # drift-deadlock this step is supposed to BREAK). Mirrors the proven
+      # Option-A re-anchor loop (#1861) in test262-sharded.yml's promote-baseline
+      # and baseline-summary-sync.yml: snapshot the small promote JSON files,
+      # hard-checkout a CLEAN tip of main on each attempt, re-apply, commit
+      # [skip ci], push via the deploy key, retry on the merge-queue race.
+      # (#3915) Same merge-queue gate the other main-pushers carry. This step
+      # is the LAST un-gated push to `main` in the repo, and every push to
+      # `main` — `[skip ci]` included — rebuilds the queued merge groups and
+      # discards their in-flight validations. It is safe to defer here because
+      # this main-repo commit is an AUDIT COPY: the authoritative push (to
+      # `loopdive/js2wasm-baselines`, above) is untouched, and the hourly,
+      # already-gated `baseline-summary-sync.yml` re-lands this exact file set
+      # from that repo under a 6h staleness floor. That declared fallback is
+      # why `--fallback` is passed and no local floor is needed. An EMERGENCY
+      # (forced) run is a recovery path and never defers.
+      - name: Gate the main audit push on the merge queue
+        id: queue_gate
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -uo pipefail
+          FORCE_ARG=""
+          if [ "${IS_FORCED}" = "true" ]; then FORCE_ARG="--force"; fi
+          # `|| RC=$?`, not a bare call then `RC=$?`: the default step shell is
+          # `bash -e {0}`, so a bare non-zero exit aborts the step before the
+          # next line runs — the DEFER path would look like a step failure.
+          RC=0
+          node scripts/main-push-queue-gate.mjs \
+            --repo "$GITHUB_REPOSITORY" \
+            --reason "test262 baseline audit commit" \
+            --fallback "the hourly gated baseline-summary-sync.yml (#1951)" \
+            $FORCE_ARG || RC=$?
+          if [ "$RC" -eq 10 ]; then
+            echo "decision=defer" >> "$GITHUB_OUTPUT"
+          else
+            [ "$RC" -eq 0 ] || echo "::warning title=main-push-queue-gate::gate exited ${RC}; failing open"
+            echo "decision=proceed" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit baseline refresh to main (audit trail)
+        if: steps.queue_gate.outputs.decision != 'defer'
+        env:
+          MAIN_DEPLOY_KEY: ${{ secrets.MAIN_DEPLOY_KEY }}
+        run: |
+          set -uo pipefail
+          if [ -z "${MAIN_DEPLOY_KEY:-}" ]; then
+            echo "::error::MAIN_DEPLOY_KEY secret is empty/unset (environment baseline-promote). The main-repo baseline push needs the private half of the loopdive/js2wasm 'MAIN_DEPLOY_KEY' deploy key — GITHUB_TOKEN is blocked by ruleset GH013."
+            exit 1
+          fi
+          # #2562 — NORMAL (scheduled / non-forced) vs FORCED (emergency) label
+          # for the audit commit subject.
+          if [ "${IS_FORCED}" = "true" ]; then REFRESH_KIND="FORCED"; else REFRESH_KIND="scheduled"; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Stage only the small JSON files and generated edition buckets (JSONL lives in baselines repo, not main).
+          # Editions live under website/public/ (the vite publicDir) since #1656; the old public/ path no longer receives them.
+          git add -f benchmarks/results/test262-current.json \
+            benchmarks/results/test262-report.json \
+            public/benchmarks/results/test262-report.json \
+            public/benchmarks/results/test262-standalone-report.json \
+            website/public/benchmarks/results/test262-editions.json \
+            website/public/benchmarks/results/test262-category-editions.json
+          # The SERVED standalone report (website/public, copied above) — the
+          # landing page's first source for its standalone donut.
+          git add -f website/public/benchmarks/results/test262-standalone-report.json 2>/dev/null || true
+          # #2871 follow-up — per-file edition index (Error Patterns / Skipped Tests filter).
+          git add -f website/public/benchmarks/results/test262-file-editions.json 2>/dev/null || true
+          # (#4362) Standalone twins of the edition buckets + feature-row counts,
+          # regenerated above. They back the per-edition pass bars and feature
+          # rows whenever the "JS host" toggle is off, so they must refresh with
+          # their host counterparts instead of freezing at whatever last landed.
+          git add -f website/public/benchmarks/results/test262-standalone-editions.json 2>/dev/null || true
+          git add -f website/public/feature-examples-standalone.json 2>/dev/null || true
+          # #3381 — the #2097 standalone high-water mark (raised earlier). Tolerant
+          # add: present on main, but never let a missing file abort the stage.
+          git add -f benchmarks/results/test262-standalone-highwater.json 2>/dev/null || true
+          if git diff --cached --quiet; then
+            echo "No baseline changes to commit."
+            exit 0
+          fi
+          PASS=${{ steps.sanity.outputs.pass }}
+          TOTAL=${{ steps.sanity.outputs.total }}
+          ACTOR="${{ github.actor }}"
+
+          # --- Set up the SSH deploy key (mirrors the baselines-repo push step
+          # above and the promote-baseline / summary-sync main pushes). ---
+          eval "$(ssh-agent -s)"
+          echo "$MAIN_DEPLOY_KEY" | ssh-add -
+          mkdir -p ~/.ssh
+          ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
+          git remote remove deploykey 2>/dev/null || true
+          git remote add deploykey "git@github.com:${GITHUB_REPOSITORY}.git"
+          # The shard run can leave the test262 submodule dirty — keep it from
+          # blocking the clean re-anchor checkout below.
+          git config submodule.test262.ignore all || true
+          git config diff.ignoreSubmodules dirty || true
+
+          # Option A re-anchor loop (#1861): snapshot the staged promote files,
+          # hard-checkout a clean tip of main on every attempt, re-apply, commit
+          # [skip ci] (prevents self-retrigger), push via the deploy key, retry
+          # on the merge-queue advance race.
+          PROMOTE_FILES=$(git diff --cached --name-only)
+          echo "Promote files staged for main:"; echo "$PROMOTE_FILES" | sed 's/^/  /'
+          PROMOTE_SNAPSHOT="$(mktemp -d)"
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            mkdir -p "$PROMOTE_SNAPSHOT/$(dirname "$f")"
+            cp "$f" "$PROMOTE_SNAPSHOT/$f"
+          done <<< "$PROMOTE_FILES"
+          PUSHED=0
+          # #3382 — 14 attempts (was 5) with capped backoff. Under sustained
+          # two-lane merge velocity main advances between fetch and push on every
+          # attempt; a 5-attempt loop lost every retry and marked this refresh
+          # FAILURE, freezing the committed main summary + prose conformance docs.
+          # 14 attempts eventually win; the min(attempt*5,30)s cap bounds total
+          # wait to ~6 min. The baselines-repo push (the PUBLIC source of truth)
+          # already landed in the EARLIER "Deploy to baselines repo" step.
+          for attempt in 1 2 3 4 5 6 7 8 9 10 11 12 13 14; do
+            git fetch deploykey main
+            git checkout -f -B _emergency_promote_tmp deploykey/main || {
+              echo "checkout of deploykey/main failed (attempt ${attempt}) — retrying"
+              SLEEP=$((attempt * 5)); [ "$SLEEP" -gt 30 ] && SLEEP=30; sleep "$SLEEP"
+              continue
+            }
+            while IFS= read -r f; do
+              [ -z "$f" ] && continue
+              mkdir -p "$(dirname "$f")"
+              cp "$PROMOTE_SNAPSHOT/$f" "$f"
+              git add -f "$f"
+            done <<< "$PROMOTE_FILES"
+            # #2179 / task #40 — the promote-baseline job syncs the prose docs
+            # that embed the conformance number ATOMICALLY with the JSON, but the
+            # forced-refresh path (this step) historically committed only the JSON
+            # with [skip ci] and ran no CI. That left README/ROADMAP/CLAUDE/
+            # goal-graph drifted on main, which then FAILED the REQUIRED `quality`
+            # gate's "Conformance numbers in sync (#1522)" sub-check on every
+            # conformance-touching PR (blocked #1620/#1633). Regenerate the docs
+            # here, against the freshly re-anchored main + new JSON, and stage them
+            # so the JSON and its derived docs can NEVER land in separate commits.
+            # Run inside the loop (after re-anchor) so a push-race retry regenerates
+            # the docs against the advanced main rather than reusing stale output.
+            if [ -f scripts/sync-conformance-numbers.mjs ]; then
+              node scripts/sync-conformance-numbers.mjs || \
+                echo "WARN: sync-conformance-numbers failed (non-fatal) — docs may drift"
+              git add -f README.md ROADMAP.md CLAUDE.md plan/goals/goal-graph.md 2>/dev/null || true
+            fi
+            if git diff --cached --quiet; then
+              echo "Baseline already current on main after re-anchor — nothing to push."
+              PUSHED=1
+              break
+            fi
+            git commit -m "chore(test262): ${REFRESH_KIND} baseline refresh by ${ACTOR} — ${PASS}/${TOTAL} pass [skip ci]"
+            if git push deploykey HEAD:main; then
+              echo "Pushed ${REFRESH_KIND} baseline refresh to main via deploy key (${PASS}/${TOTAL} pass, attempt ${attempt})."
+              PUSHED=1
+              break
+            fi
+            echo "push race lost (attempt ${attempt}) — re-anchoring on latest main and retrying"
+            SLEEP=$((attempt * 5)); [ "$SLEEP" -gt 30 ] && SLEEP=30; sleep "$SLEEP"
+          done
+          if [ "$PUSHED" != "1" ]; then
+            echo "::error::Failed to push refreshed baseline to main after 14 attempts (persistent, not a transient race)."
+            exit 1
+          fi
+
+      - name: Trigger Pages deploy
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh workflow run deploy-pages.yml --ref main || true
+
+      - name: Upload merged reports
+        uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          retention-days: 1
+          name: emergency-merged-report
+          path: |
+            merged-reports/**
+          if-no-files-found: warn

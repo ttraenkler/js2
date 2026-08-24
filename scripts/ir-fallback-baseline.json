@@ -1,0 +1,14 @@
+{
+  "generated": "2026-08-03",
+  "unintended": {},
+  "deferred": {
+    "string-builder-candidate": 2
+  },
+  "postClaim": {
+    "build": {},
+    "verify": {},
+    "lower": {},
+    "backend-legality": {}
+  },
+  "moduleLevel": {}
+}

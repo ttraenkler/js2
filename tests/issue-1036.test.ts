@@ -1,0 +1,59 @@
+/**
+ * Issue #1036 — DisposableStack/AsyncDisposableStack property-chain access null trap
+ *
+ * Root cause: `lib.esnext.disposable.d.ts` was not included in the composite
+ * lib.d.ts assembled by src/checker/index.ts, so the TypeScript checker had no
+ * type information for DisposableStack/AsyncDisposableStack. Without type info,
+ * `staticTypeofForType` could not resolve `DisposableStack.prototype.method`
+ * and `compileIdentifier` fell through to the "unknown global" path, emitting
+ * `ref.null extern` + throw — which killed the rest of the test body as dead code.
+ *
+ * Fix: Added `lib.esnext.disposable.d.ts` to the libNames array in
+ * src/checker/index.ts so the checker picks up DisposableStackConstructor.
+ */
+import { describe, it, expect } from "vitest";
+import { compileAndRunResultObject } from "./helpers/compile.js";
+
+const compileAndRun = (src: string) => compileAndRunResultObject(src, true);
+
+describe("Issue #1036: DisposableStack property-chain access", () => {
+  it("typeof DisposableStack.prototype.defer === 'function'", async () => {
+    const r = await compileAndRun(`
+      export function test(): number {
+        return typeof DisposableStack.prototype.defer === "function" ? 1 : 0;
+      }
+    `);
+    expect(r.success).toBe(true);
+    expect(r.result).toBe(1);
+  });
+
+  it("DisposableStack.prototype.adopt.name === 'adopt'", async () => {
+    const r = await compileAndRun(`
+      export function test(): number {
+        return DisposableStack.prototype.adopt.name === "adopt" ? 1 : 0;
+      }
+    `);
+    expect(r.success).toBe(true);
+    expect(r.result).toBe(1);
+  });
+
+  it("DisposableStack.prototype.adopt.length === 2", async () => {
+    const r = await compileAndRun(`
+      export function test(): number {
+        return DisposableStack.prototype.adopt.length === 2 ? 1 : 0;
+      }
+    `);
+    expect(r.success).toBe(true);
+    expect(r.result).toBe(1);
+  });
+
+  it("AsyncDisposableStack.prototype.defer.name === 'defer'", async () => {
+    const r = await compileAndRun(`
+      export function test(): number {
+        return AsyncDisposableStack.prototype.defer.name === "defer" ? 1 : 0;
+      }
+    `);
+    expect(r.success).toBe(true);
+    expect(r.result).toBe(1);
+  });
+});

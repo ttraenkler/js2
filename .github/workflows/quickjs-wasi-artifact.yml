@@ -1,0 +1,256 @@
+# Build the QuickJS "boxed tier" WASI artifact (#4236), then exercise the
+# default QuickJS eval engine, membrane, and closure bridge that consume it
+# (#4238/#4245/#4307).
+#
+# NON-REQUIRED: it is not in the branch-protection ruleset (docs/ci-policy.md §7
+# stays at six required checks). Pull requests that touch the QuickJS artifact,
+# provider, membrane, parity gate, or this workflow get semantic coverage; the
+# path filter keeps unrelated PRs free of this long build. Manual dispatch plus
+# a weekly cron remain the artifact and semantic anti-rot floor.
+#
+# Modelled on the `runtime-eval-provider` job in test262-sharded.yml (#4013):
+# build one content-keyed wasm artifact centrally instead of in every consumer.
+#
+# What it produces (retention 30d, plus a content-hash cache entry):
+#   libquickjs.wasm  wasm32-wasip1 reactor module, ~1.01 MB / ~348 KB gzip.
+#                    Imports ONLY wasi_snapshot_preview1.{clock_time_get,
+#                    fd_close,fd_fdstat_get,fd_seek,fd_write}. Exports its
+#                    linear memory, malloc/free and the qjs_* wrapper ABI.
+#   qjs-abi.json     QuickJS tag/encoding constants read OUT of that module, so
+#                    codegen never hardcodes QuickJS-internal layouts.
+#   build-info.json  pinned refs + sizes + sha256.
+#
+# Runtime on a 4-core box: ~3 min cold (sysroot ~30 s, quickjs core ~20 s,
+# link ~1 s; the rest is clones + the builtins download).
+
+name: quickjs-wasi-artifact
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/quickjs-wasi-artifact.yml"
+      - ".github/workflows/test262-sharded.yml"
+      - "scripts/build-quickjs-eval-provider.mjs"
+      - "scripts/eval-engine-parity.mjs"
+      - "scripts/quickjs-artifact/**"
+      - "scripts/quickjs-eval-provider.mjs"
+      - "scripts/runtime-eval-provider.mjs"
+      - "scripts/run-test262-vitest.sh"
+      - "scripts/test262-import-object.mjs"
+      - "scripts/test262-worker.mjs"
+      - "src/codegen/expressions/runtime-eval-provider.ts"
+      - "tests/issue-4242-eval-engine-parity.test.ts"
+      - "tests/issue-4242-no-removal.test.ts"
+      - "tests/issue-4307-closure-carrier-wrap.test.ts"
+      - "tests/quickjs-eval-membrane.test.ts"
+      - "tests/quickjs-eval-provider.test.ts"
+  workflow_dispatch:
+    inputs:
+      quickjs_ng_ref:
+        description: quickjs-ng commit to build (default = the pinned v0.16.1)
+        required: false
+        default: "954dc53628e36891f93c359aa60895c2ae3dac6b"
+      opt:
+        description: "-O2 (fast, ~1.01 MB) or -Oz (~626 KB, ~23% slower)"
+        required: false
+        default: "-O2"
+  schedule:
+    # Weekly anti-rot sweep (#4238 hard-constraint 3). A `schedule` run supplies
+    # no `inputs`, so every use of them below falls back to the pinned default.
+    - cron: "17 4 * * 1"
+
+permissions:
+  contents: read
+
+env:
+  QUICKJS_NG_REF_DEFAULT: "954dc53628e36891f93c359aa60895c2ae3dac6b"
+  OPT_DEFAULT: "-O2"
+
+concurrency:
+  # Long build, and the artifact is content-keyed, so let a newer dispatch win.
+  group: quickjs-wasi-artifact-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: build libquickjs.wasm (wasm32-wasip1)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    outputs:
+      hash: ${{ steps.key.outputs.hash }}
+      artifact_key: ${{ steps.key.outputs.artifact_key }}
+      quickjs_ng_ref: ${{ steps.key.outputs.quickjs_ng_ref }}
+      opt: ${{ steps.key.outputs.opt }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Setup Node and pnpm (cached)
+        uses: ./.github/actions/setup-node-pnpm
+
+      # The cache key is the CONTENT of everything that determines the output:
+      # the pinned upstream refs, the shim, the build script, the opt level and
+      # the compiler version. A hit means the artifact is already exactly this.
+      - name: Compute content hash
+        id: key
+        run: |
+          set -euo pipefail
+          QJS_REF="${{ inputs.quickjs_ng_ref || env.QUICKJS_NG_REF_DEFAULT }}"
+          QJS_OPT="${{ inputs.opt || env.OPT_DEFAULT }}"
+          ARTIFACT_KEY="$(QUICKJS_NG_REF="$QJS_REF" OPT="$QJS_OPT" node --input-type=module -e '
+            import { quickjsArtifactCacheKey } from "./scripts/quickjs-eval-provider.mjs";
+            process.stdout.write(quickjsArtifactCacheKey());
+          ')"
+          CLANG_V="$(clang-18 --version | head -1)"
+          # `quickjsArtifactCacheKey()` is the provider's canonical identity:
+          # quickjs-ng + wasi-libc refs, builtins URL, OPT, shim and build
+          # script. Fold the compiler version into the Actions cache identity
+          # as an additional build-environment input.
+          HASH="$(printf '%s|%s' "$ARTIFACT_KEY" "$CLANG_V" | sha256sum | cut -d' ' -f1)"
+          echo "hash=$HASH" >> "$GITHUB_OUTPUT"
+          echo "artifact_key=$ARTIFACT_KEY" >> "$GITHUB_OUTPUT"
+          echo "quickjs_ng_ref=$QJS_REF" >> "$GITHUB_OUTPUT"
+          echo "opt=$QJS_OPT" >> "$GITHUB_OUTPUT"
+          echo "provider artifact key: $ARTIFACT_KEY"
+          echo "Actions cache key: $HASH"
+
+      - name: Restore built artifact
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: .tmp/quickjs-artifact
+          key: quickjs-wasi-${{ steps.key.outputs.hash }}
+
+      - name: Install wasm toolchain
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          # clang 18 + lld give us wasm32; the wasm32 compiler-rt builtins are
+          # NOT packaged and are fetched from a wasi-sdk release by build.sh.
+          sudo apt-get install -y clang-18 lld-18 llvm-18 cmake
+          clang-18 --version
+
+      - name: Build artifact
+        if: steps.cache.outputs.cache-hit != 'true'
+        env:
+          QUICKJS_NG_REF: ${{ inputs.quickjs_ng_ref || env.QUICKJS_NG_REF_DEFAULT }}
+          OPT: ${{ inputs.opt || env.OPT_DEFAULT }}
+          JOBS: "4"
+        run: bash scripts/quickjs-artifact/build.sh
+
+      # Guard rails: the ENTIRE point of this artifact over the emscripten build
+      # the #4236 spike used is that it needs no JS host. An `env.*` import would
+      # silently reintroduce that dependency, so fail the build on it.
+      - name: Verify standalone (no env.* / no emscripten imports)
+        run: |
+          set -euo pipefail
+          node --input-type=module -e '
+            import { readFileSync } from "node:fs";
+            import {
+              assertQuickjsArtifactExports,
+              assertQuickjsArtifactStandalone,
+            } from "./scripts/quickjs-eval-provider.mjs";
+            const binary = readFileSync(".tmp/quickjs-artifact/libquickjs.wasm");
+            const m = assertQuickjsArtifactStandalone(binary);
+            assertQuickjsArtifactExports(m);
+            const imports = WebAssembly.Module.imports(m);
+            const exports = new Set(WebAssembly.Module.exports(m).map((e) => e.name));
+            const missing = ["memory", "malloc", "free"].filter((n) => !exports.has(n));
+            console.log("imports:", imports.map((i) => `${i.module}.${i.name}`).join(", "));
+            if (missing.length) { console.error("MISSING EXPORTS:", missing); process.exit(1); }
+            console.log("standalone + current adapter ABI OK");
+          '
+
+      - name: Report sizes and ABI
+        run: |
+          cat .tmp/quickjs-artifact/build-info.json
+          cat .tmp/quickjs-artifact/qjs-abi.json
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: quickjs-wasi-${{ steps.key.outputs.hash }}
+          path: |
+            .tmp/quickjs-artifact/libquickjs.wasm
+            .tmp/quickjs-artifact/qjs-abi.json
+            .tmp/quickjs-artifact/build-info.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30
+
+  # ---------------------------------------------------------------------------
+  # #4238/#4245/#4307 — the default QuickJS eval-engine lane.
+  #
+  # NON-REQUIRED by construction (see the header). It compiles the GC adapter
+  # against the artifact this run just produced and runs the scoped eval suite
+  # under `JS2WASM_EVAL_ENGINE=quickjs`, so the default path cannot rot.
+  #
+  # It ALSO runs interpreter-tier proof suites with the engine selected
+  # explicitly, so the kept native bytecode engine cannot rot behind the flip.
+  eval-provider-lane:
+    name: quickjs eval-engine lane (non-required)
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      # Keep the provider's content key aligned with the artifact that the
+      # build job actually produced, including non-default manual dispatches.
+      QUICKJS_NG_REF: ${{ needs.build.outputs.quickjs_ng_ref }}
+      OPT: ${{ needs.build.outputs.opt }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Setup Node and pnpm (cached)
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Download libquickjs.wasm
+        uses: actions/download-artifact@v6
+        with:
+          name: quickjs-wasi-${{ needs.build.outputs.hash }}
+          path: .tmp/quickjs-artifact
+
+      - name: Build the quickjs eval provider (artifact + GC adapter)
+        env:
+          # The selector NEVER builds, so the artifact is handed in explicitly;
+          # this also skips the ~3 min rebuild the acquisition order would
+          # otherwise attempt when the keyed cache dir is cold.
+          JS2WASM_QUICKJS_ARTIFACT_DIR: .tmp/quickjs-artifact
+        run: node --import tsx scripts/build-quickjs-eval-provider.mjs
+
+      - name: Verify the distributable provider cache (no builds allowed)
+        run: node --import tsx scripts/build-quickjs-eval-provider.mjs --require-cache
+
+      - name: Run all QuickJS semantic suites and parity-gate tests
+        env:
+          JS2WASM_EVAL_ENGINE: quickjs
+          JS2WASM_QUICKJS_ARTIFACT_DIR: .tmp/quickjs-artifact
+        run: |
+          npx vitest run \
+            tests/quickjs-eval-provider.test.ts \
+            tests/quickjs-eval-membrane.test.ts \
+            tests/issue-4307-closure-carrier-wrap.test.ts \
+            tests/issue-4242-eval-engine-parity.test.ts \
+            tests/issue-4242-no-removal.test.ts
+
+      - name: Kept native interpreter path remains selectable
+        env:
+          JS2WASM_EVAL_ENGINE: interpreter
+        run: |
+          npx vitest run \
+            tests/issue-2928-refusal-provider.test.ts \
+            tests/issue-2960.test.ts \
+            tests/issue-2928-e6-provider-cache.test.ts \
+            tests/issue-1102.test.ts \
+            tests/issue-4162.test.ts \
+            tests/issue-2657-raw-wasi-fd-import.test.ts

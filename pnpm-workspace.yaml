@@ -1,0 +1,12 @@
+onlyBuiltDependencies:
+  - '@biomejs/biome'
+  - bun
+  - deno
+  - esbuild
+
+supportedArchitectures:
+  os:
+    - current
+  cpu:
+    - arm64
+    - x64

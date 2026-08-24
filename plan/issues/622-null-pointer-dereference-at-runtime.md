@@ -1,0 +1,87 @@
+---
+id: 622
+title: "Null pointer dereference at runtime (707 FAIL)"
+status: done
+created: 2026-03-19
+updated: 2026-04-14
+completed: 2026-03-19
+priority: high
+feasibility: medium
+goal: crash-free
+sprint: 0
+required_by: [647]
+test262_fail: 707
+files:
+  src/codegen/index.ts:
+    breaking:
+      - "null pointer dereference on struct access — missing null guards"
+  src/codegen/expressions.ts:
+    breaking:
+      - "pushDefaultValue emits ref.as_non_null on ref.null for ref params"
+---
+# #622 — Null pointer dereference at runtime (707 FAIL)
+
+## Status: in-review
+707 tests fail with "RuntimeError: dereferencing a null pointer" — struct.get/struct.set on a null reference at runtime.
+
+### Root cause
+Class method, constructor, and setter parameters with default values were typed as
+non-nullable `ref N` in the Wasm function signature. When callers omitted the argument,
+`pushDefaultValue` emitted `ref.null N` + `ref.as_non_null`, which traps immediately
+because the ref is null. This happened before the callee's default-value initialization
+code could run.
+
+Standalone functions already had the fix (widening `ref` to `ref_null` for params with
+initializers), but class members did not.
+
+Additionally, `destructureParamObject` lacked a null guard — unlike
+`destructureParamArray`, it did not wrap its struct.get operations in an
+`if (not null)` block.
+
+### Fix
+1. In all class member parameter registration paths (method type placeholders,
+   constructor, setter, and method compilation), widen `ref` to `ref_null` when
+   the parameter has an `initializer` (default value).
+2. Add a null guard to `destructureParamObject` following the same pattern as
+   `destructureParamArray`: pre-allocate binding locals, wrap destructuring in
+   `if (ref.is_null) then [] else [struct.get ...]`.
+
+## Complexity: M
+
+## Implementation Summary
+
+### What was done
+- Widened parameter types from `ref` to `ref_null` for parameters with default
+  values in 6 locations in `src/codegen/index.ts`:
+  - Method type placeholder registration (line ~7828)
+  - Constructor type placeholder registration (line ~7765)
+  - Setter type placeholder registration (line ~7924)
+  - Constructor compilation (line ~9463)
+  - Method compilation (line ~9740)
+  - Setter compilation (line ~10021)
+- Added null guard to `destructureParamObject` with pre-allocation of binding
+  locals and if-not-null wrapping of struct.get operations.
+- Added test file `tests/null-pointer-deref.test.ts` with 4 test cases.
+- Added `tests/null-destructure-param-object.test.ts`, verifying no crash on
+  undefined object destructuring params.
+
+### Files changed
+- `src/codegen/index.ts` — param type widening + destructureParamObject null guard
+- `tests/null-pointer-deref.test.ts` — new test file
+- `tests/null-destructure-param-object.test.ts` — null object destructuring guard
+  coverage
+
+### What worked
+- Standalone functions already had the `ref` -> `ref_null` widening for default
+  params; the fix was applying the same pattern to class members.
+- The `destructureParamArray` null guard pattern was directly reusable for
+  `destructureParamObject`. When a nullable parameter is null, destructuring is
+  skipped and binding locals keep their zero-initialized defaults.
+- This prevents the "RuntimeError: dereferencing a null pointer" crash for the
+  test262 cases that pass undefined/null to functions with object destructuring
+  parameters.
+
+### What didn't work
+- Initial approach of adding null guards only to struct.get sites was too broad
+  (hundreds of sites). The root cause was the parameter type itself, not the
+  access sites.

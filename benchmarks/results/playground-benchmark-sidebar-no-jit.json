@@ -1,0 +1,98 @@
+[
+  {
+    "path": "examples/benchmarks/fib.ts",
+    "wasmOptimized": true,
+    "wasmOptimizeLevel": 4,
+    "mode": "no-jit",
+    "jsFlags": [
+      "--jitless",
+      "--no-opt",
+      "--no-turbofan",
+      "--no-sparkplug",
+      "--no-maglev"
+    ],
+    "wasmFlags": [
+      "--no-wasm-tier-up",
+      "--liftoff"
+    ],
+    "wasmUs": 4228.604263888889,
+    "jsUs": 81161.10879999996,
+    "wasmStdUs": 4.534651147982888,
+    "jsStdUs": 2575.5090185481968,
+    "ratioStd": 0.6148393328777729,
+    "warmupRounds": 2,
+    "measuredRounds": 9
+  },
+  {
+    "path": "examples/benchmarks/loop.ts",
+    "wasmOptimized": true,
+    "wasmOptimizeLevel": 4,
+    "mode": "no-jit",
+    "jsFlags": [
+      "--jitless",
+      "--no-opt",
+      "--no-turbofan",
+      "--no-sparkplug",
+      "--no-maglev"
+    ],
+    "wasmFlags": [
+      "--no-wasm-tier-up",
+      "--liftoff"
+    ],
+    "wasmUs": 179.95849458483758,
+    "jsUs": 16642.5624090909,
+    "wasmStdUs": 0.3311939844555668,
+    "jsStdUs": 393.0675502701436,
+    "ratioStd": 2.1695141386971843,
+    "warmupRounds": 2,
+    "measuredRounds": 9
+  },
+  {
+    "path": "examples/benchmarks/string.ts",
+    "wasmOptimized": true,
+    "wasmOptimizeLevel": 4,
+    "mode": "no-jit",
+    "jsFlags": [
+      "--jitless",
+      "--no-opt",
+      "--no-turbofan",
+      "--no-sparkplug",
+      "--no-maglev"
+    ],
+    "wasmFlags": [
+      "--no-wasm-tier-up",
+      "--liftoff"
+    ],
+    "wasmUs": 0.11999352233129418,
+    "jsUs": 20.407632804895005,
+    "wasmStdUs": 0.000540931387468091,
+    "jsStdUs": 0.6112151807216026,
+    "ratioStd": 5.5313776355022855,
+    "warmupRounds": 2,
+    "measuredRounds": 9
+  },
+  {
+    "path": "examples/benchmarks/array.ts",
+    "wasmOptimized": true,
+    "wasmOptimizeLevel": 4,
+    "mode": "no-jit",
+    "jsFlags": [
+      "--jitless",
+      "--no-opt",
+      "--no-turbofan",
+      "--no-sparkplug",
+      "--no-maglev"
+    ],
+    "wasmFlags": [
+      "--no-wasm-tier-up",
+      "--liftoff"
+    ],
+    "wasmUs": 18.075539716175445,
+    "jsUs": 513.5652727272724,
+    "wasmStdUs": 0.10587534098170374,
+    "jsStdUs": 5.77967946390668,
+    "ratioStd": 0.32810149232658586,
+    "warmupRounds": 2,
+    "measuredRounds": 9
+  }
+]

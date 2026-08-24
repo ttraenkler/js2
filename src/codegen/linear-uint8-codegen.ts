@@ -1,0 +1,484 @@
+// Copyright (c) 2026 Loopdive GmbH. Licensed under Apache-2.0 WITH LLVM-exception.
+/**
+ * #1886 — codegen for linear-backed `Uint8Array` buffers.
+ *
+ * A buffer proven linear-safe by the #1886 analysis (`ctx.linearUint8`, Slice A)
+ * is represented as a `(ptr, len)` pair of i32 locals rather than a WasmGC vec
+ * struct. This module owns the per-function buffer registry
+ * (`fctx.linearU8Buffers`) and the small emit helpers the four wiring sites call:
+ *
+ *   - `tryEmitLinearU8New`  — `new Uint8Array(n)` / `new Uint8Array([..])` →
+ *     bind `(ptr=__lin_u8_alloc(n), len=n)` instead of `array.new_default`.
+ *   - `tryEmitLinearU8ElementGet` — `b[i]` → `i32.load8_u (ptr+i)` widened to f64
+ *     (the observable element value type the GC path also returns).
+ *   - `tryEmitLinearU8ElementSet` — `b[i] = v` → `i32.store8 (ptr+i), trunc(v)`.
+ *   - `tryEmitLinearU8Length` — `b.length` → `len` widened to f64.
+ *
+ * All entry points are **additive guards**: they return `false`/`null` unless
+ * the receiver is a registered linear-safe buffer, so any other `Uint8Array`
+ * (escaping, non-WASI, or not bound here) falls through to the existing GC path
+ * unchanged.
+ */
+import type { Instr, ValType } from "../ir/types.js";
+import { ts } from "../ts-api.js";
+import { allocLocal } from "./context/locals.js";
+import type { CodegenContext, FunctionContext } from "./context/types.js";
+import { ensureLinearU8AllocHelper, ensureWasiFdWriteAllHelper } from "./index.js";
+import {
+  getLinearU8Buffer as lookupLinearU8Buffer,
+  isLinearU8SafeBinding,
+  isLinearU8RepresentableNew,
+  registerLinearU8Buffer,
+} from "./linear-uint8-signatures.js";
+import { compileExpression, VOID_RESULT } from "./shared.js";
+import type { InnerResult } from "./shared.js";
+
+/**
+ * True when this `Uint8Array` binding is proven linear-safe by the #1886
+ * analysis. Slice C rewrites matching function params to `(ptr,len)`, so the
+ * codegen can consume the full safe set rather than Slice B's local-only
+ * subset. Returns false outside WASI or when the analysis did not run.
+ */
+export function isLinearSafeBinding(ctx: CodegenContext, node: ts.Node): boolean {
+  return isLinearU8SafeBinding(ctx, node);
+}
+
+/**
+ * Local allocation is still tied to `new Uint8Array(...)` bindings. Parameters
+ * become linear-backed when Slice C registers their source name as a `(ptr,len)`
+ * pair in the function body. For locals we additionally require the declaration
+ * to be a `VariableDeclaration` whose initializer is a length-or-literal
+ * `new Uint8Array(...)` (not a buffer view).
+ */
+function isLocalLinearNewBinding(ctx: CodegenContext, nameNode: ts.Identifier): boolean {
+  if (!isLinearSafeBinding(ctx, nameNode)) return false;
+  const sym = ctx.checker.getSymbolAtLocation(nameNode);
+  const decls = sym?.getDeclarations() ?? [];
+  return decls.some(
+    (d) =>
+      ts.isVariableDeclaration(d) &&
+      !!d.initializer &&
+      ts.isNewExpression(d.initializer) &&
+      ts.isIdentifier(d.initializer.expression) &&
+      d.initializer.expression.text === "Uint8Array" &&
+      isLinearU8RepresentableNew(ctx, d.initializer),
+  );
+}
+
+/**
+ * `new Uint8Array(n)` / `new Uint8Array([a,b,…])` for a linear-safe local being
+ * declared as `nameNode`. Allocates `(ptr, len)` i32 locals, calls
+ * `__lin_u8_alloc(n)`, and (for the array-literal form) stores the literal
+ * bytes. Registers the buffer in `fctx.linearU8Buffers` and leaves NOTHING on
+ * the value stack (the binding lives in the two i32 locals). Returns true if it
+ * handled the `new`; false to fall through to the GC path.
+ *
+ * Caller contract: invoked from the variable-declaration lowering for a
+ * `const/let x = new Uint8Array(...)` where `isLocalLinearNewBinding(x)` holds.
+ */
+export function tryEmitLinearU8New(
+  ctx: CodegenContext,
+  fctx: FunctionContext,
+  nameNode: ts.Identifier,
+  newExpr: ts.NewExpression,
+): boolean {
+  if (!isLocalLinearNewBinding(ctx, nameNode)) return false;
+  const allocIdx = ensureLinearU8AllocHelper(ctx);
+  if (allocIdx < 0) return false;
+
+  const args = newExpr.arguments ?? ([] as unknown as ts.NodeArray<ts.Expression>);
+  const ptrLocal = allocLocal(fctx, `__linu8_ptr_${fctx.locals.length}`, { kind: "i32" });
+  const lenLocal = allocLocal(fctx, `__linu8_len_${fctx.locals.length}`, { kind: "i32" });
+
+  // Array-literal form: `new Uint8Array([a, b, c])` — length = element count,
+  // then store each (constant or computed) byte.
+  if (args.length === 1 && ts.isArrayLiteralExpression(args[0]!)) {
+    const elems = args[0]!.elements;
+    fctx.body.push({ op: "i32.const", value: elems.length });
+    fctx.body.push({ op: "local.set", index: lenLocal });
+    fctx.body.push({ op: "i32.const", value: elems.length });
+    fctx.body.push({ op: "call", funcIdx: allocIdx });
+    fctx.body.push({ op: "local.set", index: ptrLocal });
+    elems.forEach((el, i) => {
+      // address = ptr + i
+      fctx.body.push({ op: "local.get", index: ptrLocal });
+      if (i > 0) {
+        fctx.body.push({ op: "i32.const", value: i });
+        fctx.body.push({ op: "i32.add" });
+      }
+      // value = trunc(elem) — element expr compiled in f64 then truncated to a byte.
+      compileExpression(ctx, fctx, el, { kind: "f64" });
+      fctx.body.push({ op: "i32.trunc_sat_f64_s" });
+      fctx.body.push({ op: "i32.store8", align: 0, offset: 0 });
+    });
+    registerBuffer(ctx, fctx, nameNode, ptrLocal, lenLocal);
+    return true;
+  }
+
+  // Length form: `new Uint8Array(n)` (or `new Uint8Array()` ⇒ 0).
+  if (args.length >= 1) {
+    compileExpression(ctx, fctx, args[0]!, { kind: "f64" });
+    fctx.body.push({ op: "i32.trunc_sat_f64_s" });
+  } else {
+    fctx.body.push({ op: "i32.const", value: 0 });
+  }
+  fctx.body.push({ op: "local.set", index: lenLocal });
+  // ptr = __lin_u8_alloc(len)
+  fctx.body.push({ op: "local.get", index: lenLocal });
+  fctx.body.push({ op: "call", funcIdx: allocIdx });
+  fctx.body.push({ op: "local.set", index: ptrLocal });
+  registerBuffer(ctx, fctx, nameNode, ptrLocal, lenLocal);
+  return true;
+}
+
+/**
+ * Register a linear-backed buffer under the binding's `ts.Symbol` (#2045).
+ * Falls back to a no-op when the identifier has no resolvable symbol — codegen
+ * then leaves the binding on the GC path, which is sound (never silent
+ * corruption).
+ */
+function registerBuffer(
+  ctx: CodegenContext,
+  fctx: FunctionContext,
+  nameNode: ts.Identifier,
+  ptrLocalIdx: number,
+  lenLocalIdx: number,
+): void {
+  const sym = ctx.checker.getSymbolAtLocation(nameNode);
+  if (!sym) return;
+  registerLinearU8Buffer(fctx, sym, ptrLocalIdx, lenLocalIdx);
+}
+
+/**
+ * `b[i]` read for a linear-backed buffer → `i32.load8_u (ptr + trunc(i))`,
+ * widened to f64 to match the observable element value type the GC path
+ * returns. Returns the result ValType, or `null` if `b` is not linear-backed.
+ */
+export function tryEmitLinearU8ElementGet(
+  ctx: CodegenContext,
+  fctx: FunctionContext,
+  expr: ts.ElementAccessExpression,
+): ValType | null {
+  const buf = lookupLinearU8Buffer(ctx, fctx, expr.expression);
+  if (!buf) return null;
+  // idx = trunc(index), stored once so the bounds check and the address
+  // computation observe the same value (and side-effecting index exprs run once).
+  const idxLocal = allocLocal(fctx, `__linu8_gidx_${fctx.locals.length}`, { kind: "i32" });
+  compileExpression(ctx, fctx, expr.argumentExpression, { kind: "f64" });
+  fctx.body.push({ op: "i32.trunc_sat_f64_s" });
+  fctx.body.push({ op: "local.set", index: idxLocal });
+  // #2045 A.2: bounds-check like the GC path. An unchecked OOB read silently
+  // returned arbitrary linear memory (iovec scratch, string data, a caller's
+  // buffer under Slice C); trap instead.
+  emitLinearU8BoundsCheck(fctx, idxLocal, buf.lenLocalIdx);
+  // address = ptr + idx
+  fctx.body.push({ op: "local.get", index: buf.ptrLocalIdx });
+  fctx.body.push({ op: "local.get", index: idxLocal });
+  fctx.body.push({ op: "i32.add" });
+  fctx.body.push({ op: "i32.load8_u", align: 0, offset: 0 });
+  fctx.body.push({ op: "f64.convert_i32_u" });
+  return { kind: "f64" };
+}
+
+/**
+ * #2045 A.2 — emit a `idx (u32) >= len → unreachable` guard before a linear
+ * element access, matching the WasmGC array path which traps on OOB. The index
+ * is compared as unsigned so a negative (huge-u32) index also traps.
+ *
+ * `idxLocal` holds the truncated i32 index; `lenLocalIdx` the buffer length.
+ * On out-of-range the module traps (`unreachable`) — the same observable
+ * outcome as the GC `array.get`/`array.set` bounds trap. A provably in-range
+ * constant index could elide this, but I keep it unconditional for soundness;
+ * the cost is one compare + branch per element access.
+ */
+function emitLinearU8BoundsCheck(fctx: FunctionContext, idxLocal: number, lenLocalIdx: number): void {
+  fctx.body.push({ op: "local.get", index: idxLocal });
+  fctx.body.push({ op: "local.get", index: lenLocalIdx });
+  fctx.body.push({ op: "i32.ge_u" });
+  fctx.body.push({
+    op: "if",
+    blockType: { kind: "empty" },
+    then: [{ op: "unreachable" }],
+  });
+}
+
+/**
+ * `b[i] = v` for a linear-backed buffer → `i32.store8 (ptr + trunc(i)),
+ * trunc(v) & 0xff`, leaving **nothing** on the stack and returning
+ * `VOID_RESULT`. Returns `null` if `b` is not a linear-backed buffer (caller
+ * falls through to GC).
+ *
+ * The assignment compiles as a statement (the common case — e.g. the
+ * native-messaging frame builder writes `buf[i] = (buf[i] + 1) & 255`). Unlike
+ * the GC `array.set` path, this does NOT push the assigned value as the
+ * expression result: `x = buf[i] = v` value-of-assignment is not yet supported
+ * for linear-backed buffers (out of scope for the I/O-buffer workloads this
+ * targets — the analysis only admits buffers that never appear as a bare
+ * identifier). See the `return VOID_RESULT` note below for why pushing the value
+ * broke void-function completion.
+ *
+ * Evaluation order matches JS + the GC path: index expression first, then the
+ * value expression, then the store.
+ */
+export function tryEmitLinearU8ElementSet(
+  ctx: CodegenContext,
+  fctx: FunctionContext,
+  target: ts.ElementAccessExpression,
+  valueExpr: ts.Expression,
+): InnerResult {
+  const buf = lookupLinearU8Buffer(ctx, fctx, target.expression);
+  if (!buf) return null;
+  // Allocate the result/addr temps up-front so their slot indices are fixed
+  // before the nested index/value sub-expressions compile (those allocate their
+  // own temps as they go). Each sub-expression is fully evaluated into a temp
+  // before the next is compiled, so no stash ever interleaves with another
+  // expression's temp usage on the value stack (#1886).
+  const idxLocal = allocLocal(fctx, `__linu8_sidx_${fctx.locals.length}`, { kind: "i32" });
+  const addrLocal = allocLocal(fctx, `__linu8_addr_${fctx.locals.length}`, { kind: "i32" });
+  const valLocal = allocLocal(fctx, `__linu8_val_${fctx.locals.length}`, { kind: "f64" });
+
+  // idx = trunc(index)  (index evaluated first, per JS + the GC path)
+  compileExpression(ctx, fctx, target.argumentExpression, { kind: "f64" });
+  fctx.body.push({ op: "i32.trunc_sat_f64_s" });
+  fctx.body.push({ op: "local.set", index: idxLocal });
+  // #2045 A.2: bounds-check BEFORE evaluating the value, so an OOB write traps
+  // (like the GC path) rather than scribbling into a caller's linear memory.
+  // The check precedes value evaluation to match the GC array.set trap order.
+  emitLinearU8BoundsCheck(fctx, idxLocal, buf.lenLocalIdx);
+  // addr = ptr + idx
+  fctx.body.push({ op: "local.get", index: buf.ptrLocalIdx });
+  fctx.body.push({ op: "local.get", index: idxLocal });
+  fctx.body.push({ op: "i32.add" });
+  fctx.body.push({ op: "local.set", index: addrLocal });
+  // val = v (kept as f64 for the assignment-expression result)
+  compileExpression(ctx, fctx, valueExpr, { kind: "f64" });
+  fctx.body.push({ op: "local.set", index: valLocal });
+  // mem[addr] = (u8) trunc(val) — low byte kept by i32.store8.
+  fctx.body.push({ op: "local.get", index: addrLocal });
+  fctx.body.push({ op: "local.get", index: valLocal });
+  fctx.body.push({ op: "i32.trunc_sat_f64_s" });
+  fctx.body.push({ op: "i32.store8", align: 0, offset: 0 });
+  // Leave NOTHING on the stack and return VOID_RESULT: `buf[i] = v` compiles as
+  // a statement (the common case, e.g. the native-messaging frame builder). The
+  // assigned value lives in `valLocal` if a value-context caller ever needs it,
+  // but pushing it here as the expression result and letting the statement
+  // wrapper drop it created a `local.get;drop` pair that the peephole removed —
+  // which then left the function/module completion-value tracker owing an
+  // unpaired `ref.null extern` at the end of a void function (invalid wasm,
+  // #1886). Returning VOID_RESULT keeps the body balanced. (`x = buf[i] = v`
+  // value-of-assignment is not yet supported for linear-backed buffers — out of
+  // scope for the I/O-buffer workloads this targets; tracked for a follow-up.)
+  return VOID_RESULT;
+}
+
+/**
+ * #2045 C.8 — compound element write `b[i] op= rhs` (`+=`, `++`, `--`, …) for a
+ * linear-backed buffer → read-modify-write at a single computed address.
+ *
+ * Without this, `compileElementCompoundAssignment` compiled the buffer
+ * expression as a value (materialising the GC representation) and wrote the
+ * result back through the externref/GC path — which never touched the linear
+ * memory, so `b[0] += 1` silently kept the old byte (read 5, computed 6, stored
+ * nowhere). This emits the same `i32.load8_u` read and `i32.store8` write as the
+ * plain get/set, sharing one `addr = ptr + trunc(i)` so the index is evaluated
+ * once and the read and write hit the same byte.
+ *
+ * `emitOp` is invoked with the current element value already on the stack as
+ * f64; it must push the rhs and emit the compound operator, leaving the result
+ * f64 on the stack (the caller passes a closure over `emitCompoundOp` + the rhs
+ * expression to avoid an assignment.ts↔linear-uint8-codegen.ts import cycle).
+ *
+ * Leaves the **assigned f64 value** on the stack and returns `{kind:"f64"}` so
+ * `b[i] op= rhs` works in both statement and expression position (matching the
+ * GC/externref compound paths, which also push the result). Note the value is
+ * the full f64 result, not the truncated stored byte — same as the GC array
+ * path's compound result. Returns `null` if `b` is not a linear-backed buffer.
+ */
+export function tryEmitLinearU8ElementCompound(
+  ctx: CodegenContext,
+  fctx: FunctionContext,
+  target: ts.ElementAccessExpression,
+  emitOp: () => void,
+): ValType | null {
+  const buf = lookupLinearU8Buffer(ctx, fctx, target.expression);
+  if (!buf) return null;
+
+  const idxLocal = allocLocal(fctx, `__linu8_cidx_${fctx.locals.length}`, { kind: "i32" });
+  const addrLocal = allocLocal(fctx, `__linu8_caddr_${fctx.locals.length}`, { kind: "i32" });
+
+  // idx = trunc(index); evaluate the index once (JS + GC order), bounds-check.
+  compileExpression(ctx, fctx, target.argumentExpression, { kind: "f64" });
+  fctx.body.push({ op: "i32.trunc_sat_f64_s" });
+  fctx.body.push({ op: "local.set", index: idxLocal });
+  emitLinearU8BoundsCheck(fctx, idxLocal, buf.lenLocalIdx);
+  // addr = ptr + idx (shared by the read and the write).
+  fctx.body.push({ op: "local.get", index: buf.ptrLocalIdx });
+  fctx.body.push({ op: "local.get", index: idxLocal });
+  fctx.body.push({ op: "i32.add" });
+  fctx.body.push({ op: "local.set", index: addrLocal });
+
+  // result = (f64) mem[addr]  op  rhs
+  fctx.body.push({ op: "local.get", index: addrLocal });
+  fctx.body.push({ op: "i32.load8_u", align: 0, offset: 0 });
+  fctx.body.push({ op: "f64.convert_i32_u" });
+  emitOp(); // pushes rhs, emits the compound op → result f64 on the stack
+  const valLocal = allocLocal(fctx, `__linu8_cval_${fctx.locals.length}`, { kind: "f64" });
+  fctx.body.push({ op: "local.set", index: valLocal });
+  // mem[addr] = (u8) trunc(result)
+  fctx.body.push({ op: "local.get", index: addrLocal });
+  fctx.body.push({ op: "local.get", index: valLocal });
+  fctx.body.push({ op: "i32.trunc_sat_f64_s" });
+  fctx.body.push({ op: "i32.store8", align: 0, offset: 0 });
+  // Push the (untruncated) assigned value as the expression result, matching the
+  // GC/externref compound paths.
+  fctx.body.push({ op: "local.get", index: valLocal });
+  return { kind: "f64" };
+}
+
+/**
+ * #2045 C.8 — prefix/postfix `++`/`--` on a linear-backed element
+ * (`b[i]++`, `++b[i]`, `b[i]--`, `--b[i]`) → read-modify-write at one address.
+ *
+ * The generic prefix/postfix element handlers begin with
+ * `compileExpression(target.expression)` and require a `ref`/`ref_null` array —
+ * a linear buffer is a `(ptr,len)` pair, so they error/throw. This emits the
+ * linear read-modify-write directly: load `b[i]`, add/sub 1, store the low byte,
+ * and leave the **old** value (postfix) or the **new** value (prefix) on the
+ * stack as f64 — matching JS update-expression semantics. Returns `null` if `b`
+ * is not a linear-backed buffer (caller falls through to the GC handlers).
+ */
+export function tryEmitLinearU8ElementUpdate(
+  ctx: CodegenContext,
+  fctx: FunctionContext,
+  target: ts.ElementAccessExpression,
+  isIncrement: boolean,
+  isPrefix: boolean,
+): ValType | null {
+  const buf = lookupLinearU8Buffer(ctx, fctx, target.expression);
+  if (!buf) return null;
+
+  const idxLocal = allocLocal(fctx, `__linu8_uidx_${fctx.locals.length}`, { kind: "i32" });
+  const addrLocal = allocLocal(fctx, `__linu8_uaddr_${fctx.locals.length}`, { kind: "i32" });
+  const oldLocal = allocLocal(fctx, `__linu8_uold_${fctx.locals.length}`, { kind: "f64" });
+  const newLocal = allocLocal(fctx, `__linu8_unew_${fctx.locals.length}`, { kind: "f64" });
+
+  // idx = trunc(index) (once), bounds-check, addr = ptr + idx.
+  compileExpression(ctx, fctx, target.argumentExpression, { kind: "f64" });
+  fctx.body.push({ op: "i32.trunc_sat_f64_s" });
+  fctx.body.push({ op: "local.set", index: idxLocal });
+  emitLinearU8BoundsCheck(fctx, idxLocal, buf.lenLocalIdx);
+  fctx.body.push({ op: "local.get", index: buf.ptrLocalIdx });
+  fctx.body.push({ op: "local.get", index: idxLocal });
+  fctx.body.push({ op: "i32.add" });
+  fctx.body.push({ op: "local.set", index: addrLocal });
+
+  // old = (f64) mem[addr]
+  fctx.body.push({ op: "local.get", index: addrLocal });
+  fctx.body.push({ op: "i32.load8_u", align: 0, offset: 0 });
+  fctx.body.push({ op: "f64.convert_i32_u" });
+  fctx.body.push({ op: "local.set", index: oldLocal });
+  // new = old ± 1
+  fctx.body.push({ op: "local.get", index: oldLocal });
+  fctx.body.push({ op: "f64.const", value: 1 });
+  fctx.body.push({ op: isIncrement ? "f64.add" : "f64.sub" });
+  fctx.body.push({ op: "local.set", index: newLocal });
+  // mem[addr] = (u8) trunc(new)
+  fctx.body.push({ op: "local.get", index: addrLocal });
+  fctx.body.push({ op: "local.get", index: newLocal });
+  fctx.body.push({ op: "i32.trunc_sat_f64_s" });
+  fctx.body.push({ op: "i32.store8", align: 0, offset: 0 });
+  // Result: prefix → new value, postfix → old value (JS §13.4).
+  fctx.body.push({ op: "local.get", index: isPrefix ? newLocal : oldLocal });
+  return { kind: "f64" };
+}
+
+/** `b.length` for a linear-backed buffer → `len` widened to f64. */
+export function tryEmitLinearU8Length(
+  ctx: CodegenContext,
+  fctx: FunctionContext,
+  expr: ts.PropertyAccessExpression,
+): ValType | null {
+  if (expr.name.text !== "length") return null;
+  const buf = lookupLinearU8Buffer(ctx, fctx, expr.expression);
+  if (!buf) return null;
+  fctx.body.push({ op: "local.get", index: buf.lenLocalIdx });
+  fctx.body.push({ op: "f64.convert_i32_u" });
+  return { kind: "f64" };
+}
+
+/** Accessor used by the WASI I/O intrinsics to get a buffer's (ptr, len) locals. */
+export function getLinearU8Buffer(
+  ctx: CodegenContext,
+  fctx: FunctionContext,
+  node: ts.Node,
+): { ptrLocalIdx: number; lenLocalIdx: number } | undefined {
+  return lookupLinearU8Buffer(ctx, fctx, node);
+}
+
+/**
+ * Zero-copy `process.stdout/stderr.write(buf)` for a linear-backed buffer.
+ * `fd_write` reads straight from `ptr` for `len` bytes — no GC→linear staging
+ * copy. Returns `true` if handled (and leaves the i32 `1` write-result on the
+ * stack, matching the GC write path), `false` if `buf` is not linear-backed.
+ *
+ * `writeSinkIdx` is the func to call: `node:fs::writeSync(fd,ptr,len)` under the
+ * node shims, or `wasi_snapshot_preview1.fd_write` inline. `fd` is 1 (stdout) or
+ * 2 (stderr).
+ */
+export function tryEmitLinearU8StdWrite(
+  ctx: CodegenContext,
+  fctx: FunctionContext,
+  bufArg: ts.Expression,
+  writeSinkIdx: number,
+  fd: number,
+): boolean {
+  const buf = getLinearU8Buffer(ctx, fctx, bufArg);
+  if (!buf) return false;
+
+  // #2633 — under the node shims, the syscall + iovec live in the shim. The user
+  // module just hands `(fd, ptr, len)` to the imported `node:fs::writeSync` over
+  // the shared memory: zero staging copy, no iovec, no nwritten cell. `writeSync`
+  // returns bytes-written (i32) → drop to match the fd_write path's stack contract.
+  if (ctx.linkNodeShims) {
+    fctx.body.push({ op: "i32.const", value: fd });
+    fctx.body.push({ op: "local.get", index: buf.ptrLocalIdx });
+    fctx.body.push({ op: "local.get", index: buf.lenLocalIdx });
+    fctx.body.push({ op: "call", funcIdx: writeSinkIdx });
+    fctx.body.push({ op: "drop" });
+    return true;
+  }
+
+  // #2807 — route through the chunked `__wasi_fd_write_all` helper so a
+  // ≥128 MiB linear-backed frame (the nm_node_process large-message echo) is
+  // split into pieces below wasmtime's single-iovec fd_write cap. A single
+  // oversized fd_write returns errno 48 with nwritten 0, which the drop here
+  // would silently swallow → zero output, exit 0 (#2807). The helper reads
+  // straight from `ptr` for each chunk (still zero-copy) and returns total
+  // bytes written (dropped to match the stack contract).
+  const writeAllIdx = ensureWasiFdWriteAllHelper(ctx);
+  if (writeAllIdx >= 0) {
+    fctx.body.push({ op: "i32.const", value: fd });
+    fctx.body.push({ op: "local.get", index: buf.ptrLocalIdx });
+    fctx.body.push({ op: "local.get", index: buf.lenLocalIdx });
+    fctx.body.push({ op: "call", funcIdx: writeAllIdx });
+    fctx.body.push({ op: "drop" });
+    return true;
+  }
+
+  // iovec.buf = ptr (memory[0])
+  fctx.body.push({ op: "i32.const", value: 0 });
+  fctx.body.push({ op: "local.get", index: buf.ptrLocalIdx });
+  fctx.body.push({ op: "i32.store", align: 2, offset: 0 });
+  // iovec.buf_len = len (memory[4])
+  fctx.body.push({ op: "i32.const", value: 4 });
+  fctx.body.push({ op: "local.get", index: buf.lenLocalIdx });
+  fctx.body.push({ op: "i32.store", align: 2, offset: 0 });
+  // fd_write(fd, iovs=0, iovs_len=1, nwritten=8) — reads directly from ptr.
+  fctx.body.push({ op: "i32.const", value: fd });
+  fctx.body.push({ op: "i32.const", value: 0 });
+  fctx.body.push({ op: "i32.const", value: 1 });
+  fctx.body.push({ op: "i32.const", value: 8 });
+  fctx.body.push({ op: "call", funcIdx: writeSinkIdx });
+  fctx.body.push({ op: "drop" });
+  return true;
+}

@@ -1,0 +1,219 @@
+name: Deploy GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+  # (#3788) `benchmark-refresh.yml` measures for ~4 minutes and only THEN
+  # commits the refreshed numbers, with `[skip ci]` in the message. That
+  # `[skip ci]` is deliberate (it stops the commit retriggering its own
+  # workflow, and #1951 established that any push to main rebuilds every
+  # queued merge group) — but it suppresses EVERY workflow for that push,
+  # including this one. So the push-triggered deploy above always builds from
+  # the numbers committed BEFORE the current push's refresh, and the fresh
+  # ones only reach the site on the next unrelated push to main. Deploying
+  # once more when Refresh Benchmarks finishes closes that window without
+  # touching the `[skip ci]` semantics.
+  workflow_run:
+    workflows: ["Refresh Benchmarks"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    # A failed/cancelled Refresh Benchmarks run has nothing new to publish, and
+    # redeploying on it would just burn a build — only follow through on success.
+    if: |
+      github.repository == 'loopdive/js2' &&
+      (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          # (#3788) On a `workflow_run` event `github.sha` is the head SHA of
+          # the TRIGGERING run — the pre-refresh commit — so the default
+          # checkout would redeploy the exact stale numbers this trigger exists
+          # to replace. Pin to the tip of main to pick up the refresh commit.
+          # `push` and `workflow_dispatch` keep their existing behaviour.
+          ref: ${{ github.event_name == 'workflow_run' && 'main' || github.sha }}
+          submodules: recursive
+          fetch-depth: 0
+          fetch-tags: true
+          # Smudge LFS-tracked files. Without this, .wasm/.log files arrive as
+          # pointer stubs and any binary served from public/ ships as text —
+          # e.g. loadtime wasm modules failing with `expected magic word 00 61
+          # 73 6d, found 76 65 72 73`. Loadtime artifacts are also opted out
+          # of LFS via .gitattributes for safety.
+          lfs: true
+
+      - name: Fetch baseline data from baselines repo
+        run: |
+          # Baseline JSONL and summary JSON now live in js2wasm-baselines,
+          # not in LFS on the main repo, to avoid LFS bandwidth exhaustion.
+          # Sparse + blob-filtered clone (#3028): the baselines repo carries a
+          # large runs/ tree (~500 MB cap of per-SHA run JSONLs), so a plain
+          # --depth=1 clone downloaded every tip blob and took 3-14 MINUTES.
+          # Materializing only the files this step reads takes ~2-5s
+          # (same pattern as test262-sharded.yml's catastrophic-guard clone).
+          # NOTE: every file consumed by the copy blocks below MUST be listed
+          # here — a missing entry makes its `[ -f ]` guard silently skip
+          # (that's how the served standalone report stayed stale after #2619).
+          { git clone --depth=1 --filter=blob:none --no-checkout https://github.com/loopdive/js2wasm-baselines.git /tmp/js2wasm-baselines \
+            && git -C /tmp/js2wasm-baselines sparse-checkout set --no-cone \
+              /test262-current.json /test262-current.jsonl /test262-standalone-current.json /test262-standalone-current.jsonl \
+              /runs/index.json /runs/editions-index.json /runs/standalone-index.json \
+              /runs/standalone-editions-index.json \
+            && git -C /tmp/js2wasm-baselines checkout main; } 2>/dev/null || true
+          if [ -f /tmp/js2wasm-baselines/test262-current.json ]; then
+            mkdir -p website/public/benchmarks/results benchmarks/results/runs
+            cp /tmp/js2wasm-baselines/test262-current.json   website/public/benchmarks/results/test262-report.json
+            cp /tmp/js2wasm-baselines/test262-current.json   benchmarks/results/test262-current.json
+            cp /tmp/js2wasm-baselines/test262-current.json   benchmarks/results/test262-report.json
+            if [ -f /tmp/js2wasm-baselines/test262-current.jsonl ]; then
+              cp /tmp/js2wasm-baselines/test262-current.jsonl website/public/benchmarks/results/test262-results.jsonl
+              # build:pages → generate-editions.ts regenerates test262-editions.json
+              # at deploy time and reads benchmarks/results/test262-current.jsonl
+              # (its CURRENT_RESULTS_JSONL input). Overwrite the STALE committed
+              # copy with the FRESH baseline so the regenerated #goals edition
+              # slider matches the live headline. Without this, the deploy falls
+              # back to the stale committed jsonl and the slider shows old
+              # cumulative numbers (~65%) while the donut shows ~71% (#1885).
+              cp /tmp/js2wasm-baselines/test262-current.jsonl benchmarks/results/test262-current.jsonl
+            fi
+            # (#2636) Pre-place the standalone-lane baseline JSONL into the cache
+            # dir that fetch-baseline-jsonl.mjs --standalone reads, so build:pages
+            # → run-pages-build.mjs regenerates test262-standalone-editions.json
+            # from the FRESH standalone baseline (its idempotent fetch then no-ops
+            # on the already-present cache file). Without this the standalone
+            # editions file falls back to the stale committed copy.
+            if [ -f /tmp/js2wasm-baselines/test262-standalone-current.jsonl ]; then
+              mkdir -p .test262-cache
+              cp /tmp/js2wasm-baselines/test262-standalone-current.jsonl .test262-cache/test262-standalone-current.jsonl
+            fi
+            # Refresh the SERVED standalone report JSON, mirroring the host
+            # copy above. build-pages.js prefers the website/public copy, so
+            # without this the report page's Host/Standalone switch reads the
+            # stale committed test262-standalone-report.json (old corpus, no
+            # host_free field) while the host donut shows fresh numbers.
+            if [ -f /tmp/js2wasm-baselines/test262-standalone-current.json ]; then
+              cp /tmp/js2wasm-baselines/test262-standalone-current.json website/public/benchmarks/results/test262-standalone-report.json
+              cp /tmp/js2wasm-baselines/test262-standalone-current.json benchmarks/results/test262-standalone-report.json
+            fi
+            [ -f /tmp/js2wasm-baselines/runs/index.json ] && \
+              cp /tmp/js2wasm-baselines/runs/index.json benchmarks/results/runs/index.json
+            [ -f /tmp/js2wasm-baselines/runs/editions-index.json ] && \
+              cp /tmp/js2wasm-baselines/runs/editions-index.json benchmarks/results/runs/editions-index.json
+            [ -f /tmp/js2wasm-baselines/runs/standalone-index.json ] && \
+              cp /tmp/js2wasm-baselines/runs/standalone-index.json benchmarks/results/runs/standalone-index.json
+            # (#4362) Per-edition STANDALONE trend series — backs the edition
+            # pass-rate-over-time chart when the JS-host toggle is off.
+            [ -f /tmp/js2wasm-baselines/runs/standalone-editions-index.json ] && \
+              cp /tmp/js2wasm-baselines/runs/standalone-editions-index.json \
+                 benchmarks/results/runs/standalone-editions-index.json
+            echo "Fetched baseline data from js2wasm-baselines."
+          else
+            echo "Warning: baselines repo not available — pages will build with stale/empty baseline."
+          fi
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 25
+
+      - name: Setup pnpm via Corepack
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.30.2 --activate
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v6
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Pages artifact
+        run: pnpm build:pages
+
+      - name: Publish graph data snapshot to labs
+        env:
+          GRAPH_DATA_SHA: ${{ github.sha }}
+          LABS_DEPLOY_KEY: ${{ secrets.LABS_DEPLOY_KEY }}
+        run: |
+          if [ -z "${LABS_DEPLOY_KEY:-}" ]; then
+            echo "LABS_DEPLOY_KEY is not configured; skipping labs graph-data publish."
+            exit 0
+          fi
+
+          test -s website/public/graph-data.json
+
+          eval "$(ssh-agent -s)"
+          echo "$LABS_DEPLOY_KEY" | ssh-add -
+          mkdir -p ~/.ssh
+          ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
+
+          tmp_dir="$(mktemp -d)"
+          trap 'rm -rf "$tmp_dir"' EXIT
+          if ! git clone --depth=1 --branch labs/graph-data git@github.com:loopdive/js2wasm-labs.git "$tmp_dir/repo"; then
+            rm -rf "$tmp_dir/repo"
+            git clone --depth=1 git@github.com:loopdive/js2wasm-labs.git "$tmp_dir/repo"
+            cd "$tmp_dir/repo"
+            git checkout --orphan labs/graph-data
+            git rm -rf . >/dev/null 2>&1 || true
+          fi
+
+          cd "$tmp_dir/repo"
+          mkdir -p website/public
+          cp "$GITHUB_WORKSPACE/website/public/graph-data.json" website/public/graph-data.json
+          short_sha="$(printf '%.12s' "$GRAPH_DATA_SHA")"
+          cat > README.md <<EOF
+          # js2 dependency graph data
+
+          This branch contains the generated \`website/public/graph-data.json\`
+          snapshot from \`loopdive/js2wasm\`.
+
+          Source commit: $GRAPH_DATA_SHA
+
+          Regenerated by \`.github/workflows/deploy-pages.yml\`; do not edit by hand.
+          EOF
+
+          if [ -z "$(git status --porcelain -- README.md website/public/graph-data.json)" ]; then
+            echo "Graph data unchanged; skipping labs push."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add README.md website/public/graph-data.json
+          git commit -m "chore(graph-data): refresh from js2 $short_sha"
+          git push origin HEAD:labs/graph-data
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: dist/pages
+
+  deploy:
+    if: github.repository == 'loopdive/js2'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

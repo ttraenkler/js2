@@ -1,0 +1,376 @@
+# #1951 — Scheduled fallback for the main-repo baseline summary commit.
+#
+# promote-baseline (test262-sharded.yml) now DEFERS its main-repo summary
+# commit whenever the merge queue is non-empty, because any push to main
+# (even [skip ci]) makes GitHub rebuild every queued merge group — each
+# rebuild costs a full 114-job validation per queued PR plus ~10 min of
+# added queue latency. The per-merge push to the loopdive/js2wasm-baselines
+# repo is NOT deferred (it doesn't move main and the regression gates need
+# it fresh), so the baselines repo is always the source of truth.
+#
+# This workflow closes the gap when the queue never empties between merges:
+# hourly, it diffs the baselines repo's latest report against the committed
+# summary and, when drifted AND the queue is empty (or the committed summary
+# is >6h old, or the dispatch `force` input is set), lands the same atomic
+# file set promote-baseline would have committed: summary JSONs + edition
+# buckets + conformance numbers in the prose docs (sync-conformance-numbers
+# keeps the number and its derived docs in ONE commit — see #1522 for why
+# splitting them drops PRs at the merge-queue head).
+#
+# Push auth: the same MAIN_DEPLOY_KEY dance as promote-baseline — GITHUB_TOKEN
+# pushes to main are rejected by ruleset GH013; the deploy key is in the
+# ruleset's bypass_actors. The key is an ENVIRONMENT secret on
+# `baseline-promote` (deployment branches restricted to main), which scheduled
+# runs on main satisfy.
+name: Baseline summary sync (#1951)
+
+on:
+  schedule:
+    - cron: "37 * * * *" # hourly, offset to avoid the top-of-hour Actions rush
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Push even if the merge queue is non-empty (accepts one queue-rebuild churn event)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  actions: write # gh workflow run deploy-pages.yml
+
+concurrency:
+  group: baseline-summary-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    # The summary sync writes the canonical repository's main branch and uses
+    # its baseline-promote environment. Forks have neither resource.
+    if: github.repository == 'loopdive/js2'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: baseline-promote
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 25
+
+      - name: Fetch latest baselines (sparse)
+        run: |
+          # Sparse + blob-filtered: the baselines repo carries a large runs/
+          # history; materialize only the three files this sync needs.
+          git clone --depth=1 --filter=blob:none --no-checkout https://github.com/loopdive/js2wasm-baselines.git /tmp/js2wasm-baselines
+          git -C /tmp/js2wasm-baselines sparse-checkout set --no-cone /test262-current.json /test262-current.jsonl /test262-standalone-report.json
+          git -C /tmp/js2wasm-baselines checkout main
+
+      - name: Decide whether to sync
+        id: decide
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FORCE: ${{ inputs.force && 'true' || 'false' }}
+        run: |
+          set -uo pipefail
+          # 1) Drift check — semantic compare (ignores volatile timestamp/sha
+          #    metadata). Unchanged on both lanes → nothing to do this hour.
+          HOST_UNCHANGED=0
+          # Compare against the PUBLIC file this job overwrites (mirrors the
+          # standalone check below), NOT the in-repo baseline. Comparing the
+          # in-repo copy let public/ strand: when a forced refresh updated the
+          # baselines repo and the in-repo copy in lockstep, this check saw
+          # "unchanged" and skipped the copy, freezing the landing page on a
+          # stale/inflated number while the job reported success (#3375).
+          node scripts/compare-test262-artifact.mjs --type report \
+            --baseline public/benchmarks/results/test262-report.json \
+            --candidate /tmp/js2wasm-baselines/test262-current.json && HOST_UNCHANGED=1
+          STANDALONE_UNCHANGED=0
+          node scripts/compare-test262-artifact.mjs --type report \
+            --baseline public/benchmarks/results/test262-standalone-report.json \
+            --candidate /tmp/js2wasm-baselines/test262-standalone-report.json && STANDALONE_UNCHANGED=1
+          # (#3953) The #2097 high-water mark is a THIRD drift axis, independent
+          # of the two report compares above. A stale mark can coexist with
+          # semantically-identical reports (the mark lags whenever the promote's
+          # main-repo commit is deferred by #1951, which is most of the time
+          # under two-lane merge velocity), and a floor that is too LOW never
+          # fires its gate — so nothing else in this repo would notice. Exit 1 =
+          # STALE, exit 2 = UNKNOWN ("cannot see"); BOTH force a sync, because
+          # "I could not determine the mark's age" must never render as fresh.
+          HIGHWATER_STALE=0
+          node scripts/check-highwater-staleness.mjs \
+            --report /tmp/js2wasm-baselines/test262-standalone-report.json \
+            --annotate || HIGHWATER_STALE=1
+          if [ "$HOST_UNCHANGED" = "1" ] && [ "$STANDALONE_UNCHANGED" = "1" ] && [ "$HIGHWATER_STALE" = "0" ]; then
+            echo "Committed summary already matches the baselines repo — nothing to sync."
+            echo "sync=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # 2) Queue check — don't create queue-rebuild churn unless forced or
+          #    the committed summary has been stale for >6h (freshness floor:
+          #    accept at most one churn event per 6h of continuous traffic).
+          OWNER="${GITHUB_REPOSITORY%/*}"; NAME="${GITHUB_REPOSITORY#*/}"
+          QUEUE_LEN=$(gh api graphql \
+            -f query='query($owner:String!,$name:String!){repository(owner:$owner,name:$name){mergeQueue{entries(first:1){totalCount}}}}' \
+            -f owner="$OWNER" -f name="$NAME" \
+            --jq '.data.repository.mergeQueue.entries.totalCount' 2>/dev/null || echo "")
+          # Age of the PUBLIC file the landing page serves — NOT the in-repo
+          # copy. The in-repo test262-current.json is refreshed in lockstep by
+          # forced promotes, so it reads ~0h even when public/ is hours stale;
+          # measuring it let the >6h "proceed despite busy queue" floor never
+          # fire, so a busy queue skipped the sync indefinitely and public/
+          # stranded (#3379, follow-up to #3375's host-compare fix).
+          COMMITTED_TS=$(git log -1 --format=%ct -- public/benchmarks/results/test262-report.json 2>/dev/null || echo 0)
+          AGE_H=$(( ($(date +%s) - ${COMMITTED_TS:-0}) / 3600 ))
+          # (#3953) A stale high-water mark ALSO earns the busy-queue bypass, but
+          # only at the SAME 6h floor the committed summary uses — otherwise this
+          # hourly job would push (and trigger a queue rebuild) every hour the
+          # mark lags. Re-run the detector at 6h rather than reusing the 3h
+          # verdict above: 3h decides "is there anything to sync", 6h decides
+          # "is it worth a queue-rebuild right now". Without this the two guards
+          # DEADLOCK — promote defers because the queue is busy, and this job
+          # skips because the queue is busy and the reports are fresh, so the
+          # mark strands indefinitely. That deadlock is the #3953 defect.
+          HIGHWATER_STALE_6H=0
+          node scripts/check-highwater-staleness.mjs \
+            --report /tmp/js2wasm-baselines/test262-standalone-report.json \
+            --max-age-hours 6 >/dev/null 2>&1 || HIGHWATER_STALE_6H=1
+          echo "Drift detected (host_unchanged=$HOST_UNCHANGED standalone_unchanged=$STANDALONE_UNCHANGED highwater_stale=$HIGHWATER_STALE highwater_stale_6h=$HIGHWATER_STALE_6H); queue=${QUEUE_LEN:-?} committed-summary age=${AGE_H}h force=$FORCE"
+          if [ "$FORCE" != "true" ] && [ -n "$QUEUE_LEN" ] && [ "$QUEUE_LEN" -gt 0 ] 2>/dev/null && [ "$AGE_H" -lt 6 ] && [ "$HIGHWATER_STALE_6H" = "0" ]; then
+            echo "Merge queue busy, summary <6h old, high-water mark fresh — skipping this cycle (#1951)."
+            echo "sync=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "sync=true" >> "$GITHUB_OUTPUT"
+
+      - name: Sync summary files + conformance docs and push to main
+        if: steps.decide.outputs.sync == 'true'
+        env:
+          MAIN_DEPLOY_KEY: ${{ secrets.MAIN_DEPLOY_KEY }}
+        run: |
+          set -uo pipefail
+          if [ -z "${MAIN_DEPLOY_KEY:-}" ]; then
+            echo "::error::MAIN_DEPLOY_KEY secret is empty/unset (environment baseline-promote)."
+            exit 1
+          fi
+          # Sanity: never promote a corrupt/empty report to main.
+          PASS=$(node -e "console.log(JSON.parse(require('fs').readFileSync('/tmp/js2wasm-baselines/test262-current.json','utf8')).summary.pass)")
+          TOTAL=$(node -e "console.log(JSON.parse(require('fs').readFileSync('/tmp/js2wasm-baselines/test262-current.json','utf8')).summary.total)")
+          if [ "$PASS" -lt 1000 ] || [ "$TOTAL" -lt 40000 ]; then
+            echo "ABORT: baselines report looks corrupt (pass=$PASS total=$TOTAL). Not committing."
+            exit 0
+          fi
+
+          # Mirror the promote-baseline file set exactly (same paths, same
+          # atomic docs sync). Sources come from the baselines repo instead of
+          # this run's shard artifacts.
+          mkdir -p benchmarks/results public/benchmarks/results
+          cp /tmp/js2wasm-baselines/test262-current.json benchmarks/results/test262-current.json
+          cp /tmp/js2wasm-baselines/test262-current.json benchmarks/results/test262-report.json
+          cp /tmp/js2wasm-baselines/test262-current.json public/benchmarks/results/test262-report.json
+          cp /tmp/js2wasm-baselines/test262-standalone-report.json public/benchmarks/results/test262-standalone-report.json
+          node --experimental-strip-types scripts/generate-editions.ts \
+            --results /tmp/js2wasm-baselines/test262-current.jsonl || \
+            echo "WARN: generate-editions failed (non-fatal) — edition buckets may lag"
+          # NOTE: sync-conformance-numbers is deliberately NOT run here. It
+          # derives the standalone line from the high-water mark, which is not
+          # raised until further down — running it now would sync the docs to
+          # the PRE-raise value and commit that alongside the POST-raise mark.
+          # See the call sited after the raise below.
+          # #2108 — coercion-site drift baseline (pure source-grep). The
+          # promote-baseline job in test262-sharded.yml is the primary refresher
+          # on every push to main; this hourly fallback re-anchors it too so a
+          # deferred/failed promote can't leave main drifted. Non-fatal.
+          node scripts/check-coercion-sites.mjs --update || \
+            echo "WARN: coercion-site baseline update failed (non-fatal)"
+          # #3131 — LOC-budget baseline (also a pure source measure; main is
+          # its sole writer now, PRs never commit it). Skips the write when
+          # only the date would change, so a stable main stays commit-free.
+          node scripts/check-loc-budget.mjs --update || \
+            echo "WARN: loc-budget baseline update failed (non-fatal)"
+          # #3400 R-FUNC twin: bank per-function shrinkage into the func-budget
+          # baseline (shrink-only floor; the PR gate is change-scoped so this
+          # only feeds the --all audit + no-git fallback). Non-fatal.
+          node scripts/check-func-budget.mjs --update-on-decrease || \
+            echo "WARN: func-budget baseline update failed (non-fatal)"
+          # (#3953) #2097 STANDALONE HIGH-WATER RAISE — this workflow is the
+          # fallback carrier the promote job's #1951 deferral message has always
+          # NAMED ("it will land via ... the hourly baseline-summary-sync") but
+          # could not actually be, because it never staged the file (grep
+          # "highwater" over this workflow returned 0 hits before this change).
+          #
+          # Consequence, measured 2026-08-02: promote's raise EXECUTED
+          # (26546 → 27019, run 30756312728) and was then discarded with the
+          # deferred commit, 37 merge commits in a row. The mark was load-bearing
+          # on the queue happening to be empty at promote time. Effective floor
+          # 26496 vs reality 27021 = 525 passes of silent permissive headroom.
+          #
+          # TWO-WRITER RACE — why last-writer-wins is safe here. After this
+          # change the mark has two writers: promote-baseline (on an empty queue)
+          # and this job (hourly). They can interleave, but the script is a
+          # RAISE-ONLY ratchet: it rewrites the file only when the measured
+          # host-free count strictly EXCEEDS the committed one, so any interleaving
+          # yields max(writes) and neither writer can lower the mark. The only
+          # ordering hazard would be writing a value computed against a DIFFERENT
+          # (older) committed mark than the one on disk at commit time — which is
+          # why the re-anchor loop below re-reads the mark from the freshly
+          # fetched tip and recomputes, rather than replaying this snapshot.
+          #
+          # Provenance is the baselines repo's own `baseline_sha` — the revision
+          # actually MEASURED — not this job's checkout sha, which is unrelated
+          # to the measurement. Non-fatal: a stale mark must never wedge the sync.
+          SA_REPORT=/tmp/js2wasm-baselines/test262-standalone-report.json
+          HW_SHA=$(node -e "try{console.log(JSON.parse(require('fs').readFileSync('$SA_REPORT','utf8')).baseline_sha||'')}catch{console.log('')}")
+          node scripts/check-standalone-highwater.mjs \
+            --report "$SA_REPORT" --update ${HW_SHA:+--sha "$HW_SHA"} || \
+            echo "WARN: high-water raise failed (non-fatal) — mark may lag"
+
+          # Sync the prose docs LAST, after BOTH inputs are final: the JS-host
+          # number from test262-current.json (copied above) and the standalone
+          # line from the high-water mark (raised immediately above). Running it
+          # before the raise — as this job did until #4211 — committed a NEW mark
+          # next to a README synced from the OLD one, so main shipped internally
+          # inconsistent and every open PR then failed the `quality` gate's
+          # sync:conformance:check until some unrelated PR happened to carry the
+          # repair commit. Observed three times on 2026-08-07 and it parked nine
+          # PRs that morning.
+          node scripts/sync-conformance-numbers.mjs || \
+            echo "WARN: sync-conformance-numbers failed (non-fatal) — docs may drift"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          eval "$(ssh-agent -s)"
+          echo "$MAIN_DEPLOY_KEY" | ssh-add -
+          mkdir -p ~/.ssh
+          ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
+          git remote remove deploykey 2>/dev/null || true
+          git remote add deploykey "git@github.com:${GITHUB_REPOSITORY}.git"
+
+          stage_files() {
+            git add -f benchmarks/results/test262-current.json \
+              benchmarks/results/test262-report.json \
+              public/benchmarks/results/test262-report.json \
+              public/benchmarks/results/test262-standalone-report.json
+            [ -f website/public/benchmarks/results/test262-editions.json ] && \
+              git add -f website/public/benchmarks/results/test262-editions.json || true
+            [ -f website/public/benchmarks/results/test262-category-editions.json ] && \
+              git add -f website/public/benchmarks/results/test262-category-editions.json || true
+            # #2871 follow-up — per-file edition index consumed by the report page's
+            # Error Patterns / Skipped Tests edition filter.
+            [ -f website/public/benchmarks/results/test262-file-editions.json ] && \
+              git add -f website/public/benchmarks/results/test262-file-editions.json || true
+            # #2108 — coercion-site drift baseline, refreshed just above.
+            git add -f scripts/coercion-sites-baseline.json 2>/dev/null || true
+            # #3131 — LOC-budget baseline, refreshed just above (sole writer).
+            git add -f scripts/loc-budget-baseline.json 2>/dev/null || true
+            git add -f scripts/func-budget-baseline.json 2>/dev/null || true
+            # (#3953) The #2097 high-water mark, raised just above. THIS LINE is
+            # the fix: without it the raise wrote a file nothing ever committed.
+            git add -f benchmarks/results/test262-standalone-highwater.json 2>/dev/null || true
+            git add -f README.md ROADMAP.md CLAUDE.md plan/goals/goal-graph.md \
+              2>/dev/null || true
+          }
+          stage_files
+          if git diff --cached --quiet; then
+            echo "::error::No changes to commit after staging despite sync=true. This means baseline drift was detected, but the same commit could not be produced. Check drift detection and file staging."
+            exit 1
+          fi
+
+          # Option A re-anchor loop (see promote-baseline / #1861): snapshot
+          # the staged files, hard-checkout a clean tip of main on every
+          # attempt, re-apply, commit [skip ci], push via the deploy key.
+          PROMOTE_FILES=$(git diff --cached --name-only)
+          PROMOTE_SNAPSHOT="$(mktemp -d)"
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            mkdir -p "$PROMOTE_SNAPSHOT/$(dirname "$f")"
+            cp "$f" "$PROMOTE_SNAPSHOT/$f"
+          done <<< "$PROMOTE_FILES"
+          PUSHED=0
+          for attempt in 1 2 3 4 5; do
+            git fetch deploykey main
+            git checkout -f -B _summary_sync_tmp deploykey/main || {
+              echo "checkout of deploykey/main failed (attempt ${attempt}) — retrying"
+              sleep $((attempt * 5))
+              continue
+            }
+            while IFS= read -r f; do
+              [ -z "$f" ] && continue
+              mkdir -p "$(dirname "$f")"
+              cp "$PROMOTE_SNAPSHOT/$f" "$f"
+              git add -f "$f"
+            done <<< "$PROMOTE_FILES"
+            # (#3115) STALE-CHECKOUT GUARD (same as promote-baseline). The coercion
+            # baseline is a pure src/codegen/** grep; the `--update` above computed
+            # it against this hourly job's checkout, but the re-anchor
+            # `git checkout -f -B _summary_sync_tmp deploykey/main` just replaced the
+            # working tree with main's current tip, which may have advanced. Banking
+            # the pre-re-anchor value over the advanced source wedges the required
+            # check:coercion-sites gate on main. Recompute against the re-anchored
+            # tree so the committed baseline always matches the tree it lands on.
+            node scripts/check-coercion-sites.mjs --update || \
+              echo "WARN: coercion-site baseline recompute on re-anchored tip failed (non-fatal)"
+            git add -f scripts/coercion-sites-baseline.json 2>/dev/null || true
+            # #3131 — same stale-checkout guard for the LOC-budget baseline
+            # (pure source measure; main is its sole writer now).
+            node scripts/check-loc-budget.mjs --update || \
+              echo "WARN: loc-budget baseline recompute on re-anchored tip failed (non-fatal)"
+            node scripts/check-func-budget.mjs --update-on-decrease || \
+              echo "WARN: func-budget baseline recompute on re-anchored tip failed (non-fatal)"
+            git add -f scripts/loc-budget-baseline.json 2>/dev/null || true
+            git add -f scripts/func-budget-baseline.json 2>/dev/null || true
+            # (#3953) STALE-CHECKOUT GUARD for the high-water mark — same shape
+            # as the coercion/LOC guards above, and load-bearing for the
+            # two-writer race described in the raise step. The re-apply loop just
+            # copied OUR snapshot of the mark over the re-anchored tip; if
+            # promote-baseline raised the mark HIGHER while we were working, that
+            # copy would silently LOWER it — turning a raise-only ratchet into a
+            # last-writer-wins clobber. So discard our copy, take the mark from
+            # the freshly fetched tip, and re-run the raise against THAT. The
+            # ratchet then compares the new measurement to main's actual current
+            # mark, so the committed value is always max(ours, main's).
+            git checkout deploykey/main -- benchmarks/results/test262-standalone-highwater.json 2>/dev/null || true
+            node scripts/check-standalone-highwater.mjs \
+              --report "$SA_REPORT" --update ${HW_SHA:+--sha "$HW_SHA"} || \
+              echo "WARN: high-water recompute on re-anchored tip failed (non-fatal)"
+            git add -f benchmarks/results/test262-standalone-highwater.json 2>/dev/null || true
+            # (#4211) The re-apply loop restored the README we synced against
+            # our ORIGINAL mark, and the recompute immediately above may have
+            # landed on a different one (main's tip is max(ours, main's)). So
+            # re-sync against the mark that is actually about to be committed,
+            # and re-stage the prose docs. Without this the re-anchor path
+            # commits the same old-mark/new-mark mismatch the fresh path used to.
+            node scripts/sync-conformance-numbers.mjs || \
+              echo "WARN: sync-conformance-numbers on re-anchored tip failed (non-fatal)"
+            git add -f README.md ROADMAP.md CLAUDE.md plan/goals/goal-graph.md \
+              2>/dev/null || true
+            if git diff --cached --quiet; then
+              echo "Summary already current on main after re-anchor — nothing to push."
+              PUSHED=1
+              break
+            fi
+            git commit -m "chore(test262): scheduled baseline summary sync — ${PASS}/${TOTAL} pass [skip ci] (#1951)"
+            if git push deploykey HEAD:main; then
+              echo "Pushed baseline summary sync to main (attempt ${attempt})."
+              PUSHED=1
+              break
+            fi
+            echo "push race lost (attempt ${attempt}) — re-anchoring and retrying"
+            sleep $((attempt * 5))
+          done
+          if [ "$PUSHED" != "1" ]; then
+            echo "::error::Failed to push baseline summary sync after 5 attempts."
+            exit 1
+          fi
+
+      - name: Trigger Pages deploy
+        if: steps.decide.outputs.sync == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # The [skip ci] commit suppresses deploy-pages.yml; dispatch it so
+          # the landing page picks up the refreshed numbers. Idempotent.
+          gh workflow run deploy-pages.yml --ref main || true
