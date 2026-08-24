@@ -58,6 +58,138 @@ function publicPhysicalFieldNames(rightType: ts.Type, fields: FieldDef[]): strin
     .filter((name): name is string => name !== undefined && publicPropertyNames.has(name));
 }
 
+/** The ES5 Object.prototype names that every ordinary object inherits. */
+const OBJECT_PROTO_PROPERTIES = new Set([
+  "hasOwnProperty",
+  "isPrototypeOf",
+  "propertyIsEnumerable",
+  "toLocaleString",
+  "toString",
+  "valueOf",
+]);
+
+/** Strip the identity-only wrappers that commonly surround a receiver. */
+function unwrapInExpression(expr: ts.Expression): ts.Expression {
+  let current = expr;
+  while (
+    ts.isParenthesizedExpression(current) ||
+    ts.isAsExpression(current) ||
+    ts.isNonNullExpression(current) ||
+    ts.isSatisfiesExpression(current) ||
+    ts.isTypeAssertionExpression(current)
+  ) {
+    current = current.expression;
+  }
+  return current;
+}
+
+/** Return a simple property name from an object-literal member. */
+function objectLiteralPropertyName(member: ts.ObjectLiteralElementLike): string | undefined {
+  const name =
+    ts.isPropertyAssignment(member) ||
+    ts.isMethodDeclaration(member) ||
+    ts.isGetAccessorDeclaration(member) ||
+    ts.isSetAccessorDeclaration(member)
+      ? member.name
+      : ts.isShorthandPropertyAssignment(member)
+        ? member.name
+        : undefined;
+  if (!name) return undefined;
+  if (ts.isIdentifier(name) || ts.isStringLiteral(name) || ts.isNumericLiteral(name)) return name.text;
+  return undefined;
+}
+
+/**
+ * Prove the receiver has the ordinary Object.prototype tail used by the
+ * static `in` fold. `$Object` values start with a null `$proto` in the
+ * standalone substrate, so relying on the checker apparent type alone would
+ * incorrectly claim `valueOf in Object.create(null)`. This deliberately
+ * recognizes only syntax whose prototype tail is still ordinary; unknown
+ * dynamic receivers stay on `__extern_has`.
+ */
+function hasOrdinaryObjectPrototype(ctx: CodegenContext, expr: ts.Expression, seen = new Set<ts.Node>()): boolean {
+  const current = unwrapInExpression(expr);
+  if (seen.has(current)) return false;
+  seen.add(current);
+
+  if (ts.isObjectLiteralExpression(current)) {
+    return !current.properties.some(
+      (member) =>
+        objectLiteralPropertyName(member) === "__proto__" &&
+        ts.isPropertyAssignment(member) &&
+        member.initializer.kind === ts.SyntaxKind.NullKeyword,
+    );
+  }
+
+  if (ts.isNewExpression(current)) {
+    // `new Object()` and user constructor instances have an ordinary object
+    // at the end of their chain unless the source explicitly replaces that
+    // chain with null (which this conservative syntactic proof declines to
+    // infer for an arbitrary constructor).
+    return true;
+  }
+
+  if (ts.isCallExpression(current) && ts.isPropertyAccessExpression(current.expression)) {
+    const callee = current.expression;
+    if (
+      ts.isIdentifier(callee.expression) &&
+      callee.expression.text === "Object" &&
+      callee.name.text === "create" &&
+      current.arguments.length > 0
+    ) {
+      const proto = unwrapInExpression(current.arguments[0]!);
+      return proto.kind !== ts.SyntaxKind.NullKeyword && hasOrdinaryObjectPrototype(ctx, proto, seen);
+    }
+  }
+
+  if (ts.isIdentifier(current)) {
+    const initializer = ctx.oracle.variableInitializerOf(current);
+    if (initializer && unwrapInExpression(initializer) !== current) {
+      return hasOrdinaryObjectPrototype(ctx, initializer, seen);
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Find the value type of the last assignment to a receiver binding embedded in
+ * the already-evaluated key expression. ES5's canonical probe uses
+ * `(NUMBER = Number, "MAX_VALUE") in NUMBER`; the checker reports NUMBER as a
+ * number even though the assignment just stored the Number constructor. The
+ * last assignment is the only one that can determine the RHS at the `in`
+ * operation, so earlier comma assignments are intentionally ignored.
+ */
+function lastAssignedReceiverType(
+  ctx: CodegenContext,
+  keyExpr: ts.Expression,
+  receiver: ts.Expression,
+): ts.Type | undefined {
+  if (!ts.isIdentifier(receiver)) return undefined;
+  const receiverSymbol = ctx.checker.getSymbolAtLocation(receiver);
+  let found: ts.Type | undefined;
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isBinaryExpression(node) &&
+      node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+      ts.isIdentifier(node.left) &&
+      node.left.text === receiver.text &&
+      (receiverSymbol === undefined || ctx.checker.getSymbolAtLocation(node.left) === receiverSymbol)
+    ) {
+      found = ctx.checker.getTypeAtLocation(node.right);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(keyExpr);
+  return found;
+}
+
+/** Return true for an approved standalone fnctor instance struct. */
+function isFnctorInstanceWasm(ctx: CodegenContext, wasmType: ValType): boolean {
+  if (wasmType.kind !== "ref" && wasmType.kind !== "ref_null") return false;
+  return ctx.typeIdxToStructName.get(wasmType.typeIdx)?.startsWith("__fnctor_") ?? false;
+}
+
 /**
  * Compile a `key in obj` binary expression (op === InKeyword). Reads only the
  * codegen context, function context, and the expression node. Always returns.
@@ -158,6 +290,9 @@ export function compileInOperator(ctx: CodegenContext, fctx: FunctionContext, ex
 
   const rightType = ctx.checker.getTypeAtLocation(expr.right);
   let rightWasm = resolveWasmType(ctx, rightType);
+  const assignedReceiverType = lastAssignedReceiverType(ctx, expr.left, expr.right);
+  const assignedReceiverCanBeObject =
+    ctx.standalone && assignedReceiverType !== undefined && !inRhsIsExclusivelyPrimitive(assignedReceiverType);
 
   // (#2741) §13.10.1 step 5 — `key in rval` throws a **TypeError** when
   // `Type(rval)` is not Object. When the RHS static type is EXCLUSIVELY a
@@ -179,7 +314,7 @@ export function compileInOperator(ctx: CodegenContext, fctx: FunctionContext, ex
   // `instanceof` §13.10.2 step-1 fold in `compileHostInstanceOf`.
   const rhsIsReassignedBinding =
     ts.isIdentifier(expr.right) && identifierIsWrittenTo(expr.right.getSourceFile(), expr.right.text);
-  if (!rhsIsReassignedBinding && inRhsIsExclusivelyPrimitive(rightType)) {
+  if (!rhsIsReassignedBinding && inRhsIsExclusivelyPrimitive(rightType) && !assignedReceiverCanBeObject) {
     const lt = compileExpression(ctx, fctx, expr.left);
     if (lt !== null) fctx.body.push({ op: "drop" });
     const rt = compileExpression(ctx, fctx, expr.right);
@@ -297,6 +432,15 @@ export function compileInOperator(ctx: CodegenContext, fctx: FunctionContext, ex
       const prop2 = lastRightType.getProperty(staticKey);
       if (prop2) tsTypeHasProperty = true;
     }
+    // A key expression may assign an object-valued constructor into a binding
+    // whose declared type remains primitive (`NUMBER = Number`). Use the
+    // value type at that assignment as the same property source as the direct
+    // RHS type; this is both side-effect preserving and checker-consistent.
+    if (ctx.standalone && !tsTypeHasProperty && assignedReceiverType) {
+      const assignedProp = assignedReceiverType.getProperty(staticKey);
+      const assignedApparentProp = ctx.checker.getApparentType(assignedReceiverType).getProperty(staticKey);
+      if (assignedProp || assignedApparentProp) tsTypeHasProperty = true;
+    }
     // Also check apparent type (includes prototype methods like valueOf, toString)
     if (!tsTypeHasProperty) {
       const apparentType = ctx.checker.getApparentType(rightType);
@@ -387,7 +531,22 @@ export function compileInOperator(ctx: CodegenContext, fctx: FunctionContext, ex
     // deleted keys).
     const growableReceiver =
       ctx.standalone && ts.isIdentifier(expr.right) && ctx.growableObjectLiteralVars.has(expr.right.text);
-    const has = !growableReceiver && (hasInStruct || tsTypeHasProperty);
+    const objectProtoKey = ctx.standalone && OBJECT_PROTO_PROPERTIES.has(staticKey);
+    const ordinaryObjectProto = objectProtoKey && hasOrdinaryObjectPrototype(ctx, expr.right);
+    // The TS apparent type for `{}` includes Object.prototype even when the
+    // standalone value is an open `$Object` with an intentionally null proto
+    // (notably `Object.create(null)`). Keep that apparent-property fact for
+    // closed structs, but decline it for unknown dynamic `$Object` receivers;
+    // those must use the runtime own/proto walk instead.
+    const dynamicObjectReceiver =
+      rightWasm.kind === "externref" ||
+      rightWasm.kind === "anyref" ||
+      (rightWasm.kind === "ref" || rightWasm.kind === "ref_null"
+        ? ctx.typeIdxToStructName.get(rightWasm.typeIdx) === "$Object"
+        : false);
+    const suppressUnknownObjectProto = objectProtoKey && dynamicObjectReceiver && !ordinaryObjectProto;
+    const has =
+      ordinaryObjectProto || (!growableReceiver && (hasInStruct || (!suppressUnknownObjectProto && tsTypeHasProperty)));
     // (#1444) When RHS is externref/anyref AND static analysis came up empty
     // (no struct field, no TS-typed prop), the answer is NOT reliably false
     // — the host object may carry dynamic keys (e.g. regex `result.groups`).
@@ -401,7 +560,11 @@ export function compileInOperator(ctx: CodegenContext, fctx: FunctionContext, ex
     // overlay and the #3537 bag, so routing makes `in` agree with the read — and
     // only a folded `false` is routed, so no affirmative answer moves.
     const vecNamedKeyRoute = !has && vecNamedKeyNeedsRuntime(ctx, rightWasm, staticKey, 0);
-    if (!has && (rightWasm.kind === "externref" || rightWasm.kind === "anyref" || vecNamedKeyRoute)) {
+    const fnctorProtoRoute = !has && ctx.standalone && isFnctorInstanceWasm(ctx, rightWasm);
+    if (
+      !has &&
+      (rightWasm.kind === "externref" || rightWasm.kind === "anyref" || vecNamedKeyRoute || fnctorProtoRoute)
+    ) {
       const hasIdx = ensureLateImport(
         ctx,
         "__extern_has",

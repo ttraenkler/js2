@@ -78,6 +78,31 @@ sub-triage table).
 - An assertion that can throw before the probed value is read measures the
   throw, not the value — run a negative control (#3626 §2.2.1).
 
+## Sub-bucket result: standalone `in` / prototype-chain rows (2026-08-24)
+
+The exact 15 paths in the `types/object + expressions/in` census row were run
+with `runTest262File(..., "standalone")` and a 30-second per-file timeout. On
+the isolated `origin/main` base (`ef5b5d335`), the result was **9/15 pass,
+6/15 fail**. After the focused changes it is **12/15 pass, 3/15 fail**: three
+rows flipped and no previously passing row regressed.
+
+Flipped rows:
+
+- `language/expressions/in/S8.12.6_A2_T1.js` — ordinary open objects inherit
+  `Object.prototype.valueOf`.
+- `language/expressions/in/S11.8.7_A2.4_T1.js` — the evaluated `NUMBER =
+  Number` alias remains object-valued for the `in` check and sees
+  `Number.MAX_VALUE`.
+- `language/expressions/in/S8.12.6_A2_T2.js` — approved fnctor instances walk
+  their per-constructor prototype object for `phylum`.
+
+The remaining three failures are separate object-prototype write/read
+mechanisms (`S8.6.2_A8`, `S8.6.2_A1`, and `S8.6.2_A2`) and are not attributed to
+this `in` slice. The changes are Wasm-native; focused standalone tests confirm
+the ordinary-object and `Object.create(null)` distinction, fnctor prototype
+membership, constructor-alias evaluation, and an empty standalone import
+manifest.
+
 ## 2026-08-19 re-census + dispatch
 
 Fresh standalone baseline (`test262-standalone-current.jsonl`, 48,735 entries,
