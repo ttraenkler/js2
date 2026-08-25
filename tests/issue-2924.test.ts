@@ -70,6 +70,22 @@ describe("#2924 — new Function('<const>') compile-away (standalone)", () => {
     ).toBe(1);
   });
 
+  it("acceptance 5b: a null body argument still falls through to undefined", async () => {
+    expect(
+      await runStandalone(
+        `export function test(): number { const f = new Function(null as any); return f() === undefined ? 1 : 0; }`,
+      ),
+    ).toBe(1);
+  });
+
+  it("acceptance 5c: an empty Function body still falls through to undefined", async () => {
+    expect(
+      await runStandalone(
+        `export function test(): number { const f = new Function("", ""); return f() === undefined ? 1 : 0; }`,
+      ),
+    ).toBe(1);
+  });
+
   it("no-arg new Function() → function anonymous() {} (callable, returns undefined)", async () => {
     expect(
       await runStandalone(

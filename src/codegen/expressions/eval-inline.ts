@@ -1614,7 +1614,7 @@ function synthesizeStaticNewFunction(
   // A unique synthesized name; `mod.functions.length` is monotonic within a
   // compile, so two `new Function` sites never collide.
   const fnName = `__new_function_${ctx.mod.functions.length}`;
-  const synthSrc = `function ${fnName}(${paramSrc}) {\n${body}\n}`;
+  const synthSrc = `function ${fnName}(${paramSrc}) {\n${body}\nreturn undefined;\n}`; // Preserve the canonical standalone undefined completion.
 
   const sf = ts.createSourceFile(
     EVAL_SOURCE_FILENAME,
