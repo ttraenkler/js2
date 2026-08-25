@@ -85,6 +85,19 @@ function registerNativeProtoDelete(ctx: CodegenContext): number | undefined {
   if (flattenIdx === undefined || equalsIdx === undefined) return undefined;
   if (concatIdx === undefined || replaceIdx === undefined) return undefined;
 
+  // A reflected native-prototype method may also have a seeded companion
+  // entry (#2175).  The CSV is the immutable-proto source of truth for the
+  // historical arm, but the own-property ladder consults that companion
+  // first.  Tombstone the companion entry as part of the same delete so
+  // `hasOwnProperty`/gOPD cannot resurrect a method after the CSV rewrite.
+  // These helpers are reserved only for proto-member armed modules; when the
+  // store is absent the cleanup is simply omitted.
+  const brandOffIdx = ctx.funcMap.get("__protoidx_brand_off");
+  const companionIdx = ctx.funcMap.get("__protoidx_companion");
+  const deletePropertyIdx = ctx.funcMap.get("__delete_property");
+  const hasCompanionCleanup =
+    brandOffIdx !== undefined && companionIdx !== undefined && deletePropertyIdx !== undefined;
+
   // params: 0 obj, 1 key
   const L_PROTO = 2;
   const L_FKEY = 3;
@@ -92,6 +105,7 @@ function registerNativeProtoDelete(ctx: CodegenContext): number | undefined {
   const L_PAD = 5;
   const L_NEEDLE = 6;
   const L_OUT = 7;
+  const L_COMPANION = 8;
   const strNull: ValType = { kind: "ref_null", typeIdx: natStr };
   const locals: { name: string; type: ValType }[] = [
     { name: "proto", type: { kind: "ref_null", typeIdx: protoTypeIdx } },
@@ -104,6 +118,7 @@ function registerNativeProtoDelete(ctx: CodegenContext): number | undefined {
     // emitter insert a narrowing cast that trapped ("illegal cast in
     // __delete_property"). Keep it wide and flatten explicitly.
     { name: "out", type: { kind: "ref_null", typeIdx: anyStr } },
+    ...(hasCompanionCleanup ? [{ name: "companion", type: { kind: "externref" } as ValType }] : []),
   ];
   const returnZero: Instr[] = [{ op: "i32.const", value: 0 }, { op: "return" }];
   const comma = (): Instr[] => nativeStringLiteralInstrs(ctx, ",");
@@ -202,6 +217,34 @@ function registerNativeProtoDelete(ctx: CodegenContext): number | undefined {
     { op: "ref.as_non_null" },
     { op: "extern.convert_any" },
     { op: "struct.set", typeIdx: protoTypeIdx, fieldIdx: NP_MEMBER_CSV },
+    // The seeded companion owns the mutable descriptor entry used by the
+    // own-property views.  Delete that entry too; otherwise the seeded ladder
+    // would report the method as own even though `$memberCsv` no longer lists
+    // it.  Calling the regular helper on the plain `$Object` companion is
+    // deliberately non-recursive: its native-proto arm returns 0 and the
+    // ordinary object tombstone path performs the actual removal.
+    ...(hasCompanionCleanup
+      ? [
+          { op: "local.get", index: 0 } as Instr,
+          { op: "call", funcIdx: brandOffIdx! } as Instr,
+          { op: "i32.const", value: 0 } as Instr,
+          { op: "call", funcIdx: companionIdx! } as Instr,
+          { op: "local.set", index: L_COMPANION } as Instr,
+          { op: "local.get", index: L_COMPANION } as Instr,
+          { op: "ref.is_null" } as Instr,
+          { op: "i32.eqz" } as Instr,
+          {
+            op: "if",
+            blockType: { kind: "empty" },
+            then: [
+              { op: "local.get", index: L_COMPANION },
+              { op: "local.get", index: 1 },
+              { op: "call", funcIdx: deletePropertyIdx! },
+              { op: "drop" },
+            ],
+          } as Instr,
+        ]
+      : []),
     { op: "i32.const", value: 1 },
   ];
 

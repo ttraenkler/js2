@@ -129,6 +129,7 @@ describe.skipIf(!TEST262)("#4485 C — Annex B Date.prototype surface (rows that
   pinRow("annexB/built-ins/Date/prototype/toGMTString/value.js", "toGMTString IS toUTCString");
   pinRow("annexB/built-ins/Date/prototype/setYear/year-number-relative.js", "the truncated 0..99 window");
   pinRow("annexB/built-ins/Date/prototype/setYear/B.2.5.js", "setYear is an own property");
+  pinRow("annexB/built-ins/Date/prototype/setYear/year-to-number-err.js", "ToNumber(Symbol) propagates its TypeError");
   // `getYear` is the already-passing control for this family. It is NOT pinned
   // here — `tests/issue-2671-getyear.test.ts` already owns it, and its row was
   // the single slowest task in this file (11 s), which is exactly the shape
@@ -182,10 +183,6 @@ describe.skipIf(!TEST262)("#4485 — measured residuals (owners recorded in the 
   // around a bare `compile()` probe, which would be asserting a DIFFERENT
   // harness's answer and is how a residual gets mis-recorded as fixed.
   // Retire an entry when its row starts passing; the pin fails loudly then.
-  pinResidualRow(
-    "annexB/built-ins/Date/prototype/setYear/year-to-number-err.js",
-    "ToNumber(Symbol) throws nowhere in standalone — a value-representation gap, not Annex B",
-  );
   pinResidualRow(
     "built-ins/Error/prototype/toString/undefined-props.js",
     "§20.5.3.4 on an ARBITRARY receiver needs a real property Get; the native helper reads $Error_struct fields only",
