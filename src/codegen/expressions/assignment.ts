@@ -1111,6 +1111,21 @@ function emitStrictPutValueThrow(ctx: CodegenContext, fctx: FunctionContext): vo
   fctx.body.push({ op: "throw", tagIdx });
 }
 
+function collectObjectRestExcludedKeys(ctx: CodegenContext, target: ts.ObjectLiteralExpression): string[] {
+  const excludedKeys: string[] = [];
+  for (const prop of target.properties) {
+    if (ts.isSpreadAssignment(prop)) continue;
+    const name = ts.isPropertyAssignment(prop) ? prop.name : prop.name;
+    if (ts.isIdentifier(name) || ts.isStringLiteral(name) || ts.isNumericLiteral(name)) {
+      excludedKeys.push(name.text);
+    } else if (ts.isComputedPropertyName(name)) {
+      const key = resolveComputedKeyExpression(ctx, name.expression);
+      if (key !== undefined) excludedKeys.push(key);
+    }
+  }
+  return excludedKeys;
+}
+
 function compileDestructuringAssignment(
   ctx: CodegenContext,
   fctx: FunctionContext,
@@ -1138,6 +1153,16 @@ function compileDestructuringAssignment(
       ? symName
       : (ctx.anonTypeMap.get(rhsType) ?? symName);
 
+  // The checker can erase an object-literal's contextual fields (for example,
+  // `{}` is typed as `{}` even when the codegen shape carries the `x` slot
+  // needed by `{ x: [x] } = {}`). Prefer the actual struct emitted for the RHS
+  // when it is available; otherwise this assignment would skip the nested
+  // pattern before it can observe the missing value as `undefined` (#4717).
+  const actualTypeIdx = (resultType as any).typeIdx as number | undefined;
+  const actualName = actualTypeIdx !== undefined ? ctx.typeIdxToStructName.get(actualTypeIdx) : undefined;
+  const actualFields = actualName ? ctx.structFields.get(actualName) : undefined;
+  const hasActualStruct = actualTypeIdx !== undefined && actualFields !== undefined;
+
   // Auto-register anonymous object types (same as resolveWasmType logic)
   if (
     typeName &&
@@ -1154,7 +1179,7 @@ function compileDestructuringAssignment(
   // we just need the RHS value as the expression result.  For non-empty
   // patterns the bindings stay at their defaults (mimics JS behaviour for
   // destructuring primitives — the properties simply do not exist). (#379)
-  if (!typeName || !ctx.structMap.has(typeName) || !ctx.structFields.get(typeName)) {
+  if ((!typeName || !ctx.structMap.has(typeName) || !ctx.structFields.get(typeName)) && !hasActualStruct) {
     // Null/undefined check — throw TypeError (#783, #1260, #1701).
     // In JS, `{...} = null` and `{...} = undefined` always throw TypeError per
     // §13.15.5.2 ObjectAssignmentPattern step 1 (RequireObjectCoercible(value)),
@@ -1378,9 +1403,6 @@ function compileDestructuringAssignment(
   // ref-typed fields, but the TS checker sees externref fields). (#822)
   let structTypeIdx: number;
   let fields: { name: string; type: ValType; mutable?: boolean }[];
-  const actualTypeIdx = (resultType as any).typeIdx as number | undefined;
-  const actualName = actualTypeIdx !== undefined ? ctx.typeIdxToStructName.get(actualTypeIdx) : undefined;
-  const actualFields = actualName ? ctx.structFields.get(actualName) : undefined;
   if (actualTypeIdx !== undefined && actualFields) {
     structTypeIdx = actualTypeIdx;
     fields = actualFields;
@@ -1721,17 +1743,9 @@ function compileDestructuringAssignment(
         if (restIdx === undefined) {
           restIdx = allocLocal(fctx, restName, { kind: "externref" });
         }
-        // Collect excluded property names
-        const excludedKeys: string[] = [];
-        for (const p of target.properties) {
-          if (ts.isSpreadAssignment(p)) continue;
-          if (ts.isPropertyAssignment(p) || ts.isShorthandPropertyAssignment(p)) {
-            const pn = ts.isPropertyAssignment(p) ? p.name : p.name;
-            if (ts.isIdentifier(pn)) excludedKeys.push(pn.text);
-            else if (ts.isStringLiteral(pn)) excludedKeys.push(pn.text);
-            else if (ts.isNumericLiteral(pn)) excludedKeys.push(pn.text);
-          }
-        }
+        // Collect excluded property names, including statically-resolvable
+        // computed names (e.g. `{ [a]: b, ...rest }`).
+        const excludedKeys = collectObjectRestExcludedKeys(ctx, target);
         if (ctx.targetProfile.semanticProviders === "native-first") {
           const emitted = emitNativeObjectRest(
             ctx,
@@ -3156,7 +3170,10 @@ function emitArrayDestructureFromLocal(
     if (isVecStruct) {
       fctx.body.push({ op: "struct.get", typeIdx: srcTypeIdx, fieldIdx: 1 });
       fctx.body.push({ op: "i32.const", value: i });
-      emitBoundsCheckedArrayGet(fctx, arrTypeIdx, arrDef!.element);
+      // Nested assignment patterns read an array-like value, so an absent
+      // element is the JS `undefined` value (and a sparse-array hole must not
+      // leak its internal sentinel). (#4717)
+      emitBoundsCheckedArrayGet(fctx, arrTypeIdx, arrDef!.element, ctx, true);
     } else {
       // Tuple: direct struct.get on field index i
       fctx.body.push({ op: "struct.get", typeIdx: srcTypeIdx, fieldIdx: i });
