@@ -235,7 +235,35 @@ throwing-object row while concurrent compiler-heavy tasks were active; they are
 load-contaminated diagnostics, not acceptance evidence.
 
 The source experiment, WAT instrumentation, probe-only test, and generated
-report mirror were restored. PR #5023 remains a draft issue-backed handoff. The
-next implementation must first prove why the Test262 fixture bypasses the
-direct reduction's carrier/classifier path before changing shared closure,
-prototype, or `instanceof` machinery again.
+report mirror were restored. PR #5023 has since merged; this branch therefore
+does not attempt to update that PR or claim readiness. The next implementation
+must first prove why the Test262 fixture bypasses the direct reduction's
+carrier/classifier path before changing shared closure, prototype, or
+`instanceof` machinery again.
+
+## 2026-08-27 resumed native-instanceof experiment — no-gain handoff
+
+The exact three maintained rows were rerun through
+`scripts/harness-flip-probe.ts` with the positive pass/fail controls enabled
+and the pinned QuickJS artifact
+`/private/tmp/js2-quickjs-artifact-2e2d7736713beeda`. The uncommitted native
+prototype experiment measured **standalone 1/3**: the primitive row passed;
+the object-return row failed with `[] should be instance of Function.prototype`;
+the throwing-object row failed because no `DummyError` was observed. Its host
+run measured **0/3** (the object row failed its one-call assertion and the two
+later rows hit `Cannot redefine property: prototype`), so it is diagnostic only
+and not a host acceptance claim. The earlier isolated clean-source host
+control remains **2/3** (throwing-object and primitive passed) and the clean
+standalone control remains **1/3** (primitive passed), with zero compile errors,
+timeouts, or skips in the accepted measurements.
+
+Temporary source changes to accessor return representation, native
+`Function.prototype` callability, native-prototype membership, and WAT probes
+were removed after this run. A direct reduction showed that an ordinary
+`"zz"` descriptor reaches the native companion, while the literal
+`"prototype"` descriptor is absent from that companion and from own-name
+enumeration. This isolates the remaining blocker to the compiler's special
+literal-`prototype` define path; the native `instanceof` membership arm is not
+yet exercised by the maintained fixture. No permanent focused test or source
+fix is claimed. The branch carries this issue-only handoff and is ready for a
+future clean implementation branch/new PR; cluster 5 remains out of scope.
