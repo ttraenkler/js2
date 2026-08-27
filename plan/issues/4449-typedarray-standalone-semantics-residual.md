@@ -269,3 +269,63 @@ the 52/55 control floor; its three failures are the pre-existing Float64
 `slice`/`subarray` custom-constructor receiver and invocation-argument rows.
 Draft PR #5022 must remain draft and this issue remains in progress until a
 future checkpoint reaches standalone 55/55 and host 55/55 with zero nonpasses.
+
+## 2026-08-27 constructor/default-identity checkpoint (partial)
+
+The bounded constructor/default-identity investigation found a re-entrant
+carrier-publication bug in the shared builtin constructor identity helper.
+When the carrier stayed null while its own properties were seeded, the native
+prototype companion could materialize the same constructor a second time and
+publish a different identity through `prototype.constructor`. Publishing the
+fresh carrier before seeding its properties fixes that split with one shared
+ordering change in `src/codegen/builtin-static-globals.ts`. The exploratory
+`dataview-native.ts` and `ta-dyn-mop.ts` edits were removed; no dataview-native
+change is part of this gain.
+
+Focused evidence after the cleanup:
+
+- `tests/issue-4449-species-controls.test.ts` plus
+  `tests/issue-4449-species-producers.test.ts`: **12/12 passed**, zero
+  standalone `env` imports.
+- The exact constructor/default-identity subset (the four methods' `get-ctor`
+  and `get-species-use-default-ctor` rows): **8/8 passed** standalone; this
+  subset was 0/8 before the carrier-order fix.
+- `pnpm run typecheck`, `pnpm run typecheck:ts5`, Prettier on the changed
+  source, `check:loc-budget`, `check:func-budget`, and `git diff --check` all
+  passed. Biome's changed-file check still reports the file's pre-existing
+  import-order/formatting diagnostics; no unsafe formatting rewrite was made.
+- A repository-wide debug-marker audit (excluding vendored `node_modules`,
+  `test262`, and `.git`) found no instrumentation matches.
+
+The frozen 55-row file is `/private/tmp/js2-4449-species-55.txt`. Direct
+bounded-pair runs used `COMPILER_POOL_SIZE=2`, the maintained pnpm/node PATH,
+and `NODE_OPTIONS=--max-old-space-size=3072`. The standalone lane used
+`JS2WASM_EVAL_ENGINE=quickjs` with pinned artifact
+`/private/tmp/js2-quickjs-artifact-2e2d7736713beeda`; the host lane used the
+default host evaluator. Both lanes executed the literal Test262 harness and
+strict rerun for every row:
+
+| Lane | Pass | Fail | Compile errors | Timeouts | Skips | Denominator |
+|---|---:|---:|---:|---:|---:|---:|
+| standalone (pinned QuickJS artifact) | 28 | 27 | 0 | 0 | 0 | 55 |
+| host | 52 | 3 | 0 | 0 | 0 | 55 |
+
+The standalone result is a partial improvement from the prior 20/35
+checkpoint, with the eight constructor/default rows now green. Remaining
+standalone failures are exactly 27 rows: method totals are `map 7`,
+`filter 6`, `slice 8`, and `subarray 6`. They are the four
+`speciesctor-get-ctor-inherited` rows, four
+`speciesctor-get-ctor-returns-throws` rows, four
+`speciesctor-get-species-returns-throws` rows, four custom-constructor
+invocation rows, three custom-constructor `length-throws` rows, three
+custom-constructor `returns-another-instance` rows, four custom-constructor
+value-copy rows, and `slice/speciesctor-return-same-buffer-with-offset.js`.
+The host residual remains the 3-row control floor: slice and subarray custom
+constructor “returns another instance” receiver rows plus the subarray custom
+constructor invocation-argument row.
+
+This checkpoint is not an acceptance claim. PR #5022 remains draft and the
+issue remains in progress until standalone reaches 55/55 and host reaches
+55/55 with zero nonpasses. The next bounded cluster is invalid constructor/
+species abrupt handling and returned-view validation; detached buffers,
+reflection metadata, and BigInt carriers remain out of scope.

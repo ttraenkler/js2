@@ -196,6 +196,12 @@ export function emitBuiltinConstructorIdentity(
   const initBody: Instr[] = [
     { op: "call", funcIdx: newObjectIdx },
     { op: "local.set", index: objLocal },
+    // Publish the carrier before seeding its own properties.  A constructor
+    // prototype seed can materialize the same carrier again through the
+    // native-prototype companion; leaving the global null until the end would
+    // let that re-entrant path mint a second object and split identity.
+    { op: "local.get", index: objLocal },
+    { op: "global.set", index: globalIdx },
   ];
 
   // (#2182 pattern) `savedBody` is detached during the swap; register it in
@@ -205,8 +211,6 @@ export function emitBuiltinConstructorIdentity(
   ctx.liveBodies.add(savedBody);
   try {
     pushBuiltinCtorOwnPropSeed(ctx, fctx, builtinName, objLocal);
-    fctx.body.push({ op: "local.get", index: objLocal });
-    fctx.body.push({ op: "global.set", index: globalIdx });
   } finally {
     fctx.body = savedBody;
     ctx.liveBodies.delete(savedBody);
