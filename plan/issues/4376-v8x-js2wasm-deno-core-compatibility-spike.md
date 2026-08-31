@@ -550,6 +550,34 @@ the `42`/`43`/`44` stages and all bridge checks. Against the clean checkpoint
 without the composed patch (10,007,948 bytes), the patch reduces the artifact
 by 3,006 bytes; the larger artifact size predates it.
 
+## Implementation notes (2026-08-31): unoptimized runtime-eval provider
+
+The failed full provider was not a module-init chunking miscompile. Its
+unoptimized chunks initialize the interpreter correctly: direct construction,
+non-script `FunctionEmitter` emission, and manually constructed interpreted
+closures all work. The distinguishing path is real Acorn parsing of a dynamic
+Function/direct-eval body. Acorn emits reflective `fn.call(...)` sites; the
+interpreter represents those as `GetProp("call")` followed by generic `Call`,
+which materializes `%Function.prototype.call%` instead of taking the AOT
+static-call rewrite.
+
+That reflected native-prototype member had no standalone body and fell through
+to the generic refusal closure. The exception left `createDynamicFunction`/
+direct eval unable to return a callable, so only the simple `"1 + 2"` eval
+canary passed. The fix gives the standalone `%Function.prototype.call%` value a
+receiver-aware variadic body: it separates `[thisArg, ...args]` and invokes the
+target through `__apply_closure`, preserving AOT and interpreted callable
+carriers. The pre-existing full-provider `__runtime_function_canary` is the
+causal regression: Acorn's real dynamic-function parse uses this reflective
+route and now returns `3` in a fresh zero-import baseline-only Node build.
+
+An independently compiled user module that performs an indirect eval of a
+function declaration still reaches a separate cross-module exception before
+the reflective call result can surface. That pre-existing declaration/link
+path is not claimed fixed here and must not be used as this change's regression
+assertion; a provider-internal function-expression `GetProp("call") + Call`
+control returns `42` with this fix.
+
 ## Handover
 
 The exact pins, stop point, reproduction steps, rejected shortcuts, and safest
