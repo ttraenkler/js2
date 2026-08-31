@@ -822,6 +822,66 @@ explicitly deferred. These are focused and inventory-honest results, not a
 claim that TypeScript's complete upstream unit suite passes. The post-fix
 canonical three-fingerprint parser run remains the next required measurement.
 
+## Parser-first carrier checkpoint and module plan (2026-08-31)
+
+The latest pre-fix canonical artifact is **84,770,324 bytes** with **4,298
+functions** (SHA-256
+`7f2a39eea88146b5c5b595b0dd576d9bd217e574d7b138468fb2fe9dc6c2f464`). It
+compiles, validates, and all three
+workloads enter the compiled parser. The two remaining failures were reduced to
+exact representation/order boundaries rather than parser algorithms:
+
+- `builderStatePublic.ts` and `performanceCore.ts` reached NodeFactory with a
+  generic `PunctuationToken` allocation carrier, while the generated
+  `createPropertySignature` / `createMethodSignature` ABI demanded a distinct
+  nominal `QuestionToken` alias leaf.
+- `corePublic.ts` reached `cast(value, isLeftHandSideExpression)`, but the
+  generic predicate's callable ladder was finalized before the later imported
+  `Node -> boolean` predicate wrapper was visible.
+
+Direct object type-reference aliases now reuse the referenced declaration's
+exact carrier when their field ABI and source-level scalar brands match. The
+referenced declaration remains the sole owner of shared field metadata, so
+sibling specializations such as `Box<A>` and `Box<B>` cannot rewrite each
+other's generic field carrier. Cross-source callback discovery now resolves
+import aliases to their exported declarations, records exact source-declared
+reference predicates, and admits their guarded `externref -> ref` argument
+bridge only inside a callable type-predicate signature. Focused coverage passes
+in both GC and standalone lanes; all **61** issue-1058 files pass (**306/306
+tests**), the nine merge-sensitive/verdict controls pass **117/117**, the pinned
+TypeScript slice passes **14/14** native and **14/14** Wasm callbacks, and TS7
+typecheck passes. The canonical three-fingerprint rerun is the remaining parser
+acceptance measurement.
+
+The immediate product boundary is a runnable **parser-only** artifact. Its
+entry graph should link scanner, parser, syntax/node factories, and only their
+required core/diagnostic initialization. Binder, checker, emitter, and language
+services are not parser-milestone roots. Subsequent public entry graphs should
+layer these capabilities explicitly:
+
+1. scanner/parser and AST construction;
+2. binder over an existing AST;
+3. checker over parser+binder;
+4. language/editor/incremental/server services as an opt-in graph.
+
+Source-graph elimination must start from the selected entry API. Type-only
+imports disappear, and a runtime module that is neither reachable nor
+re-exported may be omitted only when its top-level evaluation is proven
+effect-free. Side-effect imports, observable initializers, and module evaluation
+order remain roots. Consumer-driven barrels should retain the named parser
+bindings, not every export from `_namespaces/ts.js`.
+
+A second DCE pass is required after lowering. Its roots are public exports,
+module/start initialization, host-visible callbacks, and functions genuinely
+reachable through `ref.func`, tables/elements, or dynamic registries.
+Unreachable functions, globals, types, data, and table entries should be
+removed, followed by identical-body folding. Current barriers are the broad
+`ts` namespace barrel, eager module initialization, runtime namespace and
+callable-dispatch registries, conservative `ref.func` rooting, and duplicate
+discovery/final closure cohorts. The measured reduction from roughly 83.6 MB
+to 41.1 MB using unused-module elimination already proves that a large fraction
+of the parser artifact is removable generated code.
+
 ## Acceptance criteria
 
 - [ ] `scripts/ts-compiler-stress.ts` exists and runs against a local `typescript` install

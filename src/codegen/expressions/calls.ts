@@ -3808,6 +3808,7 @@ export function ensureFuncValueWrappersRegistered(ctx: CodegenContext, sf: ts.So
     __funcValueWrapperNamedDeclarations?: Set<ts.FunctionDeclaration>;
     __funcValueWrapperPendingExactDeclarations?: Set<ts.FunctionDeclaration>;
     __funcValueWrapperFunctionExpressions?: Set<ts.FunctionExpression | ts.ArrowFunction>;
+    __funcValueWrapperReferencePredicateFuncTypes?: Set<number>;
   };
   const registeredSources =
     registrationState.__funcValueWrapperSourcesRegistered ??
@@ -3832,6 +3833,9 @@ export function ensureFuncValueWrappersRegistered(ctx: CodegenContext, sf: ts.So
   const usedAsValueFunctions =
     registrationState.__funcValueWrapperFunctionExpressions ??
     (registrationState.__funcValueWrapperFunctionExpressions = new Set<ts.FunctionExpression | ts.ArrowFunction>());
+  const referencePredicateFuncTypes =
+    registrationState.__funcValueWrapperReferencePredicateFuncTypes ??
+    (registrationState.__funcValueWrapperReferencePredicateFuncTypes = new Set<number>());
   let liveClosureInfosByFuncTypeIdx: Map<number, Set<ClosureInfo>> | undefined;
   const indexLiveClosureInfo = (info: ClosureInfo): void => {
     const index = (liveClosureInfosByFuncTypeIdx ??= new Map());
@@ -3892,7 +3896,21 @@ export function ensureFuncValueWrappersRegistered(ctx: CodegenContext, sf: ts.So
         (ts.isFunctionDeclaration(p) || ts.isFunctionExpression(p)) &&
         (p as ts.FunctionLikeDeclaration).name === node;
       if (!isCallee && !isNewCallee && !isOwnName) {
-        const sym = ctx.checker.getSymbolAtLocation(node);
+        let sym = ctx.checker.getSymbolAtLocation(node);
+        // Cross-file callback values are normally referenced through an
+        // ImportSpecifier alias.  Looking only at the alias's declaration
+        // records the import node rather than the function declaration, so a
+        // generic helper compiled before the imported callback never sees its
+        // wrapper type.  Resolve the alias to the exact exported declaration
+        // before populating the order-independent candidate set.
+        if (sym && (sym.flags & ts.SymbolFlags.Alias) !== 0) {
+          try {
+            sym = ctx.checker.getAliasedSymbol(sym);
+          } catch {
+            // Keep the unresolved symbol; it cannot name a source function
+            // declaration and is therefore safely ignored below.
+          }
+        }
         const decl = sym?.valueDeclaration;
         if (decl && ts.isFunctionDeclaration(decl) && decl.name) {
           usedAsValue.add(decl);
@@ -3960,6 +3978,19 @@ export function ensureFuncValueWrappersRegistered(ctx: CodegenContext, sf: ts.So
     if (sig.params.length < sourceParamSlotCount) return false;
     const params = sourceParamSlotCount === 0 ? [] : sig.params.slice(sig.params.length - sourceParamSlotCount);
     const wrapper = getOrCreateFuncRefWrapperTypes(ctx, params, sig.results);
+    if (
+      wrapper &&
+      declaration.type !== undefined &&
+      ts.isTypePredicateNode(declaration.type) &&
+      declaration.type.assertsModifier === undefined &&
+      params.length === 1 &&
+      (params[0]!.kind === "ref" || params[0]!.kind === "ref_null") &&
+      sig.results.length === 1 &&
+      sig.results[0]!.kind === "i32" &&
+      sig.results[0]!.boolean === true
+    ) {
+      referencePredicateFuncTypes.add(wrapper.closureInfo.funcTypeIdx);
+    }
     if (wrapper) {
       const minimumArgumentCount = expectedArgumentCountOfParams(declaration.parameters);
       if (minimumArgumentCount < params.length) {
@@ -3990,13 +4021,22 @@ export function ensureFuncValueWrappersRegistered(ctx: CodegenContext, sf: ts.So
 
     // Captured or not-yet-registered nested declarations have no safe funcMap
     // signature to consult. Their lifted funcref still shares the root wrapper
-    // signature computed from the declaration, but only pre-register the same
-    // conservative all-externref shape used for function expressions below.
-    // Numeric/mixed speculative candidates can make an over-arity dispatch arm
-    // invalid even when that arm never matches at runtime.
+    // signature computed from the declaration. Pre-register the same
+    // conservative all-externref shape used for function expressions below,
+    // plus the exact one-ref -> boolean ABI of a syntactically declared type
+    // predicate. Numeric/mixed speculative candidates can make an over-arity
+    // dispatch arm invalid even when that arm never matches at runtime.
     const { params, returnType } = computeClosureWrapperSig(ctx, declaration);
     const allExternref = params.every((p) => p.kind === "externref");
     const externrefOrVoidReturn = returnType === null || returnType.kind === "externref";
+    const safeReferencePredicate =
+      declaration.type !== undefined &&
+      ts.isTypePredicateNode(declaration.type) &&
+      declaration.type.assertsModifier === undefined &&
+      params.length === 1 &&
+      (params[0]!.kind === "ref" || params[0]!.kind === "ref_null") &&
+      returnType?.kind === "i32" &&
+      returnType.boolean === true;
     const hasOmittableTrailingParams = expectedArgumentCountOfParams(declaration.parameters) < params.length;
     // A callback whose entire parameter ABI is externref can safely be
     // registered before its value site: omitted trailing parameters are
@@ -4018,8 +4058,11 @@ export function ensureFuncValueWrappersRegistered(ctx: CodegenContext, sf: ts.So
           (returnType.kind === "i32" && returnType.boolean === true) ||
           (returnType.kind === "f64" && returnType.undefSentinel !== true)
         : hasOmittableTrailingParams && (returnType.kind === "ref" || returnType.kind === "ref_null"));
-    if (!allExternref || (!externrefOrVoidReturn && !safeErasedReturn)) continue;
+    if ((!allExternref || (!externrefOrVoidReturn && !safeErasedReturn)) && !safeReferencePredicate) continue;
     const wrapper = getOrCreateFuncRefWrapperTypes(ctx, params, returnType ? [returnType] : []);
+    if (wrapper && safeReferencePredicate) {
+      referencePredicateFuncTypes.add(wrapper.closureInfo.funcTypeIdx);
+    }
     if (wrapper && hasOmittableTrailingParams) {
       observeMinimumArgumentCount(wrapper, expectedArgumentCountOfParams(declaration.parameters));
     }

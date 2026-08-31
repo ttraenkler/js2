@@ -2334,7 +2334,7 @@ export function collectDeclarations(ctx: CodegenContext, sourceFile: ts.SourceFi
       } else if (ts.isTypeAliasDeclaration(stmt)) {
         const aliasType = ctx.checker.getTypeAtLocation(stmt);
         if (aliasType.flags & ts.TypeFlags.Object) {
-          collectObjectType(ctx, stmt.name.text, aliasType);
+          collectObjectType(ctx, stmt.name.text, aliasType, stmt);
         }
       }
     }

@@ -33,6 +33,7 @@ interface RegisteredInterface {
 const registeredInterfaces = new WeakMap<CodegenContext, RegisteredInterface[]>();
 const collectedInterfaceDeclarations = new WeakMap<CodegenContext, WeakSet<ts.InterfaceDeclaration>>();
 const erasedNominalBrandFacts = new WeakMap<CodegenContext, WeakMap<ts.Symbol, boolean>>();
+const directTypeReferenceCarrierAliases = new WeakMap<CodegenContext, WeakSet<ts.TypeAliasDeclaration>>();
 
 function isRuntimeErasedNominalBrand(ctx: CodegenContext, symbol: ts.Symbol): boolean {
   let facts = erasedNominalBrandFacts.get(ctx);
@@ -512,6 +513,14 @@ export function resolveStructFieldTypes(ctx: CodegenContext, sourceFile: ts.Sour
 
   for (const stmt of sourceFile.statements) {
     if (!ts.isTypeAliasDeclaration(stmt)) continue;
+    // A direct alias that reuses another declaration's exact carrier is not a
+    // second owner of that carrier's FieldDef array.  Re-resolving the alias's
+    // specialized properties here would mutate the shared generic carrier
+    // (Box<A> could rewrite Box<T>.value from externref to ref A, then make a
+    // sibling Box<B> fail).  The referenced declaration is resolved in its own
+    // interface/type-alias pass and remains the sole authority for the shared
+    // field ABI.
+    if (directTypeReferenceCarrierAliases.get(ctx)?.has(stmt) === true) continue;
 
     const name = stmt.name.text;
     const fields = ctx.structFields.get(name);
@@ -585,12 +594,88 @@ export function publishDeclaredShapesForDedup(ctx: CodegenContext, sourceFile: t
   }
 }
 
-export function collectObjectType(ctx: CodegenContext, name: string, type: ts.Type): void {
+function directTypeReferenceAliasCarrier(
+  ctx: CodegenContext,
+  declaration: ts.TypeAliasDeclaration,
+  type: ts.Type,
+): { typeIdx: number; fields: FieldDef[] } | undefined {
+  let typeNode: ts.TypeNode = declaration.type;
+  while (ts.isParenthesizedTypeNode(typeNode)) typeNode = typeNode.type;
+  if (!ts.isTypeReferenceNode(typeNode)) return undefined;
+
+  let symbol = ctx.checker.getSymbolAtLocation(typeNode.typeName);
+  if (symbol && (symbol.flags & ts.SymbolFlags.Alias) !== 0) {
+    try {
+      symbol = ctx.checker.getAliasedSymbol(symbol);
+    } catch {
+      // A malformed alias in skip-diagnostics mode is not carrier evidence.
+      return undefined;
+    }
+  }
+  const targetName = symbol?.name;
+  if (!targetName || targetName === declaration.name.text) return undefined;
+  const typeIdx = ctx.structMap.get(targetName);
+  const targetFields = ctx.structFields.get(targetName);
+  if (typeIdx === undefined || !targetFields || targetFields.length === 0) return undefined;
+
+  // A direct type alias creates no JavaScript object or nominal runtime
+  // identity.  Generic literal specializations such as
+  // `QuestionToken = PunctuationToken<SyntaxKind.QuestionToken>` therefore
+  // share their referenced interface's allocation carrier when every physical
+  // field is unchanged.  Emitting a fresh WasmGC subtype for the alias makes a
+  // token allocated by the generic factory fail the first parameter/field
+  // downcast even though TypeScript treats both views as the same object.
+  const properties = new Map(type.getProperties().map((property) => [property.name, property] as const));
+  if (properties.size !== targetFields.length) return undefined;
+  for (const targetField of targetFields) {
+    const property = properties.get(targetField.name);
+    if (!property) return undefined;
+    const aliasFieldType = mapDeclaredFieldType(ctx, ctx.checker.getTypeOfSymbol(property));
+    if (!samePhysicalValType(aliasFieldType, targetField.type)) return undefined;
+    // Physical Wasm equality alone is insufficient for source-level carrier
+    // identity: boolean/symbol/bigint/undefined-sentinel brands select the
+    // correct boxer when a field crosses an externref boundary.
+    if (
+      (aliasFieldType.kind === "i32" &&
+        targetField.type.kind === "i32" &&
+        (aliasFieldType.boolean !== targetField.type.boolean || aliasFieldType.symbol !== targetField.type.symbol)) ||
+      (aliasFieldType.kind === "i64" &&
+        targetField.type.kind === "i64" &&
+        aliasFieldType.bigint !== targetField.type.bigint) ||
+      (aliasFieldType.kind === "f64" &&
+        targetField.type.kind === "f64" &&
+        aliasFieldType.undefSentinel !== targetField.type.undefSentinel)
+    ) {
+      return undefined;
+    }
+  }
+  return { typeIdx, fields: targetFields };
+}
+
+export function collectObjectType(
+  ctx: CodegenContext,
+  name: string,
+  type: ts.Type,
+  declaration?: ts.TypeAliasDeclaration,
+): void {
   // A homomorphic `-readonly` alias is only a compile-time mutability view.
   // resolveWasmType and ensureStructForType canonicalize its instantiations to
   // the source type; declaration collection must likewise avoid publishing a
   // phantom named struct for the generic alias itself.
   if (readonlyErasureMappedAliasTarget(type)) return;
+
+  const aliasCarrier = declaration ? directTypeReferenceAliasCarrier(ctx, declaration, type) : undefined;
+  if (aliasCarrier) {
+    let aliases = directTypeReferenceCarrierAliases.get(ctx);
+    if (!aliases) {
+      aliases = new WeakSet<ts.TypeAliasDeclaration>();
+      directTypeReferenceCarrierAliases.set(ctx, aliases);
+    }
+    aliases.add(declaration!);
+    ctx.structMap.set(name, aliasCarrier.typeIdx);
+    ctx.structFields.set(name, aliasCarrier.fields);
+    return;
+  }
 
   const fields: FieldDef[] = [];
   for (const prop of type.getProperties()) {

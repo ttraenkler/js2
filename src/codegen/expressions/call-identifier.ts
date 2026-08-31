@@ -1943,6 +1943,45 @@ export function compileIdentifierCall(
           // `async-function/returns-async-function-returns-arguments-*`.
           const calleeIsAsync = isPromiseType(sigRetType);
           const expectedReturn: ValType | null = calleeIsAsync ? { kind: "externref" } : matchedClosureInfo.returnType; // null for void
+          const callableTypePredicate = ctx.checker.getTypePredicateOfSignature(sig);
+          const referencePredicateFuncTypes = (
+            ctx as unknown as { __funcValueWrapperReferencePredicateFuncTypes?: Set<number> }
+          ).__funcValueWrapperReferencePredicateFuncTypes;
+
+          // A generic predicate parameter erases `T` to externref in the
+          // higher-order body, while the concrete predicate retains its exact
+          // source ABI (`Node -> boolean`).  The wrapper is selected by its
+          // exact funcref type, so after that runtime proof it is safe to
+          // recover the one reference argument for the predicate call.  Keep
+          // this exception tied to source-declared type predicates registered
+          // by the whole-program callback pre-scan; ordinary externref ->
+          // nominal-ref callback candidates remain excluded.
+          const referencePredicateArgumentBridge = (
+            candidate: { funcTypeIdx: number; returnType: ValType | null; paramTypes: ValType[] },
+            paramIndex: number,
+            from: ValType,
+            to: ValType,
+          ): Instr[] | null => {
+            if (
+              callableTypePredicate === undefined ||
+              paramIndex !== 0 ||
+              sigParamWasmTypes.length !== 1 ||
+              candidate.paramTypes.length !== 1 ||
+              referencePredicateFuncTypes?.has(candidate.funcTypeIdx) !== true ||
+              expectedReturn?.kind !== "i32" ||
+              expectedReturn.boolean !== true ||
+              candidate.returnType?.kind !== "i32" ||
+              candidate.returnType.boolean !== true ||
+              !isHostExtern(from) ||
+              (to.kind !== "ref" && to.kind !== "ref_null")
+            ) {
+              return null;
+            }
+            return [
+              { op: "any.convert_extern" },
+              { op: to.kind === "ref_null" ? "ref.cast_null" : "ref.cast", typeIdx: to.typeIdx },
+            ];
+          };
 
           const declaredRefSubtypeOf = (from: ValType, to: ValType): boolean => {
             if ((from.kind !== "ref" && from.kind !== "ref_null") || (to.kind !== "ref" && to.kind !== "ref_null")) {
@@ -2261,12 +2300,23 @@ export function compileIdentifierCall(
             let paramsMatch = true;
             for (let pi = 0; pi < candidateParamTypes.length; pi++) {
               if (!scalarAbiTypesMatch(candidateParamTypes[pi]!, sigParamWasmTypes[pi]!)) {
-                const bridge = dispatchBridgePlan(
-                  sigParamWasmTypes[pi]!,
-                  candidateParamTypes[pi]!,
-                  argumentHasNumberBridgeProof(pi),
-                  true,
-                );
+                const bridge =
+                  dispatchBridgePlan(
+                    sigParamWasmTypes[pi]!,
+                    candidateParamTypes[pi]!,
+                    argumentHasNumberBridgeProof(pi),
+                    true,
+                  ) ??
+                  referencePredicateArgumentBridge(
+                    {
+                      funcTypeIdx: info.funcTypeIdx,
+                      returnType: info.returnType,
+                      paramTypes: info.paramTypes,
+                    },
+                    pi,
+                    sigParamWasmTypes[pi]!,
+                    candidateParamTypes[pi]!,
+                  );
                 if (bridge === null) {
                   paramsMatch = false;
                   break;
@@ -2870,7 +2920,9 @@ export function compileIdentifierCall(
                 }
                 fcCallBody.push({ op: "local.get", index: argLocals[ai]! });
                 if (!scalarAbiTypesMatch(fromType, toType)) {
-                  const bridge = dispatchBridgePlan(fromType, toType, argumentHasNumberBridgeProof(ai), true);
+                  const bridge =
+                    dispatchBridgePlan(fromType, toType, argumentHasNumberBridgeProof(ai), true) ??
+                    referencePredicateArgumentBridge(fc, ai, fromType, toType);
                   if (bridge === null) {
                     candidateArgsCoercible = false;
                     break;
