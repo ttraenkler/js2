@@ -369,6 +369,7 @@ import { fillMapSetDynDispatchArms } from "./map-runtime.js"; // (#4629) Map/Set
 import { fillBigIntDynValueOfArm } from "./wrapper-proto-value-of.js"; // (#4631) dyn wrapper valueOf arm
 import { scanGlobalThisFnShadows } from "./fn-global-shadow.js"; // (#4630) globalThis.<fn> reassignment shadowing
 import { fillAsyncClosurePromiseWrappers } from "./async-closure-promise.js"; // (#4648)
+import { fillDeferredCallablePropertyDispatches } from "./expressions/calls-closures.js";
 import { moduleMentionsObjectIdentifier, moduleReadsConstructorProp } from "./wrapper-constructor-carrier.js"; // (#4223/#4232)
 import { unshiftNativeProtoHasOwnArms } from "./native-proto-own-props.js"; // (#4248) builtin-proto own members
 import { unshiftRegExpAccessorSetGuard } from "./regexp-accessor-set-guard.js"; // (#2875 w4-F)
@@ -5951,6 +5952,13 @@ export function generateModule(
       for (let n = 6; n <= cap; n++) emitClosureMethodCallExportN(ctx, n);
     }
 
+    // (#1058) Callable-property sites can compile before the closure stored by
+    // a later source has published its concrete funcref ABI. Complete their
+    // reserved typed ladders now, over the final closure registry and before
+    // any consumer helper snapshots that registry. The fill only replaces
+    // reserved bodies/locals; it registers no module state.
+    fillDeferredCallablePropertyDispatches(ctx);
+
     // Emit the declared-arity classifier before filling `__apply_closure`.
     // The native bridge uses it to select a dispatcher wide enough for calls
     // that omit optional trailing arguments, padding those missing formals with
@@ -10432,6 +10440,11 @@ export function generateMultiModule(multiAst: MultiTypedAST, options?: CodegenOp
       const cap = Math.min(maxClosureArity, 8);
       for (let n = 0; n <= cap; n++) emitClosureMethodCallExportN(ctx, n);
     });
+
+    // (#1058) Multi-source twin of the primary finalize seam. The parser-side
+    // call can precede the scanner-side captured closure, so the ladder must be
+    // filled only after the complete graph has emitted its closure ABIs.
+    profilePhase("fill-deferred-callable-property-dispatch", () => fillDeferredCallablePropertyDispatches(ctx));
 
     // These reserve/fill drivers require the receiver-aware arity-0 bridge,
     // which is only registered by the loop above in the multi-source path.

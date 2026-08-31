@@ -790,13 +790,37 @@ The three runtime fingerprints do **not** pass yet:
   The sound follow-up is a deferred/finalized callable-property dispatcher, not
   another eager signature guess or a `setOnError` special case.
 
-After the current edits, all **57** `tests/issue-1058-*.test.ts` files pass
-(**297/297 tests**), and both TS5 and TS7 typechecks pass. The bounded pinned
-TypeScript 5.9.3 upstream adapter also passes all **11/11** admitted original
-callbacks across its three selected files; **253** upstream files are explicitly
-deferred. These figures cover focused compiler regressions only. The adapter is
-not TypeScript's complete unit suite, and no full Wasm-backed TypeScript unit
-runner exists yet.
+The next focused follow-up now implements both diagnosed parser seams:
+
+- Conditional expressions joining different nominal reference siblings no
+  longer select the first arm's concrete layout and guarded-cast the other arm
+  to null. Each arm first honors a lossless contextual reference carrier; with
+  no contextual carrier, the result uses the nearest declared common struct
+  ancestor (or `externref` when no such ancestor exists). The exact
+  `StringLiteral | Identifier` shape behind
+  `parseImportOrExportSpecifier` is covered, as is the contextual vec-union
+  counterexample that would regress Redux reducers if joined at `__vec_base`.
+- Eligible externref-backed callable properties now reserve one typed private
+  dispatcher per declared ABI/result while lowering early call sites, then fill
+  its body from the complete closure registry after all source bodies have been
+  emitted. This admits `createScanner`'s later-published `setScriptKind(number)`
+  trampoline without guessing another eager signature or shifting already
+  baked module indices. The order-independent path is deliberately limited to
+  zero-argument or all-scalar signatures: any admitted reference parameter can
+  be indistinguishable from a source-rest closure prefix and still needs an
+  argc/argv-aware carrier before it can be widened soundly.
+
+At this checkpoint all **59** `tests/issue-1058-*.test.ts` files pass
+(**301/301 tests**). The merge-sensitive #3996/#4294/#4470/#4486/#5166 and
+TypeScript verdict controls add **117/117** passing tests. Both TS5 and TS7
+typechecks pass, as do the focused formatter/linter, issue-ID, IR-fallback,
+LOC/function-budget, and oracle-ratchet gates. The bounded pinned TypeScript
+5.9.3 upstream adapter now passes **14/14** native and **14/14** Wasm callbacks
+across four selected original files, including all three admitted
+`comments.ts` scanner callbacks; **252** files / **1,747** registrations remain
+explicitly deferred. These are focused and inventory-honest results, not a
+claim that TypeScript's complete upstream unit suite passes. The post-fix
+canonical three-fingerprint parser run remains the next required measurement.
 
 ## Acceptance criteria
 

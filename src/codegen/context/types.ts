@@ -383,6 +383,31 @@ export interface ClosureInfo {
   inlineBody?: Instr[];
 }
 
+/**
+ * A callable-property funcref ladder whose body is reserved while lowering a
+ * call site and filled after the complete program closure registry is known.
+ *
+ * Keep this record limited to stable handles and immutable ABI facts.  The
+ * finalizer must only read these facts plus `closureInfoByTypeIdx`; it may not
+ * register another type/function/import after callers have baked their
+ * references.
+ */
+export interface DeferredCallablePropertyDispatchPlan {
+  /** Stable private helper name/handle reserved at the first matching site. */
+  helperName: string;
+  helperFuncIdx: FuncHandle;
+  /** Canonical open wrapper root accepted by every admitted closure carrier. */
+  rootTypeIdx: number;
+  /** Declared wrapper candidate anchoring the final candidate collection. */
+  declaredFuncTypeIdx: number;
+  declaredStructTypeIdx: number;
+  declaredReturnType: ValType | null;
+  /** Typed helper ABI, excluding the leading wrapper-root receiver. */
+  paramTypes: ValType[];
+  /** Result expected by the original property signature (`null` = void). */
+  expectedReturn: ValType | null;
+}
+
 /** Metadata for a generator lowered to an in-module WasmGC state machine (#680). */
 export interface NativeGeneratorInfo {
   /** Source-level generator function name. */
@@ -2490,6 +2515,12 @@ export interface CodegenContext extends StandaloneCapabilityDemandState, BodyRou
   /** Map from local variable name → closure metadata (for call_ref dispatch) */
   closureMap: Map<string, ClosureInfo>;
   closureInfoByTypeIdx: Map<number, ClosureInfo>;
+  /**
+   * Order-independent callable-property dispatchers, keyed by declared lifted
+   * funcref ABI plus expected result.  Optional so modules without an eligible
+   * externref callable field remain byte-identical.
+   */
+  deferredCallablePropertyDispatches?: Map<string, DeferredCallablePropertyDispatchPlan>;
   /**
    * Smallest observed source-level argument count for an exact lifted
    * funcref ABI. Unlike `ClosureInfo`, this survives replacement of a shared
