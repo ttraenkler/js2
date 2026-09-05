@@ -87,17 +87,24 @@ import {
   type LinearAllocationSitePlan,
   type LinearAllocatorPolicy,
   type LinearMemoryPlan,
+  type LinearPreparedAllocationFact,
   type LinearRecordLayoutPlan,
   type LinearRuntimeOperation,
   type LinearStorageKind,
 } from "../analysis/linear-memory-plan.js";
-import { bindLinearStringRuntime } from "../analysis/linear-string-runtime.js";
+import {
+  bindLinearStringRuntime,
+  LinearStringEncodingUnsupportedError,
+  validateLinearStringRuntimeEncoding,
+  type LinearStringRuntimeRequest,
+} from "../analysis/linear-string-runtime.js";
 import { IR_STRING_REPEAT_FN, type IrStringConcatMode, type IrStringEncoding } from "../string-runtime.js";
 import { IR_VEC_ELEM_SET_PREFIX } from "../vector-runtime.js";
 import {
   asVal,
   forEachInstrDeep,
   irVal,
+  mapNestedBuffers,
   type AllocSiteId,
   type IrFuncRef,
   type IrFunction,
@@ -107,6 +114,7 @@ import {
   type IrObjectShape,
   type IrType,
   type IrTypeRef,
+  type IrValueId,
 } from "../nodes.js";
 import { buildIrUnitInventory, type BuildIrUnitInventoryOptions, type IrSourceId, type IrUnitId } from "../identity.js";
 import {
@@ -457,6 +465,69 @@ function addLinearBackendInstructionDemand(instr: IrInstr, runtimeFunctions: Set
   }
 }
 
+function forEachLinearIrInstruction(fn: IrFunction, visit: (instr: IrInstr) => void): void {
+  const buffers = [
+    ...fn.blocks.map((block) => block.instrs),
+    ...(fn.asyncPlan?.states.map((state) => state.body) ?? []),
+  ];
+  for (const buffer of buffers) {
+    for (const instr of buffer) forEachInstrDeep(instr, visit);
+  }
+}
+
+/** Exactly the operations that the linear resolver binds through the shared contract. */
+function linearStringRuntimeRequest(instr: IrInstr): LinearStringRuntimeRequest | undefined {
+  switch (instr.kind) {
+    case "string.const":
+      return { intrinsic: "constant", alloc: instr.alloc };
+    case "string.concat":
+      return { intrinsic: "concat", alloc: instr.alloc };
+    case "string.len":
+      return { intrinsic: "length", inputEncoding: instr.inputEncoding };
+    case "string.char_at":
+      return { intrinsic: "char-at", alloc: instr.alloc, inputEncoding: instr.inputEncoding };
+    case "string.char_code_at":
+      return { intrinsic: "char-code-at", inputEncoding: instr.inputEncoding };
+    default:
+      // Equality uses the byte comparison helper; repeat has its own exact
+      // provider/evidence contract. Neither invokes this binder at emission.
+      return undefined;
+  }
+}
+
+function prepareLinearStringCapabilities(
+  fn: IrFunction,
+  allocations: ReadonlyMap<AllocSiteId, LinearPreparedAllocationFact>,
+): IrFunction {
+  const encodingByValue = new Map<IrValueId, IrStringEncoding>();
+  forEachLinearIrInstruction(fn, (instr) => {
+    if (instr.alloc === undefined || instr.result === null) return;
+    const allocation = allocations.get(instr.alloc);
+    if (allocation?.site.kind === "string" && allocation.encoding !== undefined) {
+      encodingByValue.set(instr.result, allocation.encoding);
+    }
+  });
+  const mapInstr = (instr: IrInstr): IrInstr => {
+    const nested = mapNestedBuffers(instr, (buffer) => buffer.map(mapInstr));
+    if (nested.kind !== "string.len" || nested.inputEncoding !== undefined) return nested;
+    // Preserve existing allocation evidence only for this exact SSA value.
+    // Slots, parameters and unaudited call results acquire no new proof.
+    const inputEncoding = encodingByValue.get(nested.value);
+    return inputEncoding === undefined ? nested : { ...nested, inputEncoding };
+  };
+  const prepared = { ...fn, blocks: fn.blocks.map((block) => ({ ...block, instrs: block.instrs.map(mapInstr) })) };
+  forEachLinearIrInstruction(prepared, (instr) => {
+    const request = linearStringRuntimeRequest(instr);
+    if (!request) return;
+    const allocation = request.alloc === undefined ? undefined : allocations.get(request.alloc);
+    if (allocation && allocation.site.kind !== "string") {
+      linearBackendResourceInvariant(`string operation uses non-string allocation site ${allocation.id as number}`);
+    }
+    validateLinearStringRuntimeEncoding(request, allocation);
+  });
+  return prepared;
+}
+
 /** Collect exact symbolic resources used by the supplied built module/plan. */
 export function collectLinearBackendResourceDemand(
   module: IrModule,
@@ -480,17 +551,7 @@ export function collectLinearBackendResourceDemand(
     for (const operation of allocation.operations) addOperation(operation);
   }
   for (const fn of module.functions) {
-    const buffers = [
-      ...fn.blocks.map((block) => block.instrs),
-      ...(fn.asyncPlan?.states.map((state) => state.body) ?? []),
-    ];
-    for (const buffer of buffers) {
-      for (const instr of buffer) {
-        forEachInstrDeep(instr, (nested) => {
-          addLinearBackendInstructionDemand(nested, runtimeFunctions);
-        });
-      }
-    }
+    forEachLinearIrInstruction(fn, (instr) => addLinearBackendInstructionDemand(instr, runtimeFunctions));
   }
 
   return Object.freeze({
@@ -1319,7 +1380,75 @@ export function compileLinearIrFunctions(
     const fn = built.get(ownerUnitId);
     return fn ? [fn] : [];
   });
-  const preparedIntrinsic = prepareLinearIntrinsicFunctions(plannedFunctions, sourceFile.fileName);
+  // Encoding is part of acceptance, not something an accepted emitter may
+  // discover. Analyze once, preserve exact SSA allocation evidence, and ask
+  // the shared runtime encoding contract before freezing any owner/provider
+  // demand. No caller allocation policy runs until the retained batch exists.
+  const plannedModule = { functions: plannedFunctions };
+  const candidateAllocationFacts = prepareLinearAllocationFacts(plannedModule, allocRegistry);
+  const candidateAllocationsById = new Map(candidateAllocationFacts.allocations.map((fact) => [fact.id, fact]));
+  const stringDeclinedOwners = new Set<IrUnitId>();
+  const declineStringOwner = (fn: IrFunction, detail: string): void => {
+    if (preparedCountedOwnerUnitIds.has(fn.unitId)) {
+      throw new IrInvariantError(
+        "selection-preparation-mismatch",
+        "resolve",
+        `linear-ir: prepared counted-string owner ${fn.unitId} failed string preparation: ${detail}`,
+      );
+    }
+    built.delete(fn.unitId);
+    stringDeclinedOwners.add(fn.unitId);
+    lastFailure.set(fn.unitId, {
+      func: fn.name,
+      reason: "build",
+      detail,
+      outcome: classifyIrFailure(new IrUnsupportedError("string-evidence-unsupported", "resolve", detail), "resolve"),
+    });
+  };
+  for (const fn of plannedFunctions) {
+    try {
+      built.set(fn.unitId, prepareLinearStringCapabilities(fn, candidateAllocationsById));
+    } catch (error) {
+      if (!(error instanceof LinearStringEncodingUnsupportedError)) throw error;
+      declineStringOwner(fn, error.message);
+    }
+  }
+  // A retained owner must not silently lose a demanded source callee. Close
+  // refusals transitively before preparing the retained runtime manifest.
+  let declinedCaller: boolean;
+  do {
+    declinedCaller = false;
+    for (const fn of built.values()) {
+      let dependency: IrUnitId | undefined;
+      forEachLinearIrInstruction(fn, (instr) => {
+        if (
+          instr.kind === "call" &&
+          instr.target.binding.kind === "unit" &&
+          stringDeclinedOwners.has(instr.target.binding.unitId)
+        ) {
+          dependency ??= instr.target.binding.unitId;
+        }
+      });
+      if (dependency === undefined) continue;
+      declineStringOwner(fn, `linear-ir: string capability depends on declined source owner ${dependency}`);
+      declinedCaller = true;
+    }
+  } while (declinedCaller);
+  const retainedFunctions = plannedFunctions.flatMap((fn) => {
+    const retained = built.get(fn.unitId);
+    return retained ? [retained] : [];
+  });
+  const retainedAllocationIds = new Set<AllocSiteId>();
+  for (const fn of retainedFunctions) {
+    forEachLinearIrInstruction(fn, (instr) => {
+      if (instr.alloc !== undefined) retainedAllocationIds.add(instr.alloc);
+    });
+  }
+  const allocationFacts = {
+    registry: candidateAllocationFacts.registry,
+    allocations: candidateAllocationFacts.allocations.filter((fact) => retainedAllocationIds.has(fact.id)),
+  };
+  const preparedIntrinsic = prepareLinearIntrinsicFunctions(retainedFunctions, sourceFile.fileName);
   const preparedStringRepeat = prepareLinearStringRepeatFunctions(
     ctx,
     preparedIntrinsic.functions,
@@ -1334,9 +1463,8 @@ export function compileLinearIrFunctions(
   const preparedCountedStringAppendReceiptCandidates = preparedStringRepeat.receipts;
   for (const fn of preparedFunctions) built.set(fn.unitId, fn);
   irModule = { functions: preparedFunctions };
-  const allocationFacts = prepareLinearAllocationFacts(irModule, allocRegistry);
 
-  const rejectionByOwner = new Map<IrUnitId, LinearIrRejection>();
+  const rejectionByOwner = new Map(lastFailure);
   for (const evidence of ownerEvidence) {
     if (evidence.outcome === "rejected") rejectionByOwner.set(evidence.ownerUnitId, evidence.rejection);
   }
