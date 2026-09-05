@@ -152,6 +152,22 @@ files:
 ---
 # #3521 — IR-only R2: prepare-before-emit free-function ownership
 
+## Whole-program A implementation — 2026-09-05
+
+The `3518:authoritative-preparation` package first separates the historical
+structural collector (`PreparedIrCandidateProgram` and
+`PreparedIrCandidateProgramBuilder`) from the production `PreparedIrProgram`
+contract in `src/ir/program.ts`. The latter carries the complete inventory,
+typed IR, enriched existing ABI entries, original ordered initializer plans,
+derived provenance, and distinct runtime attachment projections. Its producer
+input and located-failure types are the shared A/B/C boundary. Reconstructed ABI
+lookups are consumers of serialized data, never serialized authority.
+
+This interface checkpoint does not change production routing and does not pass
+the seven-unit application checkpoint. A continues directly into extraction of
+the shared prepare/emit driver. The existing ABI session and live R1/R3/R4
+modules remain excluded from A ownership.
+
 ## Execution amendment — 2026-09-05
 
 The approved [whole-program cutover plan](3518-ir-only-default-and-direct-frontend-retirement.md#current-execution-plan--whole-program-cutover-2026-09-05)
