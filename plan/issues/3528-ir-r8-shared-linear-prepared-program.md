@@ -40,10 +40,13 @@ files:
 loc-budget-allow:
   # L0-P1's production capture/consumer seam is explicitly owned here; the
   # driver grows only for the required frozen handoff and remains bounded.
+  # 2026-09-05 Astra repair: preserve existing string evidence and close
+  # unsupported owners/callers before capture; no new runtime capability.
   - src/ir/backend/linear-integration.ts
 func-budget-allow:
   # The same bounded handoff is assembled at the existing linear entrypoint;
   # keep its allowance scoped to that one production function.
+  # 2026-09-05: capability refusals must reconcile the exact batch here.
   - src/ir/backend/linear-integration.ts::compileLinearIrFunctions
 ---
 
@@ -788,3 +791,192 @@ demand remain governed by the authenticated consumer and lowerer. A future
 backend-neutral preparation slice must settle those authorities before moving
 the producer above the backend branch. This record does not claim normal GC
 cutover, full resource neutrality, or R8 completion.
+
+
+## Implementation Plan — 2026-09-05 — Astra linear CI integration repair
+
+The existing R8 PR's exact `linear-tests` run at source
+`a2809ce8f0908b953b98513c9e06461f93448983` completed 241/243 tests in
+25 files. Its two failures are `linear-advanced.test.ts` — "compiles template
+literals with number" — and `linear-string-data-layout.test.ts` — "keeps
+literals clear of the Ryū tables when the number formatter is linked".
+Both enter the frozen backend consumer with an accepted owner and then fail
+because `string.len` lacks the ASCII encoding evidence demanded by
+`bindLinearStringRuntime`. This is an existing handoff/CI blocker within
+L0-P1 consolidation; it does not authorize a new string feature or broad
+retirement. Root's exact job log is retained as
+`.tmp/ir-completion-20260905/r8-linear-tests-failure.log` in the integration
+checkout (job `101332370811`, run `33975844766`).
+
+1. Reproduce both exact failures on the repaired local candidate before
+   changing source. Pair the enabled linear overlay with the direct
+   `JS2WASM_LINEAR_IR=0` control on identical fixtures in fresh processes;
+   preserve native value assertions and report exact test denominators.
+   If a later candidate already fixes them, identify the actual changed
+   bytes instead of adding another repair.
+2. Trace the string encoding evidence from built IR through intrinsic/string
+   preparation, allocation facts, memory planning, frozen capture, and the
+   emitter's shared string-runtime binding. Determine whether valid evidence
+   was dropped or the body was accepted without a supported representation.
+   Do not infer ASCII from a string type, function name, or success in the
+   legacy backend; do not run a speculative body lower to obtain proof.
+3. Preserve valid evidence when already available. Otherwise classify the
+   known unsupported string operation before frozen acceptance and before
+   the first emitter callback, retaining typed source/unit/stage diagnostics.
+   Reconcile owner/provider/allocation/call-dependency vectors after a
+   declined owner so the retained batch remains exact. Already promised
+   counted-string owners and post-acceptance contradictions stay fatal.
+4. Reuse the actual shared runtime's capability/encoding contract in the
+   narrowest preparation boundary. Keep legitimate relocatable data valid,
+   and preserve resource and provider preflight. Do not relax the emitter,
+   enable ASCII without proof, skip either existing test, rewrite baselines,
+   or broaden generic lowering recovery after frozen acceptance.
+5. Add a production refusal control with zero accepted/emitted prefix, an
+   exact supported ASCII positive that remains owned, and any dependency
+   closure control required by the changed join. Run the two former CI
+   failures, the complete 25-file linear CI cohort, the frozen-body/allocator
+   controls, and relevant typecheck/format/budget gates. Attribute any
+   remaining failures to measured controls rather than "existing" totals.
+6. Keep source ownership in the existing R8 worktree: linear integration and
+   its focused tests/issue. Inspect consumers before changing shared string
+   analysis/legality helpers; avoid unrelated R4 storage and bench-string
+   work. Keep `f2593aa2` as an ancestor, commit a signed clean local repair
+   with normal hooks, and leave publication to parent integration review.
+
+### Implementation Record — 2026-09-05 — Astra linear string capability repair
+
+Work continued in the same R8 checkout from signed
+`f2593aa20797e5a2f8d06a2eb399d5ff8d2ee76a`. Before source edits, the exact
+two-file CI population reproduced 16/18 passing tests and both recorded
+post-acceptance ASCII failures (`.tmp/astra-r8-exact-before.log`). The direct
+control retained from the same head is deliberately mixed: advanced 8/8,
+string-data-layout 1/10, with nine independent direct `.charCodeAt()` refusals
+(`.tmp/r8-linear-ci-direct.log`). It is not evidence of full direct-path parity.
+
+The source-derived trace (`.tmp/astra-r8-string-boundary-before.log`) separates
+the mechanisms. The test called "template literals with number" actually
+builds the ASCII expression `hello ${name}`, where `name` is `"world"`. Its
+concat allocation already has ASCII encoding evidence, but the exact SSA
+length read lacked `inputEncoding`. The number formatter's allocation has
+only conservative `wtf16` evidence; no audited ASCII origin exists in this
+pipeline for that call.
+
+The linear producer now preserves existing allocation evidence on missing
+SSA length-read annotations and validates the shared runtime's exact encoding
+contract before capture. Only `LinearStringEncodingUnsupportedError` can
+produce a typed `string-evidence-unsupported` outcome at `resolve`, retaining
+the original diagnostic and exact source/unit location. Missing allocation or
+layout resources, provider contradictions, and any post-acceptance error remain
+fatal. Already promised counted-string owners also remain fatal at this earlier
+boundary. The runtime's ASCII requirements are unchanged.
+
+The only shared production change is in `analysis/linear-string-runtime.ts`.
+Its readers were enumerated before the change: the linear resolver and the
+Porffor assembler/sink, plus the focused string-contract tests. Its pure
+`validateLinearStringRuntimeEncoding` function is used by both the real binder
+and preparation over detached allocation facts. Preparation does not construct
+a provisional memory plan or invoke the caller's allocation policy. Review
+first exposed a double policy call: the counting control observed `[0,1,0]`
+for retained site 0 and declined site 1. The final implementation observes only
+`[0]` (`.tmp/astra-r8-policy-before.log`, `.tmp/astra-r8-focused-final.log`).
+
+Encoding, ownership, escape, and stack-candidate analyses still run once.
+Their provider-field readers were checked: none reads the attached provider
+fields. For this linear path, `attachProvidersToBuffer` in
+`intrinsic-support.ts` only copies `intrinsic.provider`; the supplied
+`attachIrStringSupport` callbacks add no storage or length carrier and only
+attach the exact string callable providers. These transformations preserve
+instruction kinds, allocation IDs, operands, and encoding evidence. The final
+batch validates allocation/body joins after those attachments.
+
+Refusals close transitively over structurally bound source callers. Intrinsic
+providers and their manifest are prepared from the retained functions only;
+live allocation facts are projected to their exact retained instruction IDs.
+The registry snapshot retains its historical audit entries, while executable
+facts, signatures, owners, and the final memory plan contain only the retained
+population. Build-stage refusals also enter the frozen owner census as
+rejected. This keeps the Ryū test's literal/checksum owners in IR while its
+unproven formatter uses its existing direct body.
+
+Production controls cover a zero accepted/emitted prefix with an independently
+passing emitter/provider control, supported ASCII template and character reads,
+two levels of declined callers beside an owned ASCII/Math function, the fatal
+counted-string promise, and exactly one caller-policy decision per retained
+allocation. The provider-refusal fixture also compares its existing direct
+`Math.floor` error with `JS2WASM_LINEAR_IR=0`; that separate direct limitation is
+not claimed as repaired. The Porffor non-ASCII check now uses an explicit input
+graph because a refused production owner is correctly absent from the batch.
+
+Validation in this checkout is recorded in `.tmp/astra-r8-*.log`. The final
+focused group passed 41/41 tests in four files: frozen-body 17, string-contract
+7, allocation registry 10, allocation provenance 7. The complete linear CI
+cohort passed 243/243 tests in 25 files, including both original failures
+(`.tmp/astra-r8-linear-ci-final.log`). The final R8 group 1 passed 63/63 in
+eight files (`.tmp/astra-r8-group1-policy-final.log`). Group 2's six required
+files passed 66/66 across the final CI and focused runs. These populations
+overlap and are not combined into an inflated unique-test total.
+
+Typecheck and the linear ratchet passed; the ratchet measured 13 files,
+10 compiled functions, and the unchanged rejection buckets. IR-only checks
+passed 5/5 entries in each of the single-host and standalone lanes: 41 terminal
+units, 38 emitted, three non-executable, and zero unsupported, invariant, or
+legacy outcomes per lane. The fallback gate reported no unintended,
+post-claim, or module-level increases. LOC, function-size, oracle, coercion,
+dead-export, layering, instruction-kind, dialect, lint, formatting, and
+`git diff --check` gates passed on the final source.
+
+The newest-main LOC comparison against
+`b1537bbeca3858faf45fd89eff5506d21d1e230f` reports inherited growth outside this
+repair: `closure-exports.ts` +98, `calls-closures.ts` +3, and
+`nested-declarations.ts` +3. These exact differences already exist at `f2593aa2`;
+the repair has zero changed lines in those files and adds no allowances for
+them. The ordinary local LOC/function gates pass using this issue's existing
+bounded allowance. The coercion and dead-export scripts mishandle the space in
+this checkout's path; their successful controls use a symlink to this exact
+checkout with Node's preserve-symlinks flags, without editing either gate or
+creating another checkout. No result is inferred from the original encoded-path
+failure or the coercion script's misleading whole-tree result.
+
+This repair resolves the recorded linear CI blocker. It does not claim R8
+completion, normal WasmGC production routing, or completion of the remaining
+callable/global/type resolver joins. Publication and integration remain with
+the parent; no source branch or public ref was pushed.
+
+### Additional Hook Repair Plan — 2026-09-05 — memory-plan controls
+
+Normal commit hooks passed formatting, lint, and budgets, then stopped at
+`tests/issue-3298.test.ts`: two of five tests passed, and three failed
+(`.tmp/astra-r8-commit-final.log`). Two synthetic `global.set` instructions
+lack the semantic `target.binding` required by the current memory planner.
+The UTF-8 control expects an executable allocation from a production owner
+that preparation now correctly declines. Parent independently reproduced
+three failures on its integrated, unchanged `f2593aa2` source and explicitly
+assigned this directly related test file to the same repair lane.
+
+Before changing the tests, inspect their current and base fixtures and the
+global identity contract. Give synthetic global operations real semantic
+bindings, preserving assertions about the exact stored identity. Keep the
+production non-ASCII refusal assertion and move the canonical UTF-8 data
+assertions to an independently built IR graph with its own real allocation
+registry. Preserve exact bytes and the ASCII runtime requirement. Then run
+the repaired memory-plan controls and affected string/frozen controls before
+retrying the normal signed commit hooks; no gate bypass or new string feature
+is authorized.
+
+The source comparison confirms the two global-fixture failures are inherited:
+`b1537bbeca3858faf45fd89eff5506d21d1e230f` already has the name-only
+`savedLabel` write and the planner's required `target.binding.bindingId` read.
+The repaired fixture uses `irModuleGlobalRef` and compares the exact semantic
+binding ID while excluding its adapter label as the storage key. The UTF-8
+control separately checks a production typed refusal with no live allocation,
+an independent builder/registry plan's exact `[104, 195, 169]` bytes, the real
+binder's unchanged ASCII refusal on that plan, and the production direct body's
+native result `2`.
+
+The repaired hook/identity population passed five files: 46 tests passed and
+two existing conditional tests were skipped out of 48
+(`.tmp/astra-r8-hook-controls-final.log`). This includes all five memory-plan
+controls, all 17 frozen-body controls, seven string-contract controls, eight
+global/type-binding controls, and nine passing empty-array controls. Only
+the memory-plan test and this issue record changed after the earlier final
+source validation; the reviewed production source is unchanged.
