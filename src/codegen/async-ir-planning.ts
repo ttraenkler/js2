@@ -556,10 +556,14 @@ export function preparedIrAsyncSourceShape(
 }
 
 export function preparedIrAsyncSourceCanSuspend(ctx: CodegenContext, fn: ts.FunctionDeclaration): boolean {
+  // Check issuance before asking the current AST/identity maps for a shape.
+  // A withdrawn or rebound owner must remain fatal even when that lookup now
+  // returns no shape and would otherwise look like an ordinary refusal.
+  const settledOwnerWasIssued = preparedIrAsyncSettledOwnerWasIssued(ctx, fn);
   const shape = preparedIrAsyncSourceShape(ctx, fn);
   const linearPlan = shape?.kind === "linear" ? analyzeAsyncBody(ctx, fn) : undefined;
   const settledOwner = shape?.kind === "linear" ? preparedIrAsyncSettledOwner(ctx, fn) : null;
-  if (shape?.kind === "linear" && !settledOwner && preparedIrAsyncSettledOwnerWasIssued(ctx, fn)) {
+  if (settledOwnerWasIssued && !settledOwner) {
     throw new IrInvariantError(
       "selection-preparation-mismatch",
       "resolve",
@@ -777,10 +781,24 @@ export function preparedIrAsyncAwaitSite(
 ): PreparedAsyncAwaitSite | null {
   const owner = enclosingFunctionDeclaration(expression);
   if (!owner) return null;
+  // Do not let a lost current source shape turn an already-issued Promise ABI
+  // into a quiet unsupported result.  The declaration-keyed issuance receipt
+  // survives identity-map loss and makes this path fail before await lowering.
+  const settledOwnerWasIssued = preparedIrAsyncSettledOwnerWasIssued(ctx, owner);
   const shape = preparedIrAsyncSourceShape(ctx, owner);
-  if (shape?.kind !== "linear" || !shape.awaitSites.includes(expression)) return null;
+  if (shape?.kind !== "linear") {
+    if (settledOwnerWasIssued) {
+      throw new IrInvariantError(
+        "selection-preparation-mismatch",
+        "resolve",
+        `settled async owner ${owner.name?.text ?? "<anonymous>"} lost its source proof before await lowering`,
+      );
+    }
+    return null;
+  }
+  if (!shape.awaitSites.includes(expression)) return null;
   const settledOwner = preparedIrAsyncSettledOwner(ctx, owner);
-  if (!settledOwner && preparedIrAsyncSettledOwnerWasIssued(ctx, owner)) {
+  if (!settledOwner && settledOwnerWasIssued) {
     throw new IrInvariantError(
       "selection-preparation-mismatch",
       "resolve",

@@ -361,6 +361,18 @@ interface SettledOwnerIdentity {
   readonly sourceFile: ts.SourceFile;
 }
 
+/**
+ * Identity retained at the moment a settled-owner proof changes the ABI.
+ *
+ * The current planning maps are read-only snapshots, but every later handoff
+ * still has to fail closed if a stale/corrupt context loses or rebinds one of
+ * those mappings.  Keying this receipt by the original declaration means
+ * `WasIssued` does not first ask the damaged map which UnitId to inspect.
+ */
+interface SettledOwnerIssuance extends SettledOwnerIdentity {
+  readonly declaration: ts.FunctionDeclaration;
+}
+
 interface SettledOwnerCallClosure {
   readonly incomingCallerUnitIds: readonly IrUnitId[];
   readonly incomingCallContracts: readonly PreparedIrAsyncCallContract[];
@@ -369,8 +381,18 @@ interface SettledOwnerCallClosure {
 }
 
 const settledOwnerCache = new WeakMap<CodegenContext, Map<IrUnitId, PreparedIrAsyncSettledOwner | null>>();
-const settledOwnerIssued = new WeakMap<CodegenContext, Set<IrUnitId>>();
+const settledOwnerIssued = new WeakMap<CodegenContext, WeakMap<ts.FunctionDeclaration, SettledOwnerIssuance>>();
 const importedResolverCache = new WeakMap<IrPlanningIdentityContext, IrIdentityImportedFunctionResolver>();
+
+function issuedSettledOwner(ctx: CodegenContext, fn: ts.FunctionDeclaration): SettledOwnerIssuance | undefined {
+  return settledOwnerIssued.get(ctx)?.get(fn);
+}
+
+function sameSettledOwnerIdentity(current: SettledOwnerIdentity, issued: SettledOwnerIssuance): boolean {
+  return (
+    current.unitId === issued.unitId && current.sourceId === issued.sourceId && current.sourceFile === issued.sourceFile
+  );
+}
 
 function importedResolver(ctx: CodegenContext): IrIdentityImportedFunctionResolver | null {
   const identity = ctx.irPlanningIdentityContext;
@@ -768,8 +790,14 @@ export function preparedIrAsyncSettledOwner(
   ctx: CodegenContext,
   fn: ts.FunctionDeclaration,
 ): PreparedIrAsyncSettledOwner | null {
+  const issued = issuedSettledOwner(ctx, fn);
   const identity = settledOwnerIdentity(ctx, fn);
   if (!identity) return null;
+  // Once the declaration has promised the Promise ABI, only the original
+  // source/unit receipt may be reused.  A stale handoff must never mint a new
+  // receipt under a rebound UnitId, nor rebuild one after its original cache
+  // entry was withdrawn.
+  if (issued && !sameSettledOwnerIdentity(identity, issued)) return null;
   let cache = settledOwnerCache.get(ctx);
   if (!cache) {
     cache = new Map();
@@ -782,25 +810,25 @@ export function preparedIrAsyncSettledOwner(
     cache.set(identity.unitId, null);
     return null;
   }
+  if (issued) return null;
   const receipt = buildPreparedIrAsyncSettledOwner(ctx, fn);
   cache.set(identity.unitId, receipt);
   if (receipt) {
-    const issued = settledOwnerIssued.get(ctx) ?? new Set<IrUnitId>();
-    issued.add(identity.unitId);
-    settledOwnerIssued.set(ctx, issued);
+    const issuedByDeclaration = settledOwnerIssued.get(ctx) ?? new WeakMap();
+    issuedByDeclaration.set(fn, { ...identity, declaration: fn });
+    settledOwnerIssued.set(ctx, issuedByDeclaration);
   }
   return receipt;
 }
 
 /** True after a settled proof was issued, even if a later handoff withdrew it. */
 export function preparedIrAsyncSettledOwnerWasIssued(ctx: CodegenContext, fn: ts.FunctionDeclaration): boolean {
-  const unitId = settledOwnerIdentity(ctx, fn)?.unitId;
-  return unitId !== undefined && settledOwnerIssued.get(ctx)?.has(unitId) === true;
+  return issuedSettledOwner(ctx, fn) !== undefined;
 }
 
 /** Test/integration seam for modelling proof loss after ABI projection. */
 export function forgetPreparedIrAsyncSettledOwner(ctx: CodegenContext, fn: ts.FunctionDeclaration): void {
-  const unitId = settledOwnerIdentity(ctx, fn)?.unitId;
+  const unitId = issuedSettledOwner(ctx, fn)?.unitId ?? settledOwnerIdentity(ctx, fn)?.unitId;
   if (unitId === undefined) return;
   const cache = settledOwnerCache.get(ctx) ?? new Map<IrUnitId, PreparedIrAsyncSettledOwner | null>();
   cache.set(unitId, null);

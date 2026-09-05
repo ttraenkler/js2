@@ -972,3 +972,36 @@ These are recorded gate/environment residuals, not B3 acceptance evidence.
 The scoped B3 source, tests, and measured record are committed in
 `7c60d5c5873d0b164f1aa99b85b2995897fe8233` on top of the signed current-main
 merge above.
+
+### B3 issuance-integrity repair — 2026-09-05 — Luna Max
+
+The post-ABI proof-loss follow-up keeps issuance evidence independent of the
+current identity maps. `settledOwnerIssued` is now keyed by compilation
+context and original `FunctionDeclaration`, retaining its original UnitId,
+SourceId, and source file. An issued declaration cannot mint a receipt under
+a rebound UnitId or rebuild one after its original cache entry is withdrawn;
+`forgetPreparedIrAsyncSettledOwner` also locates the original UnitId after
+current identity lookup fails. The source-suspend and prepared-await guards
+check issuance before source-shape admission, so a missing shape remains an
+Invariant instead of a quiet refusal or direct fallback.
+
+The three real identity controls all begin with a positive receipt and
+externref ABI projection, then mutate copied identity maps: declaration-to-unit
+deletion, terminal deletion, and declaration rebinding to the sibling UnitId.
+Each retains `WasIssued=true`, returns no current receipt, and raises the
+`selection-preparation-mismatch` proof-loss error from source suspend, await
+site, and ABI projection. A fourth control removes the current function body
+after issuance and raises the same error before either handoff can return.
+
+The end-to-end identity-loss control uses a narrow Map-read fault after the
+first receipt is issued. It returns `success=false` with one
+`selection-preparation-mismatch` invariant, `legacyBodyEmitted=false`,
+`irBodyEmitted=false`, zero direct/IR body counters, and no async state
+function. Thus the promised externref slot is not published with a raw f64
+body or a direct retry. Focused B3 runtime is **15/15**; B3 plus the adjacent
+linear preparation/runtime controls are **26/26**. `pnpm run typecheck`,
+Prettier checks, `node --import tsx scripts/check-ir-only.ts --json` (both
+single-host and standalone, 5/5 entries, 38 emitted, 0 Unsupported, 0
+Invariants, 0 legacy bodies), and `pnpm run check:ir-fallbacks` pass. The
+broader R7, Promise-valued operand, remaining caller-contract, and CI gates
+remain open as recorded above.
