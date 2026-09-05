@@ -995,3 +995,85 @@ controls, all 17 frozen-body controls, seven string-contract controls, eight
 global/type-binding controls, and nine passing empty-array controls. Only
 the memory-plan test and this issue record changed after the earlier final
 source validation; the reviewed production source is unchanged.
+
+## Implementation Record — 2026-09-06 — package C: codec, shared consumer, fresh-process replay (Claude)
+
+Claim `3518:backend-consumption-replay`, owner
+`ttraenkler/claude-fable-ir-backend-c-20260906`, branch
+`claude/3518-whole-program-c-20260906`, base `8e89954c` (A's typed handoff).
+Package A's `PreparedIrProgram` (`prepared-ir-program-v1`) is the only schema;
+nothing here defines a second ledger, cache or admission path.
+
+### What landed
+
+- `src/ir/program-codec.ts` — `encodePreparedIrProgram` / `decodePreparedIrProgram`
+  / `assertPreparedIrProgramShape` / `digestEncodedPreparedIrProgram`. The codec
+  encodes exactly the prepared-data model `freezePreparedIrValue` accepts and
+  decodes by handing the rebuilt value back to that same copier, so "prepared
+  data" has one definition. Canonical bytes: sorted keys, single-key tags for
+  every non-JSON value (`$bigint`, `$number` for `-0`/`NaN`/`±Infinity`,
+  `$undefined`, `$map`, `$set`, `$irClassShapeCell`, `$classShapeRef`), `$`-keys
+  escaped as `$$`. Re-encoding a decoded program is byte-identical. Recursive
+  class shapes close onto the same decoded object; any other cycle, executable
+  value, foreign instance, unknown tag, non-canonical order or `-0` literal is
+  refused with `PreparedIrProgramInvariantError("invalid-prepared-data")`.
+- `src/ir/backend/program-consumer.ts` — `consumePreparedIrProgram({program,
+  backend, factories})`, the one consumer both backends call with the SAME
+  decoded object. Order: shape → `verifyIrFunction` per body against the
+  program's declarations → unit/support/global references must close inside the
+  program ABI → `verifyIrBackendLegality` per body → lower every body via the
+  existing `lowerIrFunctionBody`, all-or-nothing. A backend capability gap is a
+  typed `unsupported` (stage `backend-legality`, owner-located through A's
+  `preparedIrProgramOwner`); a contradiction or an accepted body that fails to
+  lower is a typed `invariant`. Nothing is emitted on any failure.
+- `scripts/ir-whole-program-replay.mjs` — fresh-process replay: decodes the
+  bytes, consumes for `wasmgc` and `linear`, assembles/instantiates each module,
+  and records every module the process resolved through a `node:module`
+  `register()` hook. Reports frontend modules (`src/ir/from-ast`, `src/compiler`,
+  `src/checker/`, `src/index`, `src/codegen/index`) and TypeScript-library
+  modules separately.
+- `tests/helpers/ir-whole-program-codec-fixture.ts`,
+  `tests/helpers/ir-whole-program-replay.ts`,
+  `tests/issue-3518-program-codec-replay.test.ts` — hand-assembled complete
+  program (4 bodies incl. a cross-unit call, i64 bigint const, `-0`/`Infinity`
+  consts, a recursive class shape in the ABI, a `ReadonlyMap`, a
+  present-but-undefined key, one startup plan), 9 tests.
+
+### Measured (2026-09-06, this worktree, vitest single file)
+
+- 9/9 tests pass. Both backends lower the identical decoded object and match the
+  native oracle: `main()=42`, `helper(21)=42`, `big()=9007199254740993n`,
+  `special()=Infinity`.
+- Negative controls with `emitters===0` (nothing reached emission): call to a
+  body absent from the program → `invariant/resolve/unknown-function-ref`;
+  declared-result contradiction → `invariant/verify/verifier-failure`; support
+  binding not planned in the ABI → `invariant/resolve/unknown-function-ref`.
+  Codec refusals: 14 distinct malformed/non-canonical inputs.
+- Fresh-process replay child: decode + byte-identical re-encode, both backends
+  ran with oracle-equal results, **92 modules loaded, 0 frontend modules,
+  5 TypeScript-library modules**. The TS library arrives through a transitive
+  VALUE import (`src/ir/identity.ts` calls `ts.isImportDeclaration` etc. at
+  runtime; `module-init-plan.ts` likewise) — reported as a measured fact, not
+  asserted, and referred to A (see interface requests below).
+- Gates: LOC/function budgets OK (no growth in owned budget files), coercion
+  OK, oracle-ratchet OK, prettier/biome clean on the new files. `check:dead-exports`
+  crashes on this machine's space-containing checkout path (`%20` in
+  `audit-legacy-reachability.mjs` ROOT); run via a space-free symlink it reports
+  ONE pre-existing dead export, `src/codegen/program-abi-module-init-planning.ts#directCallTargets`,
+  introduced by the P2A merge (`2d8e449d`), not by this package.
+
+### Not yet done (package C remaining scope)
+
+- `compileLinearIrFunctions` still builds its own `FrozenIrBodyBatch`; routing
+  the linear entry onto `consumePreparedIrProgram` needs A's strict producer to
+  hand a `PreparedIrProgram` to the linear driver (today the linear frontend
+  prepares its own overlay from source). Planned next once A's driver exists.
+- WasmGC wiring (`src/ir/integration.ts`, `src/codegen/index.ts`) is A's file
+  scope; C provides the consumer API and requests the call.
+- Runtime projections (`program.runtime[]`, B's manifest/async producers) are
+  encoded as data but no fixture with a projection exists until B lands; the
+  consumer's only projection rule so far is "async body without a projection for
+  this backend ⇒ unsupported before emission".
+- The seven-unit application fixture (D) has not been pushed through this path;
+  the codec evidence above is on a synthetic complete program built from A's
+  types, not on A's driver output.
