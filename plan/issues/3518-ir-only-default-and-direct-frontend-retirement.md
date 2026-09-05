@@ -188,6 +188,39 @@ No subagent was started, contacted, or assigned, and no active claim was changed
 The main thread must perform the live ownership/publication check and execute
 the waves above.
 
+### Whole-program dispatch ownership — 2026-09-05
+
+The combined prerequisite head `1376d702fd272485d07d564ed87754f11349a388`
+passed normal changed-root hooks (129 tests, two existing optional skips across
+12 files), typecheck, and all 26 C1 controls. Both IR-only lanes retained their
+41-terminal census: 38 IR, three non-executable, zero legacy/unsupported/invariant.
+The 13-file fallback gate passed. These bounded gates do not replace the unchanged
+seven-terminal application checkpoint or full conformance CI.
+
+The lead verified current main `2257b950eeab2b1f4ef66a8db4ce32efbf525c74`
+and preserved the published generic-async, settled-async, and initializer branch
+histories in consolidation. The incoming six compiler files include initializer
+terminal identity and pass-two closure-registry currentness fixes. Eight older
+R2/R6 branch-backed claims have merged PRs whose heads are ancestors of this main;
+none has a linked worktree. Their existing implementation can therefore be
+extended by the new packages without commissioning their completed slices again.
+Their claim records are preserved. The unresolved no-branch
+`3521:scoped-prepared-abi-seal` claim remains protected: A must consume existing
+session APIs without editing `src/codegen/program-abi-session.ts` or
+`tests/issue-3521-scoped-prepared-abi-seal.test.ts`. Live R1/R3/R4 ownership remains
+unchanged.
+
+Acquire distinct claims `3518:authoritative-preparation` (A, Astra Max),
+`3518:semantic-runtime-producers` (B, Astra Max), and
+`3518:application-evidence` (D, Luna Max), each on its own worktree from the signed
+consolidated head. A publishes its typed interface first and owns the shared
+compiler entry points; B supplies existing runtime/async producers; D commits
+independent executable evidence without changing compiler source. Once A's
+interface exists and D releases its worker slot, start
+`3518:backend-consumption-replay` (C, Astra Max). The lead independently reviews
+A's architecture and the combined application result. These are dispatch
+instructions, not a claim that implementation or migration is complete.
+
 ### Prerequisite consolidation record — 2026-09-05
 
 The main thread has adopted this amendment into the isolated integration
