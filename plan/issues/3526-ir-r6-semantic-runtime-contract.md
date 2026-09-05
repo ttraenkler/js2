@@ -561,6 +561,20 @@ func-budget-allow:
 
 # #3526 — IR-only R6: typed semantic runtime contract and frozen feature manifest
 
+## Execution amendment — 2026-09-05
+
+Future work follows package B of the approved
+[whole-program cutover plan](3518-ir-only-default-and-direct-frontend-retirement.md#current-execution-plan--whole-program-cutover-2026-09-05),
+jointly with R7. Populate one prepared program using the existing manifest,
+provider contracts, and immutable async plans. Reuse runtime implementations
+through typed operands/results, effects, exceptions, and allocation demands;
+do not wrap AST dispatch in an opaque IR operation or copy the runtime.
+Begin dependency extraction alongside package A, then implement its published
+interface without a second ABI/ownership authority. A integrates shared-entry
+changes; B owns its dedicated producers after live claim reconciliation.
+Prioritize complete applications over more isolated policy switches. Existing
+runtime behavior, optimization obligations, and full issue acceptance remain.
+
 ## Objective
 
 Establish one typed, immutable contract from prepared semantics to runtime and

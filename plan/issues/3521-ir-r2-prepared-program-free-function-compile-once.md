@@ -152,6 +152,20 @@ files:
 ---
 # #3521 — IR-only R2: prepare-before-emit free-function ownership
 
+## Execution amendment — 2026-09-05
+
+The approved [whole-program cutover plan](3518-ir-only-default-and-direct-frontend-retirement.md#current-execution-plan--whole-program-cutover-2026-09-05)
+now controls future dispatch. R2 and R5 jointly supply package A: one authoritative
+program, shared ABI contract, and preparation driver above backend selection.
+The historical single-source slice below remains evidence and an acceptance
+obligation, not the next architectural limit. Connect existing structures rather
+than introducing more candidate ledgers or per-shape ownership exceptions.
+Package A alone owns shared compiler integration files after current claims are
+reconciled; R6/R7 producers and R8 consumers use its minimal typed interface.
+Its checkpoint is a complete mixed application with zero direct emissions and
+real snapshot replay, not another structural-only `PreparedIrProgram` record.
+Current repairs and all original issue acceptance criteria remain required.
+
 ## Objective
 
 Introduce `PreparedIrProgram` and invert the default single-source top-level

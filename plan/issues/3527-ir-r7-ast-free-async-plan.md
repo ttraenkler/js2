@@ -42,8 +42,29 @@ files:
   - src/codegen/declarations/import-collector.ts
   - src/codegen/expressions.ts
   - tests/issue-3527-ir-async-plan.test.ts
+loc-budget-allow:
+  - src/ir/from-ast.ts
+  - src/codegen/ir-prepared-free-functions.ts
+func-budget-allow:
+  - src/ir/from-ast.ts::lowerExpr
+oracle-ratchet-allow:
+  - src/codegen/async-linear-planning.ts
+  - src/codegen/async-ir-planning.ts
 ---
 # #3527 — IR-only R7: AST-free async suspension plans and canonical Promise ABI
+
+## Execution amendment — 2026-09-05
+
+Complete the active carrier/currentness repair before starting new work. Then
+join R6 in package B of the approved
+[whole-program cutover plan](3518-ir-only-default-and-direct-frontend-retirement.md#current-execution-plan--whole-program-cutover-2026-09-05).
+The prepared program owns the complete async call graph, canonical Promise
+contracts, immutable suspension plans, and runtime demands. Preserve the proven
+post-issuance invariants while replacing dependence on mutable live-context
+joins; do not add another parallel ownership cache. Package A integrates the
+producer into the shared driver. The first mixed-application checkpoint must
+preserve Promise identity and microtask behavior with zero direct bodies.
+All async containers and the original R7 retirement criteria remain in scope.
 
 ## Objective
 
@@ -594,3 +615,639 @@ reason to bypass preparation or silently widen a backend.
   merge-group Test262. Report remaining fixture producers, C-1 await elision,
   unsupported containers/handlers and target gaps explicitly. A green
   playground family or the small IR-only corpus cannot close this issue.
+
+### B2 implementation checkpoint — 2026-09-05
+
+The B2 implementation is published in signed merge head
+`873e5fa140f65040bab224a1d147582a55a615c9`, whose parents are the signed B2
+implementation `a8bc547795f47ec0847466b0bb0ebb5a75cb01f8` and current upstream
+`470ceba797a2822ead2a4060fc65fb78c0b52887`. The branch is
+`codex/3527-b2-luna-20260905`; PR #5602 is open against `loopdive/js2:main`
+from `ttraenkler:codex/3527-b2-luna-20260905`.
+
+The structural source record and AST free producer now admit arbitrary positive
+await counts in supported top level straight line async declarations. The
+runtime fixture measures five source awaits and five emitted frame state edges:
+pending `delay`, settled `Promise.resolve`, an unused settled
+`Promise.resolve`, settled non thenable `await 42`, and a second pending
+`delay`. The IR and native controls both produce the event sequence
+`schedule:0:1`, `fire:0`, `observer:1`, `observer:2`, `schedule:0:1`,
+`fire:0`; the independent Promise observer distinguishes retained settled
+awaits from static erasure. Controlled first and second rejection cases stop
+later state effects, and final void owners resolve `undefined` through the
+canonical ABI. The direct engine value comparison remains supplemental.
+
+The pure preparation suite verifies three states/two suspensions, computed
+SSA liveness `[[0], [0, 4]]` with SSA spills `{0, 4}`, mutable slot reaching
+definitions with slot spill `{3}`, and verifier refusal of missing liveness,
+missing spills, duplicate states, and missing runtime intent. The direct body
+poison control observes direct `0` / IR `1` for newly prepared owners.
+
+Post merge validation: the two B2 suites passed 10/10 tests and the adjacent
+async plan suite passed 12/12. Typecheck, format, fallback, IR only hybrid and
+IR only, dialect, neutrality, layering, stack, host import, LOC/function,
+oracle/coercion, numeric local parity (18/18), issue integrity, and normal
+pre push checks passed. The focused #4106 suite passed 7/8 with its existing
+host free invalid `WebAssembly.validate` baseline red; the #4104 suite passed
+16/17 with its existing `functionPrototypeCall` policy expectation red.
+
+This checkpoint does not close R7. Loops/back edges, handlers, nested
+executable containers, async generators, `for await`, WASI, and fully settled
+owners on the historical C 1 route remain separate work. Existing standalone
+and WASI invalid opcode validation reds remain unchanged, and no baseline was
+weakened.
+
+### B2 settled owner admission repair checkpoint — 2026-09-05
+
+Root's independent settled await controls found a regression at the published
+B2 head before this repair. With `experimentalIR: true`,
+`nativeStrings: false`, and `trackIrOutcomes: true`, the one await literal
+owner and the two await literal owner both failed compilation with
+`IR async runtime attachment for test has no valid async plan owner`. One
+direct body was emitted before the fatal IR error, and the result had zero IR
+bodies. The historical C 1 controls returned 43 and 85. The provider only
+`Promise.resolve` control remained a
+valid B2 owner and returned native Promise value 6 with matching independent
+native observer order.
+
+The narrow fix makes prepared await retention require the existing
+potentially suspending owner analysis in addition to the linear source shape.
+Fully static owners therefore remain on their established C 1 route until a
+separate cutover, while provider only and pending mixed chains retain the B2
+producer and canonical await ordering. The regression suite independently
+asserts that both static owners' synthetic helpers are absent, then validates
+their direct results 43 and 85; the existing mixed, pending, rejection, and
+provider controls remain active.
+
+Repair commits `96defcfe84d9753e5352e20b60a0c86236f5dda0` and
+`18352307cb7cb6bede526bf496e10ba3846624d7` are signed with the required
+Thomas Tränkler author, Codex coauthor, and Luna Max model trailer. PR #5602
+is open and unqueued at exact head
+`18352307cb7cb6bede526bf496e10ba3846624d7`.
+
+The focused runtime regression suite passed 7/7 and the pure preparation suite
+passed 4/4. Typecheck, formatting, fallback, IR policy, dialect, layering,
+neutrality, stack, oracle/coercion, numeric local parity (18/18), issue
+integrity, and the normal pre push hooks passed. Root independently reran the
+three source controls 3/3: static one and two await owners compile and return
+43/85 with the baseline route, and the provider only owner remains direct 0 /
+IR 1 with native observer parity. The exact upstream merge head still needs to
+be integrated before the final R7 publication review; this repair does not
+close R7 or broaden its remaining loop, handler, container, generator,
+`for await`, WASI, or settled owner limits.
+
+## Implementation Plan — 2026-09-05 — B3 settled non-thenable owners
+
+**Next bounded cutover, conditional on final B2 author handoff.** Canonical
+claim `3527:r7-b3-settled-nonthenable-owners` is held by
+`ttraenkler/luna-ir-r7-b3-20260905` for branch
+`codex/3527-b3-luna-20260905`. Root prepared its isolated worktree at verified
+published B2 repair head `76fb2f31258ec90aef96aa81fe287e285a6a7221`.
+The preceding B2 implementation and repair records are preserved from that
+exact head. The complete ten-open-PR file census and canonical claims read at
+`a7a7a28affed7db816f1a645d4e4fc8ad21a207d` found no duplicate B3 slice.
+Astra plans; Luna Max implements after root records the author's completed
+current-main integration and releases the final source handoff. Worktree
+creation alone is not implementation dispatch or proof that B2 has merged.
+
+### B2 repair prerequisite and source cause
+
+Root ran five isolated GC/JS-host rows with `experimentalIR:true`,
+`nativeStrings:false`, `trackIrOutcomes:true`: two fully literal one/two-await
+sources at each of B2 and planning head
+`a5fbaa544046f854daba8881d80c72bc56b87bf9` (source equals main `470ceba`), plus
+one B2 `Promise.resolve(parameter expression)` positive control. Main's two
+literal sources compiled/validated and returned raw numbers `43`/`85` (2/2).
+B2's same two sources failed compilation (0/2), reporting
+`IR async runtime attachment for test has no valid async plan owner`. Its
+positive control compiled and returned a real Promise fulfilled with `6`, with
+native observer ordering. Artifacts: root scratch `r7-settled-*.jsonl` under
+`.tmp/ir-completion-20260905` and the corresponding probe script. These results
+establish a B2 regression for those two controls, not a complete async census.
+
+The original B2 author owns its narrow repair. Do not repair it again in B3 or
+claim the old C-1 population remained unchanged before the repaired head passes.
+Root subsequently verified three repair controls (3/3) on local candidate HEAD
+`96defcfe84d9753e5352e20b60a0c86236f5dda0` plus final comment edits, with
+`async-ir-planning.ts` SHA-256
+`d84b1bc8252361afcdd9c5ac3cd67750f0950f220fa954d5e45875296b124ead`
+stable across the runs. The literal sources again compiled/validated and returned
+raw `43`/`85`; the provider control retained direct `0` / IR `1`, a real Promise
+fulfilled with `6`, and native observer ordering. Outputs are
+`r7-settled-{one,two,provider}-fix.jsonl`. This verifies the narrow regression
+repair locally. The original author subsequently reports 7/7 runtime and 4/4
+pure-preparation controls plus normal gates passing. Root's complete PR file
+census independently confirms published head `76fb2f3` with the eleven intended
+files, including the repair and its record. Current-main integration and the
+final B2 author handoff remain prerequisites for B3 implementation.
+The source discrepancy is exact: `preparedIrAsyncAwaitSite`
+(`async-ir-planning.ts:759`) checks a linear source shape/site, while
+`preparedIrAsyncSourceCanSuspend:551` additionally requires a non-static await.
+Consequently retention can run for an owner absent from
+`collectPreparedIrAsyncOwners:970` and without an `IrAsyncPlan`. B3 must inherit
+the repaired ownership guard, not remove it to gain coverage.
+
+Other decisions that must move together:
+
+- `prepareAsyncCallableAbi:869`, called by `declarations.ts:1856/2995`, projects
+  `externref` only for the prepared source proof. Otherwise the declaration
+  retains the unwrapped fulfillment ABI. `isAsyncIrReady`
+  (`ir/async-selection.ts:26`) still admits historical C-1 owners separately.
+- `preparedIrAsyncSourceShape:511` prioritizes the old one-await identity source
+  shape. A settled `return await ...` must receive exact retained-await evidence
+  even when that source-shape priority would otherwise select identity.
+- `selectR3PreparedSuspendingAsyncFunctions`
+  (`ir-prepared-free-functions.ts:1203`) joins exact owners, allocated Promise
+  signatures and outgoing prepared dependencies. It does not by itself prove
+  every incoming source consumer compatible with a changed Promise ABI.
+- `prepareSuspendingAsyncLowering` (`ir/integration.ts:476`) splits only the
+  recorded owner set. `prepareSuspendingIrFunction` (`ir/async-prepare.ts:679`)
+  already tries the one-await optimization before B2's generic splitter.
+  `lowerPreparedIrAsyncFunction` (`codegen/ir-async-frame.ts:365`) verifies the
+  allocated `externref` result and drives the existing frame engine.
+
+### Integrated B3 baseline verification — 2026-09-05
+
+The original B2 author integrated exact main
+`e4ef2c3ef01cc04126203551240fe95b3513f92e` in signed merge
+`d658f8964b1fd106f28a243e273211db968afaac`, whose other parent is the
+published repair `76fb2f3`. The B3 planning worktree contains that merge and
+has identical source and test contents; its only additional change is this
+Astra plan. The author's post-merge gates, safe publication and final handoff
+remain separate dispatch prerequisites.
+
+Root reran the same three controls in separate GC/JS-host processes at exact
+`d658f896`, including the merged integration, lowering and R3-routing files
+in the seven-file before/after fingerprint check. All three controls passed
+(3/3): the one/two literal-await exports compiled and validated, returning
+raw `43`/`85` with direct `1` / IR `1`; the prepared provider export returned
+a real Promise fulfilled with `6`, direct `0` / IR `1`, and exactly the native
+observer event sequence. The two raw-value results preserve the repaired
+baseline and still contradict the required canonical Promise ABI; they are
+not B3 acceptance evidence. No conformance population is inferred here.
+Evidence is in root scratch `r7-settled-{one,two,provider}-postmerge.jsonl`
+and `r7-settled-runtime-postmerge-control.mts`.
+
+### Scope and ordered implementation
+
+Own top-level ordinary async free functions on the existing JS-host WasmGC
+provider profile, with B2's flat source/control proof, existing supported
+parameter carriers, numeric awaited values and numeric/void fulfillment. Every
+await operand must have exact non-thenable evidence after transparent wrappers
+are removed. This is a semantic proof, independent of spelling, constants,
+source-file identity or an await-count limit. A function with no await needs a
+separate entry/settlement plan and remains outside this increment. Keep loops,
+handlers, nested executables, methods, generators, `for await`, standalone/WASI
+and new carrier families on their existing policies.
+
+1. **Prepare one exact owner proof before ABI projection.** Extend the existing
+   async source planning with an explicit settled-owner record containing source/
+   unit/declaration identity, ordered await sites, their actual operand and
+   delivery types, fulfillment signature, and existing number-box/unbox and
+   async-runtime capability requirements. Reuse `preparedIrAsyncLinearSource`
+   and the ordinary selector's body/signature proof. Unknown evidence is not
+   non-thenability; a cast of a Promise/unknown value to `number` is not proof.
+   Do not use the old static classifier's scheduling-elision verdict as the
+   authority. Parameters, helpers and retained calls must use their existing
+   supported ABI, with the existing exact function-value exclusions.
+2. **Close the callable boundary before changing it.** Join incoming and outgoing
+   source call sites by UnitId and require the selected declaration's canonical
+   Promise result to agree with each prepared/direct call contract. Preserve
+   numeric fulfillment separately from the physical callable `externref` result.
+   External JS callers receive the real Promise; old source raw-value/await
+   consumers cannot be assumed compatible. If an existing caller contract cannot
+   express this distinction, leave the affected component unadmitted before ABI
+   projection and identify the required caller-contract prerequisite. Do not
+   broaden the R2 transaction or infer compatibility from a bare function name.
+3. **Use that same proof at every handoff.** Declaration ABI projection,
+   selection, the repaired `preparedAsyncAwaitSite` guard, collected owner IDs and
+   final R3 routing must agree. Unselected owners receive neither the new ABI nor
+   retained awaits. Once a Promise ABI has been promised, losing its prepared
+   owner must be an Invariant or a proven rollback before any consumer/ABI
+   publication; falling back to the old C-1/direct body is invalid because its
+   activation predicate still declines settled owners. Do not globally enable
+   `asyncFnNeedsHostDrive` or change legacy activation for unrelated functions.
+4. **Retain and split the actual operands.** For these non-thenable sites, evaluate
+   the source operand once, use B2's existing carrier conversion and emit one
+   `await` per site. Reconcile the exact ordered source sites with final IR awaits
+   before splitting. Reuse B2 liveness, slot reaching definitions, derived-unit
+   provenance and `canonicalPromiseAbi`; do not add a second state builder.
+   Preserve `prepareSingleAwaitIrFunction`'s proven carrier optimization before
+   the generic splitter. Optimizing carrier conversions must retain the await
+   edge and its job boundary.
+5. **Prepare providers, seal, then emit.** Use the existing runtime manifest and
+   `materializePreparedAsyncHostAdapters` to reserve number boundaries, Promise
+   resolve/react/capability/settlement and void-undefined support before component
+   seal. Validate final logical/physical signatures, helpers, state/spill/await
+   census and exact runtime receipts before the source slot is published once.
+   The exported Wasm function itself returns a real Promise. A call-site
+   `Promise.resolve` wrapper cannot be used to hide a raw result. Unknown support
+   is a pre-ownership refusal; broken promised evidence is an Invariant with no
+   partial body publication or direct retry.
+
+**Promise.resolve is an explicit dependent proof.**
+`staticPromiseResolveSettledExpr` (`ir/async-static.ts`) recognizes textual
+`Promise.resolve` chains without binding or mutation evidence. Both the C-1
+selector and B2's prepared-await arm reuse it (`select.ts:9319`,
+`from-ast.ts:4058/4073`). A nonempty declaration-file check alone does not prove
+an unmodified builtin property or justify erasing a callable evaluation.
+Promise-valued operands therefore do not qualify for B3's non-thenable proof.
+Their next increment must either evaluate the original call exactly once with
+its resolved callable/receiver/effects and Promise carrier, or supply a sound
+immutable-builtin substitution proof covering aliases, shadowing, mutation,
+getters and nested calls. No new name-only substitution is permitted here.
+The current host async normalization itself uses `Promise_resolve`
+(`runtime-host-capabilities.ts:589`, `runtime.ts:16250`); distinguish that
+intrinsic-await obligation from the source-visible static call when planning the
+follow-up. Do not call this separate existing hazard a B2 regression without a
+controlled baseline. Existing B2 Promise-valued owners remain on their current
+policy; this phase does not certify or broaden them.
+
+### Finite validation and ownership
+
+Use the repaired B2 head as the measured base and record its exact SHA. Add
+`tests/issue-3527-settled-owner-runtime.test.ts` and focused owner-proof negatives:
+
+- Real exported functions with one and multiple numeric/non-thenable awaits,
+  a parameter/computed value live across both, mutable-local updates, unused
+  await results, `return await`, and a void tail. Vary names, constants and
+  helper order. Check raw export return is a native Promise, expected fulfillment,
+  exact await/state/liveness evidence and direct `0` / IR `1` per admitted owner.
+- Native-JS controls with independent `Promise.resolve().then(...)` observers
+  and observable effects before the first await, between awaits and after the
+  last. Compare the full event sequence, including what happens before the call
+  returns. Awaiting a raw number in the test harness is not Promise-ABI proof.
+- A supported effectful call that throws before the first await and after a
+  resume must return a rejected Promise, never throw out of the exported call,
+  and must stop subsequent effects. Use controlled host imports/helpers with
+  matching native controls. Retain B2's controlled first/second awaited rejection
+  tests as adjacent engine coverage; those Promise-valued inputs are not new B3
+  admission evidence. A raw cast consumer is not a compatibility oracle.
+- At least one closed prepared caller of a new owner, plus an incompatible
+  historical raw-value caller and a same-spelling foreign binding. Verify exact
+  Promise call ABI or refusal before projection, never a wrong executable.
+- Delete/substitute the owner proof, a source await, spill, helper provenance or
+  runtime/ABI receipt; withdraw the owner after Promise projection; poison the
+  source direct/C-1 body and the unprepared await arm for admitted owners.
+  Corruption must fail before publication. Unselected and kill-switch controls
+  keep their existing route and ABI; empty/no-await input cannot satisfy the
+  positive denominator. Preserve the existing one-await optimization checks.
+- Shadowed/aliased/mutated `Promise.resolve` and cast thenables must not gain the
+  new settled-owner proof. Compare main/repaired-B2 controls where practical;
+  report any existing failure separately rather than changing a baseline.
+
+One Luna Max worker owns only the relevant owner-proof/ABI/await-site functions
+in `codegen/async-ir-planning.ts`, the source-proof helper in
+`codegen/async-linear-planning.ts`, the exact proof fields in
+`ir/async-from-ast.ts` and their prepared-await consumption in `ir/from-ast.ts`,
+plus focused tests and this issue record. Existing declaration call sites,
+selector, splitters, runtime providers and frame engine should consume the
+shared proof without redesign. If needed, a narrow change to the R3-specific
+functions `r3SuspendingAsyncSignatureMatchesAllocatedSlot` /
+`selectR3PreparedSuspendingAsyncFunctions` requires the lead to confirm the
+R2 worker's file ownership is clear. No changes to R2 sealing/publication,
+P2A initializer transactions, R8, broad `codegen/index.ts`/`ir/integration.ts`
+lifecycle, or the legacy activation engine are authorized by this slice.
+
+Run `pnpm typecheck`; the new suites; both B2 suites; the adjacent
+`tests/ir/issue-1373b-async-plan.test.ts`; the existing #4106 one-await,
+#4104 runtime-consumer, #4124 final-async and #2906 multi-await suites; and
+standalone/native-async controls as no-regression evidence. Run
+`node --import tsx scripts/check-ir-only.ts --json` in both hybrid and IR-only
+policies, `node --import tsx scripts/check-ir-fallbacks.ts`, plus the repository's
+applicable async-equivalence, layering/dialect/format/size gates. Record exact
+baseline/candidate denominators and existing reds; the earlier B2 checkpoint is
+not a substitute for fresh validation. No new pass count is asserted here.
+
+This removes C-1 only for owners carrying the new complete proof. Promise-valued
+settled operands, no-await async functions, remaining containers/carriers and
+caller-contract gaps remain explicit follow-ups. R7 and full #3518 retirement
+acceptance remain open.
+
+### B3 implementation record — 2026-09-05 — Luna Max
+
+B3 implementation is present on the settled-owner slice in
+`async-linear-planning.ts`, `async-ir-planning.ts`, `async-from-ast.ts`, and
+`from-ast.ts`. The source proof now requires one exact top-level linear owner
+carrying checker-backed numeric, non-thenable evidence for every await operand.
+Its immutable receipt is owned by the planning `UnitId`/`SourceId`, freezes the
+ordered await sites and facts, and records incoming/outgoing source callable
+UnitIds. The declaration ABI gate, selector gate, retained-owner collection,
+R3 acceptance input, and prepared await resolver all consume the same cached
+receipt; a stale or withdrawn issued receipt raises
+`selection-preparation-mismatch` before a direct body can retry. The prepared
+await handoff carries the receipt owner and source fingerprint, and AST lowering
+retains the original numeric operand exactly once. Existing `Promise.resolve`
+substitution and cast/unknown refusals remain on their prior policy.
+
+Measured integrated B2 baseline is `d658f8964b1fd106f28a243e273211db968afaac`:
+the repaired fully literal one/two-await controls returned raw `43`/`85` with
+direct `1` / IR `1`, while the Promise-valued provider control returned a native
+Promise with direct `0` / IR `1`. On the B3 candidate, literal one/two-await,
+single and multiple settled owners, `return await`, void-tail, and a numeric
+helper call all return native Promises with direct `0` / IR `1`; the settled
+three-await owner resolves to `192` and preserves the observed native sequence
+`after-call:1`, `observer-1:2`, `after-flush-1:2`, `observer-2:3`,
+`after-flush-2:3`, `after-promise:4`. A closed prepared caller resolves to
+`42`. The raw-value consumer withdraws the owner before ABI projection; the
+same-spelling foreign callable binding, Promise/unknown casts, shadowed
+`Promise.resolve`, no-await, and standalone static controls receive no B3
+receipt. A forced owner-proof withdrawal after ABI issuance fails before state
+publication with the invariant above.
+
+The focused B3/runtime and adjacent preparation denominator is `33/33`: new
+settled-owner runtime `10/10`, existing linear runtime `7/7`, linear preparation
+`4/4`, and the adjacent async-plan suite `12/12`. TypeScript typecheck also
+passes. The broader requested async controls retain environment/base reds: the
+six-file #4106/#4104/#4124/#2906 run was `34` passing and `21` failing; #4104
+has its existing standalone `functionPrototypeCall` policy mismatch, #4106's
+standalone host-free binary row is already false on the baseline, #4124's child
+`tsx` process is blocked by the sandbox `listen EPERM` pipe, and the #2906 WASI
+rows fail `WebAssembly.validate` under this local runtime. No local full
+test262 run was attempted. Broader R7 ownership, Promise-valued operands,
+no-await owners, remaining caller contracts, and CI acceptance remain open.
+
+The branch first recorded the signed current-main refresh at
+`9cc5826906db09eacf9007b7faf3b9bb02d207d5` and then integrated fetched current
+main `b67ab1fc0eb2bafe959c3100df6e68d03325ce4f` in signed merge
+`04b4a59dbf19c9fa61e8e01ec2ad6bd192cedc1b`. The fresh ten-file async matrix
+on that candidate was `67` passing / `34` failing (`101` total): the B3,
+linear, preparation, and async-plan files remained green; the retained failures
+were #4104 `1`, #4106 `1`, #4124 `1` (sandbox `tsx` IPC), #4573 `11`, #4574
+`14`, and #2906 `6` (standalone/WASI `WebAssembly.validate` environment
+controls). The direct `node --import tsx` forms of the harness, stack-balance,
+and codegen-fallback checks passed after their `npx tsx` forms hit the sandbox
+IPC pipe restriction. The repository-wide dead-export, any-box, and
+speculative-rollback scripts resolve the space-containing worktree as an
+encoded `%20` path; the JSR package budget has no local `dist` artifact; and
+the godfile check reports 44 current-main regressions outside this slice.
+These are recorded gate/environment residuals, not B3 acceptance evidence.
+
+The scoped B3 source, tests, and measured record are committed in
+`7c60d5c5873d0b164f1aa99b85b2995897fe8233` on top of the signed current-main
+merge above.
+
+### B3 issuance-integrity repair — 2026-09-05 — Luna Max
+
+The post-ABI proof-loss follow-up keeps issuance evidence independent of the
+current identity maps. `settledOwnerIssued` is now keyed by compilation
+context and original `FunctionDeclaration`, retaining its original UnitId,
+SourceId, and source file. An issued declaration cannot mint a receipt under
+a rebound UnitId or rebuild one after its original cache entry is withdrawn;
+`forgetPreparedIrAsyncSettledOwner` also locates the original UnitId after
+current identity lookup fails. The source-suspend and prepared-await guards
+check issuance before source-shape admission, so a missing shape remains an
+Invariant instead of a quiet refusal or direct fallback.
+
+The three real identity controls all begin with a positive receipt and
+externref ABI projection, then mutate copied identity maps: declaration-to-unit
+deletion, terminal deletion, and declaration rebinding to the sibling UnitId.
+Each retains `WasIssued=true`, returns no current receipt, and raises the
+`selection-preparation-mismatch` proof-loss error from source suspend, await
+site, and ABI projection. A fourth control removes the current function body
+after issuance and raises the same error before either handoff can return.
+
+The end-to-end identity-loss control uses a narrow Map-read fault after the
+first receipt is issued. It returns `success=false` with one
+`selection-preparation-mismatch` invariant, `legacyBodyEmitted=false`,
+`irBodyEmitted=false`, zero direct/IR body counters, and no async state
+function. Thus the promised externref slot is not published with a raw f64
+body or a direct retry. Focused B3 runtime is **15/15**; B3 plus the adjacent
+linear preparation/runtime controls are **26/26**. `pnpm run typecheck`,
+Prettier checks, `node --import tsx scripts/check-ir-only.ts --json` (both
+single-host and standalone, 5/5 entries, 38 emitted, 0 Unsupported, 0
+Invariants, 0 legacy bodies), and `pnpm run check:ir-fallbacks` pass. The
+broader R7, Promise-valued operand, remaining caller-contract, and CI gates
+remain open as recorded above.
+
+## Implementation Plan — 2026-09-05 — Astra async integration repair
+
+The user now prioritizes consolidating the existing migration pieces before
+opening another feature slice. B2 and B3 must form a coherent validated async
+change; separate local successes do not satisfy their dependency relationship.
+Parent Astra owns this plan and review. The same Luna Max async owner implements
+the repair in the preserved B3 worktree, retaining signed checkpoint
+`44694026163cee6c38eea890a6df263234d93a62` before further source changes.
+
+### Concrete CI evidence and source boundary
+
+On published B2 head `df4b8b86ca2620607a6470428d509cba5aea61bb`, CI run
+`33976818803` finished with a failing quality job, equivalence shard 5, and its
+aggregate gate. The shard reports one new regression:
+`tests/equivalence/ir-slice10-promise.test.ts`, async-to-async cross-call.
+The source contains an async `inner` with no await, an `outer` with two awaits
+of `inner`, and a synchronous exported caller casting `outer(5)` to number.
+The existing C1 no-await declaration can retain numeric fulfillment ABI; an
+async TypeScript return annotation alone is not proof of a physical Promise.
+A generic B2 producer can encounter this boundary without issuing B3's
+all-settled receipt, so repairing only that receipt's callers is insufficient.
+
+The quality failure is separate evidence: the host-free control in
+`tests/issue-4106-ir-async-fetch-user.test.ts` reports a successful compilation
+whose binary fails `WebAssembly.validate`. Root is measuring both controls
+against freshly fetched main `b1537bbeca3858faf45fd89eff5506d21d1e230f`.
+Do not infer that the two failures share a cause, or declare the host-free
+failure harmless merely because it was seen on an earlier baseline.
+
+### Implementation order
+
+1. Trace the generic owner's actual ABI projection, selection, source proof,
+   await retention and final prepared admission. Enumerate all consumers of
+   the shared shape/capability helper before changing it. Preserve existing
+   single-await, timer, Promise provider and counted-loop behavior.
+2. Close outgoing source calls by exact declaration and UnitId against the
+   carrier their declaration will actually publish. A known C1 no-await async
+   callee with numeric ABI does not satisfy a Promise-carrier demand. Reuse
+   authoritative prepared/source ABI evidence; a name, `Promise` annotation,
+   or later numeric cast is insufficient. Unknown evidence must decline
+   before projection rather than silently accept an empty caller census.
+3. Close incoming source calls before promoting a generic owner. Distinguish
+   a proved Promise carrier or compatible prepared await from a raw numeric
+   consumer, unowned call site, function-value escape or unresolved target.
+   Retain complete source identities and exact call contracts. If multiple
+   candidate owners depend on each other, settle their component before ABI
+   publication; do not make correctness depend on declaration order or a
+   recursive predicate's optimistic partial result.
+4. Keep eligibility refusal before any Promise declaration or body-skip
+   promise. After issuance, loss or contradiction of the retained contract
+   must remain an invariant, using the identity-loss repair already committed.
+   Do not recover by rebuilding a different proof, restoring raw C1 output,
+   or disabling the whole generic producer to satisfy one fixture.
+5. Run the exact failing cross-call control with a real compatible Promise
+   chain as its positive control. Check compilation, binary validity, runtime
+   result/Promise behavior and terminal ownership, not only byte counts.
+   Preserve legacy behavior for a relation this increment explicitly declines;
+   no-await async semantic migration remains outside the current repair.
+   Include declaration-order and post-projection contradiction controls when
+   they exercise the changed join. Do not weaken equivalence or Test262 baselines.
+6. Diagnose the host-free validity failure independently using the fresh-main
+   observation and concrete validation error. If it is already fixed by the
+   fetched dependency, retain that source/byte evidence. Otherwise report the
+   smallest actual missing carrier/resource contract before touching another
+   subsystem. Do not skip or weaken the control merely to publish B2.
+7. Return a signed clean candidate with focused checks and updated evidence.
+   Root composes it with the repaired initializer and linear handoff candidates
+   and runs the larger public-compiler path. Preserve B2's public main merge
+   and B3's automatic public update. No force push, queued-head mutation, or
+   duplicate PR is authorized by this plan. Publication arrangement follows
+   the verified dependency graph and queue state after integrated validation.
+
+### Astra async integration repair — implementation record — 2026-09-05 — Luna Max
+
+The generic Promise-owner handoff now uses one source-qualified fixed point.
+`async-linear-planning.ts` builds an exact declaration/UnitId call closure,
+including incoming awaited callers, incoming Promise carriers and outgoing
+top-level async callees. `async-ir-planning.ts` retains that immutable owner
+population for declaration ABI preparation and still invokes the existing
+current-source proof unconditionally, so a later identity loss remains a
+fatal invariant. `ir-prepared-free-functions.ts` consumes the same population
+at final R3 selection while the broader source-shape population remains
+available to withdraw an incomplete component before runtime attachment.
+
+Before this repair, the settled-inner/raw-consumer matrix at B3 checkpoint
+`44694026163cee6c38eea890a6df263234d93a62` prepared both `inner` and `outer`
+(`direct=0`, `IR=1`) even though `run(): number` cast `outer()` to a raw C1
+value; `run` remained direct and body-shape-rejected. The candidate withdraws
+that component before Promise ABI publication: `inner` and `outer` are both
+`direct=1`, `IR=0`, with no emitted async state and a validated, byte-identical
+legacy control. The exact no-await `inner`/two-await `outer` CI shape also
+compiles and validates with the same direct fallback because the no-await
+callee never enters the Promise population.
+
+The positive reversed-declaration provider control uses
+`inner(): Promise<number> { return await Promise.resolve(x + 1); }`, two awaits
+in `outer`, and an exact synchronous `run(): Promise<number>` carrier. Both
+async owners are prepared (`direct=0`, `IR=1`), the exported call returns a
+native Promise, and it resolves to `13`. The new focused closure suite is
+`2/2`; the existing settled-owner, linear preparation/runtime and Promise
+equivalence controls are `15/15`, `4/4`, `7/7` and `11/11` respectively.
+Together the focused B2/B3 set is `39/39` after restoring the B3 proof-loss
+currentness check. `pnpm run typecheck` passes. The independent host-free
+`WebAssembly.validate` failure on #4106 remains outside this repair and is
+recorded under the separate integration lane; no baseline was weakened.
+
+The integration closure review found one supported existing shape that needed
+an explicit carrier contract: `fetchUser()` calls stored in a typed empty
+`Promise<number>[]` and consumed by the same owner's `await Promise.all`. The
+closure now authenticates the vector declaration, ambient `Promise` type,
+Promise-valued call, and exact lexical `Promise.all` consumer by declaration
+identity; only an active fixed-point Promise owner may satisfy that edge. This
+preserves the #4124/#1373b sequential, parallel, and final-main owners while
+continuing to reject arbitrary typed-array pushes, casts, shadowed Promise
+bindings, unknown targets, and raw C1 consumers. The focused family controls
+are `4/4` after this repair, and the complete scoped async run is `61/62`:
+the only red is the existing #4124 nested `pnpm exec tsx` probe blocked by the
+sandbox `listen EPERM` pipe. The #3527 closure, B3, linear, #1373b, #4124,
+and Promise equivalence controls all pass; typecheck remains green.
+
+### Astra generic Promise issuance repair — implementation contract — 2026-09-05
+
+Retain generic Promise ABI issuance independently by context and original
+declaration/UnitId. At every ABI reuse and R3/await handoff, authenticate the
+original declaration, reverse identity join, terminal, and exact closed
+call-contract population. Missing, rebound, or contradictory evidence after
+issuance is a located invariant, never raw f64, direct retry, silent cached
+success, or issuance of a replacement proof. Return an actually immutable
+owner collection; do not expose mutable `Set` authority. Keep preclaim refusal
+distinct and preserve the provider-backed reversed-order Promise13 control.
+Add all four independent post-projection mutation controls from the read-only
+probe, plus source-call contract contradiction where the retained proof can
+stale. Re-run the exact CI cross-call and focused B2/B3/currentness suites,
+remove debug logging, and return a clean signed repair candidate.
+
+### Astra generic Promise issuance repair — implementation record — 2026-09-05
+
+Codex GPT-6 Astra Max continued the existing dirty B3 worktree at signed
+checkpoint `44694026163cee6c38eea890a6df263234d93a62`, preserving the earlier
+plans, tests, branch and claim. No replacement checkout or history rewrite
+was used. The original seven-test issuance draft passed, but review found
+additional gaps at the exported source-suspension gate, cached population,
+caller/callee reverse joins and final allocated-slot check.
+
+Generic ABI issuance now has a context-owned declaration lookup and a separate
+original-UnitId registry. Each receipt retains the original terminal object,
+source identity, source fingerprint, closed owner population, exact incoming
+and outgoing call-contract fingerprint, and actual parameter/fulfillment ABI.
+Every ABI reuse, source/await handoff and R3 population read starts from those
+original receipts, including when the current selector has lost the owner or
+supplied a different declaration. A failed receipt stays invalid after the
+damaged map is restored. The final R3 slot check raises a located invariant
+for a missing or contradictory already-issued Promise slot, instead of
+silently declining it. The end-to-end identity and allocated-slot faults all
+stop with zero direct and IR bodies for the affected owner.
+
+The exposed owner population is a frozen read-only view over private storage.
+It has no `clear`, `add` or `delete` authority; borrowing those methods from
+`Set.prototype` also fails. Call-closure arrays and their records are frozen.
+Incoming and outgoing source calls authenticate forward, reverse, source and
+terminal joins. Asserted numeric await operands do not establish a Promise
+carrier. Source parameter inference checks the same native-annotation
+resolver as declaration collection, so `type i32 = number` cannot masquerade
+as an f64 parameter merely because TypeScript erases the alias. Actual ABI
+observations must agree with the predicted scalar/vector parameters and
+numeric/void fulfillment. A contradiction before any issuance withdraws the
+component; one after issuance is fatal.
+
+The additional oracle-ratchet allowance is scoped to
+`src/codegen/async-ir-planning.ts`. Its source-only preflight deliberately
+reads the declaration/checker parameter and Promise-fulfillment facts and the
+existing native-annotation resolver before any callable is published. These
+are temporary frontend proof inputs, not fields added to the AST-free async
+plan. No shared oracle baseline is changed; replacing this hybrid preflight
+belongs to the separately approved whole-program preparation follow-up.
+
+The expanded C1 controls were compared through the same public compiler API
+against a read-only export of exact main
+`b1537bbeca3858faf45fd89eff5506d21d1e230f`. Parent verified all 1,188 exported
+source/configuration blobs; this lane retained unchanged before/after hashes
+for its imported source controls. On JS-host GC, the original mixed fixture
+(`base` with a settled Promise.resolve await, `twice` awaiting `base`) returns
+`42` on both versions. Main IR-emits `base`; this repair withdraws both owners
+before promotion because raw C1 fulfillment does not close the generic
+Promise dependency. Its revised test retains the exact fixture and runtime
+assertion and additionally requires one direct body, zero IR bodies and no
+post-claim error for both owners. This is a change to pre-ABI component
+ownership, not a claim that all C1 async semantics have migrated.
+
+On WASI, main and candidate produce the same Node 24 validation failure at
+`__promise_thenable_job`: opcode `0x1f` requires
+`--experimental-wasm-exnref`. Both exact binaries validate with that feature
+enabled. The C1 test now sends its unchanged compiler bytes to a narrowly
+scoped Node child for validation and execution, and corrupts the magic byte
+as a firing negative control. The unrelated host-free test and global Vitest
+configuration are untouched. The final-async test's nested poison probe now
+uses `node --import tsx` instead of the tsx CLI, retaining its positive and
+negative assertions without the sandbox IPC dependency.
+
+The exact failing CI fixture still compiles to a validated byte-identical
+legacy control; its unsupported synchronous numeric cast also retains the
+legacy runtime result (`NaN`). The supported reversed-declaration provider
+chain prepares both async owners and returns a native Promise resolving to
+`13`. Canonical no-await async behavior, wider Promise contracts and full R7
+retirement remain open. Final validation results are recorded below before
+the signed local candidate is handed to integration; no public push, PR
+mutation, issue comment or queue action is part of this repair.
+
+Final candidate validation uses the unchanged source after the C1 test fix.
+The complete affected cohort passes **118/118 tests in 8/8 files**: generic
+call closure/currentness `32/32`, settled owners `15/15`, linear preparation
+`4/4`, linear runtime `7/7`, C1 async `26/26`, async plans `12/12`, final async
+`11/11`, and Promise equivalence `11/11`. Typecheck passes. Both IR-only policy
+lanes (single-host and standalone) pass with `5/5` expected entries, `41`
+terminal units, `38` IR-emitted units, `3` non-executable units and zero
+Unsupported, Invariant or legacy-body outcomes each. The six changed
+TypeScript files pass Biome and Prettier; `git diff --check` and the scoped
+oracle ratchet also pass. The final cohort and policy evidence is retained in
+this worktree's `.tmp/astra-async-final-cohort.log` and
+`.tmp/astra-async-ir-only-final.json`.
+The fallback telemetry gate passes with no unintended, post-claim or
+module-level increase against its committed baseline; the full issue-link
+and metadata audit also exits successfully without changing any issue file.
+
+The local signed commit runs all normal hook bodies with
+`CHANGED_ROOT_TESTS_BASE=44694026163cee6c38eea890a6df263234d93a62`.
+That changed-root run is repair-scoped validation, not a whole-branch result.
+The full `118/118` cohort above is separate. The parent integration lane owns
+the already-reviewed #4106 exnref validation fix and must pass that existing
+control and the normal combined hooks on the composed candidate before any
+publication is authorized.

@@ -58,6 +58,176 @@ func-budget-allow:
 > both WasmGC and linear consume the same prepared IR program, unsupported
 > source fails explicitly, and the direct front-end is deleted.
 
+## Current execution plan — whole-program cutover (2026-09-05)
+
+The user approved replacing continued hybrid feature-by-feature expansion with
+a coordinated whole-program cutover, and requested parallel implementation.
+This section supersedes future dispatch order in older slice plans. It preserves
+all eleven acceptance criteria below and the correctness obligations of work
+already in flight. It is an execution change, not a new definition of completion.
+
+The planning baseline is the integration record at `3d2dfce953652e3d8491490cdd786b14943342cd`:
+the mixed application executes correctly but all seven terminals remain legacy;
+`PreparedIrProgram.reconciliation` still says `pending-production-wiring`.
+Focused green suites therefore do not establish a complete new compiler path.
+Recheck current main, open implementation PRs, and slice claims before dispatch;
+this recorded baseline is not a claim about future public state.
+
+### Transition and central contract
+
+1. Finish the existing initializer, async currentness, and linear acceptance
+   repairs; integrate their actual source histories and review combined results.
+   Preserve their worktrees, claims, tests, and public updates. Do not interrupt
+   a writer or start a competing implementation under this amendment.
+2. Stop commissioning additional source-shape admission exceptions, feature
+   toggles, and per-component legacy/IR arbitration. Existing safety checks stay
+   until their dependency is removed. Repairing a current regression is allowed;
+   expanding the hybrid framework is no longer the next milestone.
+3. Make the existing prepared program production-authoritative. One preparation
+   driver resolves source-qualified units, bodies, shared ABI contracts, module
+   bindings and startup order, effects, runtime demands, and async plans before
+   either backend emits. Extend and connect existing IR and manifest structures;
+   do not build a second candidate ledger or a replacement compiler from scratch.
+4. The producer returns a complete verified program, a source-located unsupported
+   outcome, or an invariant. A missing fact is explicit. All call, allocation,
+   provider, export, and startup references must resolve within the complete
+   program. Backend representation and capability checks happen before artifact
+   emission; neither backend reconstructs semantic facts from source or live
+   checker/codegen caches. Symbolic relocations may be resolved below this boundary.
+5. Exercise the new path without per-unit legacy fallback. During development,
+   the existing compiler is a separately invoked comparison oracle; keep its
+   public behavior until cutover is justified. Do not add a new public escape
+   option or make the strict path silently invoke the old compiler. Serialization
+   belongs to this same contract, with stable identities and lossless semantic
+   data; it must not capture AST objects, callbacks, or mutable context handles.
+
+### Parallel work packages and exclusive responsibility
+
+The main-thread lead owns architecture, scheduling, integration, and independent
+review. Retain the already selected implementation models. Each writer uses an
+isolated worktree and an explicit slice claim. These are proposed responsibilities,
+not claims acquired by this document; existing owners must be reconciled first.
+
+| Package | Deliverable | Proposed exclusive implementation surface | Dependency / handoff |
+| --- | --- | --- | --- |
+| A — authoritative preparation | One complete program and a strict public-compiler route, including ordinary and multi-source startup/call ownership | R2/R5: `src/ir/program.ts`, `src/ir/prepare.ts`, shared program ABI contracts, `src/ir/integration.ts`, `src/compiler.ts`, `src/codegen/index.ts`, `src/codegen/multi-prepared-program.ts`, `src/codegen/ir-prepared-free-functions.ts` | Publish the minimal typed producer/consumer interface first. A alone integrates changes to shared entry points. Other packages supply typed inputs or consumer APIs. |
+| B — semantic/runtime producers | Populate the program with semantic runtime demands and existing immutable async plans; preserve behavior through shared runtime helpers | R6/R7: `src/ir/runtime-manifest.ts`, runtime-provider modules, `src/ir/async-plan.ts`, `src/ir/async-prepare.ts`, `src/ir/async-from-ast.ts`, and dedicated IR async adapters | Reuse current repair results. Begin the reader/mutator inventory alongside A; implement against A's interface, with no private ABI or ownership cache. Request shared-entry-point wiring from A. |
+| C — backend consumption and replay | Both backend entry points consume the same verified program; lossless codec and fresh-process replay | R8: `src/ir/backend/linear-integration.ts`, WasmGC/linear emitters and legality, `src/codegen-linear/index.ts`, and the program codec module | Starts implementation once A's interface is available and a slot is free. A owns the schema; C owns its codec implementation. C does not edit the shared compiler entry points. |
+| D — application evidence | Independent whole-application fixtures, exact unit accounting, oracle comparison, and affected integration checks | R9 evidence under this epic: dedicated whole-program tests/fixtures and their runner; existing coverage scripts only with explicit ownership | Can start immediately alongside A/B on a pinned source snapshot. Owns no compiler source and cannot redefine supported scope, suppress failures, or alter baselines to accept the candidate. |
+
+Existing R1 identity, R3 class/closure, and R4 module-storage owners remain
+authoritative for their modules. A consumes their interfaces and routes concrete
+missing prerequisites to those owners; this table does not grant access to their
+claimed files. B/C likewise enumerate readers and mutators before moving shared
+facts. Every dispatch must say the worker is not alone, must preserve others'
+changes, and must refer out-of-scope defects to the responsible owner.
+
+Use at most the available three worker slots plus the lead. After the current
+repair batch, run A + B + D in parallel. When D has committed the baseline harness
+and released its slot, start C against A's interface; rerun D's harness on each
+meaningfully changed combined candidate. If A's interface is not ready, C may
+inventory backend reads but must not invent a competing schema. Review A's core
+change by a different architectural implementer; authors do not supply their own
+independent acceptance. Do not dispatch four workers into three slots or keep an
+idle validator occupying the slot needed for implementation.
+
+### First bounded implementation checkpoint
+
+Review the approach after the first implementation cycle, no later than one
+working day of implementation after prerequisite consolidation. This is a review
+budget, not a promise that the full compiler can be migrated in a day. A publishes
+the minimal interface as its first implementation artifact; do not spend that
+cycle producing another exhaustive specification without executable integration.
+
+- Promote the existing mixed application's sources from the recorded integration
+  probe into a stable test fixture. Pin its source hash and original seven-unit
+  census. Require all seven units to be prepared exactly once, zero direct body
+  emissions, correct initialization order and values, native Promise identity,
+  and the recorded microtask behavior through the public compiler's strict path.
+- Add an independently structured mixed application, plus renamed/reordered
+  declarations and an explicit missing-fact control, to reject fixture-specific
+  admission. Preserve the inputs when reporting a failure; do not simplify away
+  a class of work to claim success.
+- Serialize a real prepared whole program containing startup and cross-unit
+  calls, then replay the exact snapshot through both backends without source or
+  checker access. Compare supported output with the same native/direct oracle.
+  Record a backend capability gap as incomplete evidence, never as successful
+  cross-backend coverage. The async mixed application and common backend subset
+  may be separate fixtures; keep both denominators explicit.
+- After serialization, missing/contradictory ABI, provider, or identity evidence
+  must fail before artifact emission. A positive runtime control must prove that
+  the exercised route is real and does not rebuild the frontend.
+- Review whole-program coverage gained, direct entry edges removed, duplicate
+  ownership mechanisms retired, regressions, and implementation effort. If only
+  metadata, additional guards, or local tests changed, the approach has not passed
+  this checkpoint. Revise the central integration work instead of spawning more
+  admission slices or reducing the acceptance bar.
+
+### Expansion and completion
+
+Once the complete path works, expand by shared semantic mechanisms across the
+full declared class, closure, module, async, fast, standalone, WASI, equivalence,
+and conformance populations. Reuse existing runtime implementations through
+typed IR operations; retain their effects, exceptions, allocation requirements,
+and optimization behavior. AST-driven runtime dispatch cannot be hidden inside
+an opaque IR operation. New optimizations and separate TypeScript/Acorn frontend
+generalization do not precede this cutover; already supported behavior and
+optimization-preservation requirements remain in scope.
+
+Validate affected modules and the combined application path before broad checks;
+repeat unchanged passing suites only for a new concern or changed candidate.
+Full Test262 remains a merge-group CI obligation, not a new local sweep. The final
+IR-only policy, complete serialized handoff, both backends, optimization ledger,
+direct-handler deletion, and all eleven existing acceptance criteria must still
+be proved against landed source. A successful checkpoint does not complete R2,
+R5, R6, R7, R8, or this epic.
+
+Dispatch status: this side conversation updated the plans and, at the user's
+explicit request, sent the parent thread the amendment and dispatch sequence.
+No subagent was started, contacted, or assigned, and no active claim was changed.
+The main thread must perform the live ownership/publication check and execute
+the waves above.
+
+### Prerequisite consolidation record — 2026-09-05
+
+The main thread has adopted this amendment into the isolated integration
+checkout. P2A ready PR5632, `feat(codegen): atomically prepare multi-source
+module initializers`, is verified OPEN at exact head
+`f9d524da9464ba1c27e8cddc46897c8422c24922`, with the reviewed body. Its claim
+remains held until actual landing. This is a publication fact, not completion
+of R5 or this epic.
+
+The reviewed R8 repair `272afba2d5de1af082768f45e5cb7b39f61a55e4` is integrated
+by signed merge `0c34f27a408187631153724c3d50e2a5142c247e`. Normal integration
+hooks passed 59 tests with two existing optional skips across seven files;
+formatting, lint, budgets, and oracle gates passed. Root verified the SSH
+signature and exact parent history. Allocation-policy callbacks remain confined
+to final retained allocations; the before/after control is `[0,1,0]` to `[0]`.
+
+The async repair `d073f433edfffc8be623d37a2333f3d763af09cc` was independently
+replayed at its exact clean signed head: generic and settled positive controls,
+missing/rebound declaration identity, terminal loss, and rejected cached-owner
+mutation all retained the required result. The integration test conflict is
+resolved by retaining both B2's generic-tail/final-void ownership controls and
+P2A's exact-byte exnref child validator with corrupt-byte rejection. No test is
+removed to reconcile the histories. The unchanged three-source async application
+(source SHA256 `236fa7d971bf9b86aafa778a9a441b2440bae2e2c2c0ae7fdab3f6e517c517fb`)
+compiles to 25,182 bytes and matches initial212/result224, native Promise identity,
+and the original microtask trace on the combined source. It still reports seven
+Unsupported terminals, zero IR bodies and six direct body emissions (the b.ts
+initializer row reports zero). This is compatibility evidence only; it does not
+pass the seven-unit whole-program checkpoint. Remaining combined candidate gates
+must pass before wave dispatch.
+
+The read-only B producer inventory identifies reusable async and manifest
+producers, their readers and mutators, and the six required A interface inputs.
+It confirms that post-hoc `evaluateIrOutcomePolicy` is not a strict compiler
+route, and the current candidate builder excludes initializer units. The
+implementation must fix those central boundaries rather than report the
+candidate ledger as production ownership. New A/B/D claims and worktrees still
+require the current main/open-PR/claim census; existing R1/R3/R4 owners retain
+their authority. Public B2/B3/P2A ancestry must remain intact on consolidation.
+
 ## Product outcome
 
 One source-language front-end builds typed IR. Backend choice happens below
@@ -3016,10 +3186,14 @@ the large graph JSON is not committed as a baseline.
 ## Implementation Plan — 2026-09-05 — consolidate existing migration work
 
 The user explicitly prioritized integrating the current pieces before opening
-more parallel feature slices. Astra owns integration planning and review;
-the existing Luna Max agents retain their current initializer, async, and
-linear-backend responsibilities. D1a authority implementation is deferred.
-Its preserved worktree and approved evidence remain intact.
+more parallel feature slices. Astra owns integration planning and review.
+Following the user's approved model switch on 2026-09-05, Astra Max also owns
+the async ownership/currentness and linear backend acceptance repairs. Both
+previous Luna writers confirmed stand-down before the Astra successors took
+over their existing worktrees, branches, issue plans, and test evidence.
+Luna Max retains initializer publication and bounded validation. Existing
+lane claims remain held under parent coordination. D1a authority implementation
+is deferred; its preserved worktree and approved evidence remain intact.
 
 The integration claim is `3518:integration-consolidation`, owned by
 `ttraenkler/astra-ir-integration-20260905`. It covers candidate composition,

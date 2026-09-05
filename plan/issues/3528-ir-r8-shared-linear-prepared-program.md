@@ -52,6 +52,21 @@ func-budget-allow:
 
 # #3528 — IR-only R8: linear consumes the shared Prepared IR program
 
+## Execution amendment — 2026-09-05
+
+Complete the active pre-emission encoding/acceptance repair, then execute
+package C of the approved
+[whole-program cutover plan](3518-ir-only-default-and-direct-frontend-retirement.md#current-execution-plan--whole-program-cutover-2026-09-05).
+Consume package A's production-authoritative program in both backends and own
+the lossless codec/replay implementation against A's schema. Begin implementation
+after the shared interface is available and a worker slot is free; backend read
+inventory can start earlier. Shared compiler entry-point edits belong to A.
+Prove a real whole program with startup and cross-unit calls survives fresh-process
+replay without source/checker access. The current captured scalar body remains
+useful evidence but does not satisfy whole-program replay. Backend capability
+gaps must precede artifact emission and remain reported as incomplete coverage.
+Full R8 and epic acceptance are unchanged; this amendment creates no new claim.
+
 ## Objective
 
 Make linear lowering consume the exact same frozen `PreparedIrProgram`,
