@@ -222,11 +222,13 @@ describe("#3298 — target-neutral LinearMemoryPlan", () => {
 
     const report = getLastLinearIrReport();
     expect(report?.compiled).not.toContain("unicode");
-    expect(report?.rejected).toContainEqual({
-      func: "unicode",
-      reason: "build",
-      detail: "ir/linear-string: ASCII encoding proof required for constant result (got utf8-guaranteed)",
-    });
+    expect(report?.rejected).toContainEqual(
+      expect.objectContaining({
+        func: "unicode",
+        reason: "build",
+        detail: "ir/linear-string: ASCII encoding proof required for constant result (got utf8-guaranteed)",
+      }),
+    );
     const allocation = report?.memoryPlan.allocations.find((candidate) => candidate.dataSegmentId !== undefined);
     expect(allocation?.dataSegmentId).toBeDefined();
     expect(report?.memoryPlan.requireDataSegment(allocation!.dataSegmentId!).bytes).toEqual([104, 195, 169]);

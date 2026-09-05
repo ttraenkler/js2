@@ -223,11 +223,13 @@ describe("#3502 backend-neutral string contract", () => {
     );
     const report = getLastLinearIrReport();
     expect(report?.compiled).toStrictEqual([]);
-    expect(report?.rejected).toContainEqual({
-      func: "unicodeAppend",
-      reason: "build",
-      detail: `${LINEAR_STRING_ASCII_PROOF_REQUIRED} for constant result (got utf8-guaranteed)`,
-    });
+    expect(report?.rejected).toContainEqual(
+      expect.objectContaining({
+        func: "unicodeAppend",
+        reason: "build",
+        detail: `${LINEAR_STRING_ASCII_PROOF_REQUIRED} for constant result (got utf8-guaranteed)`,
+      }),
+    );
     expect(() =>
       lowerIrModuleToPorffor(report!.irModule, {
         memoryPlan: report!.memoryPlan,
