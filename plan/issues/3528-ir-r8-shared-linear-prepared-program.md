@@ -729,9 +729,10 @@ budgets, lint, formatting and `git diff --check` also green.
 
 The frontmatter contains one scoped `loc-budget-allow` for
 `src/ir/backend/linear-integration.ts`, which the ratchet measured as
-`1936 → 2034 (+98)` for this plan's explicitly owned production capture and
-consumer seam, and one scoped `func-budget-allow` for its existing
-`compileLinearIrFunctions` entrypoint (`508` lines versus the `419` baseline).
+`1936 → 2255 (+319)` for this plan's explicitly owned production capture,
+consumer seam, diagnostics, and resource preflight, and one scoped
+`func-budget-allow` for its existing
+`compileLinearIrFunctions` entrypoint (`549` lines versus the `419` baseline).
 No oracle allowance or baseline-file update was made.
 
 The repository-wide `node scripts/check-issue-ids.mjs` helper could not run in
@@ -742,3 +743,48 @@ does not claim backend-neutral frontend preparation, normal WasmGC production
 routing, one source build per owner, whole-program ABI/session publication,
 async-plan cutover, or R8 completion; remaining loops, handlers, containers and
 WASI work stay explicitly outside this increment.
+
+### Implementation Record — 2026-09-05 — linear preclaim diagnostics and resource preflight
+
+The follow-up audit closed two concrete observability/resource gaps at the
+linear producer boundary. A post-claim `IrUnsupportedError` is now retained on
+`LinearIrRejection.outcome` with its typed `kind`, `code`, and `stage`, and the
+same rejection carries the exact inventory-backed `sourceId`, `sourceKey`,
+`unitId`, source filename, line, and column. Selector bucket records retain
+their existing shape; typed build demotions expose the additional diagnostic
+projection. The source `const [a, b, c] = [1, 2, 3]` control remains a real
+unsupported carrier: it reports `array-representation-unsupported` at build,
+has no built owner in the frozen batch, and reaches no consumer/lowerer.
+
+`collectLinearBackendResourceDemand` and
+`validateLinearBackendResourceDemand` now run after the immutable memory plan
+is bound and before the first authenticated body consumer. The demand includes
+runtime helper names, symbolic operation bindings, allocation sites, layout
+IDs, and data-segment IDs. The existing linear operation map is reused,
+including vector `grow` through the checked `__arr_set` helper. Missing helper,
+unmapped operation, allocation, layout, or data segment is a typed
+`selection-preparation-mismatch` invariant before body emission. The check
+keeps data segments and static globals relocatable: it proves symbolic
+availability and does not require final addresses or global indices.
+
+Focused validation after this repair: `tests/issue-3528-frozen-body-handoff.test.ts`
+passed 12/12, including the supported nonempty production batch, typed
+unsupported/location control, real production vector allocation, missing
+`__arr_new` control, missing-layout control, an ASCII string/data-segment
+control, and the relocatable-data assertion.
+`tests/issue-3501-empty-array-element-inference.test.ts` passed 9/9 runnable
+tests (2 native tests skipped) after its build-rejection assertions were made
+metadata-tolerant. The prescribed R8 group 1 passed 8/8 files and 58/58 tests;
+group 2 passed 6/6 files and 66/66 tests. Typecheck, lint, targeted Prettier,
+and `git diff --check` passed. The broader six-file adjacency run was 48
+passed, 8 failed, 2 skipped; the failures are existing-head residuals outside
+this repair (existing vector selector claims, UTF-16/non-ASCII linear-string
+post-claim lowering, and synthetic global fixtures), so no baseline or fallback
+threshold was changed.
+
+The remaining resource boundary is intentionally explicit: resolver callable,
+global, and type lookups that are not represented by the linear helper/layout
+demand remain governed by the authenticated consumer and lowerer. A future
+backend-neutral preparation slice must settle those authorities before moving
+the producer above the backend branch. This record does not claim normal GC
+cutover, full resource neutrality, or R8 completion.

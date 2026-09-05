@@ -3,7 +3,12 @@
 import { describe, expect, it } from "vitest";
 import { compile } from "../src/index.js";
 import { emitBinary } from "../src/emit/binary.js";
-import { getLastLinearIrReport } from "../src/ir/backend/linear-integration.js";
+import { LINEAR_IR_VEC_INIT_F64_FN } from "../src/codegen-linear/runtime.js";
+import {
+  collectLinearBackendResourceDemand,
+  getLastLinearIrReport,
+  validateLinearBackendResourceDemand,
+} from "../src/ir/backend/linear-integration.js";
 import { LinearEmitter } from "../src/ir/backend/linear-emitter.js";
 import { WasmGcEmitter } from "../src/ir/backend/wasmgc-emitter.js";
 import { irImportGlobalRef } from "../src/ir/abi-bindings.js";
@@ -288,6 +293,20 @@ async function productionAllocationBatch(): Promise<FrozenIrBodyBatch> {
   return batch!;
 }
 
+async function productionStringResourceBatch(): Promise<{
+  readonly batch: FrozenIrBodyBatch;
+  readonly memoryPlan: NonNullable<ReturnType<typeof getLastLinearIrReport>>["memoryPlan"];
+}> {
+  const result = await compile(`export function same(): number { const left = "a"; return left === "a" ? 1 : 0; }`, {
+    target: "linear",
+    fileName: "r8-string-resource.ts",
+  });
+  expect(result.success, result.success ? "" : result.errors.map((error) => error.message).join("; ")).toBe(true);
+  const report = getLastLinearIrReport();
+  expect(report?.frozenBodyBatch?.module.functions).toHaveLength(1);
+  return { batch: report!.frozenBodyBatch!, memoryPlan: report!.memoryPlan };
+}
+
 function declaredReferenceInput(withUnexpectedArgument: boolean, withContradictoryDeclaration = false) {
   const f64 = irVal({ kind: "f64" });
   const registry = new AllocSiteRegistry();
@@ -494,6 +513,107 @@ describe("#3528 L0-P1 frozen executable body handoff", () => {
         producer: batch.producer,
       }),
     ).toThrow(/provider demand has no frozen runtime manifest/);
+  });
+
+  it("keeps typed unsupported build outcomes and exact source/unit location", async () => {
+    const result = await compile(`export function test(): number { const [a, b, c] = [1, 2, 3]; return a + b + c; }`, {
+      target: "linear",
+      fileName: "r8-linear-unsupported.ts",
+    });
+    expect(result.success, result.success ? "" : result.errors.map((error) => error.message).join("; ")).toBe(true);
+    const report = getLastLinearIrReport();
+    expect(report?.compiled).toEqual([]);
+    const rejection = report?.rejected.find((candidate) => candidate.func === "test");
+    expect(rejection).toMatchObject({
+      reason: "build",
+      outcome: {
+        kind: "unsupported",
+        code: "array-representation-unsupported",
+        stage: "build",
+      },
+      location: {
+        sourceKey: "r8-linear-unsupported.ts",
+        file: "r8-linear-unsupported.ts",
+        line: 1,
+      },
+    });
+    expect(rejection?.location?.column).toBeGreaterThan(0);
+    expect(rejection?.location?.sourceId).toBeTruthy();
+    expect(rejection?.location?.unitId).toBe(
+      rejection &&
+        report?.ownerEvidence.find((evidence) => evidence.outcome === "rejected" && evidence.legacyName === "test")
+          ?.ownerUnitId,
+    );
+    expect(rejection?.outcome?.detail).toBe(rejection?.detail);
+    expect(report?.frozenBodyBatch?.module.functions).toEqual([]);
+    expect(report?.frozenBodyBatch?.owners.some((owner) => owner.outcome === "built")).toBe(false);
+  });
+
+  it("preflights demanded helpers and relocatable layout resources before body emission", async () => {
+    const batch = await productionAllocationBatch();
+    const memoryPlan = getLastLinearIrReport()?.memoryPlan;
+    expect(memoryPlan).toBeDefined();
+    const demand = collectLinearBackendResourceDemand(batch.module, memoryPlan!);
+    expect(batch.module.functions.length).toBeGreaterThan(0);
+    expect(demand.runtimeFunctions).toContain("__arr_new");
+    expect(demand.runtimeFunctions).toContain(LINEAR_IR_VEC_INIT_F64_FN);
+    expect(demand.layoutIds.length).toBeGreaterThan(0);
+
+    const completeFunctions = new Set(demand.runtimeFunctions);
+    expect(() =>
+      validateLinearBackendResourceDemand({
+        demand,
+        memoryPlan: memoryPlan!,
+        availableFunctionNames: completeFunctions,
+      }),
+    ).not.toThrow();
+
+    const missingHelper = new Set(completeFunctions);
+    missingHelper.delete("__arr_new");
+    expect(() =>
+      validateLinearBackendResourceDemand({
+        demand,
+        memoryPlan: memoryPlan!,
+        availableFunctionNames: missingHelper,
+      }),
+    ).toThrow(/demanded runtime helper '__arr_new'.*before body emission/);
+
+    const missingLayout = new Set(demand.layoutIds);
+    missingLayout.delete(demand.layoutIds[0]!);
+    expect(() =>
+      validateLinearBackendResourceDemand({
+        demand,
+        memoryPlan: memoryPlan!,
+        availableFunctionNames: completeFunctions,
+        availableLayoutIds: missingLayout,
+      }),
+    ).toThrow(/demanded layout .*before body emission/);
+
+    const { batch: stringBatch, memoryPlan: stringMemoryPlan } = await productionStringResourceBatch();
+    const stringDemand = collectLinearBackendResourceDemand(stringBatch.module, stringMemoryPlan);
+    expect(stringDemand.dataSegmentIds.length).toBeGreaterThan(0);
+    const stringFunctions = new Set(stringDemand.runtimeFunctions);
+    expect(() =>
+      validateLinearBackendResourceDemand({
+        demand: stringDemand,
+        memoryPlan: stringMemoryPlan,
+        availableFunctionNames: stringFunctions,
+      }),
+    ).not.toThrow();
+    const missingDataSegment = new Set(stringDemand.dataSegmentIds);
+    missingDataSegment.delete(stringDemand.dataSegmentIds[0]!);
+    expect(() =>
+      validateLinearBackendResourceDemand({
+        demand: stringDemand,
+        memoryPlan: stringMemoryPlan,
+        availableFunctionNames: stringFunctions,
+        availableDataSegmentIds: missingDataSegment,
+      }),
+    ).toThrow(/demanded data segment .*before body emission/);
+
+    for (const segment of stringMemoryPlan.dataSegments) {
+      expect("address" in segment).toBe(false);
+    }
   });
 
   it("preserves ordered imported-call evaluation through both consumers", async () => {

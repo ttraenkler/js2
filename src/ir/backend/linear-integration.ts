@@ -108,7 +108,7 @@ import {
   type IrType,
   type IrTypeRef,
 } from "../nodes.js";
-import { buildIrUnitInventory, type BuildIrUnitInventoryOptions, type IrUnitId } from "../identity.js";
+import { buildIrUnitInventory, type BuildIrUnitInventoryOptions, type IrSourceId, type IrUnitId } from "../identity.js";
 import {
   buildIrPlanningIdentityContext,
   IrPlanningIdentityInvariantError,
@@ -131,7 +131,7 @@ import {
 } from "../select.js";
 import { planIrCompilationByIdentity, projectIrSelectionToLegacy } from "../select-identity.js";
 import { buildIrRecursiveTypeEvidence } from "../type-evidence.js";
-import { IrInvariantError } from "../outcomes.js";
+import { classifyIrFailure, IrInvariantError, IrUnsupportedError, type IrPreparationFailure } from "../outcomes.js";
 import type { FuncTypeDef, Instr, ValType, WasmFunction } from "../types.js";
 import { verifyIrFunction } from "../verify.js";
 import { prepareIrRuntimeManifest } from "../intrinsic-support.js";
@@ -180,6 +180,19 @@ export interface LinearIrRejection {
   readonly reason: string;
   /** First error message — diagnostic detail, NOT part of the bucket key. */
   readonly detail?: string;
+  /** Exact typed preparation outcome when a post-claim typed error demotes. */
+  readonly outcome?: IrPreparationFailure;
+  /** Exact source/terminal location for a typed post-claim demotion. */
+  readonly location?: LinearIrRejectionLocation;
+}
+
+export interface LinearIrRejectionLocation {
+  readonly sourceId: IrSourceId;
+  readonly sourceKey: string;
+  readonly unitId: IrUnitId;
+  readonly file: string;
+  readonly line: number;
+  readonly column: number;
 }
 
 export type LinearIrOwnerEvidence =
@@ -389,6 +402,158 @@ export interface LinearIrHelper {
 /** L4 gate: default-on, with an explicit `=0` direct-backend escape hatch. */
 export function linearIrEnabled(): boolean {
   return typeof process === "undefined" || process.env?.JS2WASM_LINEAR_IR !== "0";
+}
+
+/**
+ * Backend resources required by one already-built linear IR module.
+ *
+ * The names are runtime bindings, while operations/layouts/data segments stay
+ * symbolic. This is deliberately a demand projection: it never assigns a
+ * final linear address or discovers a new source/runtime intent.
+ */
+export interface LinearBackendResourceDemand {
+  readonly runtimeFunctions: readonly string[];
+  readonly runtimeOperations: readonly LinearRuntimeOperation[];
+  readonly allocationSites: readonly AllocSiteId[];
+  readonly layoutIds: readonly string[];
+  readonly dataSegmentIds: readonly string[];
+}
+
+function linearBackendResourceInvariant(detail: string): never {
+  throw new IrInvariantError(
+    "selection-preparation-mismatch",
+    "resolve",
+    `linear-ir: backend resource preflight: ${detail}`,
+  );
+}
+
+function addLinearBackendInstructionDemand(instr: IrInstr, runtimeFunctions: Set<string>): void {
+  switch (instr.kind) {
+    case "string.const":
+      runtimeFunctions.add("__str_from_data");
+      return;
+    case "string.concat":
+      runtimeFunctions.add(instr.concatMode === "owned-append" ? LINEAR_IR_STRING_APPEND_ASCII_FN : "__str_concat");
+      return;
+    case "string.eq":
+      runtimeFunctions.add("__str_eq");
+      return;
+    case "string.len":
+      runtimeFunctions.add("__str_length_utf16");
+      return;
+    case "string.char_at":
+      runtimeFunctions.add(LINEAR_IR_STRING_CHAR_AT_FN);
+      return;
+    case "string.char_code_at":
+      runtimeFunctions.add(LINEAR_IR_STRING_CHAR_CODE_AT_FN);
+      return;
+    case "intrinsic":
+      if (instr.provider?.kind === "callable" && instr.provider.target.binding.kind === "runtime") {
+        runtimeFunctions.add(instr.provider.target.binding.symbol);
+      }
+      return;
+    default:
+      return;
+  }
+}
+
+/** Collect exact symbolic resources used by the supplied built module/plan. */
+export function collectLinearBackendResourceDemand(
+  module: IrModule,
+  memoryPlan: LinearMemoryPlan,
+): LinearBackendResourceDemand {
+  const runtimeFunctions = new Set<string>();
+  const operationByKey = new Map<string, LinearRuntimeOperation>();
+  const allocationSites = new Set<AllocSiteId>();
+  const layoutIds = new Set<string>();
+  const dataSegmentIds = new Set<string>();
+  const addOperation = (operation: LinearRuntimeOperation): void => {
+    operationByKey.set(linearRuntimeOperationKey(operation), operation);
+    const helper = linearRuntimeFunctionName(operation);
+    if (helper) runtimeFunctions.add(helper);
+  };
+
+  for (const allocation of memoryPlan.allocations) {
+    allocationSites.add(allocation.id);
+    layoutIds.add(allocation.layoutId);
+    if (allocation.dataSegmentId !== undefined) dataSegmentIds.add(allocation.dataSegmentId);
+    for (const operation of allocation.operations) addOperation(operation);
+  }
+  for (const fn of module.functions) {
+    const buffers = [
+      ...fn.blocks.map((block) => block.instrs),
+      ...(fn.asyncPlan?.states.map((state) => state.body) ?? []),
+    ];
+    for (const buffer of buffers) {
+      for (const instr of buffer) {
+        forEachInstrDeep(instr, (nested) => {
+          addLinearBackendInstructionDemand(nested, runtimeFunctions);
+        });
+      }
+    }
+  }
+
+  return Object.freeze({
+    runtimeFunctions: Object.freeze([...runtimeFunctions].sort()),
+    runtimeOperations: Object.freeze([...operationByKey.values()]),
+    allocationSites: Object.freeze([...allocationSites].sort((left, right) => (left as number) - (right as number))),
+    layoutIds: Object.freeze([...layoutIds].sort()),
+    dataSegmentIds: Object.freeze([...dataSegmentIds].sort()),
+  });
+}
+
+/**
+ * Validate the demand before the first body emitter runs.
+ *
+ * Optional availability sets make the preflight independently testable. The
+ * production caller supplies only the actual module function table and the
+ * immutable memory plan; no final address/global index is required here.
+ */
+export function validateLinearBackendResourceDemand(input: {
+  readonly demand: LinearBackendResourceDemand;
+  readonly memoryPlan: LinearMemoryPlan;
+  readonly availableFunctionNames: ReadonlySet<string>;
+  readonly availableLayoutIds?: ReadonlySet<string>;
+  readonly availableDataSegmentIds?: ReadonlySet<string>;
+}): void {
+  const availableLayouts = input.availableLayoutIds ?? new Set(input.memoryPlan.layouts.map((layout) => layout.id));
+  const availableDataSegments =
+    input.availableDataSegmentIds ?? new Set(input.memoryPlan.dataSegments.map((segment) => segment.id));
+  const availableAllocations = new Set(input.memoryPlan.allocations.map((allocation) => allocation.id));
+
+  for (const operation of input.demand.runtimeOperations) {
+    const helper = linearRuntimeFunctionName(operation);
+    if (!helper) {
+      linearBackendResourceInvariant(`no runtime binding exists for '${linearRuntimeOperationKey(operation)}'`);
+    }
+    if (!input.availableFunctionNames.has(helper)) {
+      linearBackendResourceInvariant(
+        `demanded runtime helper '${helper}' for '${linearRuntimeOperationKey(operation)}' is missing before body emission`,
+      );
+    }
+  }
+  for (const helper of input.demand.runtimeFunctions) {
+    if (!input.availableFunctionNames.has(helper)) {
+      linearBackendResourceInvariant(`demanded runtime helper '${helper}' is missing before body emission`);
+    }
+  }
+  for (const allocationId of input.demand.allocationSites) {
+    if (!availableAllocations.has(allocationId)) {
+      linearBackendResourceInvariant(
+        `demanded allocation site ${allocationId as number} is missing before body emission`,
+      );
+    }
+  }
+  for (const layoutId of input.demand.layoutIds) {
+    if (!availableLayouts.has(layoutId)) {
+      linearBackendResourceInvariant(`demanded layout '${layoutId}' is missing before body emission`);
+    }
+  }
+  for (const dataSegmentId of input.demand.dataSegmentIds) {
+    if (!availableDataSegments.has(dataSegmentId)) {
+      linearBackendResourceInvariant(`demanded data segment '${dataSegmentId}' is missing before body emission`);
+    }
+  }
 }
 
 function planLinearIrOverlay(
@@ -914,14 +1079,41 @@ export function compileLinearIrFunctions(
     if (sameName) sameName.push(owner);
     else ownersByLegacyName.set(owner.legacyName, [owner]);
   }
+  const rejectionLocationForOwner = (owner: LinearIrSourceOwner): LinearIrRejectionLocation => {
+    const terminal = identityContext.terminalByUnitId.get(owner.ownerUnitId);
+    const source = terminal
+      ? identityContext.inventory.sources.find((candidate) => candidate.id === terminal.sourceId)
+      : undefined;
+    if (!terminal || !source || terminal.id !== owner.ownerUnitId) {
+      return linearOwnerInvariant(
+        "unit-record-mismatch",
+        `linear IR rejection ${owner.ownerUnitId} has no exact source/unit location`,
+      );
+    }
+    return {
+      sourceId: source.id,
+      sourceKey: source.sourceKey,
+      unitId: terminal.id,
+      file: source.originalFileName,
+      line: terminal.line,
+      column: terminal.column,
+    };
+  };
   const recordRejection = (owner: LinearIrSourceOwner, rejection: LinearIrRejection): void => {
     requireLinearOwnerPair(owner, rejection.func);
-    rejected.push(rejection);
+    // Keep the long-standing selector/bucket projection byte-compatible. A
+    // post-claim typed failure carries its canonical outcome and exact source
+    // unit, so diagnostics do not collapse when the public rejection is made.
+    const located =
+      rejection.outcome && !rejection.location
+        ? { ...rejection, location: rejectionLocationForOwner(owner) }
+        : rejection;
+    rejected.push(located);
     ownerEvidence.push({
       outcome: "rejected",
       ownerUnitId: owner.ownerUnitId,
       legacyName: owner.legacyName,
-      rejection,
+      rejection: located,
     });
   };
   for (const fallback of selection.fallbacks ?? []) {
@@ -1094,10 +1286,13 @@ export function compileLinearIrFunctions(
         // exactly as it does today (the overlay only ever ADDS capability).
         // A "call to unknown function" may resolve in a later round once
         // the callee's signature lands in `signaturesByUnitId` — keep it pending.
+        const outcome =
+          e instanceof IrUnsupportedError || e instanceof IrInvariantError ? classifyIrFailure(e, "build") : undefined;
         lastFailure.set(ownerUnitId, {
           func: name,
           reason: "build",
           detail: e instanceof Error ? e.message : String(e),
+          ...(outcome ? { outcome } : {}),
         });
         next.push(owner);
       }
@@ -1211,6 +1406,17 @@ export function compileLinearIrFunctions(
   irModule = frozenBodyBatch.module;
   memoryPlan = planLinearMemoryFromFrozenFacts(irModule, frozenBodyBatch.allocationFacts, allocationPolicy);
   bindMemoryPlan(memoryPlan);
+  // Resolve every helper/operation/layout/data join demanded by the captured
+  // module before the first authenticated consumer/emitter callback. Data
+  // segments and globals intentionally remain relocatable/symbolic; this
+  // check only proves that the semantic resources the emitter will request
+  // are present in the completed plan and runtime table.
+  const resourceDemand = collectLinearBackendResourceDemand(irModule, memoryPlan);
+  validateLinearBackendResourceDemand({
+    demand: resourceDemand,
+    memoryPlan,
+    availableFunctionNames: new Set(ctx.mod.functions.map((func) => func.name)),
+  });
 
   // Every body is lowered through the authenticated batch consumer. The
   // existing local-slot/vector-scratch adaptation remains below this point,
@@ -1862,8 +2068,8 @@ function makeLinearIrResolver(
   };
 }
 
-/** Bind a symbolic plan operation to the existing linear runtime adapter. */
-function resolveLinearRuntimeOperation(ctx: LinearContext, operation: LinearRuntimeOperation): number {
+/** Map a symbolic plan operation to the existing linear runtime helper. */
+function linearRuntimeFunctionName(operation: LinearRuntimeOperation): string | undefined {
   let name: string | undefined;
   if (operation.family === "memory" && operation.operation === "allocate" && operation.allocationClass === "arena") {
     name = "__malloc";
@@ -1888,6 +2094,15 @@ function resolveLinearRuntimeOperation(ctx: LinearContext, operation: LinearRunt
   ) {
     name = LINEAR_IR_VEC_INIT_F64_FN;
   } else if (
+    operation.family === "vector" &&
+    operation.operation === "grow" &&
+    operation.allocationClass === "arena" &&
+    operation.elementStorage === "f64"
+  ) {
+    // Vector growth is realized by the existing checked element-store helper;
+    // the semantic plan keeps a distinct grow operation for other adapters.
+    name = "__arr_set";
+  } else if (
     operation.family === "string" &&
     operation.operation === "materialize-data" &&
     operation.allocationClass === "arena" &&
@@ -1906,6 +2121,12 @@ function resolveLinearRuntimeOperation(ctx: LinearContext, operation: LinearRunt
   } else if (operation.family === "stack" && operation.operation === "restore") {
     name = "__linear_stack_restore";
   }
+  return name;
+}
+
+/** Bind a symbolic plan operation to the existing linear runtime adapter. */
+function resolveLinearRuntimeOperation(ctx: LinearContext, operation: LinearRuntimeOperation): number {
+  const name = linearRuntimeFunctionName(operation);
   if (!name) throw new Error(`linear-ir: no runtime binding for '${linearRuntimeOperationKey(operation)}'`);
   const localIdx = ctx.mod.functions.findIndex((func) => func.name === name);
   if (localIdx < 0) throw new Error(`linear-ir: runtime helper '${name}' missing`);
