@@ -156,6 +156,7 @@ import {
   tryLowerVecPush,
 } from "./array-element-lowering.js";
 import {
+  emitPreparedAsyncAwait,
   preparedAsyncAwaitResultType,
   tryLowerPreparedAsyncPromiseAll,
   type PreparedAsyncFromAstResolver,
@@ -4051,6 +4052,10 @@ function lowerExpr(expr: ts.Expression, cx: LowerCtx, hint: IrType): IrValueId {
     // PromiseResolve/adoption and the subsequent reaction.
     const preparedAwait = cx.resolver?.preparedAsyncAwaitSite?.(expr);
     if (preparedAwait) {
+      if (preparedAwait.operandType) {
+        const operand = lowerExpr(expr.expression, cx, preparedAwait.operandType);
+        return emitPreparedAsyncAwait(cx.builder, operand, preparedAwait);
+      }
       if (
         preparedAwait.settledNonThenable === true &&
         (!preparedAwait.settledOwnerUnitId || !preparedAwait.settledOwnerProofKey)

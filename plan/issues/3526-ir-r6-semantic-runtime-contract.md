@@ -575,6 +575,65 @@ changes; B owns its dedicated producers after live claim reconciliation.
 Prioritize complete applications over more isolated policy switches. Existing
 runtime behavior, optimization obligations, and full issue acceptance remain.
 
+### Package B executable producer checkpoint — 2026-09-06
+
+`prepareWholeProgramRuntimeManifest` now lives in the dedicated
+`src/ir/runtime-program-manifest.ts` leaf and is re-exported by
+`runtime-program-producers.ts`. It invokes A's shared population validator,
+requires one explicit existing semantic-demand scan per final artifact, and
+freezes the existing provider graph once. Runtime-free programs receive an
+explicit empty frozen manifest. Provider lookup uses A's immutable map facade.
+This phase never materializes helpers or allocates backend imports, functions,
+types, or globals.
+
+The reconciled producer inventory matches consolidated base
+`af5eef9e24a8fb5b575cb57ce9eee0e8ebe425e8`; its preserved SHA256 is
+`02b0daafdff2fb4fccb6a9b85b7565245f0f7bafcd930946cd3253ade82655df`.
+Before editing, the `prepareIrRuntimeManifest` callers were enumerated:
+`integration.ts`, `backend/linear-integration.ts`, and `stdlib-selfhost.ts`.
+They retain their optional-empty behavior. The complete producer passes exact
+owner locations and requests empty output explicitly. Per-function collection
+and attachment failures preserve UnitId; provider-graph failures retain the
+original request through the existing fixed-point walk. The builder's initial
+requests, frontier removal, and transitive additions were updated together.
+Diagnostics resolve through A's original/derived owner helper, never the first
+source filename. No ownership or ABI authority moved.
+
+Typed numeric Promise crossings use the new semantic `promise.number.bridge`
+intent with the existing canonical `number.box` and `number.unbox` host records,
+and the existing native number-boundary requirement. The generic number-boundary
+policy remains unchanged, including its disabled state for the original
+`target: "gc", nativeStrings: true` application. Frame lowering reads only the
+authenticated prepared adapter projection. The canonical capability table also
+now declares the existing `env.__get_caught_exception: () -> externref` import
+through the mandatory Promise-capability creation provider. This moves its allocation into the
+accepted manifest's physical materializer and prevents the frame from inventing
+that import late. Readers were enumerated across catalogue canonicalization,
+manifest closure, async projection, intrinsic attachment, runtime currentness,
+ABI dependency collection, and materialization; the frozen canonical records
+have no mutators. The historical narrow async value-type projection remains
+separate from the explicitly typed numeric projection.
+
+Focused evidence totals 118/118 across eight distinct producer,
+manifest, provider-schema, state-preparation, and existing settled/linear async
+runtime test files; standalone typechecking passed. The numeric control executes
+real Wasm with native host Promises, returns 29, preserves
+`sync,tick1,tick2,value:29,done`, and preserves all nine import object identities
+and the import count across frame generation. ABI, missing-body/provenance,
+provider-origin, and attachment-identity mutation controls remain explicit.
+Fresh-process source-free reattachment passes after A's signed identity
+extraction (`1b9ced2df05cd5ac0415508ec6f8299d07767369`): the loader blocks the
+frontend, reissues authenticated runtime joins from JSON semantic plans, and
+a deliberate frontend import proves the barrier. Minimal valid settle-only
+plans retain their three-record semantic closure but receive a located
+backend capability refusal (typed resolve stage) before physical allocation: the current shared frame
+requires the complete core host adapter set. A fully declared settled control
+executes without new imports. The existing unconditional exception-tag helper
+remains backend setup; shared-tag imports are not covered by the module-local
+tag control. A owns source scanning and compiler wiring; C owns exact decoded
+manifest comparison before accepting newly authenticated runtime attachments.
+The original seven-unit application and complete R6 acceptance remain open.
+
 ## Objective
 
 Establish one typed, immutable contract from prepared semantics to runtime and

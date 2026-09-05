@@ -1138,6 +1138,9 @@ export class RuntimeManifestInvariantError extends Error {
   constructor(
     readonly code: RuntimeManifestInvariantCode,
     detail: string,
+    /** Failed graph node, plus the original semantic request that reached it. */
+    readonly feature?: RuntimeFeature,
+    readonly requestedFeature?: RuntimeFeature,
   ) {
     super(detail);
     this.name = "RuntimeManifestInvariantError";
@@ -2543,14 +2546,25 @@ export class RuntimeManifestBuilder {
 
   #buildManifest(): FrozenRuntimeManifest {
     const providersByFeature = this.#indexProviders();
-    const pending = new Set<RuntimeFeature>(this.#requestedFeatures);
-    for (const use of this.#uses) pending.add(INTRINSIC_DEFINITIONS[use.id].feature);
+    const pending = new Map<RuntimeFeature, RuntimeFeature>();
+    for (const feature of this.#requestedFeatures) pending.set(feature, feature);
+    for (const use of this.#uses) {
+      const feature = INTRINSIC_DEFINITIONS[use.id].feature;
+      pending.set(feature, feature);
+    }
 
     while (pending.size > 0) {
-      const feature = [...pending].sort(compareStrings)[0]!;
+      const feature = [...pending.keys()].sort(compareStrings)[0]!;
+      const requestedFeature = pending.get(feature)!;
       pending.delete(feature);
       if (this.#providerPlans.has(feature)) continue;
-      const selected = this.#selectProvider(feature, providersByFeature);
+      let selected: RuntimeProviderDefinition;
+      try {
+        selected = this.#selectProvider(feature, providersByFeature);
+      } catch (error) {
+        if (!(error instanceof RuntimeManifestInvariantError)) throw error;
+        throw new RuntimeManifestInvariantError(error.code, error.message, feature, requestedFeature);
+      }
       const expectedSignature = RUNTIME_FEATURE_SIGNATURES[feature];
       if (
         expectedSignature !== undefined &&
@@ -2559,6 +2573,8 @@ export class RuntimeManifestBuilder {
         throw new RuntimeManifestInvariantError(
           "provider-signature-mismatch",
           `provider ${selected.id} does not implement the ${feature} signature`,
+          feature,
+          requestedFeature,
         );
       }
       const dependencies = new Set(selected.dependencies);
@@ -2568,7 +2584,9 @@ export class RuntimeManifestBuilder {
         dependencies: Object.freeze([...dependencies].sort(compareStrings)),
       });
       this.#providerPlans.set(feature, plan);
-      for (const dependency of plan.dependencies) pending.add(dependency);
+      for (const dependency of plan.dependencies) {
+        if (!pending.has(dependency)) pending.set(dependency, requestedFeature);
+      }
     }
 
     const features = Object.freeze([...this.#providerPlans.keys()].sort(compareStrings));

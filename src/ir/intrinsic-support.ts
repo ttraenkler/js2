@@ -2,7 +2,11 @@
 
 import { irImportFuncRef, irIntrinsicFuncRef, irRuntimeFuncRef, sameIrCallableBinding } from "./callable-bindings.js";
 import { createIrAsyncPlan, createPreparedIrAsyncRuntime, type IrAsyncPlan } from "./async-plan.js";
-import { asAsyncHostAdapter, isAsyncHostCapabilityId, type AsyncHostCapabilityId } from "./async-runtime-providers.js";
+import {
+  asPreparedAsyncHostAdapter,
+  isPreparedAsyncHostCapabilityId,
+  type PreparedAsyncHostCapabilityId,
+} from "./async-runtime-providers.js";
 import {
   resolveRuntimeHostCapabilityFuncFamilyRecord,
   resolveRuntimeHostCapabilityFuncRecord,
@@ -14,7 +18,12 @@ import {
 } from "./runtime-host-capabilities.js";
 import { IR_ASYNC_CLOCK_SNAPSHOT_FN } from "./async-semantic-runtime.js";
 import type { IrStringConcatMode } from "./string-runtime.js";
-import { intrinsicEffectEvidence, INTRINSIC_DEFINITIONS, type IntrinsicSignature } from "./intrinsics.js";
+import {
+  intrinsicEffectEvidence,
+  INTRINSIC_DEFINITIONS,
+  type IntrinsicSignature,
+  type IntrinsicSourceLocation,
+} from "./intrinsics.js";
 import {
   forEachInstrDeep,
   irTypeEquals,
@@ -743,10 +752,7 @@ function attachProviders(
  * attach lookup-only provider choices to final IR. This is deliberately after
  * inference and middle-end transforms and before Program-ABI component seal.
  */
-export function prepareIrRuntimeManifest(input: {
-  readonly functions: readonly IrFunction[];
-  readonly sourceFile: string;
-  readonly policy: RuntimeManifestPolicy;
+export interface IrRuntimeManifestDemands {
   /**
    * (#3526 F1-S3) True when some generator in `functions` stashes a numeric
    * return value. The manifest walk below collects `intrinsic` uses only, so a
@@ -850,39 +856,90 @@ export function prepareIrRuntimeManifest(input: {
    * scanned by the caller instead.
    */
   readonly functionPrototypeCallDemand?: boolean;
-}): PreparedIrRuntimeManifest | undefined {
-  const uses: Array<{ readonly instr: IrInstrIntrinsic; readonly argumentTypes: readonly IrType[] }> = [];
+}
+
+export interface PrepareIrRuntimeManifestInput extends IrRuntimeManifestDemands {
+  readonly functions: readonly IrFunction[];
+  readonly sourceFile: string;
+  readonly policy: RuntimeManifestPolicy;
+  /** Exact owner locations for complete multi-source preparation. Missing entries fail. */
+  readonly sourceLocationsByUnit?: ReadonlyMap<IrFunction["unitId"], IntrinsicSourceLocation>;
+  /** A whole program publishes an explicit frozen manifest even with no runtime demand. */
+  readonly includeEmpty?: true;
+}
+
+/** Preserve the exact semantic owner when a per-function producer rejects. */
+export class IrRuntimeFunctionPreparationError extends Error {
+  constructor(
+    readonly unitId: IrFunction["unitId"],
+    cause: unknown,
+  ) {
+    super(cause instanceof Error ? cause.message : String(cause), { cause });
+    this.name = "IrRuntimeFunctionPreparationError";
+  }
+}
+
+export function prepareIrRuntimeManifest(
+  input: PrepareIrRuntimeManifestInput & { readonly includeEmpty: true },
+): PreparedIrRuntimeManifest;
+export function prepareIrRuntimeManifest(input: PrepareIrRuntimeManifestInput): PreparedIrRuntimeManifest | undefined;
+export function prepareIrRuntimeManifest(input: PrepareIrRuntimeManifestInput): PreparedIrRuntimeManifest | undefined {
+  const uses: Array<{
+    readonly unitId: IrFunction["unitId"];
+    readonly location: IntrinsicSourceLocation;
+    readonly instr: IrInstrIntrinsic;
+    readonly argumentTypes: readonly IrType[];
+  }> = [];
   const asyncPlans = new Map<IrFunction["unitId"], IrAsyncPlan>();
   for (const fn of input.functions) {
-    if (fn.asyncPlan) {
-      if (fn.funcKind !== "async") {
-        throw new Error(`IR async plan owner ${fn.name} is not marked funcKind=async`);
+    try {
+      const sourceLocation = input.sourceLocationsByUnit?.get(fn.unitId);
+      if (input.sourceLocationsByUnit && !sourceLocation) {
+        throw new Error(`IR runtime preparation has no source location for ${fn.unitId}`);
       }
-      if (fn.asyncPlan.ownerUnitId !== fn.unitId) {
-        throw new Error(`IR async plan owner mismatch for ${fn.name}: ${fn.asyncPlan.ownerUnitId} != ${fn.unitId}`);
+      if (fn.asyncPlan) {
+        if (fn.funcKind !== "async") {
+          throw new Error(`IR async plan owner ${fn.name} is not marked funcKind=async`);
+        }
+        if (fn.asyncPlan.ownerUnitId !== fn.unitId) {
+          throw new Error(`IR async plan owner mismatch for ${fn.name}: ${fn.asyncPlan.ownerUnitId} != ${fn.unitId}`);
+        }
+        asyncPlans.set(fn.unitId, createIrAsyncPlan(fn.asyncPlan));
+      } else if (fn.asyncRuntime) {
+        throw new Error(`IR async runtime attachment for ${fn.name} has no semantic async plan`);
       }
-      asyncPlans.set(fn.unitId, createIrAsyncPlan(fn.asyncPlan));
-    } else if (fn.asyncRuntime) {
-      throw new Error(`IR async runtime attachment for ${fn.name} has no semantic async plan`);
-    }
-    const valueTypes = valueTypesOf(fn);
-    const collectBuffer = (buffer: readonly IrInstr[]): void => {
-      for (const root of buffer) {
-        forEachInstrDeep(root, (instr) => {
-          if (instr.kind !== "intrinsic") return;
-          const argumentTypes = instr.args.map((arg) => {
-            const type = valueTypes.get(arg);
-            if (!type) throw new Error(`IR intrinsic ${instr.id} references an untyped SSA value ${arg}`);
-            return type;
+      const valueTypes = valueTypesOf(fn);
+      const collectBuffer = (buffer: readonly IrInstr[]): void => {
+        for (const root of buffer) {
+          forEachInstrDeep(root, (instr) => {
+            if (instr.kind !== "intrinsic") return;
+            const argumentTypes = instr.args.map((arg) => {
+              const type = valueTypes.get(arg);
+              if (!type) throw new Error(`IR intrinsic ${instr.id} references an untyped SSA value ${arg}`);
+              return type;
+            });
+            uses.push({
+              unitId: fn.unitId,
+              instr,
+              argumentTypes,
+              location: {
+                file: sourceLocation?.file ?? input.sourceFile,
+                line: instr.site?.line ?? sourceLocation?.line ?? 1,
+                column: instr.site?.column ?? sourceLocation?.column ?? 0,
+              },
+            });
           });
-          uses.push({ instr, argumentTypes });
-        });
-      }
-    };
-    for (const block of fn.blocks) collectBuffer(block.instrs);
-    for (const state of fn.asyncPlan?.states ?? []) collectBuffer(state.body);
+        }
+      };
+      for (const block of fn.blocks) collectBuffer(block.instrs);
+      for (const state of fn.asyncPlan?.states ?? []) collectBuffer(state.body);
+    } catch (error) {
+      if (!input.sourceLocationsByUnit) throw error;
+      throw new IrRuntimeFunctionPreparationError(fn.unitId, error);
+    }
   }
   if (
+    !input.includeEmpty &&
     uses.length === 0 &&
     asyncPlans.size === 0 &&
     !input.generatorNumberBoxDemand &&
@@ -922,25 +979,26 @@ export function prepareIrRuntimeManifest(input: {
     builder.requestFeature(HOST_CALLBACK_WRAP_RUNTIME_FEATURE);
   }
   if (input.functionPrototypeCallDemand) builder.requestFeature(FUNCTION_PROTOTYPE_CALL_RUNTIME_FEATURE);
-  for (const { instr, argumentTypes } of uses) {
-    const definition = INTRINSIC_DEFINITIONS[instr.id];
-    if (!instr.resultType || !irTypeEquals(instr.resultType, definition.signature.result)) {
-      throw new Error(`IR intrinsic ${instr.id} has a result outside its semantic signature`);
-    }
-    builder.addIntrinsicUse(
-      {
-        id: instr.id,
-        version: instr.version,
-        argumentTypes,
-        resultType: instr.resultType,
-        location: {
-          file: input.sourceFile,
-          line: instr.site?.line ?? 1,
-          column: instr.site?.column ?? 0,
+  for (const { unitId, instr, argumentTypes, location } of uses) {
+    try {
+      const definition = INTRINSIC_DEFINITIONS[instr.id];
+      if (!instr.resultType || !irTypeEquals(instr.resultType, definition.signature.result)) {
+        throw new Error(`IR intrinsic ${instr.id} has a result outside its semantic signature`);
+      }
+      builder.addIntrinsicUse(
+        {
+          id: instr.id,
+          version: instr.version,
+          argumentTypes,
+          resultType: instr.resultType,
+          location,
         },
-      },
-      intrinsicEffectEvidence(instr),
-    );
+        intrinsicEffectEvidence(instr),
+      );
+    } catch (error) {
+      if (!input.sourceLocationsByUnit) throw error;
+      throw new IrRuntimeFunctionPreparationError(unitId, error);
+    }
   }
   const manifest = builder.freeze();
   const providers = new Map<IrInstrIntrinsic["id"], RuntimeProviderPlan>();
@@ -963,21 +1021,21 @@ export function prepareIrRuntimeManifest(input: {
     if (!nativeProjection && !hostProjection) {
       throw new Error(`IR async runtime attachment for ${fn.name} mixes host and native providers`);
     }
-    const capabilities = new Set<AsyncHostCapabilityId>();
+    const capabilities = new Set<PreparedAsyncHostCapabilityId>();
     for (const provider of selectedProviders) {
       for (const capability of provider.hostCapabilities) {
-        // Async providers only ever declare async capabilities; the narrowing
-        // is checked, never cast, so a widened central row can never reach the
-        // async adapter materializer (which would mislower f64 as externref).
-        if (!isAsyncHostCapabilityId(capability)) {
+        // The closed Promise adapter projection includes the separately typed
+        // numeric bridge. Its f64 signatures are retained by the materializer;
+        // unrelated capability records still fail closed.
+        if (!isPreparedAsyncHostCapabilityId(capability)) {
           throw new Error(`IR async runtime attachment for ${fn.name} requested non-async capability ${capability}`);
         }
         capabilities.add(capability);
       }
     }
     const records = manifest.hostCapabilityRecords
-      .filter((record) => isAsyncHostCapabilityId(record.capability) && capabilities.has(record.capability))
-      .map(asAsyncHostAdapter);
+      .filter((record) => isPreparedAsyncHostCapabilityId(record.capability) && capabilities.has(record.capability))
+      .map(asPreparedAsyncHostAdapter);
     if (records.length !== capabilities.size) {
       throw new Error(`IR async runtime attachment for ${fn.name} is missing a frozen capability record`);
     }
@@ -1023,7 +1081,14 @@ export function prepareIrRuntimeManifest(input: {
   };
   return Object.freeze({
     functions: Object.freeze(
-      input.functions.map((fn) => attachAsyncRuntime(attachProviders(fn, providers, manifest.hostCapabilityRecords))),
+      input.functions.map((fn) => {
+        try {
+          return attachAsyncRuntime(attachProviders(fn, providers, manifest.hostCapabilityRecords));
+        } catch (error) {
+          if (!input.sourceLocationsByUnit) throw error;
+          throw new IrRuntimeFunctionPreparationError(fn.unitId, error);
+        }
+      }),
     ),
     manifest,
     providers,
