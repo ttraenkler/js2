@@ -3012,3 +3012,72 @@ the large graph JSON is not committed as a baseline.
    and optimization obligations are met. Then run the complete final merged
    validation above. No bounded cohort or five-entry readiness check substitutes
    for the epic's acceptance criteria.
+
+## Implementation Plan — 2026-09-05 — consolidate existing migration work
+
+The user explicitly prioritized integrating the current pieces before opening
+more parallel feature slices. Astra owns integration planning and review;
+the existing Luna Max agents retain their current initializer, async, and
+linear-backend responsibilities. D1a authority implementation is deferred.
+Its preserved worktree and approved evidence remain intact.
+
+The integration claim is `3518:integration-consolidation`, owned by
+`ttraenkler/astra-ir-integration-20260905`. It covers candidate composition,
+cross-lane validation, and this plan, not another feature or direct-path
+retirement. Preserve the independent `3518:bench-string-c2` claim and both
+active R4 storage claims. The concise current status is maintained in the
+integration lane's `.tmp/ir-completion-20260905/integration-status.md`;
+historical agent reports do not override that record's source evidence.
+
+1. **Repair the initializer failure boundary before publication.** For
+   **#3525 — IR-only R5: whole-program single- and multi-source Prepared
+   ownership**, retain every authentic returned pending receipt before
+   validating its complete partition. Any malformed or incomplete partition
+   must abort all original pending scopes, including receipts excluded from
+   the invalid partition. Classify failure outcomes explicitly: only supported
+   preclaim `Unsupported` refusals may resume existing routing. An invariant
+   or postclaim failure must abort and remain fatal. Pair real positive
+   production initialization with late-partition and injected-phase failures;
+   measure scope revocation and absence of direct retry, not only empty output.
+2. **Reconcile the actual async prerequisite graph.** For
+   **#3527 — IR-only R7: AST-free async plan**, B3 currently contains B2's
+   source changes. Preserve both published branches and any automatic main
+   merge; never overwrite them with a stale local head. After an actual B2
+   landing event, verify the merge's source ancestry and file contents, then
+   inspect B3's remaining diff against that main. Do not count B2 twice or
+   mark the broader issue complete. B2 currently has a reproduced generic
+   async-to-async call regression in equivalence CI; repair the physical
+   carrier closure before waiting on its landing. Compose the repaired B2/B3
+   histories first and choose a coherent publication path after the actual
+   head and queue census. Review loss of retained owner identity after
+   Promise ABI issuance as an existing B3 acceptance condition.
+3. **Finish the linear handoff's existing contract.** For
+   **#3528 — IR-only R8: shared linear Prepared program**, preserve typed,
+   located preclaim refusals through the linear rejection report. Verify
+   demanded helper/layout availability before the first accepted emission.
+   Distinguish legitimate symbolic relocation from an unproved resource;
+   relocation does not permit late capability discovery. Retain the repaired
+   SSA, declaration, allocation, provider, and one-shot failure controls.
+4. **Compose the repaired candidates in an isolated integration checkout.**
+   Pin main and all candidate heads, merge ordinary branch histories, and
+   inspect every overlapping source hunk. Do not push an integration merge to
+   any author's branch or to main. R5 and async changes share declaration and
+   integration machinery; independently green branch tests are insufficient.
+   Run their focused suites against the combined candidate before broadening
+   validation. Preserve exact input hashes and record preexisting failures.
+5. **Demonstrate a larger path through the public compiler.** Compile a
+   multi-source application with ordered numeric initialization, imported
+   reads, an async export with multiple numeric awaits, and a numeric
+   loop/branch helper. Execute emitted output and compare values, startup
+   order, Promise identity, and microtask observations with native JavaScript.
+   Record terminal ownership and direct-body counts for every source/unit.
+   Where current mixed-graph or backend support declines, retain that refusal
+   as the measured integration boundary; do not call the application IR-only
+   or widen admission to make a test green. Separately consume one captured
+   supported body graph in both backends and execute both outputs.
+6. **Verify landing by effect and preserve the full acceptance bar.** Observe
+   actual merge events without polling. Verify source parent ancestry and
+   changed file contents on main, then rerun integration checks when landed
+   source differs from the candidate. Required merge-group CI, complete
+   Test262 accounting, whole-program ownership, and all eleven epic criteria
+   remain required. Bounded runtime evidence does not authorize deletion.
