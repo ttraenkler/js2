@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Loopdive GmbH. Licensed under Apache-2.0 WITH LLVM-exception.
 
-import { createDerivedIrUnitId, type IrUnitId } from "./identity.js";
+import { createDerivedIrUnitId } from "./identity-values.js";
+import type { IrUnitId } from "./identity.js";
 import { forEachInstrDeep, type IrFuncRef, type IrFunction } from "./nodes.js";
 import { verifyIrAsyncPlan } from "./async-plan.js";
 import type { ProgramAbiDerivedUnitRecord } from "./program-abi.js";

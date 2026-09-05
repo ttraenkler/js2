@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Loopdive GmbH. Licensed under Apache-2.0 WITH LLVM-exception.
 
+import { createDerivedIrUnitId } from "./identity-values.js";
 import {
-  createDerivedIrUnitId,
   type IrBindingId,
   type IrClassId,
   type IrSourceId,
