@@ -6,16 +6,15 @@
 // existing IR builders, and it must pass A's complete validator; it is not a
 // producer and does not stand in for A's preparation driver or for D's
 // application fixtures. It touches every codec-relevant shape: cross-unit
-// calls, ReadonlyMaps (units, providers), a recursive class shape in the ABI,
-// i64 (bigint) and non-finite/negative-zero f64 constants, a present-but-
+// calls, ReadonlyMaps (units, providers), a recursive class shape (exported for the
+// codec-only data probe), i64 (bigint) and non-finite/negative-zero f64 constants, a present-but-
 // undefined optional property, and one runtime projection per backend.
 
-import { irClassTypeRef } from "../../src/ir/abi-bindings.js";
 import { AllocSiteRegistry } from "../../src/ir/alloc-registry.js";
 import { IrFunctionBuilder } from "../../src/ir/builder.js";
 import { irCallableBindingKey, irUnitCallableBindingId, irUnitFuncRef } from "../../src/ir/callable-bindings.js";
-import { irTypeBindingKey } from "../../src/ir/abi-bindings.js";
 import {
+  createIrBindingId,
   createIrClassId,
   createIrSourceId,
   createIrUnitId,
@@ -26,11 +25,7 @@ import {
 } from "../../src/ir/identity.js";
 import type { IrModuleInitPlan } from "../../src/ir/module-init-plan.js";
 import { IR_CLASS_SHAPE_CELL, irVal, type IrClassShape, type IrFunction, type IrType } from "../../src/ir/nodes.js";
-import {
-  preparedIrCallableSignature,
-  preparedIrClassLayoutKey,
-  preparedIrDraftAbiLookup,
-} from "../../src/ir/program-abi-contracts.js";
+import { preparedIrCallableSignature, preparedIrDraftAbiLookup } from "../../src/ir/program-abi-contracts.js";
 import { irProgramRuntimeDemands } from "../../src/ir/program-runtime-demands.js";
 import {
   freezePreparedIrRuntimeValue,
@@ -199,25 +194,30 @@ export function buildCodecFixture(policies: readonly RuntimeManifestPolicy[] = C
       contract: { kind: "callable", ref, params, results },
     };
   };
-  const classRef = irClassTypeRef(classId, "Node");
-  const classEntry: PreparedIrAbiEntry = {
-    plan: {
-      id: classRef.binding.bindingId,
-      order: { sourceOrder: source.order, declarationOrder: 4 },
-      displayName: "Node",
-      structuralReferenceKey: irTypeBindingKey(classRef.binding),
-      intent: { kind: "class", classId, layoutKey: preparedIrClassLayoutKey(classShape) },
-      slotPolicy: "required",
-      slotSpace: "type",
-    },
-    contract: { kind: "class", ref: classRef, shape: classShape },
+  // Module exports are ABI export aliases, never a body flag: emission exports only what the ABI says.
+  const exportEntry = (id: IrFunctionIdentity, ordinal: number): PreparedIrAbiEntry => {
+    const targetId = irUnitCallableBindingId(id.unitId);
+    return {
+      plan: {
+        id: createIrBindingId({ ownerId: id.unitId, domain: "export", role: id.name }),
+        order: { sourceOrder: source.order, declarationOrder: ordinal },
+        displayName: id.name,
+        intent: { kind: "export", externalName: id.name, targetId },
+        slotPolicy: "alias",
+        aliasOf: targetId,
+      },
+      contract: { kind: "export", externalName: id.name, targetId },
+    };
   };
   const entries = [
     callableEntry(helper, helperId, 0),
     callableEntry(main, mainId, 1),
     callableEntry(big, bigId, 2),
     callableEntry(special, specialId, 3),
-    classEntry,
+    exportEntry(helperId, 4),
+    exportEntry(mainId, 5),
+    exportEntry(bigId, 6),
+    exportEntry(specialId, 7),
   ];
 
   const startup: IrModuleInitPlan = {

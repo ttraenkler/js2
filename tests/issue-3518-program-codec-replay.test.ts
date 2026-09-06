@@ -1,7 +1,8 @@
 // Copyright (c) 2026 Loopdive GmbH. Licensed under Apache-2.0 WITH LLVM-exception.
 //
 // #3518 package C — lossless PreparedIrProgram codec, runtime re-authentication,
-// the shared backend consumer (accept/emit), and fresh-process replay.
+// the backend consumer (accept / one-argument emit with internal physical
+// setup), and fail-closed fresh-process replay.
 //
 // Denominators, kept separate on purpose:
 //   - synthetic complete fixture (tests/helpers/ir-whole-program-codec-fixture.ts)
@@ -15,10 +16,11 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { analyzeMultiSource } from "../src/checker/index.js";
-import { IR_CLASS_SHAPE_CELL, type IrClassShape, type IrInstr, type IrType } from "../src/ir/nodes.js";
+import { createIrClassId, createIrSourceId } from "../src/ir/identity.js";
+import { IR_CLASS_SHAPE_CELL, irVal, type IrClassShape, type IrInstr, type IrType } from "../src/ir/nodes.js";
 import {
+  acceptedPhysicalSetupPlan,
   acceptPreparedIrProgram,
-  emitAcceptedIrProgram,
   isAuthenticAcceptedIrProgram,
 } from "../src/ir/backend/program-consumer.js";
 import {
@@ -30,6 +32,8 @@ import {
   PREPARED_IR_PROGRAM_CODEC,
   PREPARED_IR_PROGRAM_SCHEMA,
 } from "../src/ir/program-codec.js";
+import { emitAcceptedIrProgram } from "../src/ir/program-emission.js";
+import { subscribePreparedIrProgram } from "../src/ir/program-observation.js";
 import { prepareWholeIrProgram } from "../src/ir/program-preparation.js";
 import {
   freezePreparedIrValue,
@@ -39,14 +43,7 @@ import {
   type PreparedIrProgram,
 } from "../src/ir/program.js";
 import { buildCodecFixture, CODEC_FIXTURE_ORACLE } from "./helpers/ir-whole-program-codec-fixture.js";
-import {
-  compareExports,
-  replayOptions,
-  replayProgram,
-  scalarPhysicalPlan,
-  type OracleCall,
-  type PlanTrace,
-} from "./helpers/ir-whole-program-replay.js";
+import { compareExports, replayOptions, replayProgram, type OracleCall } from "./helpers/ir-whole-program-replay.js";
 
 const REPO_ROOT = resolve(import.meta.dirname, "..");
 
@@ -129,13 +126,6 @@ describe("#3518 C — PreparedIrProgram codec (synthetic complete fixture)", () 
     for (const [id, record] of decoded.units) expect(record.id).toBe(id);
     expect(typeof decoded.runtime[0]!.prepared.providers.get).toBe("function");
 
-    const classContract = decoded.abi.entries.find((entry) => entry.contract.kind === "class")!.contract;
-    const shape = (classContract as { readonly shape: IrClassShape }).shape;
-    expect(shape[IR_CLASS_SHAPE_CELL]).toBe(true);
-    expect(shape.classId).toBe(fixture.classShape.classId);
-    const next = shape.fields.find((field) => field.name === "next")!.type as Extract<IrType, { kind: "class" }>;
-    expect(next.shape).toBe(shape);
-
     const special = decoded.ir.functions.find((fn) => fn.name === "special")!;
     const values = constants(special).map((instr) => (instr as { value: { value: unknown } }).value.value);
     expect(values.some((value) => Object.is(value, -0))).toBe(true);
@@ -159,8 +149,6 @@ describe("#3518 C — PreparedIrProgram codec (synthetic complete fixture)", () 
     expect(encoded).toContain('{"$number":"Infinity"}');
     expect(encoded).toContain('{"$bigint":"9007199254740993"}');
     expect(encoded).toContain('{"$undefined":true}');
-    expect(encoded).toContain('"$irClassShapeCell":true');
-    expect(encoded).toContain('{"$classShapeRef":"');
     expect(encoded).toContain('"units":{"$map":[[');
     expect(encoded).toContain('"providers":{"$map":[');
     expect(encoded).not.toContain("-0,");
@@ -310,6 +298,32 @@ describe("#3518 C — codec data-model probes (data-level decode)", () => {
     }) as PreparedIrProgram;
   }
 
+  it("closes a recursive class shape onto the same decoded object with its brand", () => {
+    const sourceId = createIrSourceId({ kind: "synthetic", order: 0, sourceKey: "@test/codec-shape-probe" });
+    const classId = createIrClassId({ sourceId, lexicalOwnerId: null, declarationKind: "declaration", ordinal: 0 });
+    const mutable = {
+      [IR_CLASS_SHAPE_CELL]: true as const,
+      classId,
+      className: "Node",
+      fields: [] as { readonly name: string; readonly type: IrType }[],
+      methods: [],
+      constructorParams: [irVal({ kind: "f64" })],
+    };
+    mutable.fields = [{ name: "next", type: { kind: "class", shape: mutable as unknown as IrClassShape } }];
+    const program = withProbe({ shape: mutable });
+    const encoded = encodePreparedIrProgram(program);
+    expect(encoded).toContain('"$irClassShapeCell":true');
+    expect(encoded).toContain('{"$classShapeRef":"');
+    const decoded = decodePreparedIrProgramData(encoded);
+    const shape = (decoded.inventory.classes[0] as unknown as { shape: IrClassShape }).shape;
+    expect(shape[IR_CLASS_SHAPE_CELL]).toBe(true);
+    expect(shape.classId).toBe(classId);
+    const next = shape.fields[0]!.type as Extract<IrType, { kind: "class" }>;
+    expect(next.shape).toBe(shape);
+    expect(encodePreparedIrProgram(decoded)).toBe(encoded);
+    expect(preparedIrDataMismatch(program, decoded)).toBeUndefined();
+  });
+
   it("preserves an own `__proto__` data property", () => {
     const record = Object.create(null) as Record<string, unknown>;
     Object.defineProperty(record, "__proto__", {
@@ -382,30 +396,55 @@ describe("#3518 C — codec data-model probes (data-level decode)", () => {
   });
 });
 
-describe("#3518 C — shared backend consumer (accept / emit)", () => {
+describe("#3518 C — backend consumer (accept / one-argument emit)", () => {
   const fixture = buildCodecFixture();
   const decoded = decodePreparedIrProgram(encodePreparedIrProgram(fixture.program));
 
-  it("accepts and emits the same decoded object through both backends with exact unit receipts", async () => {
-    const trace: PlanTrace = { emitters: 0, assembled: 0 };
-    for (const backend of ["wasmgc", "linear"] as const) {
-      const outcome = await replayProgram(decoded, replayOptions(backend), trace);
-      expect(outcome.kind, `${backend}: ${outcome.kind === "ran" ? "" : JSON.stringify(outcome)}`).toBe("ran");
-      if (outcome.kind !== "ran") return;
-      expect(outcome.run.accepted.program).toBe(decoded);
-      expect(outcome.run.emitted.emittedUnitIds).toEqual(
-        outcome.run.accepted.runtime.prepared.functions.map((fn) => fn.unitId),
-      );
-      expect(outcome.run.emitted.emittedUnitIds).toHaveLength(4);
-      expectOracle(outcome.run.exports, backend);
+  it("accepts and emits the same decoded object through both backends with receipts derived from the module", async () => {
+    const phases: string[] = [];
+    const unsubscribe = subscribePreparedIrProgram((event) => {
+      if (event.program === decoded) phases.push(`${event.backend}:${event.phase}`);
+    });
+    try {
+      for (const backend of ["wasmgc", "linear"] as const) {
+        const outcome = await replayProgram(decoded, replayOptions(backend));
+        expect(outcome.kind, `${backend}: ${outcome.kind === "ran" ? "" : JSON.stringify(outcome)}`).toBe("ran");
+        if (outcome.kind !== "ran") return;
+        const { run } = outcome;
+        expect(run.accepted.program).toBe(decoded);
+        const projection = run.accepted.runtime.prepared.functions.map((fn) => fn.unitId);
+        expect(run.emitted.emittedUnitIds).toEqual(projection);
+        // Actual construction accounting: one module function per receipt, one export per ABI alias-free export.
+        expect(run.emitted.module.functions).toHaveLength(4);
+        expect(run.emitted.module.functions.map((fn) => fn.body.length > 0)).toEqual([true, true, true, true]);
+        expect(run.emitted.module.exports.map((entry) => entry.name).sort()).toEqual([
+          "big",
+          "helper",
+          "main",
+          "special",
+        ]);
+        expect(run.emitted.module.imports).toHaveLength(0);
+        expect(run.emitted.module.startFuncIdx).toBeUndefined();
+        const plan = acceptedPhysicalSetupPlan(run.accepted);
+        expect(plan.functions.map((slot) => slot.unitId)).toEqual(projection);
+        expect(plan.exports.map((entry) => entry.externalName).sort()).toEqual(["big", "helper", "main", "special"]);
+        expectOracle(run.exports, backend);
+      }
+    } finally {
+      unsubscribe();
     }
-    // Emitter accounting: exactly one emitter per physical body per backend, all assembled.
-    expect(trace.emitters).toBe(8);
-    expect(trace.assembled).toBe(4);
+    // C owns phase accounting: exactly one accepted / emission-started / emitted per acceptance.
+    expect(phases).toEqual([
+      "wasmgc:accepted",
+      "wasmgc:emission-started",
+      "wasmgc:emitted",
+      "linear:accepted",
+      "linear:emission-started",
+      "linear:emitted",
+    ]);
   });
 
   it("fails typed, located and before emission when the program has no projection for the backend/target", () => {
-    const trace: PlanTrace = { emitters: 0, assembled: 0 };
     const wasmgcOnly = decodePreparedIrProgram(
       encodePreparedIrProgram(buildCodecFixture([{ target: "host", backend: "wasmgc" }]).program),
     );
@@ -416,7 +455,6 @@ describe("#3518 C — shared backend consumer (accept / emit)", () => {
     expect(outcome.detail).toMatch(/no linear:host runtime projection \(available: wasmgc:host\)/);
     expect(outcome.sourceFile).toBe("@test/ir-whole-program-codec");
     expect(outcome.unitId).toBe(fixture.program.ir.functions[0]!.unitId);
-    expect(trace.emitters).toBe(0);
   });
 
   it("refuses to emit a forged or cloned acceptance and refuses a second emission", async () => {
@@ -427,27 +465,21 @@ describe("#3518 C — shared backend consumer (accept / emit)", () => {
     expect(isAuthenticAcceptedIrProgram(accepted)).toBe(true);
     const forged = { ...accepted } as AcceptedPreparedIrProgram;
     expect(isAuthenticAcceptedIrProgram(forged)).toBe(false);
-    const trace: PlanTrace = { emitters: 0, assembled: 0 };
-    expectInvalid(
-      () => emitAcceptedIrProgram(forged, scalarPhysicalPlan(accepted, trace)),
-      /not produced by acceptPreparedIrProgram/,
-    );
-    expectInvalid(() => emitAcceptedIrProgram(accepted, scalarPhysicalPlan(accepted, trace)), /already emitted/);
-    expect(trace.emitters).toBe(0);
+    expectInvalid(() => emitAcceptedIrProgram(forged), /not produced by acceptPreparedIrProgram/);
+    expectInvalid(() => emitAcceptedIrProgram(accepted), /already emitted/);
   });
 
-  it("fails before lowering when a shared exception tag is requested and the plan cannot reserve one", () => {
+  it("reserves the shared exception tag as the first physical resource when requested", () => {
     const acceptance = acceptPreparedIrProgram(decoded, { ...replayOptions("wasmgc"), sharedExceptionTag: true });
     expect(acceptance.kind).toBe("accepted");
     if (acceptance.kind !== "accepted") return;
-    const trace: PlanTrace = { emitters: 0, assembled: 0 };
-    // The scalar plan declares the tag a gap; build it from a tag-less view to reach the consumer's own guard.
-    const plan = scalarPhysicalPlan(
-      { ...acceptance, options: { ...acceptance.options, sharedExceptionTag: false } } as AcceptedPreparedIrProgram,
-      trace,
-    );
-    expectInvalid(() => emitAcceptedIrProgram(acceptance, plan), /cannot reserve one/);
-    expect(trace.emitters).toBe(0);
+    expect(acceptedPhysicalSetupPlan(acceptance).sharedExceptionTag).toBe(true);
+    const emitted = emitAcceptedIrProgram(acceptance);
+    const tags = emitted.module.imports.filter((entry) => entry.desc.kind === "tag");
+    expect(tags).toHaveLength(1);
+    expect(tags[0]).toMatchObject({ module: "env", name: "__exn" });
+    expect(emitted.module.imports[0]).toBe(tags[0]); // reserved before every other physical resource
+    expect(emitted.emittedUnitIds).toHaveLength(4);
   });
 
   it("refuses linear physical options on a non-linear backend", () => {
@@ -492,7 +524,7 @@ describe("#3518 C — A-produced programs from source", () => {
     });
   }
 
-  it("common backend subset: A's program survives codec replay and runs on both backends", async () => {
+  it("common backend subset: A's program survives codec replay and runs on both backends through internal emission", async () => {
     const result = prepare(COMMON_SUBSET);
     expect(result.kind, result.kind === "prepared" ? "" : `${result.kind} ${result.code}: ${result.detail}`).toBe(
       "prepared",
@@ -503,13 +535,16 @@ describe("#3518 C — A-produced programs from source", () => {
     expect(encodePreparedIrProgram(decoded)).toBe(encoded);
     expect(preparedIrDataMismatch(result.program, decoded)).toBeUndefined();
     // `double` is exported by math.ts, not by the entry module, so it is a body but not a module export.
-    expect(decoded.ir.functions.map((fn) => fn.name).sort()).toEqual(expect.arrayContaining(["double", "main"]));
+    expect(decoded.ir.functions.map((fn) => fn.name)).toEqual(expect.arrayContaining(["double", "main"]));
     const calls: OracleCall[] = [{ export: "main", args: [], expected: 42 }];
     for (const backend of ["wasmgc", "linear"] as const) {
       const outcome = await replayProgram(decoded, replayOptions(backend));
-      // A plan gap here is a finding about the subset (e.g. an executable startup body), not a pass.
       expect(outcome.kind, `${backend}: ${outcome.kind === "ran" ? "" : JSON.stringify(outcome, null, 1)}`).toBe("ran");
       if (outcome.kind !== "ran") return;
+      expect(outcome.run.emitted.emittedUnitIds).toEqual(
+        outcome.run.accepted.runtime.prepared.functions.map((fn) => fn.unitId),
+      );
+      expect(outcome.run.emitted.module.exports.map((entry) => entry.name)).toContain("main");
       const rows = compareExports(outcome.run.exports, calls);
       for (const row of rows) {
         expect(row.match, `${backend}: ${row.export} = ${row.actual}, expected ${row.expected}`).toBe(true);
@@ -517,20 +552,11 @@ describe("#3518 C — A-produced programs from source", () => {
     }
   });
 
-  it("original mixed application: exact pinned sources, codec-identical, acceptance recorded per backend", () => {
-    const pathNulContent = createHash("sha256");
-    for (const [path, text] of Object.entries(ORIGINAL_MIXED)) {
-      pathNulContent.update(path).update("\0").update(text).update("\0");
-    }
+  it("original mixed application: exact pinned sources, codec-identical, physical gaps reported at acceptance", () => {
     const candidates = {
-      pathNulContent: pathNulContent.digest("hex"),
-      concatenated: createHash("sha256").update(Object.values(ORIGINAL_MIXED).join("")).digest("hex"),
       json: createHash("sha256").update(JSON.stringify(ORIGINAL_MIXED)).digest("hex"),
     };
-    expect(
-      Object.values(candidates).includes(ORIGINAL_MIXED_DIGEST),
-      `no digest recipe reproduces D's pinned ${ORIGINAL_MIXED_DIGEST}: ${JSON.stringify(candidates)}`,
-    ).toBe(true);
+    expect(candidates.json, "D's pinned digest is sha256(JSON.stringify(files))").toBe(ORIGINAL_MIXED_DIGEST);
 
     // Requesting a linear projection for the async application is a typed, located capability gap
     // at preparation time (B's runtime has no linear Promise adapter) — recorded, not worked around.
@@ -556,68 +582,79 @@ describe("#3518 C — A-produced programs from source", () => {
     expect(encodePreparedIrProgram(decoded)).toBe(encoded);
     expect(preparedIrDataMismatch(result.program, decoded)).toBeUndefined();
 
+    // Acceptance now includes the physical setup plan: the Promise/scheduler runtime and the async
+    // body are not materializable in this increment, so the whole application is a located typed
+    // gap at acceptance — never a smaller module.
     const wasmgc = acceptPreparedIrProgram(decoded, replayOptions("wasmgc"));
-    expect(wasmgc.kind, wasmgc.kind === "accepted" ? "" : `${wasmgc.kind} ${wasmgc.code}: ${wasmgc.detail}`).toBe(
-      "accepted",
-    );
+    expect(wasmgc.kind).toBe("unsupported");
+    if (wasmgc.kind === "unsupported") {
+      expect(wasmgc.detail).toMatch(/physical setup cannot be materialized/);
+      expect(wasmgc.detail).toMatch(/async body run/);
+      expect(wasmgc.sourceFile).toBe("entry.ts");
+    }
     const linear = acceptPreparedIrProgram(decoded, replayOptions("linear"));
     expect(linear.kind).toBe("unsupported");
     if (linear.kind === "unsupported") expect(linear.detail).toMatch(/no linear:host runtime projection/);
     console.info(
-      `[#3518 C] original mixed application: wasmgc:host ${wasmgc.kind}; linear:host ${linear.kind}${
-        linear.kind === "accepted" ? "" : ` (${linear.code}: ${linear.detail})`
-      }`,
+      `[#3518 C] original mixed application: wasmgc:host ${wasmgc.kind}${
+        wasmgc.kind === "unsupported" ? ` (${wasmgc.detail.slice(0, 220)}…)` : ""
+      }; linear:host ${linear.kind}`,
     );
-  });
-
-  it("original mixed application: the scalar-subset plan reports its gaps instead of emitting a smaller module", async () => {
-    const result = prepare(ORIGINAL_MIXED, [{ target: "host", backend: "wasmgc" }]);
-    if (result.kind !== "prepared") throw new Error(result.detail);
-    const decoded = decodePreparedIrProgram(encodePreparedIrProgram(result.program));
-    const outcome = await replayProgram(decoded, replayOptions("wasmgc"));
-    expect(outcome.kind).toBe("plan-gap");
-    if (outcome.kind !== "plan-gap") return;
-    expect(outcome.gaps).toEqual(expect.arrayContaining(["executable startup unit", "runtime providers"]));
   });
 });
 
 describe("#3518 C — fresh-process replay", () => {
-  it("replays the encoded program in a child that loads no TypeScript or source frontend and fails closed", () => {
-    const fixture = buildCodecFixture();
-    const encoded = encodePreparedIrProgram(fixture.program);
+  const fixture = buildCodecFixture();
+  const encoded = encodePreparedIrProgram(fixture.program);
+  const BOTH = [
+    { backend: "wasmgc", target: "host" },
+    { backend: "linear", target: "host" },
+  ];
+  type Report = {
+    ok: boolean;
+    digest?: string;
+    reencodedIdentical: boolean;
+    decodeFailure?: string;
+    oracle?: { targets: number; calls: number; problems: string[] };
+    failures: string[];
+    targets: Record<
+      string,
+      { kind: string; emittedUnits?: number; moduleFunctions?: number; rows?: { match: boolean }[] }
+    >;
+    frontendModules: string[];
+    typescriptModules: string[];
+    loadedModuleCount: number;
+  };
+
+  function withFiles(
+    run: (
+      dir: string,
+      run: (args: string[]) => { status: number | null; stdout: string; stderr: string; report: Report },
+    ) => void,
+  ) {
     const dir = mkdtempSync(join(tmpdir(), "ir-whole-program-replay-"));
     try {
+      run(dir, (args) => {
+        const child = spawnSync(process.execPath, ["--import", "tsx", "scripts/ir-whole-program-replay.mjs", ...args], {
+          cwd: REPO_ROOT,
+          encoding: "utf8",
+          timeout: 180_000,
+        });
+        const last = child.stdout.trim().split("\n").at(-1) ?? "{}";
+        return { status: child.status, stdout: child.stdout, stderr: child.stderr, report: JSON.parse(last) as Report };
+      });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
+  it("replays the program in a child that loads no TypeScript or source frontend", () => {
+    withFiles((dir, run) => {
       const file = join(dir, "program.json");
       const oracleFile = join(dir, "oracle.json");
       writeFileSync(file, encoded);
-      writeFileSync(
-        oracleFile,
-        JSON.stringify({
-          targets: [
-            { backend: "wasmgc", target: "host" },
-            { backend: "linear", target: "host" },
-          ],
-          calls: CODEC_FIXTURE_ORACLE.calls,
-        }),
-      );
-      const run = (encodedPath: string, oraclePath: string) =>
-        spawnSync(
-          process.execPath,
-          ["--import", "tsx", "scripts/ir-whole-program-replay.mjs", encodedPath, oraclePath],
-          { cwd: REPO_ROOT, encoding: "utf8", timeout: 180_000 },
-        );
-      const child = run(file, oracleFile);
-      const report = JSON.parse(child.stdout.trim().split("\n").at(-1)!) as {
-        ok: boolean;
-        digest: string;
-        reencodedIdentical: boolean;
-        decodeFailure?: string;
-        failures?: string[];
-        targets: Record<string, { kind: string; bytes?: number; emittedUnits?: number; rows?: { match: boolean }[] }>;
-        frontendModules: string[];
-        typescriptModules: string[];
-        loadedModuleCount: number;
-      };
+      writeFileSync(oracleFile, JSON.stringify({ targets: BOTH, calls: CODEC_FIXTURE_ORACLE.calls }));
+      const { status, stderr, report } = run([file, oracleFile]);
       const summary = JSON.stringify(
         { failures: report.failures, frontend: report.frontendModules, typescript: report.typescriptModules },
         null,
@@ -631,38 +668,82 @@ describe("#3518 C — fresh-process replay", () => {
         const target = report.targets[key]!;
         expect(target.kind, `${key}: ${summary}`).toBe("ran");
         expect(target.emittedUnits).toBe(4);
+        expect(target.moduleFunctions).toBe(4);
+        expect(target.rows?.length).toBe(4);
         expect(target.rows?.every((row) => row.match)).toBe(true);
       }
       expect(report.frontendModules, summary).toEqual([]);
       expect(report.typescriptModules, summary).toEqual([]);
+      expect(report.failures, summary).toEqual([]);
       expect(report.ok, summary).toBe(true);
-      expect(child.status, child.stderr).toBe(0);
+      expect(status, stderr).toBe(0);
+    });
+  });
 
-      // Fail-closed control: a non-canonical byte must produce a nonzero exit and a decode failure.
+  it("fails closed on non-canonical bytes, an oracle mismatch, and a deliberately forbidden import", () => {
+    withFiles((dir, run) => {
+      const file = join(dir, "program.json");
+      const oracleFile = join(dir, "oracle.json");
+      writeFileSync(oracleFile, JSON.stringify({ targets: BOTH, calls: CODEC_FIXTURE_ORACLE.calls }));
+
       writeFileSync(file, `${encoded}\n`);
-      const corrupted = run(file, oracleFile);
+      const corrupted = run([file, oracleFile]);
       expect(corrupted.status).toBe(1);
-      const corruptedReport = JSON.parse(corrupted.stdout.trim().split("\n").at(-1)!) as {
-        ok: boolean;
-        decodeFailure?: string;
-      };
-      expect(corruptedReport.ok).toBe(false);
-      expect(corruptedReport.decodeFailure).toMatch(/not canonical/);
+      expect(corrupted.report.ok).toBe(false);
+      expect(corrupted.report.decodeFailure).toMatch(/not canonical/);
 
-      // Fail-closed control: an oracle mismatch must produce a nonzero exit even though everything ran.
       writeFileSync(file, encoded);
       writeFileSync(
         oracleFile,
-        JSON.stringify({
-          targets: [{ backend: "wasmgc", target: "host" }],
-          calls: [{ export: "main", args: [], expected: 41 }],
-        }),
+        JSON.stringify({ targets: [BOTH[0]], calls: [{ export: "main", args: [], expected: 41 }] }),
       );
-      const mismatched = run(file, oracleFile);
+      const mismatched = run([file, oracleFile]);
       expect(mismatched.status).toBe(1);
-      expect(mismatched.stdout).toContain('"expected":"41"');
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
+      expect(mismatched.report.failures.some((f) => /main\(\) = 42, expected 41/.test(f))).toBe(true);
+
+      writeFileSync(oracleFile, JSON.stringify({ targets: BOTH, calls: CODEC_FIXTURE_ORACLE.calls }));
+      const probed = run([file, oracleFile, "--probe-forbidden-import"]);
+      expect(probed.status).toBe(1);
+      expect(probed.report.targets["wasmgc:host"]?.kind).toBe("ran"); // the replay itself was fine…
+      expect(probed.report.typescriptModules.length).toBeGreaterThan(0); // …the boundary check is what failed
+      expect(probed.report.typescriptModules.join("\n")).toMatch(/src\/ts-api\./);
+      expect(probed.report.failures.some((f) => /TypeScript modules were loaded/.test(f))).toBe(true);
+    });
+  });
+
+  it("refuses empty, duplicate or malformed oracle work before touching the program", () => {
+    withFiles((dir, run) => {
+      const file = join(dir, "program.json");
+      const oracleFile = join(dir, "oracle.json");
+      writeFileSync(file, encoded);
+      const cases: [string, unknown, RegExp][] = [
+        ["empty targets", { targets: [], calls: CODEC_FIXTURE_ORACLE.calls }, /targets must be a nonempty array/],
+        ["empty calls", { targets: BOTH, calls: [] }, /calls must be a nonempty array/],
+        [
+          "duplicate targets",
+          { targets: [BOTH[0], BOTH[0]], calls: CODEC_FIXTURE_ORACLE.calls },
+          /repeats wasmgc:host/,
+        ],
+        [
+          "unknown backend",
+          { targets: [{ backend: "porffor", target: "host" }], calls: CODEC_FIXTURE_ORACLE.calls },
+          /not a known backend/,
+        ],
+        [
+          "call without export",
+          { targets: BOTH, calls: [{ args: [], expected: 1 }] },
+          /export must be a nonempty string/,
+        ],
+        ["call without expected", { targets: BOTH, calls: [{ export: "main", args: [] }] }, /lacks an expected value/],
+      ];
+      for (const [label, oracle, pattern] of cases) {
+        writeFileSync(oracleFile, JSON.stringify(oracle));
+        const { status, report } = run([file, oracleFile]);
+        expect(status, label).toBe(2);
+        expect(report.ok, label).toBe(false);
+        expect(Object.keys(report.targets), label).toEqual([]);
+        expect(report.failures.join("\n"), label).toMatch(pattern);
+      }
+    });
   });
 });

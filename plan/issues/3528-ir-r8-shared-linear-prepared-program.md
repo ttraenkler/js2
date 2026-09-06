@@ -1168,3 +1168,94 @@ physical-imports dependency); routing `compileLinearIrFunctions` onto
 `acceptPreparedIrProgram`/`emitAcceptedIrProgram` (needs a
 `PreparedIrProgram` handed to the linear driver by A's wrapper); D's
 independent runner remains under review and is not used as evidence here.
+
+### Implementation Record — 2026-09-06 — package C increment 3: internal physical setup, one-argument emission, fail-closed replay (Claude)
+
+Dependency: signed `2e68ccfe` merged as `bc6f4604` (attributed merge; the
+earlier merge `ad1d205c` of `7b2e8b03` carried git's default message — its
+author is Thomas Tränkler, produced by Claude Fable 5.1 Default, recorded here
+rather than by rewriting shared history). Increments 1–2 preserved.
+
+**Emission is one argument again and owns its physical setup.**
+`emitAcceptedIrProgram(accepted)` (`src/ir/program-emission.ts`) reads the
+physical plan acceptance derived and builds the module itself: reserves the
+shared exception tag first (through A's `ensureExnTag` on the probe-style
+source-free physical context), imported functions/globals (`addImport`),
+defined numeric globals, one `WasmFunction` slot per physical body and the
+startup adapter slot; freezes the index space; plans and seals A's
+`ProgramAbiMap` over the program's own ABI entries and binds every required
+binding to its reserved index (`finishBinding`); lowers every physical body
+through the existing WasmGC/linear emitters into its slot, refusing any lowered
+signature that contradicts the reserved ABI slot; materializes `wasm-start`
+(start section) or `deferred-export` (`__module_init` export) from the startup
+plans and the module exports from the ABI export aliases; and derives
+`emittedUnitIds` from the functions actually present in the module. Root's
+counterexample (four receipts over an assembler returning zero functions) is
+no longer expressible: there is no caller-supplied resolver, assembler or
+reservation. Emission lives outside `src/ir/backend/` because it needs the
+codegen physical-import registry; it imports no frontend module.
+
+**Acceptance includes the physical plan.** `src/ir/program-physical-plan.ts`
+(pure, no backend/codegen imports) derives imports, globals, slots, exports and
+startup from the ABI entries, startup plans and the selected projection, and
+returns the first located `unsupported` for anything this increment cannot
+materialize: non-scalar carriers, runtime/support callables and globals,
+type/class layouts, host-callable/self-hosted provider intrinsics, async
+bodies, WASI start, reference-typed global initializers, and linear allocation
+plans. A gap is an acceptance failure; it can never become a smaller module.
+Consequence for the original mixed application: wasmgc:host is now a located
+`unsupported` at acceptance with exactly one gap (`async body run needs
+scheduler/promise runtime materialization` @ entry.ts) instead of "accepted but
+unemittable" — the honest state until the Promise/scheduler runtime is
+materialized.
+
+**Phase accounting.** C is the sole owner of `accepted` / `emission-started` /
+`emitted`; they are raised once per acceptance from the consumer/emitter only
+(`beginAcceptedIrProgramEmission` consumes the token; `emitted` is raised only
+after the module and receipts exist). Pinned by a subscriber test.
+
+**Replay runner.** Validates the oracle schema before touching the program
+(nonempty unique targets over known backends, nonempty calls with export/args/
+expected); per target requires acceptance, nonzero receipts equal to the
+projection's physical functions AND to the module's owned functions, ≥1
+checked row, all matched. The module census is a `node:module` resolve hook
+appending `{url,parent}` synchronously to a file before each resolution
+returns, so every loaded module is on disk before the import that loaded it
+settles — read after the last await, no timer. `--probe-forbidden-import`
+deliberately imports `src/ts-api.ts` after the replay and must fail closed.
+
+**Measured (2026-09-06, vitest single file, load1 < 8 gate): 21/21.**
+- synthetic complete fixture (4 bodies, ABI export aliases, no class entry):
+  both backends emit 4/4 receipts = 4 module functions = 4 exports, 184 bytes,
+  oracle `main=42, helper(21)=42, big=9007199254740993n, special=Infinity`;
+  shared-tag request reserves `env.__exn` as import #0; forged/cloned
+  acceptance and second emission refused; linear options on wasmgc refused;
+  missing projection located with `sourceFile`.
+- codec: 20 refusals incl. the five reviewed cases; 5 data-model probes (adds
+  the recursive class-shape probe at data level); 2 re-authentication refusals.
+- A-produced common backend subset (2 sources): codec-identical, mismatch-free,
+  emitted and run on BOTH backends through internal emission (`main()=42`),
+  `main` exported through the ABI alias.
+- A-produced original mixed application (exact D sources, digest
+  `236fa7d9…` = `sha256(JSON.stringify(files))`): 7 terminals,
+  codec-identical, mismatch-free; wasmgc:host `unsupported` (1 physical gap,
+  above); linear projection at preparation `unsupported` (no linear Promise
+  adapter); linear:host acceptance `unsupported` (no projection). Incomplete
+  coverage, recorded.
+- fresh child replay: 167 modules loaded, 0 TypeScript, 0 frontend; both
+  targets 4/4; fail-closed controls verified for non-canonical bytes (exit 1),
+  oracle mismatch (exit 1), deliberate `ts-api` import (exit 1 with the module
+  named), and six malformed/empty/duplicate oracle schemas (exit 2, no target
+  touched).
+- typecheck 0 errors; LOC/function/coercion/oracle gates OK; `check:dead-exports`
+  OK on the spaced path (25 known, 0 new) after root's audit fix; prettier and
+  biome clean.
+
+**Not yet materializable (next C steps, dependencies named).** Promise/
+scheduler and other runtime-callable providers, string/vec/object carriers and
+type/class layouts, reference-typed globals, WASI start, linear memory plans:
+each needs the corresponding runtime materialization (B/A) and the linear
+memory plan; the mixed application and the three-source common fixture
+(`594eaf3f…`, `__new_ReferenceError` pending with A) stay incomplete until
+then. Routing `compileLinearIrFunctions` onto the consumer still needs A's
+wrapper to hand a `PreparedIrProgram` to the linear driver.
