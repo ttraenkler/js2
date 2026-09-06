@@ -529,6 +529,76 @@ is not accepted as that control. Preserve both measurements. A investigates
 the missing runtime ABI declaration; D must retain the approved source/native
 census and label preparation failure without substituting coverage.
 
+#### Second consumer increment and measured oracle limits — 2026-09-06
+
+C supplied signed `3b2179d2f7e6f617c4484254e61a6a4f1fe3e8ae`; root verified
+the signature and read its actual 19/19 test log. Its A-produced two-source
+scalar subset executes through the codec on both backends. The original mixed
+source retains seven terminals and passes WasmGC acceptance, while linear is
+typed unsupported. Mixed emission remains a physical-plan gap, and the fresh
+child uses the synthetic four-function fixture. These are separate populations.
+
+A's contract review rejects the additional caller-supplied physical-plan
+argument as the production boundary: its mutable resolver, factories and
+assembler remain outside acceptance, and the assembler can omit bodies while
+the consumer still reports all lowered IDs. C must build and validate concrete
+source-free physical setup internally, expose one-argument authenticated
+emission, and derive receipts from actual module construction. C owns the
+accepted/emission-started/emitted observations; A owns prepared and its held
+public wrapper. The scalar test adapter does not replace startup, global,
+provider or async emission. Root also reviews nonempty oracle target/call
+floors, exact receipt identities and deterministic forbidden-module evidence.
+The saved C signing log skipped slow hooks via `SKIP_SLOW_PRECOMMIT=1`;
+normal configured hook completion remains required for the no-bypass handoff.
+
+Root's independent exact-C controls confirm all five original codec fixes and
+the canonical positive. The full replay child runs four units and four values
+on each backend, with 152 module resolutions and no TypeScript/frontend match.
+Empty targets, empty oracle calls and duplicate targets all incorrectly return
+exit0/ok:true. A separate actual consumer control lowers four bodies and reports
+four emitted IDs while its supplied assembler returns zero module functions and
+exports. These are reproduced defects, not merely source-review predictions.
+
+Root combined signed A `fcd2e9109789681f33e2f26d8a3312fb219f40c8` and B
+`45a6c72add4605df078fb2a90cd1f600617f56c2`. Full combined typecheck passes.
+The physical-leaf probe performs real function/tag import registration and
+frozen-tag reuse, with two imports, one function and one function type; its
+deliberate frontend import is rejected. This establishes the bounded physical
+import boundary, not full runtime materialization or mixed-application replay.
+
+B executed the original direct oracle on clean signed45a6, using the distinct
+b3 runner worktree with stable before/after source fingerprints. The actual
+25182-byte module matches native initial212/result224 and the two-tick Promise
+sequence. Its raw audit has 13 entry records and 10 physical records, but only
+six of seven terminals have evidence. The sole structural violation is
+`missing-terminal-evidence` for the b.ts module initializer: it has a
+declaration pass and no body receipt. CLI exit1 correctly rejects this audit,
+independently of temporarily missing fixture metadata. B's focused control
+must pin this failure through the exact terminal-record join while retaining
+all runtime/provenance assertions; do not invent or ignore the missing receipt.
+
+B additionally owns one data-only captured regression fixture,
+`tests/ir/fixtures/captured-original-direct-audit.json`, containing the entire
+measured raw audit, source digest and before/after compiler provenance. The
+always-run predicate control must label this captured evidence and verify the
+exact six-of-seven refusal; it makes no fresh-compile claim. Remove machine
+paths and fixed ephemeral revision assertions from test code. The explicit
+`JS2WASM_WHOLE_PROGRAM_DIRECT_ORACLE` setting supplies actual oracle execution;
+absent or identical checkout configuration must be visibly refused. A configured
+run checks stable distinct provenance, native behavior and its actual returned
+audit independently, and requires the CLI status to match that audit's verdict.
+Retain separate native execution and report captured/configured coverage apart.
+
+The imported-global initializer's ReferenceError constructor requires a
+canonical runtime declaration/provider from B, consumed into A's ABI vector
+before sealing and physically reserved by C before emission. The existing
+allocation-time integration helper supplies no semantic authority. A and B
+confirmed that no catalog entry currently exists. Preserve the TDZ guard;
+linear's rejection of its null/externref/throw instructions is separate coverage.
+An exact-binding proof of prior initialization within ordered startup would
+need its own plan and early/cyclic/deferred-read negative controls. No such
+optimization or source-arm change is authorized by this runtime declaration.
+
 B also has a narrow grant for the await-expression arm/import wiring in
 `src/ir/from-ast.ts`. Read-only ownership review verified the earlier R1 W1-G
 and R3 W1-C implementations landed at merge commits `ae5d2d25` and `6b9c5a1f`,
