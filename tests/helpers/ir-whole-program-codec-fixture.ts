@@ -7,7 +7,7 @@
 // producer and does not stand in for A's preparation driver or for D's
 // application fixtures. It touches every codec-relevant shape: cross-unit
 // calls, ReadonlyMaps (units, providers), a recursive class shape (exported for the
-// codec-only data probe), i64 (bigint) and non-finite/negative-zero f64 constants, a present-but-
+// codec-only data probe), i64 (bigint), NaN/Infinity/-0 f64 constants, a present-but-
 // undefined optional property, and one runtime projection per backend.
 
 import { AllocSiteRegistry } from "../../src/ir/alloc-registry.js";
@@ -47,6 +47,8 @@ export const CODEC_FIXTURE_ORACLE = Object.freeze({
     { export: "helper", args: [21], expected: 42 },
     { export: "big", args: [], expected: { $bigint: "9007199254740993" } },
     { export: "special", args: [], expected: { $number: "Infinity" } },
+    { export: "nan", args: [], expected: { $number: "NaN" } },
+    { export: "negZero", args: [], expected: { $number: "-0" } },
   ],
 });
 
@@ -109,6 +111,8 @@ export function buildCodecFixture(policies: readonly RuntimeManifestPolicy[] = C
   const mainId = identity("main", 1);
   const bigId = identity("big", 2);
   const specialId = identity("special", 3);
+  const nanId = identity("nan", 4);
+  const negZeroId = identity("negZero", 5);
   const registry = new AllocSiteRegistry();
 
   // helper(x: f64): f64 = x * 2
@@ -148,12 +152,24 @@ export function buildCodecFixture(policies: readonly RuntimeManifestPolicy[] = C
   });
   const special = specialBuilder.finish();
 
-  const functions = [helper, main, big, special];
+  // nan(): f64 = NaN and negZero(): f64 = -0   (positive controls for the tagged oracle spellings)
+  const nanBuilder = new IrFunctionBuilder(nanId, [f64], true, registry);
+  nanBuilder.openBlock();
+  nanBuilder.terminate({ kind: "return", values: [nanBuilder.emitConst({ kind: "f64", value: Number.NaN }, f64)] });
+  const nan = nanBuilder.finish();
+  const negZeroBuilder = new IrFunctionBuilder(negZeroId, [f64], true, registry);
+  negZeroBuilder.openBlock();
+  negZeroBuilder.terminate({ kind: "return", values: [negZeroBuilder.emitConst({ kind: "f64", value: -0 }, f64)] });
+  const negZero = negZeroBuilder.finish();
+
+  const functions = [helper, main, big, special, nan, negZero];
   const terminals = [
     terminal({ id: helperId.unitId, sourceId, name: "helper", ordinal: 0 }),
     terminal({ id: mainId.unitId, sourceId, name: "main", ordinal: 1 }),
     terminal({ id: bigId.unitId, sourceId, name: "big", ordinal: 2 }),
     terminal({ id: specialId.unitId, sourceId, name: "special", ordinal: 3 }),
+    terminal({ id: nanId.unitId, sourceId, name: "nan", ordinal: 4 }),
+    terminal({ id: negZeroId.unitId, sourceId, name: "negZero", ordinal: 5 }),
   ];
 
   // A recursive class shape: `next` points back at the shape itself.
@@ -214,10 +230,14 @@ export function buildCodecFixture(policies: readonly RuntimeManifestPolicy[] = C
     callableEntry(main, mainId, 1),
     callableEntry(big, bigId, 2),
     callableEntry(special, specialId, 3),
-    exportEntry(helperId, 4),
-    exportEntry(mainId, 5),
-    exportEntry(bigId, 6),
-    exportEntry(specialId, 7),
+    callableEntry(nan, nanId, 4),
+    callableEntry(negZero, negZeroId, 5),
+    exportEntry(helperId, 6),
+    exportEntry(mainId, 7),
+    exportEntry(bigId, 8),
+    exportEntry(specialId, 9),
+    exportEntry(nanId, 10),
+    exportEntry(negZeroId, 11),
   ];
 
   const startup: IrModuleInitPlan = {

@@ -1259,3 +1259,95 @@ memory plan; the mixed application and the three-source common fixture
 (`594eaf3f…`, `__new_ReferenceError` pending with A) stay incomplete until
 then. Routing `compileLinearIrFunctions` onto the consumer still needs A's
 wrapper to hand a `PreparedIrProgram` to the linear driver.
+
+### Correction plan — 2026-09-06 — package C increment 4 (recorded before the fixes)
+
+Root reproduced seven defects against `999a6a42` (records:
+`codex-3518-reference-error-runtime-20260906/.tmp/c-increment3-review/` and
+`codex-3518-ir-integration-20260905/.tmp/ir-completion-20260905/c-increment3-physical-controls*`).
+Dependency adopted first: signed `5c9fd95d` (A's canonical runtime callable
+declarations, parent runtime leaf `b38d1ecf`, parent `2e68ccfe`) merged as
+`ea64ff08`. Planned corrections, each with a paired positive/negative test:
+
+1. The accepted physical plan is exposed deep-frozen (nested records and
+   arrays); mutation cannot change emitted output. Acceptance keeps its own
+   private copy.
+2. Emission state transitions (`begin`/`finish`) become private to the single
+   one-argument construction path: acceptance and emission move into one
+   module (`src/ir/program-consumer.ts`); `src/ir/backend/program-consumer.ts`
+   and `src/ir/program-emission.ts` are removed. `emitted` is raised only after
+   successful construction, exactly once.
+3. The replay oracle value domain is validated before replay: plain JSON
+   number/boolean/string/null or an exact single-key `$bigint` (canonical
+   decimal) / `$number` (`-0`, `NaN`, `Infinity`, `-Infinity`) tag; malformed
+   values are schema refusals (exit 2), distinct from mismatches (exit 1).
+   Positive NaN / -0 controls are added to the synthetic fixture.
+4. Oracle targets are validated against the actual `RuntimeTarget` set
+   (`host`, `strict-no-host`, `standalone`, `wasi`); unknown targets exit 2
+   before the program is touched.
+5. ABI export aliases are planned with their target index space; global
+   exports are materialized (`export let answer = 42`); any other space is a
+   located refusal at acceptance.
+6. Exception resources are derived at planning (bodies containing `throw` /
+   `try`): a local `__exn` tag, or the requested shared import; the resolver
+   provides `ensureExnTag`. `export function fail(): void { throw null; }`
+   must accept, emit and throw at runtime.
+7. The startup adapter is identified by construction ownership, not by
+   display name; a user body named `__module_init` replays.
+
+Also: WasmGC options carry no own `linear` property unless supplied.
+
+### Implementation Record — 2026-09-06 — package C increment 4: seven reproduced defects corrected (Claude)
+
+All seven items of the correction plan above landed, each with paired
+positive/negative regressions in `tests/issue-3518-program-codec-replay.test.ts`:
+
+1. `planPhysicalSetup` returns the plan through `freezePreparedIrValue` (deep-
+   frozen, null-prototype, nested arrays included); `acceptedPhysicalSetupPlan`
+   exposes that same object. Root's retarget of `main` to `special` now throws
+   `TypeError` in strict mode and `main()` stays 42.
+2. Acceptance and emission live in one module, `src/ir/program-consumer.ts`
+   (`src/ir/backend/program-consumer.ts` and `src/ir/program-emission.ts`
+   removed). The public surface is exactly `acceptPreparedIrProgram`,
+   `emitAcceptedIrProgram`, `isAuthenticAcceptedIrProgram`,
+   `acceptedPhysicalSetupPlan`, `emittedStartupAdapterIndex`; begin/finish no
+   longer exist. `emitted` is raised only after construction succeeded; a second
+   `emitAcceptedIrProgram` throws before any observation (pinned: exactly
+   `accepted, emission-started, emitted` per acceptance).
+3. `oracleValueProblem` (shared by the runner and `compareExports`) enforces the
+   exact value domain; `{}` and `{"$number":"not-a-number"}` are schema exit 2,
+   distinct from a mismatch (exit 1). Positive NaN and -0 rows added to the
+   synthetic fixture (now 6 bodies, 6 ABI export aliases).
+4. Targets are validated against the actual `RuntimeTarget` set; `wasmgc:bogus`
+   exits 2 without touching the program.
+5. Export aliases are planned with their canonical target's index space and
+   emitted as `func` or `global` exports; `export let answer: number = 42`
+   accepts, emits (start section + global export) and reads 42 on both backends.
+6. The plan derives `exceptionTag {required, shared}` from `throw`/`try` bodies
+   and the options; emission reserves a local `__exn` tag or the shared import
+   first and the resolver provides `ensureExnTag`. `export function fail(): void
+   { throw null; }` accepts, emits and throws a `WebAssembly.Exception` under
+   both tag modes.
+7. The startup adapter is identified by constructed identity
+   (`emittedStartupAdapterIndex`), never by name; a user body named
+   `__module_init` replays in-process on both backends and in the child, with a
+   real adapter present alongside it. A `deferred-export` adapter that would
+   collide with a user `__module_init` export is a planning gap.
+
+Also: WasmGC options carry no own `linear` key (`preparedIrDataMismatch` against
+the input options is undefined).
+
+**Measured (2026-09-06, vitest single file, load1 < 8): 27/27.** Synthetic
+fixture: 6/6 receipts = 6 module functions = 6 exports on both backends, 8
+oracle rows incl. NaN/-0. A-produced: two-source subset runs on both backends;
+`answer` global, `fail` throw (local and shared tag), `__module_init` user body
+each run on both backends; original mixed application still `unsupported` at
+wasmgc:host acceptance with the one async gap, linear typed gaps unchanged.
+Child replay: zero TypeScript/frontend modules; fail-closed controls for
+non-canonical bytes, oracle mismatch, forbidden import, and ten schema
+refusals. Typecheck 0; LOC/function/coercion/oracle/dead-exports gates OK;
+prettier/biome clean. Dependency `5c9fd95d` merged as `ea64ff08` (attributed).
+The three-source common fixture (`594eaf3f…`) and the full mixed application
+remain incomplete: runtime-callable providers (`__new_ReferenceError` declared
+by A, not yet physically materialized), scheduler/promise runtime, non-scalar
+carriers and linear memory plans are the open C steps.

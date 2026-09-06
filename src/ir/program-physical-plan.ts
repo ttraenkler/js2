@@ -6,11 +6,11 @@
 // Acceptance derives this plan from the program's authoritative ABI entries,
 // startup plans and the selected runtime projection — nothing else. It names
 // every physical resource emission will reserve (imports, globals, function
-// slots, exports, start adapter, shared exception tag) and, just as
-// importantly, every resource this increment cannot yet materialize. A gap is
-// a located, typed `unsupported` at ACCEPTANCE time; it is never a smaller
-// module. This module imports no backend, codegen or frontend code: it is pure
-// data over A's types so both acceptance and the fresh replay child can run it.
+// slots, exports with their index space, start adapter, exception tag) and,
+// just as importantly, every resource this increment cannot yet materialize.
+// A gap is a located, typed `unsupported` at ACCEPTANCE time; it is never a
+// smaller module. The returned plan is deep-frozen data over A's types; this
+// module imports no backend, codegen or frontend code.
 
 import { irGlobalBindingKey } from "./abi-bindings.js";
 import { irCallableBindingKey, irUnitCallableBindingId } from "./callable-bindings.js";
@@ -18,6 +18,7 @@ import type { IrBindingId, IrUnitId } from "./identity.js";
 import { forEachInstrDeep, type IrFunction, type IrType } from "./nodes.js";
 import type { IrPreparationFailure } from "./outcomes.js";
 import {
+  freezePreparedIrValue,
   preparedIrProgramOwner,
   PreparedIrProgramInvariantError,
   type PreparedIrAbiEntry,
@@ -61,6 +62,8 @@ export interface PhysicalImportedGlobal extends PhysicalDefinedGlobal {
 export interface PhysicalExport {
   readonly externalName: string;
   readonly targetBindingId: IrBindingId;
+  /** Index space of the canonical target, decided at planning. */
+  readonly space: "function" | "global";
 }
 
 export interface PhysicalStartup {
@@ -69,11 +72,18 @@ export interface PhysicalStartup {
   readonly adapter: "none" | "wasm-start" | "deferred-export";
 }
 
-/** Everything emission will reserve, in the order it will reserve it. */
+export interface PhysicalExceptionTag {
+  /** Some body throws or catches, so a `__exn` tag must exist. */
+  readonly required: boolean;
+  /** Requested by the options: import `env.__exn` instead of defining a local tag. */
+  readonly shared: boolean;
+}
+
+/** Everything emission will reserve, in the order it will reserve it. Deep-frozen. */
 export interface PhysicalSetupPlan {
   readonly backend: PreparedIrBackendOptions["backend"];
   readonly target: PreparedIrBackendOptions["target"];
-  readonly sharedExceptionTag: boolean;
+  readonly exceptionTag: PhysicalExceptionTag;
   readonly importedFunctions: readonly PhysicalImportedFunction[];
   readonly importedGlobals: readonly PhysicalImportedGlobal[];
   readonly definedGlobals: readonly PhysicalDefinedGlobal[];
@@ -106,11 +116,26 @@ class Gaps {
   }
 }
 
+/** Follow export aliases to the canonical required entry. */
+function canonicalEntry(
+  entries: ReadonlyMap<IrBindingId, PreparedIrAbiEntry>,
+  id: IrBindingId,
+): PreparedIrAbiEntry | undefined {
+  const seen = new Set<IrBindingId>();
+  let current = entries.get(id);
+  while (current && current.plan.slotPolicy === "alias" && !seen.has(current.plan.id)) {
+    seen.add(current.plan.id);
+    current = entries.get(current.plan.aliasOf);
+  }
+  return current;
+}
+
 /**
  * Derive the physical setup for one projection, or the first located gap.
  * Only scalar carriers, unit/import callables, source/import globals, export
- * aliases, wasm-start / deferred-export startup and the shared exception tag
- * are materializable in this increment; every other need is reported.
+ * aliases onto functions or globals, wasm-start / deferred-export startup and
+ * the `__exn` tag are materializable in this increment; every other need is
+ * reported.
  */
 export function planPhysicalSetup(
   program: PreparedIrProgram,
@@ -126,12 +151,12 @@ export function planPhysicalSetup(
     const out: ValType[] = [];
     for (const type of types) {
       const value = scalar(type);
-      if (!value)
+      if (!value) {
         gaps.add(
           `${where} carries non-scalar IR type ${typeLabel(type)}; physical carrier materialization is not available`,
           unitId,
         );
-      else out.push(value);
+      } else out.push(value);
     }
     return out;
   };
@@ -157,7 +182,7 @@ export function planPhysicalSetup(
     });
   }
 
-  // 2. Every other required slot: imports, globals, or a gap.
+  // 2. Every other required slot: imports, globals, or a gap. Exports are resolved to their space.
   const importedFunctions: PhysicalImportedFunction[] = [];
   const importedGlobals: PhysicalImportedGlobal[] = [];
   const definedGlobals: PhysicalDefinedGlobal[] = [];
@@ -165,18 +190,32 @@ export function planPhysicalSetup(
   for (const entry of program.abi.entries) {
     const { plan, contract } = entry;
     if (contract.kind === "export") {
-      exports.push({ externalName: contract.externalName, targetBindingId: contract.targetId });
+      const target = canonicalEntry(entries, contract.targetId);
+      if (!target || target.plan.slotPolicy !== "required") {
+        gaps.add(`export ${contract.externalName} does not resolve to a required binding`);
+      } else if (target.plan.slotSpace === "function" || target.plan.slotSpace === "global") {
+        exports.push({
+          externalName: contract.externalName,
+          targetBindingId: contract.targetId,
+          space: target.plan.slotSpace,
+        });
+      } else {
+        gaps.add(
+          `export ${contract.externalName} targets the ${target.plan.slotSpace} index space, which is not exportable`,
+        );
+      }
       continue;
     }
     if (plan.slotPolicy !== "required") continue;
     if (contract.kind === "callable") {
       const binding = contract.ref.binding;
       if (binding.kind === "unit") {
-        if (!bodies.has(binding.unitId))
+        if (!bodies.has(binding.unitId)) {
           gaps.add(
             `callable ${contract.ref.name} has no physical body in the ${options.backend}:${options.target} projection`,
             binding.unitId,
           );
+        }
         continue;
       }
       if (binding.kind === "import") {
@@ -223,13 +262,19 @@ export function planPhysicalSetup(
     }
     gaps.add(`support binding ${plan.id} (${contract.role}) needs runtime materialization`);
   }
+  const exportNames = new Set<string>();
+  for (const exported of exports) {
+    if (exportNames.has(exported.externalName)) gaps.add(`export ${exported.externalName} is declared twice`);
+    exportNames.add(exported.externalName);
+  }
 
-  // 3. Bodies may only reference what the plan reserves.
+  // 3. Bodies may only reference what the plan reserves; exception use is a reserved resource too.
   const reserved = new Set<string>([
     ...functions.map((slot) => irCallableBindingKey({ kind: "unit", unitId: slot.unitId })),
     ...importedFunctions.map((fn) => fn.referenceKey),
   ]);
   const reservedGlobals = new Set<string>([...importedGlobals, ...definedGlobals].map((global) => global.referenceKey));
+  let exceptionRequired = false;
   for (const fn of physical) {
     for (const buffer of [
       ...fn.blocks.map((block) => block.instrs),
@@ -265,6 +310,8 @@ export function planPhysicalSetup(
                 fn.unitId,
               );
             }
+          } else if (instruction.kind === "throw" || instruction.kind === "try") {
+            exceptionRequired = true;
           }
         });
       }
@@ -281,12 +328,16 @@ export function planPhysicalSetup(
     startupUnits.push(plan.unitId);
     const kind = plan.invocation.kind;
     if (kind === "wasm-start" || kind === "deferred-export") {
-      if (adapter !== "none" && adapter !== kind)
+      if (adapter !== "none" && adapter !== kind) {
         gaps.add(`startup sources disagree on the invocation adapter (${adapter} vs ${kind})`, plan.unitId);
+      }
       adapter = kind;
     } else {
       gaps.add(`startup adapter ${kind} is not materializable (only wasm-start and deferred-export)`, plan.unitId);
     }
+  }
+  if (adapter === "deferred-export" && exportNames.has("__module_init")) {
+    gaps.add("deferred startup export __module_init collides with a program export of the same name");
   }
 
   // 5. Linear physical needs beyond scalar bodies.
@@ -314,18 +365,17 @@ export function planPhysicalSetup(
     return Object.freeze({ ...failure, unitId: owner.unitId, location: owner.location, sourceFile: owner.sourceFile });
   }
 
-  return {
-    kind: "planned",
-    plan: Object.freeze({
-      backend: options.backend,
-      target: options.target,
-      sharedExceptionTag: options.sharedExceptionTag,
-      importedFunctions: Object.freeze(importedFunctions),
-      importedGlobals: Object.freeze(importedGlobals),
-      definedGlobals: Object.freeze(definedGlobals),
-      functions: Object.freeze(functions),
-      exports: Object.freeze(exports),
-      startup: Object.freeze({ units: Object.freeze(startupUnits), adapter }),
-    }),
+  const plan: PhysicalSetupPlan = {
+    backend: options.backend,
+    target: options.target,
+    exceptionTag: { required: exceptionRequired || options.sharedExceptionTag, shared: options.sharedExceptionTag },
+    importedFunctions,
+    importedGlobals,
+    definedGlobals,
+    functions,
+    exports,
+    startup: { units: startupUnits, adapter },
   };
+  // Deep-frozen, null-prototype copy: nested records and arrays included.
+  return { kind: "planned", plan: freezePreparedIrValue(plan) as PhysicalSetupPlan };
 }

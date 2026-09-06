@@ -5,33 +5,39 @@
 //   node --import tsx scripts/ir-whole-program-replay.mjs <encoded.json> <oracle.json> [--probe-forbidden-import]
 //
 // oracle.json: { "targets": [{ "backend", "target" }], "calls": [{ "export", "args", "expected" }] }
-// where `expected` is plain JSON or a codec-style tag ({"$bigint":"…"} / {"$number":"Infinity"}).
-// The oracle schema is validated before anything runs: targets must be a
-// nonempty array of unique backend/target pairs, calls a nonempty array whose
-// entries name an export string, an args array of finite numbers and an
-// expected value.
+//
+// Schema (validated BEFORE the program is touched; violations exit 2):
+//   - targets: nonempty, unique backend/target pairs; backend ∈ {wasmgc, linear};
+//     target ∈ the actual RuntimeTarget set {host, strict-no-host, standalone, wasi}
+//     (artifact target labels are a different domain and are not accepted here)
+//   - calls: nonempty; each names an export string, an args array of finite
+//     numbers, and an `expected` value in the exact oracle-value domain: JSON
+//     null / boolean / string / finite non-negative-zero number, or a single-key
+//     tag {"$bigint": "<canonical decimal>"} | {"$number": "-0"|"NaN"|"Infinity"|"-Infinity"}.
+//     A malformed value is a schema refusal, never a mismatch.
 //
 // The child decodes the bytes through the complete (re-authenticating) decode,
 // accepts and emits the SAME decoded object for every requested backend/target
 // through the consumer's one-argument emission, instantiates each module and
-// compares the program's own declared exports with the pinned oracle.
+// compares the program's own declared exports (functions called, globals read)
+// with the pinned oracle.
 //
 // Module boundary. A `node:module` resolve hook appends one line per
 // resolution — `{url, parent}` — synchronously to a census file BEFORE the
 // resolution result is returned to the importing thread. Every module this
 // process loads is therefore on disk before the import that loaded it settles,
 // so reading the file after the last await is a deterministic handshake: no
-// timer, no "late" records. The census must be nonempty (the hook saw the
-// codec import itself), and it must contain no TypeScript library, `ts-api`,
-// source frontend, checker, compiler, or frontend producer module.
-// `--probe-forbidden-import` deliberately imports the TypeScript shim after the
-// replay so the boundary check can be shown to fail closed.
+// timer, no "late" records. The census must contain the codec itself and no
+// TypeScript library, `ts-api`, source frontend, checker, compiler, or frontend
+// producer module. `--probe-forbidden-import` deliberately imports the
+// TypeScript shim after the replay so the boundary check can be shown to fail
+// closed.
 //
 // Exit 0 only when every target accepted, emitted a nonzero number of bodies
 // whose receipts equal both the projection's physical functions and the
-// module's owned functions, every oracle row matched, and the boundary held.
-// Any other outcome — including a physical capability gap — exits 1. Exit 2 is
-// usage / schema.
+// module's owned functions (the startup adapter is identified by construction
+// ownership, never by name), every oracle row matched, and the boundary held.
+// Any other outcome — including a physical capability gap — exits 1.
 
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { register } from "node:module";
@@ -103,11 +109,13 @@ if (!encodedPath || !oraclePath) {
   finish(2);
 }
 
-// --- oracle schema: refuse empty or duplicate work before touching the program ---
+// The value-domain validator is the same one the in-process comparison uses.
+const { compareExports, oracleValueProblem, replayOptions, replayProgram, RUNTIME_BACKENDS, RUNTIME_TARGETS } =
+  await import("../tests/helpers/ir-whole-program-replay.ts");
+
 function validateOracle(raw) {
   const problems = [];
   if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return ["oracle must be a JSON object"];
-  const backends = new Set(["wasmgc", "linear"]);
   if (!Array.isArray(raw.targets) || raw.targets.length === 0) problems.push("oracle.targets must be a nonempty array");
   else {
     const seen = new Set();
@@ -121,8 +129,12 @@ function validateOracle(raw) {
         problems.push(`oracle.targets[${index}] must name backend and target strings`);
         return;
       }
-      if (!backends.has(target.backend))
+      if (!RUNTIME_BACKENDS.includes(target.backend))
         problems.push(`oracle.targets[${index}].backend ${target.backend} is not a known backend`);
+      if (!RUNTIME_TARGETS.includes(target.target))
+        problems.push(
+          `oracle.targets[${index}].target ${target.target} is not a RuntimeTarget (${RUNTIME_TARGETS.join(", ")})`,
+        );
       const key = `${target.backend}:${target.target}`;
       if (seen.has(key)) problems.push(`oracle.targets repeats ${key}`);
       seen.add(key);
@@ -131,14 +143,19 @@ function validateOracle(raw) {
   if (!Array.isArray(raw.calls) || raw.calls.length === 0) problems.push("oracle.calls must be a nonempty array");
   else {
     raw.calls.forEach((call, index) => {
-      if (call === null || typeof call !== "object") problems.push(`oracle.calls[${index}] must be an object`);
+      if (call === null || typeof call !== "object" || Array.isArray(call)) {
+        problems.push(`oracle.calls[${index}] must be an object`);
+        return;
+      }
+      if (typeof call.export !== "string" || call.export.length === 0)
+        problems.push(`oracle.calls[${index}].export must be a nonempty string`);
+      if (!Array.isArray(call.args) || !call.args.every((arg) => typeof arg === "number" && Number.isFinite(arg))) {
+        problems.push(`oracle.calls[${index}].args must be an array of finite numbers`);
+      }
+      if (!Object.hasOwn(call, "expected")) problems.push(`oracle.calls[${index}] lacks an expected value`);
       else {
-        if (typeof call.export !== "string" || call.export.length === 0)
-          problems.push(`oracle.calls[${index}].export must be a nonempty string`);
-        if (!Array.isArray(call.args) || !call.args.every((arg) => typeof arg === "number" && Number.isFinite(arg))) {
-          problems.push(`oracle.calls[${index}].args must be an array of finite numbers`);
-        }
-        if (!("expected" in call)) problems.push(`oracle.calls[${index}] lacks an expected value`);
+        const problem = oracleValueProblem(call.expected);
+        if (problem) problems.push(`oracle.calls[${index}].expected is malformed: ${problem}`);
       }
     });
   }
@@ -163,7 +180,7 @@ if (oracleProblems.length > 0) {
 try {
   const { decodePreparedIrProgram, digestEncodedPreparedIrProgram, encodePreparedIrProgram } =
     await import("../src/ir/program-codec.ts");
-  const { compareExports, replayOptions, replayProgram } = await import("../tests/helpers/ir-whole-program-replay.ts");
+  const { emittedStartupAdapterIndex } = await import("../src/ir/program-consumer.ts");
 
   const text = readFileSync(encodedPath, "utf8");
   report.digest = digestEncodedPreparedIrProgram(text);
@@ -184,13 +201,18 @@ try {
       const rows = compareExports(run.exports, oracle.calls);
       const receipts = run.emitted.emittedUnitIds;
       const projection = run.accepted.runtime.prepared.functions.map((fn) => fn.unitId);
-      const ownedFunctions = run.emitted.module.functions.filter((fn) => fn.name !== "__module_init").length;
+      const adapterIndex = emittedStartupAdapterIndex(run.emitted);
+      const importedFunctions = run.emitted.module.imports.filter((entry) => entry.desc.kind === "func").length;
+      const ownedFunctions = run.emitted.module.functions.filter(
+        (_, position) => importedFunctions + position !== adapterIndex,
+      ).length;
       report.targets[key] = {
         kind: "ran",
         bytes: run.bytes,
         emittedUnits: receipts.length,
         projectionUnits: projection.length,
         moduleFunctions: run.emitted.module.functions.length,
+        startupAdapterIndex: adapterIndex,
         moduleExports: run.emitted.module.exports.length,
         rows,
       };

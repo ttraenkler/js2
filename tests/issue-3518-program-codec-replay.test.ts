@@ -5,7 +5,7 @@
 // setup), and fail-closed fresh-process replay.
 //
 // Denominators, kept separate on purpose:
-//   - synthetic complete fixture (tests/helpers/ir-whole-program-codec-fixture.ts)
+//   - synthetic complete fixture (tests/helpers/ir-whole-program-codec-fixture.ts): 6 bodies
 //   - codec data-model probes on that fixture's container (data-level decode)
 //   - A-produced programs from source through `prepareWholeIrProgram`
 
@@ -19,11 +19,6 @@ import { analyzeMultiSource } from "../src/checker/index.js";
 import { createIrClassId, createIrSourceId } from "../src/ir/identity.js";
 import { IR_CLASS_SHAPE_CELL, irVal, type IrClassShape, type IrInstr, type IrType } from "../src/ir/nodes.js";
 import {
-  acceptedPhysicalSetupPlan,
-  acceptPreparedIrProgram,
-  isAuthenticAcceptedIrProgram,
-} from "../src/ir/backend/program-consumer.js";
-import {
   assertPreparedIrProgramShape,
   decodePreparedIrProgram,
   decodePreparedIrProgramData,
@@ -32,7 +27,14 @@ import {
   PREPARED_IR_PROGRAM_CODEC,
   PREPARED_IR_PROGRAM_SCHEMA,
 } from "../src/ir/program-codec.js";
-import { emitAcceptedIrProgram } from "../src/ir/program-emission.js";
+import * as consumer from "../src/ir/program-consumer.js";
+import {
+  acceptedPhysicalSetupPlan,
+  acceptPreparedIrProgram,
+  emitAcceptedIrProgram,
+  emittedStartupAdapterIndex,
+  isAuthenticAcceptedIrProgram,
+} from "../src/ir/program-consumer.js";
 import { subscribePreparedIrProgram } from "../src/ir/program-observation.js";
 import { prepareWholeIrProgram } from "../src/ir/program-preparation.js";
 import {
@@ -43,7 +45,13 @@ import {
   type PreparedIrProgram,
 } from "../src/ir/program.js";
 import { buildCodecFixture, CODEC_FIXTURE_ORACLE } from "./helpers/ir-whole-program-codec-fixture.js";
-import { compareExports, replayOptions, replayProgram, type OracleCall } from "./helpers/ir-whole-program-replay.js";
+import {
+  compareExports,
+  oracleValueProblem,
+  replayOptions,
+  replayProgram,
+  type OracleCall,
+} from "./helpers/ir-whole-program-replay.js";
 
 const REPO_ROOT = resolve(import.meta.dirname, "..");
 
@@ -88,6 +96,7 @@ function constants(fn: { readonly blocks: readonly { readonly instrs: readonly I
 }
 
 const ORACLE_CALLS = CODEC_FIXTURE_ORACLE.calls as readonly OracleCall[];
+const FIXTURE_BODIES = 6;
 
 function expectOracle(exports: WebAssembly.Exports, label: string): void {
   const rows = compareExports(exports, ORACLE_CALLS);
@@ -99,6 +108,40 @@ function expectOracle(exports: WebAssembly.Exports, label: string): void {
   }
 }
 
+const BOTH_BACKENDS = [
+  { target: "host", backend: "wasmgc" },
+  { target: "host", backend: "linear" },
+] as const;
+
+function prepare(
+  files: Record<string, string>,
+  runtimePolicies: readonly { target: "host"; backend: "wasmgc" | "linear" }[] = BOTH_BACKENDS,
+) {
+  const ast = analyzeMultiSource(files, "./entry.ts");
+  return prepareWholeIrProgram({
+    sourceFiles: ast.sourceFiles,
+    entrySource: ast.entryFile,
+    checker: ast.checker,
+    policy: { target: "host", backend: "wasmgc" },
+    runtimePolicies,
+    deferTopLevelInit: false,
+  });
+}
+
+function preparedProgram(
+  files: Record<string, string>,
+  policies = BOTH_BACKENDS as readonly { target: "host"; backend: "wasmgc" | "linear" }[],
+): PreparedIrProgram {
+  const result = prepare(files, policies);
+  if (result.kind !== "prepared")
+    throw new Error(`${result.kind} ${result.code}: ${result.detail} @ ${result.sourceFile}`);
+  const encoded = encodePreparedIrProgram(result.program);
+  const decoded = decodePreparedIrProgram(encoded);
+  expect(encodePreparedIrProgram(decoded)).toBe(encoded);
+  expect(preparedIrDataMismatch(result.program, decoded)).toBeUndefined();
+  return decoded;
+}
+
 describe("#3518 C — PreparedIrProgram codec (synthetic complete fixture)", () => {
   const fixture = buildCodecFixture();
   const encoded = encodePreparedIrProgram(fixture.program);
@@ -107,12 +150,12 @@ describe("#3518 C — PreparedIrProgram codec (synthetic complete fixture)", () 
     const decoded = decodePreparedIrProgram(encoded);
     expect(decoded).not.toBe(fixture.program);
     expect(Object.isFrozen(decoded)).toBe(true);
-    // Same shape AND same bytes: the data check is not a stand-in for the byte check or vice versa.
     expect(preparedIrDataMismatch(fixture.program, decoded)).toBeUndefined();
     expect(encodePreparedIrProgram(decoded)).toBe(encoded);
     expect(digestEncodedPreparedIrProgram(encodePreparedIrProgram(decoded))).toBe(
       digestEncodedPreparedIrProgram(encoded),
     );
+    expect(decoded.ir.functions).toHaveLength(FIXTURE_BODIES);
     expect(decoded.runtime.map((projection) => `${projection.backend}:${projection.target}`)).toEqual([
       "wasmgc:host",
       "linear:host",
@@ -130,6 +173,8 @@ describe("#3518 C — PreparedIrProgram codec (synthetic complete fixture)", () 
     const values = constants(special).map((instr) => (instr as { value: { value: unknown } }).value.value);
     expect(values.some((value) => Object.is(value, -0))).toBe(true);
     expect(values.some((value) => value === Number.POSITIVE_INFINITY)).toBe(true);
+    const nan = decoded.ir.functions.find((fn) => fn.name === "nan")!;
+    expect(constants(nan).map((instr) => (instr as { value: { value: unknown } }).value.value)).toEqual([Number.NaN]);
     const big = decoded.ir.functions.find((fn) => fn.name === "big")!;
     expect(constants(big).map((instr) => (instr as { value: { value: unknown } }).value.value)).toEqual([
       9007199254740993n,
@@ -146,6 +191,7 @@ describe("#3518 C — PreparedIrProgram codec (synthetic complete fixture)", () 
     expect(envelope.codec).toBe(PREPARED_IR_PROGRAM_CODEC);
     expect(envelope.schema).toBe(PREPARED_IR_PROGRAM_SCHEMA);
     expect(encoded).toContain('{"$number":"-0"}');
+    expect(encoded).toContain('{"$number":"NaN"}');
     expect(encoded).toContain('{"$number":"Infinity"}');
     expect(encoded).toContain('{"$bigint":"9007199254740993"}');
     expect(encoded).toContain('{"$undefined":true}');
@@ -158,7 +204,6 @@ describe("#3518 C — PreparedIrProgram codec (synthetic complete fixture)", () 
   it("refuses non-canonical, malformed and unknown bytes before returning anything", () => {
     expectInvalid(() => decodePreparedIrProgramData(encoded.slice(0, encoded.length - 20)), /not valid JSON/);
     expectInvalid(() => decodePreparedIrProgramData("[]"), /must be a JSON object/);
-    // Probe cases from the independent review:
     expectInvalid(() => decodePreparedIrProgramData(` ${encoded}`), /not canonical \(first difference at byte 0\)/);
     expectInvalid(() => decodePreparedIrProgramData(`${encoded}\n`), /not canonical/);
     expectInvalid(
@@ -197,7 +242,6 @@ describe("#3518 C — PreparedIrProgram codec (synthetic complete fixture)", () 
       /does not name an enclosing class shape/,
     );
     expectInvalid(
-      // JSON.stringify cannot spell -0, so tamper the bytes directly.
       () => decodePreparedIrProgramData(encoded.replace(/"valueCount":\d+/, '"valueCount":-0')),
       /-0 must be spelled/,
     );
@@ -239,7 +283,7 @@ describe("#3518 C — PreparedIrProgram codec (synthetic complete fixture)", () 
             (at(e, "program", "inventory").terminalUnits as unknown[]).pop();
           }),
         ),
-      /program\.units holds 4 units but the inventory has 3 terminals/,
+      /program\.units holds 6 units but the inventory has 5 terminals/,
     );
   });
 
@@ -269,18 +313,15 @@ describe("#3518 C — PreparedIrProgram codec (synthetic complete fixture)", () 
   });
 
   it("rejects persisted runtime claims that contradict the regenerated projection", () => {
-    // A persisted manifest record is data; its regenerated twin must agree field for field.
     const featureTampered = tamper(encoded, (e) => {
       const manifest = at(e, "program", "runtime", 0, "prepared", "manifest");
       (manifest.features as unknown[]).push("string.compare.native");
     });
     expectInvalid(() => decodePreparedIrProgram(featureTampered), /contradicts the regenerated runtime at/);
-    // Dropping a physical body from a projection is a contradiction, not a smaller program.
     const bodyDropped = tamper(encoded, (e) => {
       (at(e, "program", "runtime", 0, "prepared").functions as unknown[]).pop();
     });
     expectInvalid(() => decodePreparedIrProgram(bodyDropped), /contradicts the regenerated runtime|is missing body/);
-    // The data-level decode preserves such claims verbatim; only re-authentication refuses them.
     expect(decodePreparedIrProgramData(featureTampered).runtime[0]!.prepared.manifest.features).toContain(
       "string.compare.native",
     );
@@ -290,7 +331,6 @@ describe("#3518 C — PreparedIrProgram codec (synthetic complete fixture)", () 
 describe("#3518 C — codec data-model probes (data-level decode)", () => {
   const fixture = buildCodecFixture();
 
-  /** Probe records ride inside `inventory.classes`, which the structural shape check only requires to be an array. */
   function withProbe(...records: unknown[]): PreparedIrProgram {
     return freezePreparedIrValue({
       ...fixture.program,
@@ -376,7 +416,6 @@ describe("#3518 C — codec data-model probes (data-level decode)", () => {
     expect(probe[3]).toBeNull();
     expect(encodePreparedIrProgram(decoded)).toBe(encoded);
     expect(preparedIrDataMismatch(program, decoded)).toBeUndefined();
-    // A hole is not a legal record field.
     expectInvalid(
       () => decodePreparedIrProgramData(encoded.replace('"classes":[', '"classes":[{"h":{"$hole":true}},')),
       /cannot be a hole/,
@@ -414,26 +453,24 @@ describe("#3518 C — backend consumer (accept / one-argument emit)", () => {
         expect(run.accepted.program).toBe(decoded);
         const projection = run.accepted.runtime.prepared.functions.map((fn) => fn.unitId);
         expect(run.emitted.emittedUnitIds).toEqual(projection);
-        // Actual construction accounting: one module function per receipt, one export per ABI alias-free export.
-        expect(run.emitted.module.functions).toHaveLength(4);
-        expect(run.emitted.module.functions.map((fn) => fn.body.length > 0)).toEqual([true, true, true, true]);
+        expect(run.emitted.module.functions).toHaveLength(FIXTURE_BODIES);
+        expect(run.emitted.module.functions.every((fn) => fn.body.length > 0)).toBe(true);
         expect(run.emitted.module.exports.map((entry) => entry.name).sort()).toEqual([
           "big",
           "helper",
           "main",
+          "nan",
+          "negZero",
           "special",
         ]);
         expect(run.emitted.module.imports).toHaveLength(0);
         expect(run.emitted.module.startFuncIdx).toBeUndefined();
-        const plan = acceptedPhysicalSetupPlan(run.accepted);
-        expect(plan.functions.map((slot) => slot.unitId)).toEqual(projection);
-        expect(plan.exports.map((entry) => entry.externalName).sort()).toEqual(["big", "helper", "main", "special"]);
+        expect(emittedStartupAdapterIndex(run.emitted)).toBeUndefined();
         expectOracle(run.exports, backend);
       }
     } finally {
       unsubscribe();
     }
-    // C owns phase accounting: exactly one accepted / emission-started / emitted per acceptance.
     expect(phases).toEqual([
       "wasmgc:accepted",
       "wasmgc:emission-started",
@@ -442,6 +479,68 @@ describe("#3518 C — backend consumer (accept / one-argument emit)", () => {
       "linear:emission-started",
       "linear:emitted",
     ]);
+  });
+
+  it("[defect 1] the exposed physical plan is deep-frozen and cannot change emitted output", async () => {
+    const acceptance = acceptPreparedIrProgram(decoded, replayOptions("wasmgc"));
+    expect(acceptance.kind).toBe("accepted");
+    if (acceptance.kind !== "accepted") return;
+    const plan = acceptedPhysicalSetupPlan(acceptance);
+    const special = plan.exports.find((entry) => entry.externalName === "special")!;
+    const main = plan.exports.find((entry) => entry.externalName === "main")!;
+    expect(Object.isFrozen(plan)).toBe(true);
+    expect(Object.isFrozen(plan.exports)).toBe(true);
+    expect(Object.isFrozen(main)).toBe(true);
+    expect(Object.isFrozen(plan.functions[0]!.params)).toBe(true);
+    // Root's reproduction: retarget `main` at `special`. Strict-mode assignment to a frozen record throws...
+    expect(() => {
+      (main as { targetBindingId: string }).targetBindingId = special.targetBindingId;
+    }).toThrow(TypeError);
+    expect(() => {
+      (plan.exports as unknown as unknown[]).push({});
+    }).toThrow(TypeError);
+    expect(() => {
+      (plan.functions[0]!.params as unknown as unknown[]).length = 0;
+    }).toThrow(TypeError);
+    // ...and the plan emission reads is the same object, so `main()` is still 42, never Infinity.
+    expect(main.targetBindingId).not.toBe(special.targetBindingId);
+    const emitted = emitAcceptedIrProgram(acceptance);
+    const { instance } = await WebAssembly.instantiate(
+      (await import("../src/emit/binary.js")).emitBinary(emitted.module),
+    );
+    expect((instance.exports as { main: () => number }).main()).toBe(42);
+  });
+
+  it("[defect 2] emission transitions are private: no forged completion, no repeated emitted event", async () => {
+    const surface = consumer as Record<string, unknown>;
+    expect(surface.beginAcceptedIrProgramEmission).toBeUndefined();
+    expect(surface.finishAcceptedIrProgramEmission).toBeUndefined();
+    expect(Object.keys(consumer).sort()).toEqual([
+      "acceptPreparedIrProgram",
+      "acceptedPhysicalSetupPlan",
+      "emitAcceptedIrProgram",
+      "emittedStartupAdapterIndex",
+      "isAuthenticAcceptedIrProgram",
+    ]);
+    const phases: string[] = [];
+    const unsubscribe = subscribePreparedIrProgram((event) => {
+      if (event.program === decoded) phases.push(event.phase);
+    });
+    try {
+      const outcome = await replayProgram(decoded, replayOptions("wasmgc"));
+      expect(outcome.kind).toBe("ran");
+      if (outcome.kind !== "ran") return;
+      const accepted = outcome.run.accepted;
+      expect(isAuthenticAcceptedIrProgram(accepted)).toBe(true);
+      const forged = { ...accepted } as AcceptedPreparedIrProgram;
+      expect(isAuthenticAcceptedIrProgram(forged)).toBe(false);
+      expectInvalid(() => emitAcceptedIrProgram(forged), /not produced by acceptPreparedIrProgram/);
+      expectInvalid(() => emitAcceptedIrProgram(accepted), /already emitted/);
+      expectInvalid(() => emitAcceptedIrProgram(accepted), /already emitted/);
+    } finally {
+      unsubscribe();
+    }
+    expect(phases).toEqual(["accepted", "emission-started", "emitted"]);
   });
 
   it("fails typed, located and before emission when the program has no projection for the backend/target", () => {
@@ -457,35 +556,44 @@ describe("#3518 C — backend consumer (accept / one-argument emit)", () => {
     expect(outcome.unitId).toBe(fixture.program.ir.functions[0]!.unitId);
   });
 
-  it("refuses to emit a forged or cloned acceptance and refuses a second emission", async () => {
-    const outcome = await replayProgram(decoded, replayOptions("wasmgc"));
-    expect(outcome.kind).toBe("ran");
-    if (outcome.kind !== "ran") return;
-    const accepted = outcome.run.accepted;
-    expect(isAuthenticAcceptedIrProgram(accepted)).toBe(true);
-    const forged = { ...accepted } as AcceptedPreparedIrProgram;
-    expect(isAuthenticAcceptedIrProgram(forged)).toBe(false);
-    expectInvalid(() => emitAcceptedIrProgram(forged), /not produced by acceptPreparedIrProgram/);
-    expectInvalid(() => emitAcceptedIrProgram(accepted), /already emitted/);
-  });
-
-  it("reserves the shared exception tag as the first physical resource when requested", () => {
+  it("reserves a requested shared exception tag as the first physical resource", () => {
     const acceptance = acceptPreparedIrProgram(decoded, { ...replayOptions("wasmgc"), sharedExceptionTag: true });
     expect(acceptance.kind).toBe("accepted");
     if (acceptance.kind !== "accepted") return;
-    expect(acceptedPhysicalSetupPlan(acceptance).sharedExceptionTag).toBe(true);
+    expect(acceptedPhysicalSetupPlan(acceptance).exceptionTag).toEqual({ required: true, shared: true });
     const emitted = emitAcceptedIrProgram(acceptance);
     const tags = emitted.module.imports.filter((entry) => entry.desc.kind === "tag");
     expect(tags).toHaveLength(1);
     expect(tags[0]).toMatchObject({ module: "env", name: "__exn" });
-    expect(emitted.module.imports[0]).toBe(tags[0]); // reserved before every other physical resource
-    expect(emitted.emittedUnitIds).toHaveLength(4);
+    expect(emitted.module.imports[0]).toBe(tags[0]);
+    expect(emitted.module.tags).toHaveLength(0);
+    expect(emitted.emittedUnitIds).toHaveLength(FIXTURE_BODIES);
   });
 
-  it("refuses linear physical options on a non-linear backend", () => {
+  it("refuses linear physical options on a non-linear backend and adds no own `linear` key otherwise", () => {
     expectInvalid(
       () => acceptPreparedIrProgram(decoded, { ...replayOptions("wasmgc"), linear: { exposeArenaReset: true } }),
       /linear physical options were supplied for backend wasmgc/,
+    );
+    const acceptance = acceptPreparedIrProgram(decoded, replayOptions("wasmgc"));
+    expect(acceptance.kind).toBe("accepted");
+    if (acceptance.kind !== "accepted") return;
+    expect(Object.hasOwn(acceptance.options, "linear")).toBe(false);
+    expect(preparedIrDataMismatch(replayOptions("wasmgc"), acceptance.options)).toBeUndefined();
+  });
+
+  it("[defect 3] validates the oracle value domain in-process before comparing", () => {
+    expect(oracleValueProblem({})).toMatch(/exactly one key/);
+    expect(oracleValueProblem({ $number: "not-a-number" })).toMatch(/one of -0, NaN, Infinity, -Infinity/);
+    expect(oracleValueProblem({ $bigint: "01" })).toMatch(/canonical decimal/);
+    expect(oracleValueProblem({ $weird: 1 })).toMatch(/unknown expected-value tag/);
+    expect(oracleValueProblem([1])).toMatch(/single-key tag/);
+    expect(oracleValueProblem(-0)).toMatch(/\$number tag/);
+    for (const good of [42, true, "x", null, { $number: "NaN" }, { $number: "-0" }, { $bigint: "-7" }]) {
+      expect(oracleValueProblem(good), JSON.stringify(good)).toBeUndefined();
+    }
+    expect(() => compareExports({}, [{ export: "nan", args: [], expected: {} as never }])).toThrow(
+      /malformed oracle value/,
     );
   });
 });
@@ -501,40 +609,10 @@ describe("#3518 C — A-produced programs from source", () => {
     "./entry.ts":
       '\n    import { left } from "./a";\n    import { right } from "./b";\n    let phase: number = 0;\n    export function initial(): number { return left * 100 + right; }\n    export function readPhase(): number { return phase; }\n    function compute(seed: number): number {\n      let total = 0;\n      for (let i = 0; i < 4; i++) {\n        if (i % 2 === 0) total = total + Math.imul(seed, i + 1);\n        else total = total - i;\n      }\n      return total;\n    }\n    \n  export async function run(seed: number): Promise<number> {\n    phase = 1;\n    const first = await (seed + 1);\n    phase = 2;\n    const second = await compute(first);\n    phase = 3;\n    return second + initial();\n  }\n\n  ',
   };
-  /** D's pinned source digest for the original mixed application (tests/fixtures/ir-whole-program/original-async-mixed). */
   const ORIGINAL_MIXED_DIGEST = "236fa7d971bf9b86aafa778a9a441b2440bae2e2c2c0ae7fdab3f6e517c517fb";
 
-  const BOTH_BACKENDS = [
-    { target: "host", backend: "wasmgc" },
-    { target: "host", backend: "linear" },
-  ] as const;
-
-  function prepare(
-    files: Record<string, string>,
-    runtimePolicies: readonly { target: "host"; backend: "wasmgc" | "linear" }[] = BOTH_BACKENDS,
-  ) {
-    const ast = analyzeMultiSource(files, "./entry.ts");
-    return prepareWholeIrProgram({
-      sourceFiles: ast.sourceFiles,
-      entrySource: ast.entryFile,
-      checker: ast.checker,
-      policy: { target: "host", backend: "wasmgc" },
-      runtimePolicies,
-      deferTopLevelInit: false,
-    });
-  }
-
   it("common backend subset: A's program survives codec replay and runs on both backends through internal emission", async () => {
-    const result = prepare(COMMON_SUBSET);
-    expect(result.kind, result.kind === "prepared" ? "" : `${result.kind} ${result.code}: ${result.detail}`).toBe(
-      "prepared",
-    );
-    if (result.kind !== "prepared") return;
-    const encoded = encodePreparedIrProgram(result.program);
-    const decoded = decodePreparedIrProgram(encoded);
-    expect(encodePreparedIrProgram(decoded)).toBe(encoded);
-    expect(preparedIrDataMismatch(result.program, decoded)).toBeUndefined();
-    // `double` is exported by math.ts, not by the entry module, so it is a body but not a module export.
+    const decoded = preparedProgram(COMMON_SUBSET);
     expect(decoded.ir.functions.map((fn) => fn.name)).toEqual(expect.arrayContaining(["double", "main"]));
     const calls: OracleCall[] = [{ export: "main", args: [], expected: 42 }];
     for (const backend of ["wasmgc", "linear"] as const) {
@@ -545,46 +623,69 @@ describe("#3518 C — A-produced programs from source", () => {
         outcome.run.accepted.runtime.prepared.functions.map((fn) => fn.unitId),
       );
       expect(outcome.run.emitted.module.exports.map((entry) => entry.name)).toContain("main");
-      const rows = compareExports(outcome.run.exports, calls);
-      for (const row of rows) {
+      for (const row of compareExports(outcome.run.exports, calls)) {
         expect(row.match, `${backend}: ${row.export} = ${row.actual}, expected ${row.expected}`).toBe(true);
       }
     }
   });
 
-  it("original mixed application: exact pinned sources, codec-identical, physical gaps reported at acceptance", () => {
-    const candidates = {
-      json: createHash("sha256").update(JSON.stringify(ORIGINAL_MIXED)).digest("hex"),
-    };
-    expect(candidates.json, "D's pinned digest is sha256(JSON.stringify(files))").toBe(ORIGINAL_MIXED_DIGEST);
+  it("[defect 5] an exported scalar global is planned in the global index space and materialized", async () => {
+    const decoded = preparedProgram({ "./entry.ts": "export let answer: number = 42;" });
+    for (const backend of ["wasmgc", "linear"] as const) {
+      const outcome = await replayProgram(decoded, replayOptions(backend));
+      expect(outcome.kind, `${backend}: ${outcome.kind === "ran" ? "" : JSON.stringify(outcome, null, 1)}`).toBe("ran");
+      if (outcome.kind !== "ran") return;
+      const plan = acceptedPhysicalSetupPlan(outcome.run.accepted);
+      expect(plan.exports.find((entry) => entry.externalName === "answer")?.space).toBe("global");
+      expect(plan.startup.adapter).toBe("wasm-start");
+      expect(plan.startup.units).toHaveLength(1);
+      const adapter = emittedStartupAdapterIndex(outcome.run.emitted);
+      expect(adapter).toBe(outcome.run.emitted.module.startFuncIdx);
+      expect(outcome.run.emitted.module.exports).toContainEqual({ name: "answer", desc: { kind: "global", index: 0 } });
+      const rows = compareExports(outcome.run.exports, [{ export: "answer", args: [], expected: 42 }]);
+      expect(rows[0]!.match, `${backend}: answer = ${rows[0]!.actual}`).toBe(true);
+    }
+  });
 
-    // Requesting a linear projection for the async application is a typed, located capability gap
-    // at preparation time (B's runtime has no linear Promise adapter) — recorded, not worked around.
+  it("[defect 6] a throwing body reserves the __exn tag at acceptance (local or requested shared) and throws at runtime", async () => {
+    const decoded = preparedProgram({ "./entry.ts": "export function fail(): void { throw null; }" });
+    for (const shared of [false, true]) {
+      const outcome = await replayProgram(decoded, { ...replayOptions("wasmgc"), sharedExceptionTag: shared });
+      expect(outcome.kind, `shared=${shared}: ${outcome.kind === "ran" ? "" : JSON.stringify(outcome, null, 1)}`).toBe(
+        "ran",
+      );
+      if (outcome.kind !== "ran") return;
+      expect(acceptedPhysicalSetupPlan(outcome.run.accepted).exceptionTag).toEqual({ required: true, shared });
+      const importedTags = outcome.run.emitted.module.imports.filter((entry) => entry.desc.kind === "tag");
+      expect(importedTags).toHaveLength(shared ? 1 : 0);
+      expect(outcome.run.emitted.module.tags).toHaveLength(shared ? 0 : 1);
+      expect(() => (outcome.run.exports as { fail: () => void }).fail()).toThrow(WebAssembly.Exception);
+    }
+  });
+
+  it("[defect 7] a user body named __module_init replays; the adapter is identified by construction, not by name", async () => {
+    const decoded = preparedProgram({ "./entry.ts": "export function __module_init(): number { return 42; }" });
+    for (const backend of ["wasmgc", "linear"] as const) {
+      const outcome = await replayProgram(decoded, replayOptions(backend));
+      expect(outcome.kind, `${backend}: ${outcome.kind === "ran" ? "" : JSON.stringify(outcome, null, 1)}`).toBe("ran");
+      if (outcome.kind !== "ran") return;
+      expect(emittedStartupAdapterIndex(outcome.run.emitted)).toBeUndefined();
+      expect(outcome.run.emitted.emittedUnitIds).toHaveLength(outcome.run.emitted.module.functions.length);
+      const rows = compareExports(outcome.run.exports, [{ export: "__module_init", args: [], expected: 42 }]);
+      expect(rows[0]!.match).toBe(true);
+    }
+  });
+
+  it("original mixed application: exact pinned sources, codec-identical, physical gaps reported at acceptance", () => {
+    expect(createHash("sha256").update(JSON.stringify(ORIGINAL_MIXED)).digest("hex")).toBe(ORIGINAL_MIXED_DIGEST);
     const withLinear = prepare(ORIGINAL_MIXED);
     expect(withLinear.kind).toBe("unsupported");
     if (withLinear.kind === "unsupported") {
       expect(withLinear.detail).toMatch(/promise\.capability\.create has no linear adapter/);
       expect(withLinear.sourceFile).toBe("entry.ts");
     }
-
-    const result = prepare(ORIGINAL_MIXED, [{ target: "host", backend: "wasmgc" }]);
-    expect(
-      result.kind,
-      result.kind === "prepared" ? "" : `${result.kind} ${result.code}: ${result.detail} @ ${result.sourceFile}`,
-    ).toBe("prepared");
-    if (result.kind !== "prepared") return;
-    expect(result.program.inventory.terminalUnits).toHaveLength(7);
-    expect(result.program.runtime.map((projection) => `${projection.backend}:${projection.target}`)).toEqual([
-      "wasmgc:host",
-    ]);
-    const encoded = encodePreparedIrProgram(result.program);
-    const decoded = decodePreparedIrProgram(encoded);
-    expect(encodePreparedIrProgram(decoded)).toBe(encoded);
-    expect(preparedIrDataMismatch(result.program, decoded)).toBeUndefined();
-
-    // Acceptance now includes the physical setup plan: the Promise/scheduler runtime and the async
-    // body are not materializable in this increment, so the whole application is a located typed
-    // gap at acceptance — never a smaller module.
+    const decoded = preparedProgram(ORIGINAL_MIXED, [{ target: "host", backend: "wasmgc" }]);
+    expect(decoded.inventory.terminalUnits).toHaveLength(7);
     const wasmgc = acceptPreparedIrProgram(decoded, replayOptions("wasmgc"));
     expect(wasmgc.kind).toBe("unsupported");
     if (wasmgc.kind === "unsupported") {
@@ -619,22 +720,24 @@ describe("#3518 C — fresh-process replay", () => {
     failures: string[];
     targets: Record<
       string,
-      { kind: string; emittedUnits?: number; moduleFunctions?: number; rows?: { match: boolean }[] }
+      {
+        kind: string;
+        emittedUnits?: number;
+        moduleFunctions?: number;
+        startupAdapterIndex?: number;
+        rows?: { match: boolean }[];
+      }
     >;
     frontendModules: string[];
     typescriptModules: string[];
     loadedModuleCount: number;
   };
+  type Runner = (args: string[]) => { status: number | null; stdout: string; stderr: string; report: Report };
 
-  function withFiles(
-    run: (
-      dir: string,
-      run: (args: string[]) => { status: number | null; stdout: string; stderr: string; report: Report },
-    ) => void,
-  ) {
+  function withFiles(body: (dir: string, run: Runner) => void) {
     const dir = mkdtempSync(join(tmpdir(), "ir-whole-program-replay-"));
     try {
-      run(dir, (args) => {
+      body(dir, (args) => {
         const child = spawnSync(process.execPath, ["--import", "tsx", "scripts/ir-whole-program-replay.mjs", ...args], {
           cwd: REPO_ROOT,
           encoding: "utf8",
@@ -648,7 +751,7 @@ describe("#3518 C — fresh-process replay", () => {
     }
   }
 
-  it("replays the program in a child that loads no TypeScript or source frontend", () => {
+  it("replays the program in a child that loads no TypeScript or source frontend (NaN/-0/bigint/Infinity rows)", () => {
     withFiles((dir, run) => {
       const file = join(dir, "program.json");
       const oracleFile = join(dir, "oracle.json");
@@ -667,9 +770,10 @@ describe("#3518 C — fresh-process replay", () => {
       for (const key of ["wasmgc:host", "linear:host"]) {
         const target = report.targets[key]!;
         expect(target.kind, `${key}: ${summary}`).toBe("ran");
-        expect(target.emittedUnits).toBe(4);
-        expect(target.moduleFunctions).toBe(4);
-        expect(target.rows?.length).toBe(4);
+        expect(target.emittedUnits).toBe(FIXTURE_BODIES);
+        expect(target.moduleFunctions).toBe(FIXTURE_BODIES);
+        expect(target.startupAdapterIndex).toBeUndefined();
+        expect(target.rows?.length).toBe(CODEC_FIXTURE_ORACLE.calls.length);
         expect(target.rows?.every((row) => row.match)).toBe(true);
       }
       expect(report.frontendModules, summary).toEqual([]);
@@ -677,6 +781,38 @@ describe("#3518 C — fresh-process replay", () => {
       expect(report.failures, summary).toEqual([]);
       expect(report.ok, summary).toBe(true);
       expect(status, stderr).toBe(0);
+    });
+  });
+
+  it("[defect 7] replays an A-produced program whose user body is named __module_init, with a real startup adapter present", () => {
+    withFiles((dir, run) => {
+      const file = join(dir, "program.json");
+      const oracleFile = join(dir, "oracle.json");
+      const program = preparedProgram({
+        "./entry.ts": "export let answer: number = 42; export function __module_init(): number { return 7; }",
+      });
+      writeFileSync(file, encodePreparedIrProgram(program));
+      writeFileSync(
+        oracleFile,
+        JSON.stringify({
+          targets: BOTH,
+          calls: [
+            { export: "answer", args: [], expected: 42 },
+            { export: "__module_init", args: [], expected: 7 },
+          ],
+        }),
+      );
+      const { status, report } = run([file, oracleFile]);
+      const summary = JSON.stringify(report.failures);
+      for (const key of ["wasmgc:host", "linear:host"]) {
+        const target = report.targets[key]!;
+        expect(target.kind, `${key}: ${summary}`).toBe("ran");
+        expect(target.startupAdapterIndex).toBeTypeOf("number");
+        expect(target.moduleFunctions).toBe((target.emittedUnits ?? 0) + 1);
+        expect(target.rows?.every((row) => row.match)).toBe(true);
+      }
+      expect(report.ok, summary).toBe(true);
+      expect(status, summary).toBe(0);
     });
   });
 
@@ -704,30 +840,32 @@ describe("#3518 C — fresh-process replay", () => {
       writeFileSync(oracleFile, JSON.stringify({ targets: BOTH, calls: CODEC_FIXTURE_ORACLE.calls }));
       const probed = run([file, oracleFile, "--probe-forbidden-import"]);
       expect(probed.status).toBe(1);
-      expect(probed.report.targets["wasmgc:host"]?.kind).toBe("ran"); // the replay itself was fine…
-      expect(probed.report.typescriptModules.length).toBeGreaterThan(0); // …the boundary check is what failed
+      expect(probed.report.targets["wasmgc:host"]?.kind).toBe("ran");
+      expect(probed.report.typescriptModules.length).toBeGreaterThan(0);
       expect(probed.report.typescriptModules.join("\n")).toMatch(/src\/ts-api\./);
       expect(probed.report.failures.some((f) => /TypeScript modules were loaded/.test(f))).toBe(true);
     });
   });
 
-  it("refuses empty, duplicate or malformed oracle work before touching the program", () => {
+  it("[defects 3, 4] refuses empty, duplicate, unknown-target or malformed-value oracle work before touching the program", () => {
     withFiles((dir, run) => {
       const file = join(dir, "program.json");
       const oracleFile = join(dir, "oracle.json");
       writeFileSync(file, encoded);
+      const nanCall = [{ export: "nan", args: [], expected: { $number: "NaN" } }];
       const cases: [string, unknown, RegExp][] = [
         ["empty targets", { targets: [], calls: CODEC_FIXTURE_ORACLE.calls }, /targets must be a nonempty array/],
         ["empty calls", { targets: BOTH, calls: [] }, /calls must be a nonempty array/],
-        [
-          "duplicate targets",
-          { targets: [BOTH[0], BOTH[0]], calls: CODEC_FIXTURE_ORACLE.calls },
-          /repeats wasmgc:host/,
-        ],
+        ["duplicate targets", { targets: [BOTH[0], BOTH[0]], calls: nanCall }, /repeats wasmgc:host/],
         [
           "unknown backend",
-          { targets: [{ backend: "porffor", target: "host" }], calls: CODEC_FIXTURE_ORACLE.calls },
+          { targets: [{ backend: "porffor", target: "host" }], calls: nanCall },
           /not a known backend/,
+        ],
+        [
+          "unknown target",
+          { targets: [{ backend: "wasmgc", target: "bogus" }], calls: nanCall },
+          /target bogus is not a RuntimeTarget/,
         ],
         [
           "call without export",
@@ -735,6 +873,21 @@ describe("#3518 C — fresh-process replay", () => {
           /export must be a nonempty string/,
         ],
         ["call without expected", { targets: BOTH, calls: [{ export: "main", args: [] }] }, /lacks an expected value/],
+        [
+          "empty-object expected",
+          { targets: BOTH, calls: [{ export: "nan", args: [], expected: {} }] },
+          /exactly one key/,
+        ],
+        [
+          "non-canonical $number",
+          { targets: BOTH, calls: [{ export: "nan", args: [], expected: { $number: "not-a-number" } }] },
+          /one of -0, NaN, Infinity, -Infinity/,
+        ],
+        [
+          "unknown tag",
+          { targets: BOTH, calls: [{ export: "nan", args: [], expected: { $float: "1" } }] },
+          /unknown expected-value tag/,
+        ],
       ];
       for (const [label, oracle, pattern] of cases) {
         writeFileSync(oracleFile, JSON.stringify(oracle));
