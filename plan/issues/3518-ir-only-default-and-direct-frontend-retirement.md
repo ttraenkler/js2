@@ -129,6 +129,82 @@ combined candidate. C consumes A's interface and requests schema changes from A.
 Review A's core change independently; authors do not supply their own independent
 acceptance. The lead retains integration and publication for all four packages.
 
+### Evidence runner repair — independent review 2026-09-06
+
+B reviewed D's exact signed `a8e5840492aefb450274ac37d1b6a52c390e1cb8`
+runner (SHA256
+`17ffdd9467df02a1a3291838382538899c633d612ba9b2220a0420d0033f4b04`).
+The original seven counterexamples now pass seven of seven, but an expanded
+24-control predicate review passes only 20. These bounded controls executed
+the unchanged predicate bodies in a fresh VM; they did not compile or replay
+an application. D's candidate remains unaccepted for integration.
+
+The lead assigns this bounded implementation plan to D, retaining its existing
+runner/test ownership and unchanged fixture population:
+
+1. Validate every observed phase's resolved target as well as backend, source
+   and exact program identity. Missing targets and a host-to-standalone target
+   substitution must both fail. The four phases must belong to one actual
+   preparation and emission of the requested target.
+2. Recompute strict accounting from the immutable captured row facts at the
+   admission boundary. An issued proof containing a direct-body emission must
+   remain rejected after a caller changes only `strictAccounting.pass` to true.
+   Preserve exact once preparation/IR counts, zero direct emissions and the
+   existing original-unit/receipt joins; no mutable summary flag supplies truth.
+3. Require separately pinned compiler provenance and affirmative evidence of
+   the executed legacy route for the direct oracle. An explicit checkout,
+   `experimentalIR: false`, successful compilation and runtime parity currently
+   allow the CLI to pass seven prepared IR rows with zero direct rows. Such a
+   run must fail oracle admission. Record actual oracle and candidate revisions
+   and compiler source fingerprints separately. Missing route evidence remains
+   incomplete rather than being interpreted as zero preparation.
+   Consume the existing `CompileResult.irBodyRouteAudit`: `compileMulti` assigns
+   its internal route and `trackIrOutcomes` enables the physical recorder even
+   with IR disabled. Validate its registered graph/generator and direct-entry
+   receipts against the exact fixture identities; no compiler instrumentation
+   rewrite is needed merely to expose those existing observations.
+4. Add the four failed cases to focused regressions, preserve all earlier
+   controls, and rerun B's independent 24-control cohort on the resulting exact
+   signed bytes. Run the affected runner tests and typecheck with normal hooks;
+   a future combined compiler run still must exercise A/C's real boundary.
+
+D edits no compiler source, fixture denominator, baseline or other package's
+files. A retains the next load-clear heavy validation slot. Root owns this
+issue amendment and integration; B owns independent review. This repair does
+not establish whole-program runtime acceptance or retire any epic criterion.
+
+Independent review of D's signed `b3f08613aff01fadfa4d924b4be7924e1a340c8e`
+passes 21 of 24 controls, including only five of the original seven. Three
+valid controls (01, 06, 20) fail because the runner compares A's observation
+`RuntimeTarget` (`host`) directly with the artifact target (`gc`). Its own test
+fixtures changed the observation to `gc`, which does not match A's producer.
+D must keep those two domains separate: derive the expected resolved runtime
+target through the existing explicit target-policy mapping, compare all four
+events to that resolved target, and separately retain exact artifact/backend
+checks. Missing, mixed and wrong resolved targets must still fail. Preserve
+B's unchanged valid controls, add an actual A-schema positive, and obtain B's
+independent replay before integration. B is also reviewing the direct-oracle
+physical audit joins; any resulting defects require an explicit follow-up.
+
+B's second positive-controlled review of the same signed runner passes only
+four of ten direct-audit controls: it accepts a missing terminal, an anonymous
+count-only receipt, explicit structural incompleteness, a foreign entry source,
+a wrong entry target and a `terminal-ir` disposition. A separate target-domain
+cohort passes two of three: changing a standalone record's target to `gc` still
+passes despite its authenticated standalone proof. The accounting-flag repair
+does reject its independently tested counterexample.
+
+This acceptance-boundary repair transfers to Astra/B after D releases its
+runner edits and B signs the granted import-only patch. B must require the
+actual audit's completeness and empty violation set, exact registered graph
+and generator, all required terminal receipts with valid legacy disposition,
+and source/backend/target joins through both oracle admission and the final
+proof-to-record check. Counts alone cannot establish coverage. Preserve the
+existing oracle/candidate fingerprint checks and independently rerun all
+positive and negative cohorts. D returns to bounded read-only evidence; root
+retains independent integration review. No fixture denominator changes or
+compiler-hook rewrites are authorized by this handoff.
+
 ### First bounded implementation checkpoint
 
 Review the approach after the first implementation cycle, no later than one
@@ -252,8 +328,17 @@ The lead approved exclusive transfer of `3518:backend-consumption-replay` to
 is `8e89954c406fed59033b2c54a03d54481fc9773a`; the following population-validator
 commit is an available dependency. No competing Codex C dispatch is authorized.
 The refreshed handoff names current signed integration base
-`1b9ced2df05cd5ac0415508ec6f8299d07767369`, which directly contains that interface,
-the population validator and canonical pure identity leaf.
+`7b2e8b038a06e77c69d788690cbd5ce935ac5448`, which contains that interface,
+the population validator, canonical pure identity leaf, B's signed runtime
+producers, the whole-program route audit and A's complete preparation driver.
+Root verified A's signature and 24-file scope, then fast-forwarded integration
+while preserving this issue amendment. A's 15/15 focused controls, full source
+typecheck and corrected original-seven preparation probe passed; emission and
+replay remain unproved.
+A's following signed diagnostic fix is also integrated: required `sourceFile`
+is copied from the resolved owner into source and runtime preparation failures.
+Its five focused controls and full typecheck passed. C must retain that field
+alongside unit identity and source location in its own located failures.
 Claude reported C unassigned and no edits/tests at proposal time. The lead then
 verified its exact owner/branch claim on remote assignment tip
 `33ed83eb238047ee076c67a4a17611d9875008ff` (claimed at 22:10:50 UTC), and its
@@ -273,7 +358,7 @@ B's producers, D's fixtures/census, scoped ABI sealing, R1/R3/R4 interfaces, and
 `src/ir/lower.ts` are consumed without C edits.
 
 A's strict producer entry is `prepareWholeIrProgram(sourceInput)`. Its proposed
-C interface separates `acceptPreparedIrProgram(program, { backend })` from
+C interface separates `acceptPreparedIrProgram(program, options)` from
 `emitAcceptedIrProgram(accepted)`. Acceptance validates the complete population,
 IR, ABI, startup, runtime and backend capabilities before allocation; actual
 emitted unit IDs reconcile against the same program's body vector. A alone
@@ -283,6 +368,95 @@ authentication through B's canonical APIs, and reject conflicting decoded
 evidence rather than silently replacing it. Fresh-process replay must prove
 the absence of TypeScript, source lowering and compiler imports. Capability
 gaps remain incomplete coverage with separate fixture/backend denominators.
+
+Concrete codec data review, grounded in the existing schema and A's unsigned
+preparation batch, gives C the following implementation requirements. These
+are representation obligations for the existing program, not new semantic
+authority or permission to edit A's schema:
+
+- `IrModule` contains the function vector and optional declaration Maps;
+  `PreparedIrProgram.units` and each runtime projection's provider table are
+  also Maps. Preserve collection iteration order: full projection comparison
+  compares entry vectors in order. Prepared Maps/Sets are immutable wrappers;
+  encode their public entries, not private object fields or methods.
+- IR `i64` constants contain BigInt values. Retain them exactly, as well as
+  negative zero, non-finite numbers, and present `undefined` versus absent
+  fields. Allocation metadata explicitly distinguishes an omitted row from a
+  row whose value is `undefined`; JSON omission is lossy.
+- Recursive `IrClassShape` graphs carry the exact symbol-keyed
+  `[IR_CLASS_SHAPE_CELL]: true` brand exported by `nodes.ts`. It is a local
+  unique symbol, not a global `Symbol.for` name. Encode the known schema brand
+  explicitly and restore it using that canonical export; stringifying the
+  symbol description is insufficient. Preserve recursive class references and
+  full layouts. Other executable or arbitrary cyclic objects remain invalid.
+- `IrModuleInitPlan` and `ProgramAbiPlanEntry` contain plain data records and
+  vectors. `IrTerminalUnitRecord` additionally permits `directFailure.cause`
+  of type `unknown`; that field cannot be assumed serializable. Accepted
+  snapshots must reject retained errors, source objects and executable causes.
+- Decode the ABI entry vector and reconstruct its lookup methods. Preserve
+  semantic async plans as data, then compare complete regenerated runtime
+  evidence before retaining B's newly authenticated plan/manifest joins.
+  Process-local observation IDs and acceptance-token authority are not part
+  of the serialized semantic program.
+
+#### C first increment and integration repairs — 2026-09-06
+
+C supplied signed `5dd03b8e237a162162fb46490aef6605760762df`, parent8e89954c,
+with seven changed files and a clean worktree. Root verified the signature.
+The reported nine tests use a synthetic typed program, not A's driver or D's
+seven-unit fixture. Three pre-emission negatives pass; five TypeScript-related
+modules still load. Neither result satisfies the complete replay acceptance.
+C remains the exclusive owner of its codec/consumer/replay source and tests.
+
+Root's codec-only probes against exact signed bytes reproduced a positive
+canonical round trip, then three defects: leading-whitespace and duplicate-key
+envelopes are accepted but re-encode differently; an own `__proto__` property
+on an accepted plain-data record disappears. D's separate codec-only controls
+confirm that A's copier preserves integer-like record keys and sparse holes,
+but C cannot decode its own encoding of keys `2` and `10`, and converts an
+array hole into a present `null` while still re-encoding byte-identically.
+The dense-record positive passes. These are synthetic data-model probes, not
+A-driver acceptance or application execution. C must preserve valid data and
+reject noncanonical or unsupported input without silent loss. Its next batch
+also adopts A's complete-program lookup/validator, authenticated runtime
+reconstruction and `acceptPreparedIrProgram`/`emitAcceptedIrProgram` contract.
+The no-TypeScript boundary remains required; loaded libraries are not exempt.
+
+The lead owns two concrete integration-gate repairs, separate from C:
+
+1. In `scripts/audit-legacy-reachability.mjs`, derive the filesystem root with
+   `fileURLToPath(import.meta.url)` instead of URL `pathname`. The existing
+   expression points at nonexistent `Archiv%20Mini`; the decoded path exists.
+   Preserve the complete audited population and every verdict/baseline rule.
+2. Remove only the unused private `directCallTargets` helper from
+   `src/codegen/program-abi-module-init-planning.ts`. Keep the stricter live
+   `exactSequentialCallTargets` and all initializer/session behavior unchanged.
+   Both reported files have identical blobs at C's parent and integrated1dea,
+   establishing that these defects predate C. The saved open-PR census has no
+   audit-script overlap. A one-shot ownership read confirms PR5632,
+   "feat(codegen): atomically prepare multi-source module initializers", merged
+   as `bdea6e9807ce30242c569fd31420def6f014872e`; root inspected its exact module
+   initializer patch. Existing claims and other worktrees remain intact.
+3. Execute the actual dead-export check from the path containing spaces,
+   inspect its nonempty population and any remaining failing rows, then run
+   the affected initializer controls and ordinary formatting/type checks.
+   Do not suppress the audit, weaken a baseline, or equate gate repair with
+   direct-handler retirement.
+
+The actual repaired dead-export gate passed from the path containing spaces:
+815 codegen files, 7190 functions, 25 known unreferenced entries and zero new
+failures. The report contains both real dispatch cut roots and the retained
+sequential helper; the obsolete helper is absent. No baseline changed.
+Full typecheck passes. The affected initializer suite passes five of six;
+its same-named-user-function control expects `legacyBodyEmitted: true`, but
+the compiler reports false. The exact failing control reproduces on unchanged
+signed7b with the original planner bytes restored; the owned deletion was
+restored byte-identically afterward. This is a separately tracked existing
+expectation mismatch, not a six-of-six pass. Review that test against the
+actual initializer dispatch before changing its expectation. The five passing
+controls cover retained direct fallback, graph ownership, invocation policies
+and strict startup authentication. Normal signing of the three-file repair
+follows; no test assertion or baseline is weakened here.
 
 B also has a narrow grant for the await-expression arm/import wiring in
 `src/ir/from-ast.ts`. Read-only ownership review verified the earlier R1 W1-G
