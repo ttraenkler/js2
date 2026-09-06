@@ -66,6 +66,56 @@ producer into the shared driver. The first mixed-application checkpoint must
 preserve Promise identity and microtask behavior with zero direct bodies.
 All async containers and the original R7 retirement criteria remain in scope.
 
+### Package B executable producer checkpoint — 2026-09-06
+
+`prepareWholeProgramAsyncFunctions` in
+`src/ir/runtime-program-producers.ts` now consumes A's complete typed population
+and invokes the existing `prepareSuspendingIrFunction` for every unprepared async
+owner. It returns the complete ordinary/async/derived population and the existing
+`ProgramAbiDerivedUnitRecord` provenance. A's shared population validator runs
+before and after production, including pre-existing semantic state calls and
+derived owners. No selector-owned set, physical signature inference, new ABI
+registry, source callback, or additional ownership cache participates.
+
+Reader/mutator reconciliation confirmed that async production is called by the
+existing integration helper, while state functions/provenance are appended there;
+A owns replacing that wiring. Runtime attachments are produced in
+`intrinsic-support.ts`; `createPreparedIrAsyncRuntime` remains the only issuer
+of the existing `preparedManifestByPlan` authentication, with rollback on failed
+attachment validation. This change does not edit that WeakMap or replace identity
+checks with copied JSON. Physical adapter/materializer calls remain below A/C's
+acceptance boundary.
+
+The source-to-IR await handoff accepts explicit `operandType` and `resultType`
+evidence. Exact f64 operands retain their original value and await edge; the
+semantic async producer declares the Promise number bridge from typed crossings.
+This path cannot carry the historical settled-owner receipt fields, preventing
+unauthenticated receipt metadata from bypassing their separate ownership checks.
+Generic number-boundary policy and existing immutable async planning remain
+unchanged. The shared frame uses authenticated box/unbox targets and the
+manifest-declared caught-exception import after acceptance.
+
+Focused positive controls exercise the generic two-await state producer,
+authenticated host/native projections, and actual gc/nativeStrings Wasm. The
+numeric result is 29 with native Promise identity and the exact two-tick trace;
+frame emission adds no imports and preserves all nine import identities.
+Missing state/provenance, source-body omission, conflicting derived identity,
+numeric/receipt contradictions, and copied runtime authority have mutation
+controls. Eight distinct focused/regression files pass 118/118;
+standalone typechecking passed. Fresh-process source-free reattachment passes with frontend loading blocked
+after A's signed identity dependency `1b9ced2df05cd5ac0415508ec6f8299d07767369`.
+A deliberately blocked frontend import validates the instrument. A fully
+declared settled plan also executes without late imports; a smaller valid
+semantic plan receives a typed backend capability refusal before allocation
+because the shared frame still requires all core host adapters.
+
+The existing producer still declines an async function with zero awaits, such
+as a typed `async immediate() { return 3; }`, and existing manifest providers
+still lack a linear async backend. These are located failure-evidence rows,
+not coverage or preserved behavior claims. The unchanged mixed application,
+zero direct body count, real cross-backend replay, and full R7 retirement
+remain open.
+
 ## Objective
 
 Prepare every supported async function-like as one immutable, AST-free

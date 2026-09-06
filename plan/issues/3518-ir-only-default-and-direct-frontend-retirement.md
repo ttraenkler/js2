@@ -3,7 +3,7 @@ id: 3518
 title: "IR-only default and direct front-end retirement"
 status: in-progress
 created: 2026-07-21
-updated: 2026-09-05
+updated: 2026-09-06
 priority: critical
 feasibility: hard
 reasoning_effort: max
@@ -112,7 +112,7 @@ not claims acquired by this document; existing owners must be reconciled first.
 | --- | --- | --- | --- |
 | A — authoritative preparation | One complete program and a strict public-compiler route, including ordinary and multi-source startup/call ownership | R2/R5: `src/ir/program.ts`, `src/ir/prepare.ts`, shared program ABI contracts, `src/ir/integration.ts`, `src/compiler.ts`, `src/codegen/index.ts`, `src/codegen/multi-prepared-program.ts`, `src/codegen/ir-prepared-free-functions.ts` | Publish the minimal typed producer/consumer interface first. A alone integrates changes to shared entry points. Other packages supply typed inputs or consumer APIs. |
 | B — semantic/runtime producers | Populate the program with semantic runtime demands and existing immutable async plans; preserve behavior through shared runtime helpers | R6/R7: `src/ir/runtime-manifest.ts`, runtime-provider modules, `src/ir/async-plan.ts`, `src/ir/async-prepare.ts`, `src/ir/async-from-ast.ts`, and dedicated IR async adapters | Reuse current repair results. Begin the reader/mutator inventory alongside A; implement against A's interface, with no private ABI or ownership cache. Request shared-entry-point wiring from A. |
-| C — backend consumption and replay | Both backend entry points consume the same verified program; lossless codec and fresh-process replay | R8: `src/ir/backend/linear-integration.ts`, WasmGC/linear emitters and legality, `src/codegen-linear/index.ts`, and the program codec module | Starts implementation once A's interface is available and a slot is free. A owns the schema; C owns its codec implementation. C does not edit the shared compiler entry points. |
+| C — backend consumption and replay | Both backend entry points consume the same verified program; lossless codec and fresh-process replay | R8: `src/ir/backend/linear-integration.ts`, WasmGC/linear emitters and legality, `src/codegen-linear/index.ts`, and the program codec module | Assigned exclusively to the user's external Claude Fable 5.1 session after the interface handoff below. A owns the schema; C owns its codec implementation. C does not edit the shared compiler entry points. |
 | D — application evidence | Independent whole-application fixtures, exact unit accounting, oracle comparison, and affected integration checks | R9 evidence under this epic: dedicated whole-program tests/fixtures and their runner; existing coverage scripts only with explicit ownership | Can start immediately alongside A/B on a pinned source snapshot. Owns no compiler source and cannot redefine supported scope, suppress failures, or alter baselines to accept the candidate. |
 
 Existing R1 identity, R3 class/closure, and R4 module-storage owners remain
@@ -122,14 +122,12 @@ claimed files. B/C likewise enumerate readers and mutators before moving shared
 facts. Every dispatch must say the worker is not alone, must preserve others'
 changes, and must refer out-of-scope defects to the responsible owner.
 
-Use at most the available three worker slots plus the lead. After the current
-repair batch, run A + B + D in parallel. When D has committed the baseline harness
-and released its slot, start C against A's interface; rerun D's harness on each
-meaningfully changed combined candidate. If A's interface is not ready, C may
-inventory backend reads but must not invent a competing schema. Review A's core
-change by a different architectural implementer; authors do not supply their own
-independent acceptance. Do not dispatch four workers into three slots or keep an
-idle validator occupying the slot needed for implementation.
+Use at most the available three Codex worker slots plus the lead. A + B + D run
+in those slots; the user's separately activated Claude session owns C. Do not
+start a competing Codex C worker. Rerun D's harness on each meaningfully changed
+combined candidate. C consumes A's interface and requests schema changes from A.
+Review A's core change independently; authors do not supply their own independent
+acceptance. The lead retains integration and publication for all four packages.
 
 ### First bounded implementation checkpoint
 
@@ -210,16 +208,174 @@ session APIs without editing `src/codegen/program-abi-session.ts` or
 `tests/issue-3521-scoped-prepared-abi-seal.test.ts`. Live R1/R3/R4 ownership remains
 unchanged.
 
-Acquire distinct claims `3518:authoritative-preparation` (A, Astra Max),
+The lead acquired and remotely verified distinct claims
+`3518:authoritative-preparation` (A, Astra Max),
 `3518:semantic-runtime-producers` (B, Astra Max), and
-`3518:application-evidence` (D, Luna Max), each on its own worktree from the signed
-consolidated head. A publishes its typed interface first and owns the shared
-compiler entry points; B supplies existing runtime/async producers; D commits
-independent executable evidence without changing compiler source. Once A's
-interface exists and D releases its worker slot, start
-`3518:backend-consumption-replay` (C, Astra Max). The lead independently reviews
-A's architecture and the combined application result. These are dispatch
-instructions, not a claim that implementation or migration is complete.
+`3518:application-evidence` (D, Luna Max), and dispatched all three writers in
+isolated worktrees from signed consolidated head
+`af5eef9e24a8fb5b575cb57ce9eee0e8ebe425e8`. Their branches are
+`codex/3518-whole-program-a-20260905`,
+`codex/3518-whole-program-b-20260905`, and
+`codex/3518-whole-program-d-20260905`. This head passed normal hooks: 170 tests,
+two existing optional skips across 16 files, plus formatting, lint, budget and
+oracle checks. Post-merge typecheck and the unchanged mixed application's
+runtime/native-Promise/microtask controls passed; its ownership remains seven
+Unsupported terminals, zero IR bodies and six direct body emissions.
+
+A published the signed typed interface at
+`8e89954c406fed59033b2c54a03d54481fc9773a`, directly after consolidation, and the
+shared population validator at `899bd71cf8e709e4552bbb81a95e40be522d0b18`.
+The lead verified both signatures. A owns shared compiler entry points; B
+supplies existing runtime/async producers; D commits independent executable
+evidence without changing compiler source. Dispatch and compatibility evidence
+do not complete implementation or pass the whole-program checkpoint.
+
+B's signed implementation `4d4c22ef222b8b55ab3e44901458940109f2525c`, directly
+after `1b9ced2d`, is now independently reviewed and fast-forwarded into the
+integration branch. It adds complete-population runtime/async producers and
+the pure replay manifest entry, preserving the exact runtime authentication
+joins. The final committed producer suite passed 25/25; the preceding unique
+focused cohort passed 118/118 across eight files, and standalone typecheck
+passed. Normal commit hooks passed formatting, budgets and oracle checks;
+their changed-root runner automatically skipped at 23 files above its 20-file
+threshold. No hook bypass was used. The root audit dependency passed 25/25
+combined tests and standalone typecheck after this integration. None of this
+closes the full application/replay checkpoint.
+
+### External package C handoff — 2026-09-06
+
+The user supplied a concrete proposal from the active Claude Fable 5.1 session.
+The lead approved exclusive transfer of `3518:backend-consumption-replay` to
+`ttraenkler/claude-fable-ir-backend-c-20260906`, using branch
+`claude/3518-whole-program-c-20260906` and isolated worktree
+`.claude/worktrees/claude-3518-whole-program-c-20260906`. The exact approved base
+is `8e89954c406fed59033b2c54a03d54481fc9773a`; the following population-validator
+commit is an available dependency. No competing Codex C dispatch is authorized.
+The refreshed handoff names current signed integration base
+`1b9ced2df05cd5ac0415508ec6f8299d07767369`, which directly contains that interface,
+the population validator and canonical pure identity leaf.
+Claude reported C unassigned and no edits/tests at proposal time. The lead then
+verified its exact owner/branch claim on remote assignment tip
+`33ed83eb238047ee076c67a4a17611d9875008ff` (claimed at 22:10:50 UTC), and its
+registered isolated worktree at the approved base. Existing A/B/D, R8 and scoped
+ABI-seal claims remain intact.
+
+The lead grants the R8 handoff for `src/ir/backend/linear-integration.ts`, retaining
+the integrated repair `272afba2d5de1af082768f45e5cb7b39f61a55e4` and existing
+claim records. C may add `src/ir/program-codec.ts`,
+`src/ir/backend/program-consumer.ts`, `scripts/ir-whole-program-replay.mjs`,
+`tests/issue-3518-program-codec-replay.test.ts`, and
+`tests/issue-3518-backend-program-consumer.test.ts`; it may edit the named linear
+integration module, WasmGC/linear emitter and legality modules, and the linear
+entry in `src/codegen-linear/index.ts`. C updates the R8 issue file for progress
+and justified budgets. A retains schema and WasmGC shared entry-point wiring;
+B's producers, D's fixtures/census, scoped ABI sealing, R1/R3/R4 interfaces, and
+`src/ir/lower.ts` are consumed without C edits.
+
+A's strict producer entry is `prepareWholeIrProgram(sourceInput)`. Its proposed
+C interface separates `acceptPreparedIrProgram(program, { backend })` from
+`emitAcceptedIrProgram(accepted)`. Acceptance validates the complete population,
+IR, ABI, startup, runtime and backend capabilities before allocation; actual
+emitted unit IDs reconcile against the same program's body vector. A alone
+wires shared compiler entry points and internal preparation/acceptance/emission
+observations. C must preserve all codec values and identities, reconstruct async
+authentication through B's canonical APIs, and reject conflicting decoded
+evidence rather than silently replacing it. Fresh-process replay must prove
+the absence of TypeScript, source lowering and compiler imports. Capability
+gaps remain incomplete coverage with separate fixture/backend denominators.
+
+B also has a narrow grant for the await-expression arm/import wiring in
+`src/ir/from-ast.ts`. Read-only ownership review verified the earlier R1 W1-G
+and R3 W1-C implementations landed at merge commits `ae5d2d25` and `6b9c5a1f`,
+with no linked worktrees or overlapping open PR at review time. This grant
+preserves the canonical identity/class APIs and all unrelated from-AST arms.
+B's existing runtime-provider scope includes declaring the existing caught-
+exception host capability and its async reject-provider dependency, so numeric
+await frames cannot allocate that import after manifest acceptance.
+
+For the replay import boundary, A has a mechanical R1 dependency grant: move
+only `createDerivedIrUnitId`, `createIrBindingId`, and their canonical encoding
+helpers to `src/ir/identity-values.ts`, keep the existing `identity.ts` API via
+re-exports, and change only runtime-factory imports in `program-abi.ts`,
+`callable-bindings.ts`, and `abi-bindings.ts`. Existing namespaces, validation,
+and all unrelated R1 behavior remain unchanged. The eight-open-PR file census
+contains no overlap on these four existing modules; the known C30–C33 PRs are
+recorded merged by GitHub, and their claimed branches have no linked worktrees.
+Local July ancestry is unproven because this checkout has shallow history.
+No old claim is released. B owns the new pure `runtime-program-manifest.ts`
+leaf, re-exported by its producer module. Both leaves must demonstrate a fresh
+runtime import graph free of frontend dependencies.
+
+A also owns the mechanical extraction of four existing runtime symbol constants
+(`IR_STRING_COMPARE_FN`, `JSSTR_CHARCODEAT_FN`, `NATIVE_CHARCODEAT_FN`, and
+`FUNCTION_PROTOTYPE_CALL_HELPER`) and the unchanged IR demand scans into pure
+leaves. Their existing modules retain public re-exports. B retains the await arm;
+the two writers coordinate only the shared import hunk. No runtime-helper logic
+or additional source-shape admission belongs to this extraction.
+
+Independent review of the first implementation drafts found obligations that
+remain open before acceptance:
+
+- A's semantic type keys must handle the recursive class shapes permitted by
+  the shared schema, and conflicting layouts must still fail validation.
+- Every runtime function must match all semantic fields of its authoritative
+  program body, apart from its authenticated runtime attachment. Comparing only
+  blocks, parameters and async-plan identity would miss substituted result types
+  or export flags. Allocation provenance must also remain validated after replay.
+- B's review of A's new in-place runtime freezer found that prototype-erased
+  native Map/Set objects can look like null-prototype data records while their
+  contents remain mutable after Object.freeze. A owns the native-brand check
+  and negative controls; accepted runtime graphs must retain authenticated
+  object joins without admitting those mutable collection objects.
+- The original seven-unit source now passes A's complete preparation draft on
+  signed B4d: fourteen typed bodies include seven declared async-derived helpers,
+  with three ordered initializers, six globals and preserved public exports.
+  This is preparation evidence only. Root's subsequent cross-backend review
+  found that promoting runtime functions minus asyncRuntime into the semantic
+  body vector retains intrinsic provider attachments from the first policy.
+  Requiring object identity for every projected block/plan then prevents
+  independently reconstructed backend projections. A/B own exact semantic-field
+  reconciliation plus separately authenticated attachments and a two-projection
+  common-subset control. Entire blocks/plans must not be exempted from validation.
+  Projection selection must also be unambiguous for backend/target pairs.
+- D's strict verdict must require actual shared-program observations, exact
+  phase order and unit-ID joins, and unchanged compiler fingerprints. Pending
+  observations or nonempty telemetry strings cannot establish acceptance. Load
+  scheduling belongs outside correctness tests, and the historical legacy
+  baseline must not become an assertion that prevents the intended cutover.
+  B's executable review of the next draft additionally reproduced copied proof
+  metadata, swapped unit IDs, wrong backend/target labels, and phase objects with
+  custom toJSON passing the gate; canonical source keys also failed its positive
+  control because of display-only './' prefixes. D owns the exact live-event,
+  field-type and identity-to-label joins plus canonical display normalization.
+
+The lead owns the narrow route-audit dependency in
+`src/ir/standalone-route-manifest.ts`, `src/codegen/legacy-body-audit.ts`, and
+`tests/issue-3518-whole-program-route-audit.test.ts`, plus the related existing
+`tests/standalone-cutover-audit.test.ts`. The new generator must
+register its real `generateWholeProgramModule` identity. An internal immutable
+session selection binds that generator to the canonical single/multi graph
+for each public entry; existing legacy sessions retain their exact generator
+checks. This adds no public compiler option and changes no terminal, derived
+unit, or physical legacy-entry reconciliation. A consumes the new session API
+without editing these files. Focused controls must reject missing registration,
+wrong graph/generator, and missing terminal evidence, and must retain actual
+legacy roots even when the new generator is registered.
+
+The existing standalone JSONL validator also hardcodes the old generator
+tuples. Its new-route support remains a separate acceptance dependency: it
+must stay fail-closed until the executed path has observable physical coverage.
+A must not publish a fresh, unused audit session's empty legacy-entry vector as
+proof of direct-dispatch absence. The complete-program observations, actual
+emitted receipts and C's source-free replay controls remain required.
+
+The existing injected-inline-failure audit control expected two unresolved
+terminals. Both the candidate and exact unchanged `1b9ced2d` source reproduce
+three: the source functions `delay` and `fetchUser`, plus the inventoried
+compiler timer shim `setTimeout`. The lead's test repair pins these exact three
+failed owners and their missing-evidence joins, retaining the incomplete
+verdict. The baseline probe restored both candidate audit files byte-for-byte;
+this is an expectation correction, not a new source admission or a relaxed gate.
 
 ### Prerequisite consolidation record — 2026-09-05
 
