@@ -212,8 +212,8 @@ Reader/mutator inventory before any extraction:
    tests plus typechecking. Report actual test denominators. This slice proves
    the handle leaf is independent; the two async bridge roots remain impure.
 
-The first slice is implemented on verified signed A dependency
-`1dea8e0cf4db8dae3f834e733e111397ce58bf18`. Its fresh-process test observes the
+The first slice is signed as `131f2327544d6a5d57a90d38358c31d644be292c`,
+on verified signed A dependency `1dea8e0cf4db8dae3f834e733e111397ce58bf18`. Its fresh-process test observes the
 real handle/layout module loads, preserves exact stable-handle lookup identity,
 and separately rejects deliberate `ts-api` and multi-source frontend imports.
 The four named focused files pass 26/26; standalone typechecking passes. Only
@@ -258,6 +258,21 @@ graph, so integration ancestry remains unknown; this does not mean unmerged.
 The scoped claim has no recorded branch, although the corresponding named
 local/origin branch refs and merge record exist. Root grants only the specified
 import/comment hunks; no ownership or claim release is inferred.
+
+The six granted imports are now substituted on the signed first slice. The
+focused fresh-process control additionally loads the type registry, wrapper
+registry, closure header, and both ABI-planning leaves with the frontend blocked;
+it exercises fresh wrapper creation through the changed `addFuncType` import,
+exact cached `ClosureInfo` reuse, the existing host-one-shot to ordinary
+allocation-mode transition, and shared header factories. Root and A requested
+this factory control before the affected cohort because a seeded-root getter
+alone would not execute the changed import. The existing async frame and scheduler roots still require their planned physical
+extractions. The nine-file affected cohort passes 118/118, including all three
+fresh-process boundary controls and all 25 runtime-producer controls. The first
+attempt exhausted the default 512 MB worker heap before reporting any tests;
+its log is retained separately. The complete repeat used the repository's
+existing `VITEST_FORK_MAX_OLD_SPACE_SIZE=4096` setting and one fork, with the same
+nine files and assertions. Full typechecking passes.
 
 Validate the resulting leaf imports and the existing compiler-support ABI,
 callable-planning, import-callable-planning, and closure-host-bridge ABI tests.
