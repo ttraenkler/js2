@@ -108,6 +108,9 @@ files:
   - src/ir/program-runtime-validation.ts
   - src/ir/program-observation.ts
   - src/ir/runtime-symbols.ts
+  - src/codegen/registry/imports.ts
+  - src/codegen/registry/physical-imports.ts
+  - tests/issue-3521-physical-import-registration.test.ts
   - tests/issue-3521-whole-program-source.test.ts
   - tests/issue-3521-whole-program-validation.test.ts
   - tests/issue-3521-program-runtime-demands.test.ts
@@ -249,6 +252,22 @@ and `ensureExnTag` into `registry/physical-imports.ts`, preserving old public
 bindings and every other registry function. B owns the paired type-registry
 import cuts. A's source-free import proof depends on that signed B dependency;
 physical helper extraction does not establish backend acceptance or emission.
+
+The required filename follow-up is signed at
+`7b2e8b038a06e77c69d788690cbd5ce935ac5448`. The physical extraction now
+moves exactly the two granted function bodies and their exclusive imports;
+the old registry imports and re-exports the same bindings. Other registration,
+source collection and index-fixup functions are unchanged. The focused physical
+registration control covers returned descriptor identity, function/global index
+counts, the freeze-point refusal, strict-host allowed and dropped imports,
+repeated local/shared exception-tag identity and old re-export identity.
+Its separate fresh-process frontend import barrier awaits B's signed paired
+type-registry/wrapper import cut.
+The six new physical controls, five existing freeze-point controls and all 25
+runtime-producer controls pass **36/36** together. The full source typecheck
+passes. A direct comparison against `7b2e8b0` confirms both moved function
+bodies are unchanged and all other old-registry text differs only in the
+necessary import/re-export declarations.
 
 ## Execution amendment — 2026-09-05
 
