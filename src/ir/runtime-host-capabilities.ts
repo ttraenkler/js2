@@ -62,6 +62,7 @@ export const RUNTIME_HOST_CAPABILITY_FUNC_IDS = Object.freeze([
   "callable.host_call.array",
   "callback.wrap.ctor",
   "callback.wrap.getter",
+  "error.reference.construct",
   "extern.is_undefined",
   "number.box",
   "number.unbox",
@@ -701,6 +702,8 @@ export const RUNTIME_HOST_CAPABILITY_RECORDS: readonly RuntimeHostCapabilityReco
   record("callback.wrap.ctor", "__make_callback_ctor", ["i32", "externref"], ["externref"]),
   record("callback.wrap.getter", "__make_getter_callback", ["i32", "externref"], ["externref"]),
   // ---- end family 3 -------------------------------------------------------
+  // Imported-global TDZ guards share this exact ABI with the native constructor.
+  record("error.reference.construct", "__new_ReferenceError", ["externref"], ["externref"]),
   // (#3526 F1-S4) The externref undefined probe. NOT a member of the
   // `addUnionImports` family: on the host lane `__extern_is_undefined` is a
   // standalone `ensureLateImport` registration, which is why the preregistration
