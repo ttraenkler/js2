@@ -35,6 +35,7 @@
 //     call's return type comes from `callReturnTypes` (same TypeMap),
 //     with arg types validated against the propagated callee param types.
 
+import { IR_STRING_COMPARE_FN } from "./runtime-symbols.js";
 import { ts, forEachChild } from "../ts-api.js";
 import { exactIndirectEvalStatement } from "../eval-call-shape.js";
 
@@ -8568,7 +8569,7 @@ function lowerMethodCall(expr: ts.CallExpression, cx: LowerCtx, statementPositio
  * mode decision in `resolveFunc` (not from-ast) mirrors the #3156 charCodeAt
  * sentinel pattern, so from-ast reads no `nativeStrings`.
  */
-export const IR_STRING_COMPARE_FN = "__ir_str_compare";
+export { IR_STRING_COMPARE_FN } from "./runtime-symbols.js";
 
 /**
  * (#3167) Emit a both-string relational `<`/`>`/`<=`/`>=`. Calls the mode-

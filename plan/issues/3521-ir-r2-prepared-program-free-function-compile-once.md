@@ -3,7 +3,7 @@ id: 3521
 title: "IR-only R2: prepare-before-emit free-function ownership"
 status: in-progress
 created: 2026-07-21
-updated: 2026-09-05
+updated: 2026-09-06
 priority: critical
 feasibility: hard
 reasoning_effort: max
@@ -96,6 +96,22 @@ func-budget-allow:
 origin: "#3518 R2 — invert single-source free functions from compile/patch to prepare/emit"
 files:
   - src/ir/program.ts
+  - src/ir/program-source.ts
+  - src/ir/program-startup-proof.ts
+  - src/ir/program-preparation.ts
+  - src/ir/program-middleend.ts
+  - src/ir/program-validation.ts
+  - src/ir/program-abi-contracts.ts
+  - src/ir/program-class-layouts.ts
+  - src/ir/program-allocations.ts
+  - src/ir/program-runtime-demands.ts
+  - src/ir/program-runtime-validation.ts
+  - src/ir/program-observation.ts
+  - src/ir/runtime-symbols.ts
+  - tests/issue-3521-whole-program-source.test.ts
+  - tests/issue-3521-whole-program-validation.test.ts
+  - tests/issue-3521-program-runtime-demands.test.ts
+  - tests/issue-3521-whole-program-projections.test.ts
   - src/ir/prepare.ts
   - src/ir/integration.ts
   - src/ir/abi-bindings.ts
@@ -167,6 +183,44 @@ This interface checkpoint does not change production routing and does not pass
 the seven-unit application checkpoint. A continues directly into extraction of
 the shared prepare/emit driver. The existing ABI session and live R1/R3/R4
 modules remain excluded from A ownership.
+
+### Complete preparation implementation — 2026-09-06
+
+Validation of this preparation batch: **15/15** focused tests across four
+files pass, including the real two-backend intrinsic projection, independent
+runtime-data reconstruction and copied-async-authentication refusal. The full
+source typecheck passes. These are preparation/validation results; backend
+emission and fresh-process executable replay remain separate acceptance work.
+
+Package A now builds typed source bodies before creating any codegen context,
+using the existing source inventory, binding resolver, callable graph, module
+initializer plans and AST-to-IR lowering. Startup follows the inventory's
+canonical dependency order; externally reachable function bodies retain their
+export flags before shared optimization. Focused controls cover reversed caller
+source order, reexports, exact failure ownership and an early initializer call
+that must retain its TDZ guard.
+
+`program-validation.ts` validates the original and derived body population,
+complete semantic ABI contracts, ordered startup storage/body joins, recursive
+class layouts and current allocation provenance/analysis. Reconstructing the
+existing ABI lookup requires this complete validation. The semantic IR remains free of intrinsic provider attachments. Each runtime
+projection is regenerated through the existing pure producer and compared in
+full, including every semantic field, recursive layout, provider map entry and
+projected async state. Its existing plan/manifest identities are authenticated
+separately. Multiple projections select an exact backend/target pair; duplicate
+pairs are rejected, even when their nested provider policies differ. Producer-owned runtime attachment
+graphs are frozen in place to preserve that authentication, with mutable native
+collections rejected even if their prototype has been disguised.
+
+The unchanged runtime demand scans and constants now have a source-free leaf.
+The complete driver combines B's reviewed async/runtime producers with shared
+optimization and one `PreparedIrProgram`. The internal observation seam assigns
+a process-local handle to this exact program object; it is telemetry provenance,
+not another semantic identity or a serialized authority. C's real backend
+acceptance/emission and public compiler wiring remain required for the original
+seven-unit application's checkpoint; the old separately invoked compiler is
+still the runtime comparison oracle. No direct-emission or replay success is
+claimed by this preparation work alone.
 
 ## Execution amendment — 2026-09-05
 
