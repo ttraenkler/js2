@@ -222,6 +222,34 @@ seven-unit application's checkpoint; the old separately invoked compiler is
 still the runtime comparison oracle. No direct-emission or replay success is
 claimed by this preparation work alone.
 
+### Exact diagnostic provenance follow-up — 2026-09-06
+
+Preparation checkpoint `1dea8e0cf4db8dae3f834e733e111397ce58bf18` is signed
+and handed to integration, B and C. The unchanged original application at
+digest `236fa7d971bf9b86aafa778a9a441b2440bae2e2c2c0ae7fdab3f6e517c517fb`
+prepares seven original bodies plus seven derived bodies, three ordered
+initializers and all three exports in one observed program. Its semantic
+provider count is zero and the selected runtime projection has one actual
+intrinsic provider attachment. This remains preparation evidence only.
+
+The next public wiring requires `PreparedIrProgramFailure.sourceFile` to
+preserve the exact filename returned by the existing owner resolver. A's source
+failure and B's shared `runtime-program-manifest.ts::locatedFailure` populate
+that required data field; C must use the same owner for backend failures.
+`CompileError.file` can then consume the failure directly without parsing
+identity strings or rebuilding inventory. Root and B granted only this
+field addition in B's helper; all producer and authentication behavior remains
+owned by B. Focused controls cover a foreign initializer's source failure and
+an imported async owner's runtime preparation failure.
+The complete source-preparation suite passes **5/5**, and the full source
+typecheck passes after the required field addition.
+
+Root also assigned A the separate, bounded extraction of unchanged `addImport`
+and `ensureExnTag` into `registry/physical-imports.ts`, preserving old public
+bindings and every other registry function. B owns the paired type-registry
+import cuts. A's source-free import proof depends on that signed B dependency;
+physical helper extraction does not establish backend acceptance or emission.
+
 ## Execution amendment — 2026-09-05
 
 The approved [whole-program cutover plan](3518-ir-only-default-and-direct-frontend-retirement.md#current-execution-plan--whole-program-cutover-2026-09-05)

@@ -3,6 +3,7 @@
 import { describe, expect, it } from "vitest";
 import { analyzeMultiSource } from "../src/checker/index.js";
 import { prepareIrProgramSources, type IrProgramSourcePreparation } from "../src/ir/program-source.js";
+import { prepareWholeIrProgram } from "../src/ir/program-preparation.js";
 import { forEachInstrDeep } from "../src/ir/nodes.js";
 
 function source(files: Record<string, string>, reverse = false) {
@@ -60,6 +61,29 @@ describe("whole-source preparation", () => {
     if (result.kind === "prepared") throw new Error("storage failure was lost");
     expect(result.unitId).toContain("module-init");
     expect(result.location.sourceId).toContain("bad.ts");
+    expect(result.sourceFile).toBe("bad.ts");
+  });
+
+  it("preserves an imported async owner's filename through runtime preparation failure", () => {
+    const ast = analyzeMultiSource(
+      {
+        "./body.ts": "export async function immediate(): Promise<number> { return 3; }",
+        "./entry.ts": 'export { immediate } from "./body";',
+      },
+      "./entry.ts",
+    );
+    const result = prepareWholeIrProgram({
+      sourceFiles: ast.sourceFiles,
+      entrySource: ast.entryFile,
+      checker: ast.checker,
+      policy: { target: "host", backend: "wasmgc" },
+      deferTopLevelInit: false,
+    });
+    expect(result.kind).toBe("unsupported");
+    if (result.kind === "prepared") throw new Error("async preparation failure was lost");
+    expect(result.unitId).toContain("top-level-function");
+    expect(result.location.sourceId).toContain("body.ts");
+    expect(result.sourceFile).toBe("body.ts");
   });
 
   it("retains TDZ checks for functions callable during startup", () => {

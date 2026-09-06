@@ -60,6 +60,7 @@ export interface PreparedIrProgramProducerInput {
 export type PreparedIrProgramFailure = IrPreparationFailure & {
   readonly unitId: IrUnitId;
   readonly location: PreparedIrSourceLocation;
+  readonly sourceFile: string;
 };
 
 /** Backend attachment phase, distinct from the semantic functions and async plans. */

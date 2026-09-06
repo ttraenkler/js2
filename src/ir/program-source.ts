@@ -338,6 +338,6 @@ export function prepareIrProgramSources(
         `source preparation failed without an original owner: ${String(error)}`,
       );
     const { cause: _cause, ...diagnostic } = classifyIrFailure(error, "build");
-    return { ...diagnostic, unitId: owner.unitId, location: owner.location };
+    return { ...diagnostic, unitId: owner.unitId, location: owner.location, sourceFile: owner.sourceFile };
   }
 }

@@ -55,7 +55,7 @@ export function locatedFailure(
   }
   // Error instances/callbacks must not escape into the serializable diagnostic contract.
   const { cause: _cause, ...diagnostic } = failure;
-  return Object.freeze({ ...diagnostic, unitId: owner.unitId, location: owner.location });
+  return Object.freeze({ ...diagnostic, unitId: owner.unitId, location: owner.location, sourceFile: owner.sourceFile });
 }
 
 export function invariant(input: ProducerInput, unitId: IrUnitId, detail: string): PreparedIrProgramFailure {
