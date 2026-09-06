@@ -12,6 +12,12 @@ import type { PreparedComponentAbiLookup } from "./prepared-component-dependenci
 import { PreparedIrProgramInvariantError, type PreparedIrAbiEntry } from "./program.js";
 import type { IrProgramSourcePreparation } from "./program-source.js";
 import type { IrProgramCallableBindingRecord } from "./program-callable-bindings.js";
+import type { IrRuntimeCallableDeclaration } from "./runtime-callable-declarations.js";
+import {
+  assertPreparedIrRuntimeCallableDeclaration,
+  preparedIrRuntimeAbiAnchor,
+  preparedIrRuntimeCallableBindingId,
+} from "./program-runtime-abi.js";
 
 /** Semantic signature key; backend layout indices are deliberately not encoded here. */
 export function preparedIrTypeKey(type: IrType): string {
@@ -80,7 +86,10 @@ export interface PrepareIrProgramAbiInput {
 }
 
 /** Produce semantic contracts from declared bodies/storage, never from a call's guessed usage. */
-export function prepareIrProgramAbiEntries(input: PrepareIrProgramAbiInput): readonly PreparedIrAbiEntry[] {
+export function prepareIrProgramAbiEntries(
+  input: PrepareIrProgramAbiInput,
+  runtimeDeclarations: readonly IrRuntimeCallableDeclaration[] = [],
+): readonly PreparedIrAbiEntry[] {
   const entries: PreparedIrAbiEntry[] = [];
   const sourceOrders = new Map(input.inventory.sources.map((source) => [source.id, source.order]));
   const nextOrder = new Map<IrSourceId, number>();
@@ -207,6 +216,33 @@ export function prepareIrProgramAbiEntries(input: PrepareIrProgramAbiInput): rea
         contract: { kind: "export", externalName, targetId },
       });
     }
+  }
+  const runtimeKeys = new Set<string>();
+  for (const declaration of [...runtimeDeclarations].sort((left, right) =>
+    irCallableBindingKey(left.ref.binding).localeCompare(irCallableBindingKey(right.ref.binding)),
+  )) {
+    assertPreparedIrRuntimeCallableDeclaration(declaration);
+    const key = irCallableBindingKey(declaration.ref.binding);
+    if (runtimeKeys.has(key))
+      throw new PreparedIrProgramInvariantError("invalid-prepared-data", `runtime ABI duplicates declaration ${key}`);
+    runtimeKeys.add(key);
+    const anchor = preparedIrRuntimeAbiAnchor(input.inventory);
+    entries.push({
+      plan: {
+        id: preparedIrRuntimeCallableBindingId(input.inventory, declaration.ref),
+        order: order(anchor.id),
+        displayName: declaration.ref.name,
+        structuralReferenceKey: key,
+        slotPolicy: "required",
+        slotSpace: "function",
+        intent: {
+          kind: "callable",
+          origin: "runtime",
+          signature: preparedIrCallableSignature(declaration.params, declaration.results),
+        },
+      },
+      contract: { kind: "callable", ref: declaration.ref, params: declaration.params, results: declaration.results },
+    });
   }
   return entries;
 }

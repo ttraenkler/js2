@@ -3,6 +3,7 @@
 import { prepareIrProgramSources, type IrProgramSourceInput } from "./program-source.js";
 import { prepareIrProgramAbiEntries, preparedIrDraftAbiLookup } from "./program-abi-contracts.js";
 import { assertPreparedIrProgramPopulation } from "./program-population.js";
+import { prepareIrProgramRuntimeCallables } from "./program-runtime-abi.js";
 import { optimizePreparedIrProgram } from "./program-middleend.js";
 import { prepareWholeProgramAsyncFunctions, prepareWholeProgramRuntimeManifest } from "./runtime-program-producers.js";
 import { irProgramRuntimeDemands } from "./program-runtime-demands.js";
@@ -41,7 +42,9 @@ export function prepareWholeIrProgram(input: IrWholeProgramPreparationInput): Ir
   const source = prepareIrProgramSources(input);
   if (source.kind !== "prepared") return source;
   assertPreparedIrProgramPopulation(source);
-  const initialEntries = prepareIrProgramAbiEntries(source);
+  const initialRuntime = prepareIrProgramRuntimeCallables(source);
+  if (initialRuntime.kind !== "prepared") return initialRuntime;
+  const initialEntries = prepareIrProgramAbiEntries(source, initialRuntime.declarations);
   const async = prepareWholeProgramAsyncFunctions({
     ...source,
     abi: preparedIrDraftAbiLookup(initialEntries),
@@ -49,11 +52,20 @@ export function prepareWholeIrProgram(input: IrWholeProgramPreparationInput): Ir
   });
   if (async.kind !== "prepared") return async;
   const transformed = { ...source, ir: { ...source.ir, functions: async.functions }, derivedUnits: async.derivedUnits };
+  const transformedRuntime = prepareIrProgramRuntimeCallables(transformed);
+  if (transformedRuntime.kind !== "prepared") return transformedRuntime;
   const optimized = optimizePreparedIrProgram(
-    { ...transformed, abi: preparedIrDraftAbiLookup(prepareIrProgramAbiEntries(transformed)), policy: input.policy },
+    {
+      ...transformed,
+      abi: preparedIrDraftAbiLookup(prepareIrProgramAbiEntries(transformed, transformedRuntime.declarations)),
+      policy: input.policy,
+    },
     source.allocations,
   );
-  const entries = prepareIrProgramAbiEntries({ ...source, ...optimized });
+  const finalSource = { ...source, ...optimized };
+  const finalRuntime = prepareIrProgramRuntimeCallables(finalSource);
+  if (finalRuntime.kind !== "prepared") return finalRuntime;
+  const entries = prepareIrProgramAbiEntries(finalSource, finalRuntime.declarations);
   // Clone/freeze semantic data BEFORE runtime attachments authenticate exact
   // plan/manifest identities. Never clone the attached result afterward.
   const semantic = freezePreparedIrValue({

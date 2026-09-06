@@ -12,7 +12,17 @@ import {
   preparedIrTypeKey,
 } from "./program-abi-contracts.js";
 import { assertPreparedIrProgramPopulation } from "./program-population.js";
-import { PreparedIrProgramInvariantError, type PreparedIrAbiEntry, type PreparedIrProgram } from "./program.js";
+import {
+  preparedIrDataMismatch,
+  PreparedIrProgramInvariantError,
+  type PreparedIrAbiEntry,
+  type PreparedIrProgram,
+} from "./program.js";
+import {
+  prepareIrProgramRuntimeCallables,
+  preparedIrRuntimeAbiAnchor,
+  preparedIrRuntimeCallableBindingId,
+} from "./program-runtime-abi.js";
 import { verifyIrFunction } from "./verify.js";
 import { assertPreparedIrClassLayouts } from "./program-class-layouts.js";
 import { assertPreparedIrProgramAllocations } from "./program-allocations.js";
@@ -121,6 +131,51 @@ function validateEntry(entry: PreparedIrAbiEntry, entries: ReadonlyMap<string, P
     invalid(`ABI support ${plan.id} contradicts its declared role`);
 }
 
+/** Reconcile the final semantic demand against the canonical catalog, including shared ownership. */
+function validateRuntimeCallables(program: PreparedIrProgram): void {
+  const collected = prepareIrProgramRuntimeCallables(program);
+  if (collected.kind !== "prepared")
+    invalid(
+      `${collected.sourceFile}:${collected.location.line}:${collected.location.column} (${collected.unitId}): ${collected.detail}`,
+    );
+  const actual = program.abi.entries.filter(
+    (entry) => entry.contract.kind === "callable" && entry.contract.ref.binding.kind === "runtime",
+  );
+  if (actual.length !== collected.declarations.length)
+    invalid("runtime ABI declaration population differs from final semantic demand");
+  if (actual.length === 0) return;
+  const anchor = preparedIrRuntimeAbiAnchor(program.inventory);
+  const runtimeEntries = new Set(actual);
+  const firstOrder = program.abi.entries.filter(
+    (entry) => !runtimeEntries.has(entry) && entry.plan.order.sourceOrder === anchor.order,
+  ).length;
+  for (const [index, declaration] of collected.declarations.entries()) {
+    const key = irCallableBindingKey(declaration.ref.binding);
+    const matches = actual.filter(
+      (entry) => entry.contract.kind === "callable" && irCallableBindingKey(entry.contract.ref.binding) === key,
+    );
+    if (matches.length !== 1) invalid(`runtime ABI lacks one exact declaration for ${key}`);
+    const expected: PreparedIrAbiEntry = {
+      plan: {
+        id: preparedIrRuntimeCallableBindingId(program.inventory, declaration.ref),
+        order: { sourceOrder: anchor.order, declarationOrder: firstOrder + index },
+        displayName: declaration.ref.name,
+        structuralReferenceKey: key,
+        slotPolicy: "required",
+        slotSpace: "function",
+        intent: {
+          kind: "callable",
+          origin: "runtime",
+          signature: preparedIrCallableSignature(declaration.params, declaration.results),
+        },
+      },
+      contract: { kind: "callable", ref: declaration.ref, params: declaration.params, results: declaration.results },
+    };
+    const mismatch = preparedIrDataMismatch(expected, matches[0]);
+    if (mismatch !== undefined) invalid(`runtime ABI ${key} contradicts its canonical declaration at ${mismatch}`);
+  }
+}
+
 /** Complete source-free validation precedes lookup reconstruction, backend acceptance and replay. */
 export function assertPreparedIrProgram(program: PreparedIrProgram): void {
   if (program.schema !== "prepared-ir-program-v1" || program.reconciliation !== "complete" || program.sealed !== true)
@@ -145,6 +200,7 @@ export function assertPreparedIrProgram(program: PreparedIrProgram): void {
   }
   const entries = new Map(program.abi.entries.map((entry) => [entry.plan.id, entry]));
   if (entries.size !== program.abi.entries.length) invalid("program ABI duplicates a binding");
+  validateRuntimeCallables(program);
   const authority = new ProgramAbiMap(program.inventory, program.derivedUnits);
   for (const entry of program.abi.entries) {
     validateEntry(entry, entries);

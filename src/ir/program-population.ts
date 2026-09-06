@@ -38,6 +38,7 @@ export function assertPreparedIrProgramPopulation(input: Population): void {
       !original?.terminal ||
       original.sourceId !== terminal.sourceId ||
       original.kind !== terminal.kind ||
+      original.terminalOwnerId !== terminal.terminalOwnerId ||
       original.declarationStart !== terminal.declarationStart ||
       original.declarationEnd !== terminal.declarationEnd ||
       terminal.terminalOwnerId !== terminal.id
