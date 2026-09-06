@@ -2,26 +2,48 @@
 //
 // #3518 package C — lossless codec for the production `PreparedIrProgram`.
 //
-// The codec owns no schema of its own. It encodes exactly the prepared-data
-// model that `freezePreparedIrValue` (src/ir/program.ts, package A) already
-// accepts — plain records, arrays, Map/Set, primitives, the IR_CLASS_SHAPE_CELL
-// brand and recursion only through exact IR class shapes — and it decodes
-// back into that same frozen model by handing the rebuilt value to the very
-// same copier. Anything the copier rejects the codec rejects too, so there is
-// one definition of "prepared data" and this file is a byte projection of it.
+// The codec owns no schema of its own. Its accepted data domain is exactly the
+// prepared-data model that `freezePreparedIrValue` (src/ir/program.ts, package
+// A) accepts and preserves:
 //
-// Canonical bytes: keys are emitted sorted, tagged forms are single-key
-// records, and every non-JSON value (bigint, -0, NaN, ±Infinity, undefined,
-// Map, Set, the class-shape brand, a recursive shape reference) has exactly one
-// spelling. `encode(decode(text)) === text` for every text `decode` accepts.
+//   - primitives: string, boolean, finite/non-finite/negative-zero number,
+//     bigint, null, undefined
+//   - arrays, including holes (absent index), present `undefined` and present
+//     `null` as three distinct states
+//   - plain records (Object.prototype or null prototype) whose own string keys
+//     may be anything — including `__proto__` and integer-like keys — plus at
+//     most one symbol key, the IR_CLASS_SHAPE_CELL brand
+//   - Map / Set (and A's FrozenMap / FrozenSet)
+//   - recursion only through exact branded IR class shapes
+//
+// Everything else (functions, symbols, foreign instances, other cycles) is
+// refused before any bytes are produced. Decoding rebuilds that model and hands
+// it to A's copier, so "prepared data" has a single definition.
+//
+// Canonical bytes: this file writes JSON itself. Record keys are sorted by
+// UTF-16 code unit, every non-JSON value has exactly one tagged spelling, and a
+// decoded value must re-encode to the identical bytes or the input is refused
+// (this rejects leading whitespace, duplicate keys, reordered keys and every
+// other non-canonical serialization without a second parser).
+//
+// A decoded program is data until its runtime projections are regenerated
+// through A/B's pure producer, compared field-for-field with the persisted
+// claims, frozen in place and passed through A's complete validator. Only that
+// re-authenticated program is returned by `decodePreparedIrProgram`.
 
 import { IR_CLASS_SHAPE_CELL } from "./nodes.js";
 import {
+  freezePreparedIrRuntimeValue,
   freezePreparedIrValue,
-  preparedIrProgramAbiLookup,
+  preparedIrDataMismatch,
   PreparedIrProgramInvariantError,
   type PreparedIrProgram,
+  type PreparedIrProgramRuntimeProjection,
 } from "./program.js";
+import { preparedIrDraftAbiLookup } from "./program-abi-contracts.js";
+import { irProgramRuntimeDemands } from "./program-runtime-demands.js";
+import { assertPreparedIrProgram } from "./program-validation.js";
+import { prepareWholeProgramRuntimeManifest } from "./runtime-program-manifest.js";
 
 export const PREPARED_IR_PROGRAM_CODEC = "prepared-ir-program-codec-v1" as const;
 export const PREPARED_IR_PROGRAM_SCHEMA = "prepared-ir-program-v1" as const;
@@ -30,18 +52,19 @@ export const PREPARED_IR_PROGRAM_SCHEMA = "prepared-ir-program-v1" as const;
 const TAG_NUMBER = "$number";
 const TAG_BIGINT = "$bigint";
 const TAG_UNDEFINED = "$undefined";
+const TAG_HOLE = "$hole";
 const TAG_MAP = "$map";
 const TAG_SET = "$set";
 const TAG_CLASS_SHAPE_REF = "$classShapeRef";
 /** The only symbol-keyed property prepared data may carry, spelled as a reserved string key. */
 const KEY_CLASS_SHAPE_CELL = "$irClassShapeCell";
 
-const SPECIAL_NUMBERS = new Map<string, number>([
+const SPECIAL_NUMBERS: readonly (readonly [string, number])[] = [
   ["-0", -0],
   ["NaN", Number.NaN],
   ["Infinity", Number.POSITIVE_INFINITY],
   ["-Infinity", Number.NEGATIVE_INFINITY],
-]);
+];
 
 function invalid(detail: string): never {
   throw new PreparedIrProgramInvariantError("invalid-prepared-data", `program codec: ${detail}`);
@@ -66,43 +89,52 @@ function isReadonlySetLike(value: object): value is ReadonlySet<unknown> {
 
 /** Same predicate the prepared-data copier uses to admit a recursive class shape. */
 function isRecursiveIrClassShape(value: object): value is { readonly classId: string } {
-  const candidate = value as Record<PropertyKey, unknown>;
+  const own = (key: PropertyKey) => Object.getOwnPropertyDescriptor(value, key)?.value;
+  const classId = own("classId");
   return (
-    candidate[IR_CLASS_SHAPE_CELL] === true &&
-    typeof candidate.classId === "string" &&
-    candidate.classId.startsWith("ir-class:v1:") &&
-    typeof candidate.className === "string" &&
-    Array.isArray(candidate.fields) &&
-    Array.isArray(candidate.methods) &&
-    Array.isArray(candidate.constructorParams)
+    own(IR_CLASS_SHAPE_CELL) === true &&
+    typeof classId === "string" &&
+    classId.startsWith("ir-class:v1:") &&
+    typeof own("className") === "string" &&
+    Array.isArray(own("fields")) &&
+    Array.isArray(own("methods")) &&
+    Array.isArray(own("constructorParams"))
   );
 }
 
+/** UTF-16 code-unit order; independent of the engine's own-key ordering rules. */
 function compareKeys(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 
 // ---------------------------------------------------------------------------
-// Encoding
+// Encoding — writes canonical JSON text directly
 // ---------------------------------------------------------------------------
 
-type Encoded = null | boolean | number | string | Encoded[] | { readonly [key: string]: Encoded };
+function quote(text: string): string {
+  return JSON.stringify(text);
+}
 
-function encodeValue(value: unknown, path: string, ancestors: Set<object>): Encoded {
+function tagged(tag: string, payload: string): string {
+  return `{${quote(tag)}:${payload}}`;
+}
+
+function encodeValue(value: unknown, path: string, ancestors: Set<object>): string {
   switch (typeof value) {
     case "string":
+      return quote(value);
     case "boolean":
-      return value;
-    case "number":
-      if (Number.isFinite(value) && !Object.is(value, -0)) return value;
-      for (const [spelling, special] of SPECIAL_NUMBERS) {
-        if (Object.is(special, value)) return { [TAG_NUMBER]: spelling };
-      }
-      return invalid(`${path}: number ${String(value)} has no canonical spelling`);
+      return value ? "true" : "false";
+    case "number": {
+      if (Number.isFinite(value) && !Object.is(value, -0)) return JSON.stringify(value);
+      const special = SPECIAL_NUMBERS.find(([, candidate]) => Object.is(candidate, value));
+      if (!special) return invalid(`${path}: number ${String(value)} has no canonical spelling`);
+      return tagged(TAG_NUMBER, quote(special[0]));
+    }
     case "bigint":
-      return { [TAG_BIGINT]: value.toString(10) };
+      return tagged(TAG_BIGINT, quote(value.toString(10)));
     case "undefined":
-      return { [TAG_UNDEFINED]: true };
+      return tagged(TAG_UNDEFINED, "true");
     case "function":
       return invalid(`${path}: prepared data cannot contain executable functions`);
     case "symbol":
@@ -112,32 +144,41 @@ function encodeValue(value: unknown, path: string, ancestors: Set<object>): Enco
     default:
       return invalid(`${path}: unsupported value type ${typeof value}`);
   }
-  if (value === null) return null;
+  if (value === null) return "null";
   if (ancestors.has(value)) {
-    if (isRecursiveIrClassShape(value)) return { [TAG_CLASS_SHAPE_REF]: value.classId };
+    if (isRecursiveIrClassShape(value)) return tagged(TAG_CLASS_SHAPE_REF, quote(value.classId));
     return invalid(`${path}: prepared data must be acyclic outside exact IR class shapes`);
   }
   const next = new Set(ancestors).add(value);
   if (Array.isArray(value)) {
-    return value.map((item, index) => encodeValue(item, `${path}[${index}]`, next));
+    const items: string[] = [];
+    for (let index = 0; index < value.length; index++) {
+      if (!Object.hasOwn(value, index)) {
+        items.push(tagged(TAG_HOLE, "true"));
+        continue;
+      }
+      const descriptor = Object.getOwnPropertyDescriptor(value, index)!;
+      if (!("value" in descriptor)) return invalid(`${path}[${index}]: array element must be a data property`);
+      items.push(encodeValue(descriptor.value, `${path}[${index}]`, next));
+    }
+    return `[${items.join(",")}]`;
   }
   if (isReadonlyMapLike(value)) {
-    return {
-      [TAG_MAP]: [...value.entries()].map(([key, item], index) => [
-        encodeValue(key, `${path}<key ${index}>`, next),
-        encodeValue(item, `${path}<value ${index}>`, next),
-      ]),
-    };
+    const entries = [...value.entries()].map(
+      ([key, item], index) =>
+        `[${encodeValue(key, `${path}<key ${index}>`, next)},${encodeValue(item, `${path}<value ${index}>`, next)}]`,
+    );
+    return tagged(TAG_MAP, `[${entries.join(",")}]`);
   }
   if (isReadonlySetLike(value)) {
-    return { [TAG_SET]: [...value.values()].map((item, index) => encodeValue(item, `${path}<item ${index}>`, next)) };
+    const items = [...value.values()].map((item, index) => encodeValue(item, `${path}<item ${index}>`, next));
+    return tagged(TAG_SET, `[${items.join(",")}]`);
   }
   if (!isPlainRecord(value)) {
     const name = (Object.getPrototypeOf(value) as { constructor?: { name?: string } } | null)?.constructor?.name;
     return invalid(`${path}: prepared data contains unsupported ${name ?? "object"} instance`);
   }
-  const record: Record<string, Encoded> = {};
-  const stringKeys: string[] = [];
+  const fields: { readonly spelled: string; readonly text: string }[] = [];
   for (const key of Reflect.ownKeys(value)) {
     const descriptor = Object.getOwnPropertyDescriptor(value, key);
     if (!descriptor || !("value" in descriptor)) {
@@ -146,47 +187,45 @@ function encodeValue(value: unknown, path: string, ancestors: Set<object>): Enco
     if (typeof key === "symbol") {
       if (key !== IR_CLASS_SHAPE_CELL) return invalid(`${path}: unsupported symbol property ${String(key)}`);
       if (descriptor.value !== true) return invalid(`${path}: IR_CLASS_SHAPE_CELL must be exactly true`);
-      record[KEY_CLASS_SHAPE_CELL] = true;
+      fields.push({ spelled: KEY_CLASS_SHAPE_CELL, text: "true" });
       continue;
     }
-    stringKeys.push(key);
+    fields.push({
+      spelled: key.startsWith("$") ? `$${key}` : key,
+      text: encodeValue(descriptor.value, `${path}.${key}`, next),
+    });
   }
-  for (const key of stringKeys) {
-    const spelled = key.startsWith("$") ? `$${key}` : key;
-    record[spelled] = encodeValue((value as Record<string, unknown>)[key], `${path}.${key}`, next);
-  }
-  const sorted: Record<string, Encoded> = {};
-  for (const key of Object.keys(record).sort(compareKeys)) sorted[key] = record[key]!;
-  return sorted;
+  fields.sort((left, right) => compareKeys(left.spelled, right.spelled));
+  return `{${fields.map((field) => `${quote(field.spelled)}:${field.text}`).join(",")}}`;
 }
 
 /**
- * Canonical bytes for one production program. The program is shape-checked
- * first so the codec never publishes a value the consumer would refuse.
+ * Canonical bytes for one program. The program is shape-checked first so the
+ * codec never publishes a value a consumer would refuse on structure alone.
  */
 export function encodePreparedIrProgram(program: PreparedIrProgram): string {
   assertPreparedIrProgramShape(program);
-  const encoded: Record<string, Encoded> = {
-    codec: PREPARED_IR_PROGRAM_CODEC,
-    program: encodeValue(program, "program", new Set()),
-    schema: PREPARED_IR_PROGRAM_SCHEMA,
-  };
-  return JSON.stringify(encoded);
+  return `{"codec":${quote(PREPARED_IR_PROGRAM_CODEC)},"program":${encodeValue(program, "program", new Set())},"schema":${quote(PREPARED_IR_PROGRAM_SCHEMA)}}`;
 }
 
 // ---------------------------------------------------------------------------
-// Decoding
+// Decoding — rebuilds the data model, then proves canonical bytes by re-encoding
 // ---------------------------------------------------------------------------
 
 type ShapeScope = ReadonlyMap<string, object>;
 
+const TAGS = new Set([TAG_NUMBER, TAG_BIGINT, TAG_UNDEFINED, TAG_HOLE, TAG_MAP, TAG_SET, TAG_CLASS_SHAPE_REF]);
+
+/** Sentinel returned by `decodeValue` for an array hole; never escapes `decodeValue`. */
+const HOLE: unique symbol = Symbol("program-codec.hole");
+
 function decodeTagged(tag: string, payload: unknown, path: string, shapes: ShapeScope): unknown {
   switch (tag) {
     case TAG_NUMBER: {
-      if (typeof payload !== "string" || !SPECIAL_NUMBERS.has(payload)) {
-        return invalid(`${path}: ${TAG_NUMBER} payload must be one of ${[...SPECIAL_NUMBERS.keys()].join(", ")}`);
-      }
-      return SPECIAL_NUMBERS.get(payload);
+      const special = typeof payload === "string" && SPECIAL_NUMBERS.find(([spelling]) => spelling === payload);
+      if (!special)
+        return invalid(`${path}: ${TAG_NUMBER} payload must be one of ${SPECIAL_NUMBERS.map(([s]) => s).join(", ")}`);
+      return special[1];
     }
     case TAG_BIGINT: {
       if (typeof payload !== "string" || !/^-?(0|[1-9][0-9]*)$/.test(payload) || payload === "-0") {
@@ -197,6 +236,9 @@ function decodeTagged(tag: string, payload: unknown, path: string, shapes: Shape
     case TAG_UNDEFINED:
       if (payload !== true) return invalid(`${path}: ${TAG_UNDEFINED} payload must be true`);
       return undefined;
+    case TAG_HOLE:
+      if (payload !== true) return invalid(`${path}: ${TAG_HOLE} payload must be true`);
+      return HOLE;
     case TAG_MAP: {
       if (!Array.isArray(payload)) return invalid(`${path}: ${TAG_MAP} payload must be an entry array`);
       const map = new Map<unknown, unknown>();
@@ -205,8 +247,11 @@ function decodeTagged(tag: string, payload: unknown, path: string, shapes: Shape
           return invalid(`${path}: ${TAG_MAP} entry ${index} must be a [key, value] pair`);
         }
         const key = decodeValue(entry[0], `${path}<key ${index}>`, shapes);
+        if (key === HOLE) return invalid(`${path}: ${TAG_MAP} key ${index} cannot be a hole`);
         if (map.has(key)) return invalid(`${path}: ${TAG_MAP} repeats key ${String(key)}`);
-        map.set(key, decodeValue(entry[1], `${path}<value ${index}>`, shapes));
+        const item = decodeValue(entry[1], `${path}<value ${index}>`, shapes);
+        if (item === HOLE) return invalid(`${path}: ${TAG_MAP} value ${index} cannot be a hole`);
+        map.set(key, item);
       });
       return map;
     }
@@ -215,6 +260,7 @@ function decodeTagged(tag: string, payload: unknown, path: string, shapes: Shape
       const set = new Set<unknown>();
       payload.forEach((item, index) => {
         const decoded = decodeValue(item, `${path}<item ${index}>`, shapes);
+        if (decoded === HOLE) return invalid(`${path}: ${TAG_SET} item ${index} cannot be a hole`);
         if (set.has(decoded)) return invalid(`${path}: ${TAG_SET} repeats item ${String(decoded)}`);
         set.add(decoded);
       });
@@ -231,6 +277,10 @@ function decodeTagged(tag: string, payload: unknown, path: string, shapes: Shape
   }
 }
 
+function define(target: object, key: PropertyKey, value: unknown): void {
+  Object.defineProperty(target, key, { value, enumerable: true, writable: true, configurable: true });
+}
+
 function decodeValue(node: unknown, path: string, shapes: ShapeScope): unknown {
   if (node === null || typeof node === "string" || typeof node === "boolean") return node;
   if (typeof node === "number") {
@@ -239,34 +289,36 @@ function decodeValue(node: unknown, path: string, shapes: ShapeScope): unknown {
     return node;
   }
   if (typeof node !== "object") return invalid(`${path}: unsupported JSON value type ${typeof node}`);
-  if (Array.isArray(node)) return node.map((item, index) => decodeValue(item, `${path}[${index}]`, shapes));
+  if (Array.isArray(node)) {
+    const array: unknown[] = new Array(node.length);
+    node.forEach((item, index) => {
+      const decoded = decodeValue(item, `${path}[${index}]`, shapes);
+      if (decoded !== HOLE) define(array, index, decoded);
+    });
+    return array;
+  }
   const keys = Object.keys(node);
-  if (keys.length === 1 && keys[0]!.startsWith("$") && !keys[0]!.startsWith("$$") && keys[0] !== KEY_CLASS_SHAPE_CELL) {
+  if (keys.length === 1 && TAGS.has(keys[0]!)) {
     return decodeTagged(keys[0]!, (node as Record<string, unknown>)[keys[0]!], path, shapes);
   }
-  for (let index = 1; index < keys.length; index++) {
-    if (compareKeys(keys[index - 1]!, keys[index]!) >= 0) {
-      return invalid(`${path}: record keys are not in canonical order (${keys[index - 1]} before ${keys[index]})`);
-    }
-  }
-  const record: Record<PropertyKey, unknown> = {};
+  const record: Record<PropertyKey, unknown> = Object.create(null);
   let branded = false;
-  const fieldKeys: { readonly spelled: string; readonly key: string }[] = [];
+  const fields: { readonly spelled: string; readonly key: string }[] = [];
   for (const spelled of keys) {
     if (spelled === KEY_CLASS_SHAPE_CELL) {
       if ((node as Record<string, unknown>)[spelled] !== true) {
         return invalid(`${path}: ${KEY_CLASS_SHAPE_CELL} must be exactly true`);
       }
-      record[IR_CLASS_SHAPE_CELL] = true;
+      define(record, IR_CLASS_SHAPE_CELL, true);
       branded = true;
       continue;
     }
     if (spelled.startsWith("$")) {
       if (!spelled.startsWith("$$")) return invalid(`${path}: unknown codec tag ${spelled} inside a record`);
-      fieldKeys.push({ spelled, key: spelled.slice(1) });
+      fields.push({ spelled, key: spelled.slice(1) });
       continue;
     }
-    fieldKeys.push({ spelled, key: spelled });
+    fields.push({ spelled, key: spelled });
   }
   // A recursive class shape must be reachable by its own `$classShapeRef`
   // while its fields are still being decoded, so register it before descending.
@@ -279,8 +331,10 @@ function decodeValue(node: unknown, path: string, shapes: ShapeScope): unknown {
     if (shapes.has(classId)) return invalid(`${path}: class shape ${classId} is nested inside itself twice`);
     scope = new Map(shapes).set(classId, record);
   }
-  for (const { spelled, key } of fieldKeys) {
-    record[key] = decodeValue((node as Record<string, unknown>)[spelled], `${path}.${key}`, scope);
+  for (const { spelled, key } of fields) {
+    const decoded = decodeValue((node as Record<string, unknown>)[spelled], `${path}.${key}`, scope);
+    if (decoded === HOLE) return invalid(`${path}.${key}: a record field cannot be a hole`);
+    define(record, key, decoded);
   }
   if (branded && !isRecursiveIrClassShape(record)) {
     return invalid(`${path}: ${KEY_CLASS_SHAPE_CELL} is only valid on an exact IR class shape`);
@@ -288,12 +342,7 @@ function decodeValue(node: unknown, path: string, shapes: ShapeScope): unknown {
   return record;
 }
 
-/**
- * Parse canonical bytes into a frozen, shape-checked production program.
- * Malformed bytes, unknown tags, noncanonical spellings and anything the
- * prepared-data copier refuses all fail here — before any consumer sees it.
- */
-export function decodePreparedIrProgram(text: string): PreparedIrProgram {
+function parseEnvelope(text: string): unknown {
   if (typeof text !== "string") return invalid("encoded program must be a string");
   let parsed: unknown;
   try {
@@ -317,9 +366,97 @@ export function decodePreparedIrProgram(text: string): PreparedIrProgram {
   if (envelope.schema !== PREPARED_IR_PROGRAM_SCHEMA) {
     return invalid(`unsupported schema ${String(envelope.schema)}; expected ${PREPARED_IR_PROGRAM_SCHEMA}`);
   }
-  const decoded = freezePreparedIrValue(decodeValue(envelope.program, "program", new Map()));
+  return envelope.program;
+}
+
+/**
+ * Bytes → persisted program DATA. Every persisted claim is preserved exactly
+ * (including runtime projections), the value is frozen through A's copier and
+ * shape-checked, and the bytes are proven canonical by re-encoding. The result
+ * is NOT re-authenticated: its runtime joins are clones without producer
+ * authority and A's complete validator has not run. Use
+ * `decodePreparedIrProgram` for anything a backend may consume.
+ */
+export function decodePreparedIrProgramData(text: string): PreparedIrProgram {
+  const decoded = freezePreparedIrValue(decodeValue(parseEnvelope(text), "program", new Map()));
   assertPreparedIrProgramShape(decoded);
+  const reencoded = encodePreparedIrProgram(decoded);
+  if (reencoded !== text) {
+    const at = firstDifference(text, reencoded);
+    return invalid(`encoded program is not canonical (first difference at byte ${at}); refusing non-canonical input`);
+  }
   return decoded;
+}
+
+function firstDifference(left: string, right: string): number {
+  const limit = Math.min(left.length, right.length);
+  for (let index = 0; index < limit; index++) if (left[index] !== right[index]) return index;
+  return limit;
+}
+
+/**
+ * Regenerate every persisted backend/target projection through the pure
+ * runtime producer, refuse any field-level contradiction with the persisted
+ * claims, and return the program carrying the regenerated (authenticated)
+ * joins in place of the persisted clones. A's complete validator runs last.
+ */
+export function reauthenticatePreparedIrProgram(persisted: PreparedIrProgram): PreparedIrProgram {
+  assertPreparedIrProgramShape(persisted);
+  const demands = new Map(persisted.ir.functions.map((fn) => [fn.unitId, irProgramRuntimeDemands(fn)]));
+  const runtime: PreparedIrProgramRuntimeProjection[] = [];
+  for (const projection of persisted.runtime) {
+    const key = `${projection.backend}:${projection.target}`;
+    const regenerated = prepareWholeProgramRuntimeManifest({
+      inventory: persisted.inventory,
+      ir: persisted.ir,
+      derivedUnits: persisted.derivedUnits,
+      abi: preparedIrDraftAbiLookup(persisted.abi.entries),
+      policy: projection.prepared.manifest.policy,
+      demands,
+    });
+    if (regenerated.kind !== "prepared") {
+      return invalid(
+        `persisted runtime projection ${key} cannot be regenerated: ${regenerated.kind} ${regenerated.detail}`,
+      );
+    }
+    const mismatch = preparedIrDataMismatch(regenerated.runtime, projection.prepared);
+    if (mismatch !== undefined) {
+      return invalid(`persisted runtime projection ${key} contradicts the regenerated runtime at ${mismatch}`);
+    }
+    if (
+      regenerated.runtime.manifest.policy.backend !== projection.backend ||
+      regenerated.runtime.manifest.policy.target !== projection.target
+    ) {
+      return invalid(`persisted runtime projection ${key} contradicts its own frozen policy`);
+    }
+    freezePreparedIrRuntimeValue(regenerated.runtime);
+    runtime.push(
+      Object.freeze({ backend: projection.backend, target: projection.target, prepared: regenerated.runtime }),
+    );
+  }
+  const program: PreparedIrProgram = Object.freeze({
+    schema: persisted.schema,
+    inventory: persisted.inventory,
+    units: persisted.units,
+    ir: persisted.ir,
+    abi: persisted.abi,
+    derivedUnits: persisted.derivedUnits,
+    startup: persisted.startup,
+    allocations: persisted.allocations,
+    runtime: Object.freeze(runtime),
+    reconciliation: persisted.reconciliation,
+    sealed: persisted.sealed,
+  });
+  assertPreparedIrProgram(program);
+  return program;
+}
+
+/**
+ * Bytes → complete, re-authenticated, validated program. This is the only
+ * decode a backend consumer may accept.
+ */
+export function decodePreparedIrProgram(text: string): PreparedIrProgram {
+  return reauthenticatePreparedIrProgram(decodePreparedIrProgramData(text));
 }
 
 /** Content fingerprint of canonical bytes (FNV-1a-64; identity aid, not a security hash). */
@@ -334,7 +471,7 @@ export function digestEncodedPreparedIrProgram(text: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Shape check shared by encode, decode and the backend consumer
+// Structural shape check shared by encode, decode and the backend consumer
 // ---------------------------------------------------------------------------
 
 function requireRecord(value: unknown, path: string): Record<string, unknown> {
@@ -357,11 +494,11 @@ function requireMap(value: unknown, path: string): ReadonlyMap<unknown, unknown>
 }
 
 /**
- * Structural contract of `PreparedIrProgram` as published by package A. This
- * is the codec/consumer-level check — container kinds, discriminators and the
- * joins a backend needs before it can even look up a body. Semantic
- * population checks (ownership, provenance, call closure) belong to A's
- * preparation driver and are run by the consumer when that module is present.
+ * Structural contract of `PreparedIrProgram` as published by package A —
+ * container kinds, discriminators and the joins a codec must see before it can
+ * even address a body. Semantic validation (population, ABI contracts, class
+ * layouts, allocations, runtime reproduction) is A's `assertPreparedIrProgram`,
+ * which `reauthenticatePreparedIrProgram` and the consumer run afterwards.
  */
 export function assertPreparedIrProgramShape(value: unknown): asserts value is PreparedIrProgram {
   const program = requireRecord(value, "program");
@@ -424,16 +561,17 @@ export function assertPreparedIrProgramShape(value: unknown): asserts value is P
 
   const abi = requireRecord(program.abi, "program.abi");
   const entries = requireArray(abi.entries, "program.abi.entries");
+  const bindingIds = new Set<string>();
   for (const [index, entry] of entries.entries()) {
     const record = requireRecord(entry, `program.abi.entries[${index}]`);
     const plan = requireRecord(record.plan, `program.abi.entries[${index}].plan`);
     if (typeof plan.id !== "string") return invalid(`program.abi.entries[${index}].plan.id must be a string`);
+    if (bindingIds.has(plan.id)) return invalid(`program ABI contains duplicate binding IDs (${plan.id})`);
+    bindingIds.add(plan.id);
     const contract = requireRecord(record.contract, `program.abi.entries[${index}].contract`);
     if (typeof contract.kind !== "string")
       return invalid(`program.abi.entries[${index}].contract.kind must be a string`);
   }
-  // Duplicate binding IDs are refused by A's own lookup reconstruction.
-  preparedIrProgramAbiLookup(program.abi as PreparedIrProgram["abi"]);
 
   const derived = requireArray(program.derivedUnits, "program.derivedUnits");
   for (const [index, record] of derived.entries()) {
@@ -451,6 +589,11 @@ export function assertPreparedIrProgramShape(value: unknown): asserts value is P
     requireArray(record.evaluations, `program.startup[${index}].evaluations`);
   }
 
+  const allocations = requireRecord(program.allocations, "program.allocations");
+  if (typeof allocations.size !== "number") return invalid("program.allocations.size must be a number");
+  requireArray(allocations.entries, "program.allocations.entries");
+  requireArray(allocations.metadata, "program.allocations.metadata");
+
   const runtime = requireArray(program.runtime, "program.runtime");
   const projections = new Set<string>();
   for (const [index, projection] of runtime.entries()) {
@@ -463,7 +606,11 @@ export function assertPreparedIrProgramShape(value: unknown): asserts value is P
     projections.add(key);
     const prepared = requireRecord(record.prepared, `program.runtime[${index}].prepared`);
     requireArray(prepared.functions, `program.runtime[${index}].prepared.functions`);
-    requireRecord(prepared.manifest, `program.runtime[${index}].prepared.manifest`);
+    const manifest = requireRecord(prepared.manifest, `program.runtime[${index}].prepared.manifest`);
+    const policy = requireRecord(manifest.policy, `program.runtime[${index}].prepared.manifest.policy`);
+    if (policy.backend !== record.backend || policy.target !== record.target) {
+      return invalid(`program.runtime[${index}] frozen policy contradicts its backend/target`);
+    }
     requireMap(prepared.providers, `program.runtime[${index}].prepared.providers`);
   }
 }

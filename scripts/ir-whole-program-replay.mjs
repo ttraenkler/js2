@@ -2,16 +2,20 @@
 //
 // #3518 package C — fresh-process replay of an encoded PreparedIrProgram.
 //
-//   node --import tsx scripts/ir-whole-program-replay.mjs <encoded.json>
+//   node --import tsx scripts/ir-whole-program-replay.mjs <encoded.json> <oracle.json>
 //
-// The child decodes the bytes, consumes the SAME decoded object for both
-// backends, assembles/instantiates each module and prints one JSON report to
-// stdout. A module-resolution hook records every module the process loads so
-// the report can prove, rather than assert, that no source frontend
-// (`src/ir/from-ast`, `src/compiler`, `src/checker`, `src/index`) took part.
-// Whether the TypeScript library itself was loaded is reported separately: it
-// is a measured fact about the import graph, not a pass/fail criterion the
-// codec can decide on its own (see the package C handoff notes).
+// oracle.json: { "targets": [{ "backend", "target" }], "calls": [{ "export", "args", "expected" }] }
+// where `expected` is plain JSON or a codec-style tag ({"$bigint":"…"} / {"$number":"Infinity"}).
+//
+// The child decodes the bytes through the complete (re-authenticating) decode,
+// accepts and emits the SAME decoded object for every requested backend/target,
+// instantiates each module and compares the program's own declared exports with
+// the separately pinned oracle. A module-resolution hook records every module
+// the process loads. The child FAILS CLOSED (exit 1) when: the bytes do not
+// decode or re-encode identically, any target fails to accept/emit/run or
+// mismatches the oracle, the census is empty, or any TypeScript / source
+// frontend / compiler module was loaded. A physical-plan capability gap is a
+// failure too — it is incomplete coverage, never success. Exit 2 is usage.
 
 import { readFileSync } from "node:fs";
 import { register } from "node:module";
@@ -23,12 +27,19 @@ const FRONTEND_MODULES = [
   /\/src\/checker\//,
   /\/src\/index\./,
   /\/src\/codegen\/index\./,
+  /\/src\/codegen-linear\/index\./,
+  /\/src\/ir\/async-from-ast\./,
+  /\/src\/ir\/async-prepare\./,
+  /\/src\/ir\/runtime-program-producers\./,
+  /\/src\/ir\/program-source\./,
+  /\/src\/ir\/program-preparation\./,
 ];
 const TYPESCRIPT_MODULES = [/\/node_modules\/typescript\//, /\/node_modules\/typescript7\//, /\/src\/ts-api\./];
 
 const { port1, port2 } = new MessageChannel();
+/** @type {{ url: string, parent: string | undefined }[]} */
 const loaded = [];
-port1.on("message", (url) => loaded.push(url));
+port1.on("message", (record) => loaded.push(record));
 port1.unref();
 register(
   `data:text/javascript,${encodeURIComponent(`
@@ -36,51 +47,100 @@ register(
     export function initialize(data) { port = data.port; }
     export async function resolve(specifier, context, next) {
       const result = await next(specifier, context);
-      port.postMessage(result.url);
+      port.postMessage({ url: result.url, parent: context.parentURL });
       return result;
     }
   `)}`,
   { parentURL: import.meta.url, data: { port: port2 }, transferList: [port2] },
 );
 
-const [, , encodedPath] = process.argv;
-if (!encodedPath) {
-  console.error("usage: node --import tsx scripts/ir-whole-program-replay.mjs <encoded.json>");
+const [, , encodedPath, oraclePath] = process.argv;
+if (!encodedPath || !oraclePath) {
+  console.error("usage: node --import tsx scripts/ir-whole-program-replay.mjs <encoded.json> <oracle.json>");
   process.exit(2);
 }
 
-const { decodePreparedIrProgram, digestEncodedPreparedIrProgram, encodePreparedIrProgram } =
-  await import("../src/ir/program-codec.ts");
-const { replayProgram, runFixtureExports } = await import("../tests/helpers/ir-whole-program-replay.ts");
-
-const text = readFileSync(encodedPath, "utf8");
 const report = {
-  digest: digestEncodedPreparedIrProgram(text),
+  digest: undefined,
   reencodedIdentical: false,
-  backends: {},
+  decodeFailure: undefined,
+  targets: {},
+  loadedModuleCount: 0,
   frontendModules: [],
   typescriptModules: [],
-  loadedModuleCount: 0,
+  ok: false,
+};
+
+let failed = false;
+const fail = (why) => {
+  failed = true;
+  report.failures = [...(report.failures ?? []), why];
 };
 
 try {
+  const { decodePreparedIrProgram, digestEncodedPreparedIrProgram, encodePreparedIrProgram } =
+    await import("../src/ir/program-codec.ts");
+  const { compareExports, replayOptions, replayProgram } = await import("../tests/helpers/ir-whole-program-replay.ts");
+
+  const text = readFileSync(encodedPath, "utf8");
+  const oracle = JSON.parse(readFileSync(oraclePath, "utf8"));
+  report.digest = digestEncodedPreparedIrProgram(text);
   const program = decodePreparedIrProgram(text);
   report.reencodedIdentical = encodePreparedIrProgram(program) === text;
-  for (const backend of ["wasmgc", "linear"]) {
+  if (!report.reencodedIdentical) fail("decoded program does not re-encode to the input bytes");
+
+  for (const { backend, target } of oracle.targets) {
+    const key = `${backend}:${target}`;
     try {
-      const run = await replayProgram(program, backend);
-      report.backends[backend] = { kind: "ran", bytes: run.bytes, results: runFixtureExports(run.exports) };
+      const outcome = await replayProgram(program, replayOptions(backend, target));
+      if (outcome.kind === "not-accepted") {
+        report.targets[key] = { kind: "not-accepted", failure: outcome.failure };
+        fail(`${key}: not accepted (${outcome.failure.kind} ${outcome.failure.code}: ${outcome.failure.detail})`);
+        continue;
+      }
+      if (outcome.kind === "plan-gap") {
+        report.targets[key] = { kind: "plan-gap", gaps: outcome.gaps };
+        fail(`${key}: physical plan gap — ${outcome.gaps.join(", ")}`);
+        continue;
+      }
+      const rows = compareExports(outcome.run.exports, oracle.calls);
+      const emitted = outcome.run.emitted.emittedUnitIds;
+      report.targets[key] = {
+        kind: "ran",
+        bytes: outcome.run.bytes,
+        emittedUnits: emitted.length,
+        projectionUnits: outcome.run.accepted.runtime.prepared.functions.length,
+        rows,
+      };
+      if (emitted.length !== outcome.run.accepted.runtime.prepared.functions.length)
+        fail(`${key}: emitted unit receipts differ from the projection`);
+      for (const row of rows)
+        if (!row.match) fail(`${key}: ${row.export}(${row.args.join(",")}) = ${row.actual}, expected ${row.expected}`);
     } catch (error) {
-      report.backends[backend] = { kind: "failed", detail: error instanceof Error ? error.message : String(error) };
+      report.targets[key] = {
+        kind: "threw",
+        detail: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+      };
+      fail(`${key}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 } catch (error) {
   report.decodeFailure = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+  fail(report.decodeFailure);
 }
 
 // Let the hook thread flush its last messages before reading the record.
 await new Promise((resolve) => setTimeout(resolve, 50));
 report.loadedModuleCount = loaded.length;
-report.frontendModules = loaded.filter((url) => FRONTEND_MODULES.some((pattern) => pattern.test(url)));
-report.typescriptModules = loaded.filter((url) => TYPESCRIPT_MODULES.some((pattern) => pattern.test(url)));
+const chain = (record) => (record.parent ? `${record.url} <- ${record.parent}` : record.url);
+report.frontendModules = loaded.filter(({ url }) => FRONTEND_MODULES.some((pattern) => pattern.test(url))).map(chain);
+report.typescriptModules = loaded
+  .filter(({ url }) => TYPESCRIPT_MODULES.some((pattern) => pattern.test(url)))
+  .map(chain);
+if (report.loadedModuleCount === 0) fail("module-load census is empty; the hook recorded nothing");
+if (report.frontendModules.length > 0)
+  fail(`source frontend modules were loaded: ${report.frontendModules.join("; ")}`);
+if (report.typescriptModules.length > 0) fail(`TypeScript modules were loaded: ${report.typescriptModules.join("; ")}`);
+report.ok = !failed;
 process.stdout.write(`${JSON.stringify(report)}\n`);
+process.exit(failed ? 1 : 0);

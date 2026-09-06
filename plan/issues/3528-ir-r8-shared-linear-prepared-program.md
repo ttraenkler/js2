@@ -1077,3 +1077,94 @@ nothing here defines a second ledger, cache or admission path.
 - The seven-unit application fixture (D) has not been pushed through this path;
   the codec evidence above is on a synthetic complete program built from A's
   types, not on A's driver output.
+
+### Implementation Record — 2026-09-06 — package C increment 2: reviewed corrections, accept/emit contract, re-authentication (Claude)
+
+Base: signed integration dependency `7b2e8b03` merged into the C branch (merge
+`ad1d205c`); first increment `5dd03b8e` preserved. Root's independent codec
+controls (`c-codec-independent-controls.json`) and D's container probe
+(`c-codec-container-probe-v2`) are all addressed and pinned as tests.
+
+**Codec (`src/ir/program-codec.ts`).** The accepted data domain is now stated
+and enforced: it is exactly what A's `freezePreparedIrValue` accepts and
+preserves. Fixes for the five reviewed cases: (1) leading/trailing whitespace,
+(2) duplicate keys, and every other non-canonical serialization are refused by
+the acceptance rule `encode(decode(text)) === text` (no second parser, first
+differing byte reported); (3) own `__proto__` data properties survive
+(records are built with `Object.create(null)` + `defineProperty`, encoder
+reads descriptors); (4) integer-like keys are written by the codec's own
+serializer in UTF-16 code-unit order — `JSON.stringify` key order is no longer
+used anywhere; (5) array holes, present `undefined` and present `null` are
+three distinct spellings (`{"$hole":true}` is legal only as an array element).
+`decodePreparedIrProgramData` returns persisted claims verbatim (unauthenticated);
+`decodePreparedIrProgram` regenerates every persisted backend/target projection
+through the pure `prepareWholeProgramRuntimeManifest`, refuses any
+`preparedIrDataMismatch` against the persisted runtime data, freezes the
+regenerated joins in place (restoring the WeakMap plan/manifest authority that
+clones cannot carry) and runs A's complete `assertPreparedIrProgram`. Old
+`preparedIrProgramAbiLookup(program.abi)` calls are gone; the draft lookup is
+used only for regeneration input.
+
+**Consumer (`src/ir/backend/program-consumer.ts`).** `acceptPreparedIrProgram(program, options)`
+→ `PreparedIrBackendAcceptance` and `emitAcceptedIrProgram(accepted, plan)` →
+`EmittedPreparedIrProgram`, on A's signed types (`PreparedIrBackendOptions`
+with backend/target/sharedExceptionTag/utf8Storage/sourceMap/moduleName and the
+optional linear data projection). Acceptance: A's validator → exact
+backend/target projection (missing ⇒ located `unsupported`, `sourceFile`
+retained) → unit-body closure on the projection's PHYSICAL functions → per-body
+`verifyIrBackendLegality` (gap ⇒ located `unsupported`). Acceptances are
+authenticated by a module-private WeakSet; a structurally forged or cloned
+acceptance and a second emission both fail with `invalid-transaction-capability`.
+Emission lowers every physical body all-or-nothing, calls the plan's
+`reserveSharedExceptionTag` before lowering when requested (missing hook ⇒
+`emission-failed` before any emitter exists), assembles via the backend's
+physical plan and returns exact `emittedUnitIds`. Observations `accepted` /
+`emission-started` / `emitted` are raised through A's `observePreparedIrProgram`
+from the consumer — A may relocate these calls into its public wrapper.
+
+**Replay runner (`scripts/ir-whole-program-replay.mjs`).** Consumes the
+program's declared exports against a separately pinned oracle file, replays
+every requested backend/target from the same decoded object, prints a nonempty
+module census, and fails closed (exit 1) on decode/canonicality failure, any
+not-accepted target, any physical-plan gap, any oracle mismatch, receipt/
+projection count mismatch, or any TypeScript / source-frontend / compiler /
+producer module load.
+
+**Measured (2026-09-06, vitest single file, load1 < 8 gate).** 19/19:
+- synthetic complete fixture (now passes A's validator: exact
+  `irUnitCallableBindingId`, class layout entry, allocation snapshot, one
+  regenerated projection per backend): byte-identical re-encode AND
+  `preparedIrDataMismatch === undefined`; both backends emit 4/4 bodies,
+  8 emitters for 8 physical bodies, oracle `main=42, helper(21)=42,
+  big=9007199254740993n, special=Infinity` on wasmgc:host and linear:host.
+- 20 codec refusals incl. the five reviewed cases; 4 data-model probes.
+- re-authentication refusals: tampered manifest feature, dropped physical body.
+- 5 consumer negatives, each with 0 emitters: missing projection (located,
+  `sourceFile`), forged acceptance, cloned acceptance, second emission,
+  unreservable shared exception tag; plus linear options on wasmgc refused.
+- A-produced common backend subset (`math.ts`/`entry.ts`, 2 sources): prepared
+  by `prepareWholeIrProgram`, codec-identical, mismatch-free, runs on BOTH
+  backends through the codec (`main()=42`).
+- A-produced original mixed application (exact D sources, digest
+  `236fa7d9…` reproduced by recipe `json`): 7 terminals, codec-identical,
+  mismatch-free, **wasmgc:host accepted**; requesting a linear projection at
+  preparation is a located `unsupported` (`promise.capability.create has no
+  linear adapter` @ entry.ts) and linear:host acceptance is `unsupported` (no
+  projection) — recorded as incomplete coverage. Emission through the scalar-
+  subset plan reports gaps (`executable startup unit`, `runtime providers`)
+  instead of a smaller module — the full physical plan (globals, imports,
+  providers, startup, exception tag) is the next C step and depends on A's
+  `registry/physical-imports.ts` extraction.
+- fresh-process replay: both targets ran, 4/4 receipts, **0 TypeScript, 0
+  frontend modules** (A's pure identity split removed the earlier 5); fail-closed
+  controls: non-canonical byte ⇒ exit 1 with decode failure; oracle mismatch ⇒
+  exit 1.
+- typecheck 0 errors; LOC/function/coercion/oracle gates OK; prettier/biome
+  clean. `check:dead-exports` (via space-free symlink) still reports only the
+  pre-existing `directCallTargets`, owned by root's audit fix.
+
+**Still open for C.** Full physical plan for the mixed application (A's
+physical-imports dependency); routing `compileLinearIrFunctions` onto
+`acceptPreparedIrProgram`/`emitAcceptedIrProgram` (needs a
+`PreparedIrProgram` handed to the linear driver by A's wrapper); D's
+independent runner remains under review and is not used as evidence here.

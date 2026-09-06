@@ -1,19 +1,21 @@
 // Copyright (c) 2026 Loopdive GmbH. Licensed under Apache-2.0 WITH LLVM-exception.
 //
-// #3518 package C — a hand-assembled, complete `PreparedIrProgram` used by the
-// codec/consumer tests and by the fresh-process replay runner. It is test DATA
-// built only from package A's published types and the existing IR builders;
-// it is not a producer and does not stand in for A's preparation driver. The
-// program is deliberately small but touches every codec-relevant shape:
-// cross-unit calls, a ReadonlyMap, a recursive class shape in the ABI, i64
-// (bigint) and non-finite/negative-zero f64 constants, and an undefined-valued
-// optional property.
+// #3518 package C — a hand-assembled, COMPLETE `PreparedIrProgram` used by the
+// codec/consumer tests and the fresh-process replay runner. It is test DATA
+// built only from package A's published types, A's contract helpers and the
+// existing IR builders, and it must pass A's complete validator; it is not a
+// producer and does not stand in for A's preparation driver or for D's
+// application fixtures. It touches every codec-relevant shape: cross-unit
+// calls, ReadonlyMaps (units, providers), a recursive class shape in the ABI,
+// i64 (bigint) and non-finite/negative-zero f64 constants, a present-but-
+// undefined optional property, and one runtime projection per backend.
 
+import { irClassTypeRef } from "../../src/ir/abi-bindings.js";
 import { AllocSiteRegistry } from "../../src/ir/alloc-registry.js";
 import { IrFunctionBuilder } from "../../src/ir/builder.js";
-import { irUnitFuncRef } from "../../src/ir/callable-bindings.js";
+import { irCallableBindingKey, irUnitCallableBindingId, irUnitFuncRef } from "../../src/ir/callable-bindings.js";
+import { irTypeBindingKey } from "../../src/ir/abi-bindings.js";
 import {
-  createIrBindingId,
   createIrClassId,
   createIrSourceId,
   createIrUnitId,
@@ -24,25 +26,39 @@ import {
 } from "../../src/ir/identity.js";
 import type { IrModuleInitPlan } from "../../src/ir/module-init-plan.js";
 import { IR_CLASS_SHAPE_CELL, irVal, type IrClassShape, type IrFunction, type IrType } from "../../src/ir/nodes.js";
-import type { ProgramAbiPlanEntry } from "../../src/ir/program-abi.js";
 import {
-  preparedIrReadonlyMap,
+  preparedIrCallableSignature,
+  preparedIrClassLayoutKey,
+  preparedIrDraftAbiLookup,
+} from "../../src/ir/program-abi-contracts.js";
+import { irProgramRuntimeDemands } from "../../src/ir/program-runtime-demands.js";
+import {
+  freezePreparedIrRuntimeValue,
   freezePreparedIrValue,
+  preparedIrReadonlyMap,
   type PreparedIrAbiEntry,
   type PreparedIrProgram,
+  type PreparedIrProgramRuntimeProjection,
 } from "../../src/ir/program.js";
+import type { RuntimeManifestPolicy } from "../../src/ir/runtime-manifest.js";
+import { prepareWholeProgramRuntimeManifest } from "../../src/ir/runtime-program-manifest.js";
 
 export const CODEC_FIXTURE_SOURCE_KEY = "@test/ir-whole-program-codec";
 
-/** Native oracle values for the runnable bodies. */
-export const CODEC_FIXTURE_EXPECTED = Object.freeze({
-  main: 42,
-  helper: (x: number) => x * 2,
-  /** `i64.const 9007199254740993` returned as a BigInt by the Wasm JS API. */
-  big: 9007199254740993n,
-  /** `(-0) + Infinity`. */
-  special: Number.POSITIVE_INFINITY,
+/** Native oracle for the runnable bodies, in the replay runner's oracle format. */
+export const CODEC_FIXTURE_ORACLE = Object.freeze({
+  calls: [
+    { export: "main", args: [], expected: 42 },
+    { export: "helper", args: [21], expected: 42 },
+    { export: "big", args: [], expected: { $bigint: "9007199254740993" } },
+    { export: "special", args: [], expected: { $number: "Infinity" } },
+  ],
 });
+
+export const CODEC_FIXTURE_POLICIES: readonly RuntimeManifestPolicy[] = Object.freeze([
+  { target: "host", backend: "wasmgc" },
+  { target: "host", backend: "linear" },
+]);
 
 export interface CodecFixture {
   readonly program: PreparedIrProgram;
@@ -78,7 +94,7 @@ function terminal(record: {
   };
 }
 
-export function buildCodecFixture(): CodecFixture {
+export function buildCodecFixture(policies: readonly RuntimeManifestPolicy[] = CODEC_FIXTURE_POLICIES): CodecFixture {
   const f64: IrType = irVal({ kind: "f64" });
   const i64: IrType = irVal({ kind: "i64" });
   const sourceId = createIrSourceId({ kind: "entry", order: 0, sourceKey: CODEC_FIXTURE_SOURCE_KEY });
@@ -122,7 +138,7 @@ export function buildCodecFixture(): CodecFixture {
   bigBuilder.openBlock();
   bigBuilder.terminate({
     kind: "return",
-    values: [bigBuilder.emitConst({ kind: "i64", value: CODEC_FIXTURE_EXPECTED.big }, i64)],
+    values: [bigBuilder.emitConst({ kind: "i64", value: 9007199254740993n }, i64)],
   });
   const big = bigBuilder.finish();
 
@@ -161,54 +177,48 @@ export function buildCodecFixture(): CodecFixture {
   ];
   const classShape = mutableShape as unknown as IrClassShape;
 
-  const callableEntry = (
-    id: IrFunctionIdentity,
-    ordinal: number,
-    params: readonly IrType[],
-    results: readonly IrType[],
-  ): PreparedIrAbiEntry => {
-    const plan: ProgramAbiPlanEntry = {
-      id: createIrBindingId({ ownerId: id.unitId, domain: "callable", role: "unit" }),
-      order: { sourceOrder: 0, declarationOrder: ordinal },
-      displayName: id.name,
-      structuralReferenceKey: `unit:${id.unitId}`,
-      intent: {
-        kind: "callable",
-        origin: "source",
-        signature: {
-          params: params.map((type) => (type as { val: { kind: string } }).val.kind),
-          results: results.map((type) => (type as { val: { kind: string } }).val.kind),
+  const callableEntry = (fn: IrFunction, id: IrFunctionIdentity, ordinal: number): PreparedIrAbiEntry => {
+    const ref = irUnitFuncRef(id);
+    const params = fn.params.map((param) => param.type);
+    const results = fn.resultTypes;
+    return {
+      plan: {
+        id: irUnitCallableBindingId(id.unitId),
+        order: { sourceOrder: source.order, declarationOrder: ordinal },
+        displayName: id.name,
+        structuralReferenceKey: irCallableBindingKey(ref.binding),
+        intent: {
+          kind: "callable",
+          origin: "source",
+          signature: preparedIrCallableSignature(params, results),
+          unitId: id.unitId,
         },
-        unitId: id.unitId,
-        sourceId,
+        slotPolicy: "required",
+        slotSpace: "function",
       },
-      slotPolicy: "required",
-      slotSpace: "function",
+      contract: { kind: "callable", ref, params, results },
     };
-    return { plan, contract: { kind: "callable", ref: irUnitFuncRef(id), params, results } };
   };
+  const classRef = irClassTypeRef(classId, "Node");
   const classEntry: PreparedIrAbiEntry = {
     plan: {
-      id: createIrBindingId({ ownerId: classId, domain: "class", role: "layout" }),
-      order: { sourceOrder: 0, declarationOrder: 4 },
+      id: classRef.binding.bindingId,
+      order: { sourceOrder: source.order, declarationOrder: 4 },
       displayName: "Node",
-      intent: { kind: "class", classId, layoutKey: "Node" },
+      structuralReferenceKey: irTypeBindingKey(classRef.binding),
+      intent: { kind: "class", classId, layoutKey: preparedIrClassLayoutKey(classShape) },
       slotPolicy: "required",
       slotSpace: "type",
     },
-    contract: {
-      kind: "class",
-      ref: {
-        kind: "type",
-        name: "Node",
-        binding: {
-          kind: "support",
-          bindingId: createIrBindingId({ ownerId: classId, domain: "type", role: "layout" }),
-        },
-      },
-      shape: classShape,
-    },
+    contract: { kind: "class", ref: classRef, shape: classShape },
   };
+  const entries = [
+    callableEntry(helper, helperId, 0),
+    callableEntry(main, mainId, 1),
+    callableEntry(big, bigId, 2),
+    callableEntry(special, specialId, 3),
+    classEntry,
+  ];
 
   const startup: IrModuleInitPlan = {
     sourceId,
@@ -228,8 +238,7 @@ export function buildCodecFixture(): CodecFixture {
     gaps: [],
   };
 
-  const draft = {
-    schema: "prepared-ir-program-v1" as const,
+  const semantic = freezePreparedIrValue({
     inventory: {
       sources: [source],
       classes: [
@@ -251,23 +260,38 @@ export function buildCodecFixture(): CodecFixture {
       allUnits: terminals,
       terminalUnits: terminals,
     },
-    units: preparedIrReadonlyMap(terminals.map((record) => [record.id, record] as const)),
     ir: { functions },
-    abi: {
-      entries: [
-        callableEntry(helperId, 0, [f64], [f64]),
-        callableEntry(mainId, 1, [], [f64]),
-        callableEntry(bigId, 2, [], [i64]),
-        callableEntry(specialId, 3, [], [f64]),
-        classEntry,
-      ],
-    },
+    abi: { entries },
     derivedUnits: [],
     startup: [startup],
-    runtime: [],
-    reconciliation: "complete" as const,
-    sealed: true as const,
-  };
-  const program = freezePreparedIrValue(draft) as PreparedIrProgram;
-  return { program, functions, classShape };
+    allocations: registry.snapshot(),
+  }) as Pick<PreparedIrProgram, "inventory" | "ir" | "abi" | "derivedUnits" | "startup" | "allocations">;
+
+  const demands = new Map(semantic.ir.functions.map((fn) => [fn.unitId, irProgramRuntimeDemands(fn)]));
+  const runtime: PreparedIrProgramRuntimeProjection[] = [];
+  for (const policy of policies) {
+    const projection = prepareWholeProgramRuntimeManifest({
+      ...semantic,
+      abi: preparedIrDraftAbiLookup(semantic.abi.entries),
+      policy,
+      demands,
+    });
+    if (projection.kind !== "prepared") {
+      throw new Error(
+        `codec fixture runtime projection ${policy.backend}:${policy.target} failed: ${projection.detail}`,
+      );
+    }
+    freezePreparedIrRuntimeValue(projection.runtime);
+    runtime.push(Object.freeze({ backend: policy.backend, target: policy.target, prepared: projection.runtime }));
+  }
+
+  const program: PreparedIrProgram = Object.freeze({
+    schema: "prepared-ir-program-v1",
+    ...semantic,
+    units: preparedIrReadonlyMap(semantic.inventory.terminalUnits.map((unit) => [unit.id, unit] as const)),
+    runtime: Object.freeze(runtime),
+    reconciliation: "complete",
+    sealed: true,
+  });
+  return { program, functions: semantic.ir.functions, classShape };
 }
