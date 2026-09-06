@@ -458,6 +458,77 @@ controls cover retained direct fallback, graph ownership, invocation policies
 and strict startup authentication. Normal signing of the three-file repair
 follows; no test assertion or baseline is weakened here.
 
+#### Separate common-backend source fixture — implementation plan
+
+D owns this new source fixture:
+`tests/fixtures/ir-whole-program/common-backend-scalar/manifest.json`.
+Its acyclic state/math/entry sources retain synchronous `initial`, `readPhase`
+and `run` exports under the existing native execution protocol, with an
+explicit `promise: false` result. The state initializer updates exported base;
+the math initializer must read that initialized base when computing bias, so
+wrong startup order changes observable results. `combine(seed)` evaluates
+`Math.sqrt(seed + base) + bias`; `run` changes phase and calls it across files.
+The three-source/seven-terminal shape is an expectation to measure, not an
+invented census. Source bytes, exact unit IDs, native values and all six phase
+observations must be derived from actual parsing/execution and recorded with
+their hashes. Preserve all original mixed/renamed fixture bytes and coverage.
+
+After B releases its current validation/signing slot, D may execute native
+derivation, exact inventory and A's preparation on both wasmgc/host and
+linear/host policies, inspecting the nonconstant sqrt demand and both runtime
+projections from one semantic program. The proposal alone proves no backend
+capability. Defer public candidate compilation and decoded backend replay to
+the actual combined A/C implementation; no old hybrid pass supplies that
+acceptance. D edits neither B's runner/test nor C's codec/consumer. Add no
+fixture allowlist and do not replace the mixed-fixture denominator. Sign only
+the complete measured manifest with normal hooks; keep derivation artifacts
+worktree-local. Root integrates the fixture alongside the reviewed runner.
+
+#### Exact fixture census and runner ownership — implementation plan
+
+B owns only `scripts/ir-whole-program-application-evidence.mjs` and
+`tests/ir/whole-program-application-evidence.test.ts` under the granular claim
+`3518:evidence-runner-acceptance`, owner
+`ttraenkler/astra-evidence-acceptance-b-20260906`, branch
+`codex/3518-evidence-acceptance-b-20260906`. D released those two files at
+`b3f08613aff01fadfa4d924b4be7924e1a340c8e`; broad A/B/C/D and scoped claims
+remain held. The claim CLI verified the new claim on the assignment ref.
+
+D also owns metadata-only additions to the existing `original-async-mixed`,
+`renamed-reordered` and `independent-mixed` manifests. For all four manifests,
+derive `inventory.sourceRecords` as `{ sourceId, sourceKey, kind, order }`
+from the actual inventory's source records, and `inventory.terminalRecords`
+as `{ unitId, sourceId, sourceKey, kind, observedKind, displayName }` from its
+terminal records joined to that source map. `kind` is the actual `IrUnitKind`
+(for example `top-level-function`); `observedKind` is the telemetry domain
+(for example `function`). Do not parse opaque identifiers or zip independently
+ordered vectors. Normalize the manifest's relative filenames explicitly when
+joining canonical source keys. Preserve the existing three fixtures' source
+bytes, digests, IDs, ordering, native values and coverage denominators.
+
+The runner must bind each terminal to its expected source and actual kind,
+validate the matching direct entry point, require an exact unique candidate
+source census and candidate mode, and retain the actual raw direct-route audit.
+Its schema-complete controls must reject reassigned terminals, wrong entry
+points, extra or duplicate sources and mode retagging. Repeated legitimate
+initializer passes remain valid. Preserve archived original control results;
+expanded public-schema controls are a new cohort, not an unchanged rerun.
+Do not manufacture per-source receipts when the measured direct compiler lacks
+them. A reviewed terminal ordering: independently constructed, frozen and fully
+validated terminal vectors may permute exact records, because population,
+receipts and ABI authority join by ID. Source order and startup order remain
+semantic. Captured manifest and evidence-row mutations must remain rejected.
+
+The approved dependency-order source fails preparation on A's clean signed
+`49f95b3fe92c710fc4877f50d080296671d87eab`: the math initializer calls
+undeclared callable `runtime|20:__new_ReferenceError`. D retained the actual
+failure report and stable source provenance. A separately measured scale-call
+variant passes preparation but does not establish the planned imported-global
+initializer behavior; its signed `d7e649091ba36e21b940eb8576feabb0c258c214`
+is not accepted as that control. Preserve both measurements. A investigates
+the missing runtime ABI declaration; D must retain the approved source/native
+census and label preparation failure without substituting coverage.
+
 B also has a narrow grant for the await-expression arm/import wiring in
 `src/ir/from-ast.ts`. Read-only ownership review verified the earlier R1 W1-G
 and R3 W1-C implementations landed at merge commits `ae5d2d25` and `6b9c5a1f`,
