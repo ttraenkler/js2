@@ -10590,3 +10590,67 @@ rationale, `LOC_GATE_BASE` re-checked). **Sequence behind #5297** (W2-A holds
 (#3521 `:953-956`): line-scoped edit at `:6598-6603` only, the same shape
 F1/F2 took — record the R2 lane's acknowledgement in the PR body as F3-S1 did.
 Claim slug `3526:f3-s3`, never the bare id.
+
+### ReferenceError runtime declaration slice — 2026-09-06
+
+Root granted the bounded runtime-producer implementation for #3518,
+“IR-only default and direct front-end retirement”, before source edits. This
+slice starts from signed integration `2e68ccfe6b2996307559952daa94c5acb2a277fb`
+in isolated worktree `codex-3518-reference-error-runtime-20260906`, under claim
+`3518:reference-error-runtime`. B retains its broad runtime ownership and its
+unchanged B45 oracle; A owns incorporation and validation in the existing ABI
+vector, and C owns physical reservation and consumption.
+
+The new pure `runtime-callable-declarations.ts` getter recognizes only the
+exact runtime binding `__new_ReferenceError`. Its immutable declaration has
+feature `error.reference.construct`, one externref parameter and one externref
+result, derived from the sole canonical `env.__new_ReferenceError` host record.
+The manifest reuses that declaration's signature and existing target filtering:
+host selects the import, standalone/WASI the native helper. Existing native
+emission builds `$Error_struct` with `struct.new` and `extern.convert_any`;
+this slice admits WasmGC only, leaving linear representation/throw support
+explicitly unavailable.
+
+Owned source changes are limited to that new leaf and the corresponding
+feature/provider/call/demand-owner hunks in `runtime-host-capabilities.ts`,
+`runtime-manifest.ts`, `intrinsic-support.ts`, and `runtime-program-manifest.ts`.
+The existing full block/state scans request the getter's feature and retain
+its actual requesting unit; runtime calls prevent the optional empty return.
+A's complete ABI collector also visits `closure.new.liftedFunc`; both runtime
+visitors use that same exact-reference population. Declaring a closure target
+does not establish physical closure support, which remains C's capability check.
+There is no new manifest-demand field, policy option, ABI/schema field or
+source dependency. The imported-global guard and approved three-source,
+seven-terminal fixture remain unchanged.
+
+Validation will cover exact binding selection, canonical deep immutability,
+host/native target and backend admission, nested/later-block/async-state
+demands, located original and derived owners, malformed capability/provider
+contracts, and a fresh-process frontend import barrier with a positive control.
+Only the new ReferenceError producer test and affected catalog ID/count/
+`LATER_SLICE_IDS` expectations in the existing string-schema suite are owned.
+Compiler, typecheck and test work will use root's single heavy slot after a
+fresh finite nonnegative load sample below cores minus two. Results and exact
+denominators will be recorded after execution; preparation does not establish
+physical reservation or application replay acceptance.
+
+Validation on signed parent `2e68ccfe6b2996307559952daa94c5acb2a277fb` plus
+this scoped diff passed **103/103 tests across 5/5 files**: ReferenceError
+producer **28/28**, string capability schema **32/32**, complete runtime
+producers **25/25**, async providers **10/10**, and runtime manifest **8/8**.
+Both full project TypeScript 7 and TypeScript 5 checks exited zero. The fresh
+load samples were respectively **4.375**, **4.3408203125**, and **7.2041015625**,
+all nonnegative and below **8** on ten logical cores; the jobs ran sequentially
+in root's assigned slot. Test workers used one fork, no file parallelism and
+4096 MB. Scoped formatting and Biome also passed. Evidence is retained in
+this worktree's `.tmp/reference-error-runtime-tests.log` and corresponding
+`reference-error-runtime-typecheck-ts7.log` / `reference-error-runtime-typecheck-ts5.log`.
+
+The two native helper controls measure construction and ABI only: each emits
+one `__new_ReferenceError` function with externref parameter/result and observes
+`struct.new` plus `extern.convert_any`. They do not establish application
+execution, error identity, physical reservation or linear support. The imported
+global's null/externref/throw legality, native Error struct/name dependencies,
+exception-tag reservation and complete public compiler replay remain owned
+follow-up work. The approved fixture's source digest remains
+`594eaf3f977ec2717777cdde3ff9813753f4c44faa6e3bf50fc6ced726e61b49`.

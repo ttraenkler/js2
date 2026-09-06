@@ -17,6 +17,7 @@ import {
   type RuntimeHostCapabilityValueType,
 } from "./runtime-host-capabilities.js";
 import { IR_ASYNC_CLOCK_SNAPSHOT_FN } from "./async-semantic-runtime.js";
+import { irRuntimeCallableDeclaration } from "./runtime-callable-declarations.js";
 import type { IrStringConcatMode } from "./string-runtime.js";
 import {
   intrinsicEffectEvidence,
@@ -52,6 +53,7 @@ import {
   projectRuntimeBackendRequirements,
   RUNTIME_PROVIDERS,
   type FrozenRuntimeManifest,
+  type RuntimeFeature,
   type RuntimeManifestPolicy,
   type RuntimeProviderDefinition,
   type RuntimeProviderPlan,
@@ -891,6 +893,7 @@ export function prepareIrRuntimeManifest(input: PrepareIrRuntimeManifestInput): 
     readonly argumentTypes: readonly IrType[];
   }> = [];
   const asyncPlans = new Map<IrFunction["unitId"], IrAsyncPlan>();
+  const runtimeCallFeatures = new Set<RuntimeFeature>();
   for (const fn of input.functions) {
     try {
       const sourceLocation = input.sourceLocationsByUnit?.get(fn.unitId);
@@ -912,6 +915,10 @@ export function prepareIrRuntimeManifest(input: PrepareIrRuntimeManifestInput): 
       const collectBuffer = (buffer: readonly IrInstr[]): void => {
         for (const root of buffer) {
           forEachInstrDeep(root, (instr) => {
+            if (instr.kind === "call" || instr.kind === "closure.new") {
+              const declaration = irRuntimeCallableDeclaration(instr.kind === "call" ? instr.target : instr.liftedFunc);
+              if (declaration) runtimeCallFeatures.add(declaration.feature);
+            }
             if (instr.kind !== "intrinsic") return;
             const argumentTypes = instr.args.map((arg) => {
               const type = valueTypes.get(arg);
@@ -942,6 +949,7 @@ export function prepareIrRuntimeManifest(input: PrepareIrRuntimeManifestInput): 
     !input.includeEmpty &&
     uses.length === 0 &&
     asyncPlans.size === 0 &&
+    runtimeCallFeatures.size === 0 &&
     !input.generatorNumberBoxDemand &&
     !input.stringCompareDemand &&
     !input.stringEqDemand &&
@@ -960,6 +968,7 @@ export function prepareIrRuntimeManifest(input: PrepareIrRuntimeManifestInput): 
   }
 
   const builder = new RuntimeManifestBuilder(input.policy);
+  for (const feature of runtimeCallFeatures) builder.requestFeature(feature);
   for (const plan of asyncPlans.values()) {
     for (const intent of plan.runtimeIntents) builder.requestFeature(intent);
   }

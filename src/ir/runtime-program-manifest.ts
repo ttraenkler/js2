@@ -24,6 +24,7 @@ import {
   type PreparedIrProgramProducerInput,
 } from "./program.js";
 import { assertPreparedIrProgramPopulation } from "./program-population.js";
+import { irRuntimeCallableDeclaration } from "./runtime-callable-declarations.js";
 import {
   FUNCTION_PROTOTYPE_CALL_RUNTIME_FEATURES,
   GENERATOR_NUMBER_BOX_RUNTIME_FEATURES,
@@ -169,6 +170,10 @@ export function prepareWholeProgramRuntimeManifest(
         forEachInstrDeep(root, (instr) => {
           if (instr.kind === "intrinsic" && INTRINSIC_DEFINITIONS[instr.id])
             note(INTRINSIC_DEFINITIONS[instr.id].feature);
+          if (instr.kind === "call" || instr.kind === "closure.new") {
+            const declaration = irRuntimeCallableDeclaration(instr.kind === "call" ? instr.target : instr.liftedFunc);
+            if (declaration) note(declaration.feature);
+          }
         });
     };
     for (const block of fn.blocks) scan(block.instrs);
