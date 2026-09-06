@@ -269,6 +269,59 @@ passes. A direct comparison against `7b2e8b0` confirms both moved function
 bodies are unchanged and all other old-registry text differs only in the
 necessary import/re-export declarations.
 
+### Initializer collision regression review — 2026-09-06
+
+Root's integration run reports **5/6** in
+`tests/issue-3520-module-init-callable-abi.test.ts`; the first control also fails
+on unchanged signed `7b2e8b038a06e77c69d788690cbd5ce935ac5448`. Both stop at
+the old `legacyBodyEmitted: true` assertion, receiving `false`. The later ABI
+and runtime assertions therefore have not been validated by those runs.
+
+The fixture has an executable numeric lexical initializer. Existing
+`prepareIrBodies` emits and seals its exact module-init body before declaration
+dispatch, hands off its skip/preserve receipts, and removes it from the later
+IR population. `compileDeclarations` skips both direct initializer passes and
+uses the reserved source-qualified callable for startup. The same-named user
+function retains a different binding and final slot. Thus `false` describes
+the intended physical route; this fixture is distinct from the ambient-only
+population residual to which the older R1 status table assigns it.
+
+The proposed test-only correction preserves the source and every existing ABI
+ownership, signature, public-alias and runtime assertion. Explain the prepared
+route beside the corrected boolean. Enable outcome tracking on the existing
+public runtime compile, then require its exact initializer receipt to show one
+preparation, zero direct bodies and one IR body. Require the actual route audit
+to exist, positively join its registered generator, source and exact IR terminal,
+and contain no `compileModuleInitBody` entry. A valid route need not enter any
+legacy body dispatcher. Execute the existing user result
+`99`, explicit initializer call, state result `3`, and unchanged user result
+`99` assertions. No compiler, selector, startup, audit or ABI source change is
+part of this proposal. Run all six controls after the coordinated load slot;
+an additional failure must be investigated rather than weakening the test.
+
+The read-only ownership census used upstream assignment tip
+`19cee249a478638e17e7a631459459f7d906373e`: the broad R1/R4 claims are released,
+the historical #5283 claim is done, and active R4m1/W2B storage claims remain
+untouched. Original callable ownership PRs #3779 and #5210 are merged. None of
+the eight current open PRs touches this test. A foreign R4 recovery worktree
+has a staged copy during a merge, but both its staged and working bytes equal
+this baseline exactly; its index and merge remain untouched. The locked
+initializing Codex worktree's staged deletion is also untouched. Root received
+these findings before any test or source edit and approved this exact test-only
+correction plus the owned issue record. The plan was recorded before editing.
+
+After D released its actual process, the corrected suite passed **6/6** on
+signed base `49f95b3fe92c710fc4877f50d080296671d87eab` plus these two owned
+files. The first control reaches and passes the retained ABI and runtime tail,
+the exact initializer's `prepareAttempts: 1`, `directBodyEmissions: 0` and
+`irBodyEmissions: 1`, and its positive route-audit joins. The full project
+typecheck also passes. The single-fork, 4 GB test run and subsequent typecheck
+started under fresh load samples **5.32 < 8** and **5.71 < 8**, respectively;
+their logs are `.tmp/a-initializer-route-regression-tests.log` and
+`.tmp/a-initializer-route-regression-typecheck.log`. This verifies the existing
+prepared initializer route; it does not claim whole-program public cutover or
+backend replay acceptance.
+
 ## Execution amendment — 2026-09-05
 
 The approved [whole-program cutover plan](3518-ir-only-default-and-direct-frontend-retirement.md#current-execution-plan--whole-program-cutover-2026-09-05)
