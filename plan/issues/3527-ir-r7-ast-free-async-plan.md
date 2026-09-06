@@ -3,7 +3,7 @@ id: 3527
 title: "IR-only R7: AST-free async suspension plans and canonical Promise ABI"
 status: blocked
 created: 2026-07-21
-updated: 2026-09-05
+updated: 2026-09-06
 priority: critical
 feasibility: hard
 reasoning_effort: max
@@ -115,6 +115,297 @@ still lack a linear async backend. These are located failure-evidence rows,
 not coverage or preserved behavior claims. The unchanged mixed application,
 zero direct body count, real cross-backend replay, and full R7 retirement
 remain open.
+
+### Source-free physical async bridge implementation plan — 2026-09-06
+
+Root approved the first slice and the exact second mechanical slice below on
+2026-09-06, after reviewing this plan, the fresh ownership census, and the
+preserved local worktree hunks. B must adopt A's signed direct-import dependency
+before removing the barrel. A also has the narrowly granted physical import/tag
+extraction recorded below. Other engine/materializer extractions still await
+exact source-ownership review.
+The source review is grounded in signed producer commit
+`4d4c22ef222b8b55ab3e44901458940109f2525c`, also inspected in the integration
+worktree. It concerns the runtime import closure of `ir-async-frame.ts` and
+`ir-async-runtime-adapters.ts`; C retains exclusive ownership of the codec,
+prepared-program consumer, backend emitters, and replay. No import substitution
+below, by itself, establishes source-free async emission.
+
+#### Observed dependencies and mutation boundaries
+
+These are runtime imports, not TypeScript-only annotations. Paths in the first
+two columns are relative to `src/codegen/` unless prefixed with `src/`.
+
+| Bridge dependency | Short route to frontend loading | Required boundary |
+| --- | --- | --- |
+| `ir-async-frame` → `async-frame` | `async-frame` → `src/ts-api` → `typescript`; also `async-cps`, `index`, and `checker/type-mapper` | Extract the actual prepared frame engine from AST planning and dispatch. |
+| `ir-async-frame` → `shared.coerceType` | `shared` → `src/ts-api`; registered implementation in `type-coercion` → `index` | Extract the required typed coercion implementation, not the delegate or its registrar. |
+| `ir-async-frame` → `func-space.definedFuncAt` | `func-space` export-star → `multi-source-ir-integration` → `src/ts-api` | Remove the unrelated frontend barrel; keep stable-handle accessors unchanged. |
+| adapters → `registry/imports.addImport` | `registry/imports` → `src/ts-api`, `declarations`, `checker/type-mapper`, `index` | Separate physical import/tag registration from AST collection and late fixups. |
+| adapters → `registry/types.addFuncType` | `registry/types` → `closures/funcref-wrapper-types` → `index` | Import the existing header leaf, then make the wrapper registry use the type registry directly. |
+| adapters → `async-scheduler.ensureAsyncDriveRuntime` | `async-scheduler` → `closures` → `src/ts-api` | Remove the barrel dependency; scheduler materializer dependencies still need extraction. |
+| adapters → `any-helpers.canonicalUndefinedExternInstrs` | `any-helpers` → `native-strings` → `native-strings-selfhost` → `stdlib-selfhost` → `src/ir/from-ast` | Extract the existing AnyValue/undefined carrier materializer from broad string/object helpers. |
+| adapters → `native-promise-number-boundary` | number boundary → `shared.addUnionImportsViaRegistry`; implementation registered by `index` | Materialize the exact accepted number providers directly before sealing. |
+| frame → `compiler-support-abi.recordAsyncFrameMachinery` | support ABI → `program-abi-planning` → `src/ir/identity` → `src/ts-api` | Use A's existing pure identity factory; preserve the session and owner contracts. |
+
+The scheduler also directly imports `registry/imports`, `shared`,
+`native-strings`, `registry/error-types`, `closed-method-dispatch`, and
+`object-runtime`. In particular, its actual thenable/callback substrate calls
+`reserveClosedMethodDispatchVararg`, `ensureObjVecBuilders`, and
+`reserveApplyClosure`; `object-runtime` imports `stdlib-selfhost`, while
+`closed-method-dispatch` imports source statement/declaration machinery. These
+are part of the remaining physical bridge dependency chain. Redirecting the
+closure imports does not remove them. `unhandled-rejection` cycles back to the
+scheduler. The reviewed `prepared-native-async-await`, `frame-core`,
+`context/locals`, `closures/closure-header-layout`, and
+`arguments-carrier-brand` leaves already have no frontend value import.
+
+Reader/mutator inventory before any extraction:
+
+- The three exported multi-source helpers have runtime readers only in
+  `src/ir/integration.ts`: `collectIntegrationFunctionDeclarations`,
+  `makeMultiSourceOverrideResolvers`, and `resolveIntegrationSourceFiles`.
+  The existing `func-space` accessors remain the single handle lookup/mint/push
+  authority; changing the export edge does not move their state.
+- `addImport` mutates module imports, function/global import counts and lookup
+  maps, and preserves strict-host/frozen-index-space checks. `ensureExnTag`
+  owns the local or shared imported exception tag through those same registries.
+  All callers must continue to reach the same implementation, never a copied
+  registry or a new lazy import fallback.
+- `registry/types` owns existing physical type caches. Wrapper type factories
+  and `closureBagField` must retain their current layouts and cache identity.
+  `program-abi-planning` and `program-abi-import-planning` consume
+  `createIrBindingId`; `src/ir/identity-values.ts` is the already committed
+  canonical source-free implementation.
+- `emitPreparedAsyncFrameStateMachine` calls `emitAsyncFrameEntry`, which calls
+  `ensureAsyncResumeFunction`; the latter owns resume/step function allocation,
+  emitted bodies, handlers, and frame bookkeeping. `buildStepAdapterLocals` and
+  `buildStepAdapterBody` are shared engine mechanics. `planAsyncResumeCfg`,
+  declaration-based type resolution, `compileExpression`, and
+  `compileStatement` are source producers and must stay above that engine.
+- Undefined/type globals are owned by `ensureAnyValueType`; reads go through
+  `undefinedExternInstrs`/`canonicalUndefinedExternInstrs`. Scheduler state is
+  owned by `getOrRegisterPromiseType`, `ensureMicrotaskQueue`,
+  `ensurePromiseSettleFunctions`, and the helper factories reached from
+  `ensureAsyncDriveRuntime`. Number-boundary publication marks existing helper
+  exports and asks the existing `ProgramAbiSession` export planner for aliases.
+- `shared.coerceType`, `addUnionImportsViaRegistry`, `addStringImportsDelegate`,
+  `ensureLateImport`, and `flushLateImportShifts` are registered delegates.
+  Registrars reside in `type-coercion.ts`, `index.ts`, and `expressions.ts`.
+  Importing those source modules for side effects is not a replay solution.
+
+#### Smallest executable first slice
+
+1. B is authorized only to remove
+   `export * from "./multi-source-ir-integration.js"` in
+   `src/codegen/func-space.ts` and a focused
+   `tests/issue-3518-runtime-producers-import-boundaries.test.ts` control,
+   and update this issue. Preserve every registry/handle implementation.
+2. A has explicitly reserved the matching `src/ir/integration.ts` import hunk:
+   import the three source helpers directly from `multi-source-ir-integration`.
+   Existing physical `func-space` imports remain there. B does not edit
+   `integration.ts`; A acknowledged this coordination on 2026-09-06.
+3. A fresh process must import `func-space` with frontend loading blocked, and
+   a deliberate `ts-api` import must fail to prove the barrier is active.
+   Run the existing `issue-1916-symbolic-func-refs` and
+   `issue-3520-integration-pass-identity`/`integration-population-identity`
+   tests plus typechecking. Report actual test denominators. This slice proves
+   the handle leaf is independent; the two async bridge roots remain impure.
+
+The first slice is signed as `131f2327544d6a5d57a90d38358c31d644be292c`,
+on verified signed A dependency `1dea8e0cf4db8dae3f834e733e111397ce58bf18`. Its fresh-process test observes the
+real handle/layout module loads, preserves exact stable-handle lookup identity,
+and separately rejects deliberate `ts-api` and multi-source frontend imports.
+The four named focused files pass 26/26; standalone typechecking passes. Only
+the unrelated export edge was removed from the handle registry. This is a
+physical leaf import-boundary result, not whole-frame or replay completion.
+
+#### Remaining mechanical cuts
+
+Root's second grant permits only these six value-import substitutions across
+five files, plus now-stale import-area comments. Apply after A's signed
+direct-import dependency and the first `func-space` slice. Keep the paired
+registry/header and wrapper/type-registry substitutions together; preserve
+every definition, compatibility re-export, registry, session, and seal.
+
+- `registry/types.ts`: import `closureBagField` from
+  `closures/closure-header-layout.ts`.
+- `closures/funcref-wrapper-types.ts`: import `addFuncType` from
+  `registry/types.ts`, preserving all wrapper factories and reexports.
+- `async-scheduler.ts`: import `getClosureFuncSelfTypeIdx`,
+  `getOrCreateFuncRefWrapperTypes` from the dedicated wrapper registry; import
+  `closureBagField` and `closureBagInitInstr` from the header leaf. The exact
+  root-wrapper lookup, `getFuncRefWrapperRootTypeIdx`, is already imported
+  directly from `closures/funcref-wrapper-types.ts`; leave that import and its
+  three call sites unchanged.
+- `program-abi-planning.ts` and `program-abi-import-planning.ts`: import the
+  runtime `createIrBindingId` factory from `src/ir/identity-values.ts`; keep
+  identity types and all session/planning behavior unchanged.
+
+The one-shot local owner review inspected 94 existing paths from 114 linked
+worktree records. Three older worktrees have `program-abi-planning.ts` edits:
+R4 call-free recovery changes adjacent imports/role-table and module-alias code;
+the two PR4823 shepherd worktrees add C35 role ordinals. All leave the proposed
+`createIrBindingId` import unchanged. Preserve these edits and every held claim.
+One worktree is locked initializing; twenty linked paths are absent. Neither
+condition implies abandoned work or permission to delete anything.
+
+The exact C31/session claim branches have local and origin refs but no matching
+linked worktree. Local merge records identify PR3827 (C31), PR3825 (session
+seal), and PR3831 (scoped seal). Their merge commits are not reachable from
+integration `8461d61680c142da712c84bf2ba566767aee3920` in the available shallow
+graph, so integration ancestry remains unknown; this does not mean unmerged.
+The scoped claim has no recorded branch, although the corresponding named
+local/origin branch refs and merge record exist. Root grants only the specified
+import/comment hunks; no ownership or claim release is inferred.
+
+The six granted imports are now substituted on the signed first slice. The
+focused fresh-process control additionally loads the type registry, wrapper
+registry, closure header, and both ABI-planning leaves with the frontend blocked;
+it exercises fresh wrapper creation through the changed `addFuncType` import,
+exact cached `ClosureInfo` reuse, the existing host-one-shot to ordinary
+allocation-mode transition, and shared header factories. Root and A requested
+this factory control before the affected cohort because a seeded-root getter
+alone would not execute the changed import. The existing async frame and scheduler roots still require their planned physical
+extractions. The nine-file affected cohort passes 118/118, including all three
+fresh-process boundary controls and all 25 runtime-producer controls. The first
+attempt exhausted the default 512 MB worker heap before reporting any tests;
+its log is retained separately. The complete repeat used the repository's
+existing `VITEST_FORK_MAX_OLD_SPACE_SIZE=4096` setting and one fork, with the same
+nine files and assertions. Full typechecking passes.
+
+Validate the resulting leaf imports and the existing compiler-support ABI,
+callable-planning, import-callable-planning, and closure-host-bridge ABI tests.
+Preserve all `ProgramAbiSession`, scoped-seal, owner/currentness, and constructor
+controls. These cuts cannot complete either physical async root on their own.
+
+#### Actual engine and materializer extraction
+
+Root granted A only the `addImport`/`ensureExnTag` portion of step 1 on
+2026-09-06, after its current preparation signature. A owns the new
+`src/codegen/registry/physical-imports.ts`, those two bodies and their
+import/re-export hunk in `registry/imports.ts`, and a dedicated A test. The
+functions need only the existing import allowlist helpers and `addFuncType`;
+source-free verification depends on B's paired registry/wrapper import cuts.
+A does not edit B's adapters, frame/scheduler work, or later numeric-carrier
+scope. B/C adopt the physical leaf through their own consumers after A's signed
+handoff. Preserve the PR5400/5063 fixup/iterator bodies and all claims. B will not
+edit A's registry hunk concurrently.
+
+All other physical steps below still require exact source-ownership review.
+They move existing implementations and their precise typed dependencies; they
+do not add a second CPS engine, ownership cache, or backend implementation.
+
+1. **Physical registries and value carriers.** Extract `addImport` and
+   `ensureExnTag` from `registry/imports.ts` into a pure physical registry leaf,
+   reexporting the same functions for source callers. Retain tag identity,
+   strict-host diagnostics, counts, and freeze discipline. Extract
+   `ensureAnyValueType` and the canonical undefined read/build helpers from
+   `any-helpers.ts` without pulling in native string selfhosting. Reserve every
+   required type/global/import before frame emission, including the shared-tag
+   case which the previous nine-import test did not cover.
+2. **Number and typed coercion materializers.** Extract the exact required
+   numeric bridge implementations reached through `registry/imports.ts`
+   (`addUnionImports`/`addUnionImportsAsNativeFuncs`) and `any-helpers.ts` into
+   directly callable accepted-provider materializers. Preserve the existing
+   `__typeof_number`/`__unbox_number` signatures and alias publication in
+   `native-promise-number-boundary.ts`. Extract the prepared carrier operations
+   used by `ir-async-frame.ts` from `type-coercion.ts`; the new engine cannot
+   depend on `shared` delegates, source bootstrap, or undeclared generic boxing.
+3. **Prepared frame mechanics.** Move the actual shared resume/step/entry
+   implementation from `async-frame.ts` to a dedicated physical engine leaf.
+   Split the common mechanics from the source planner at their input boundary;
+   existing source compilation and prepared IR must both use that one engine.
+   Keep AST statement/expression/type resolution in the source adapter. The
+   `async-cps.ts` prepared operand/CFG type guard (`isEmitOperand`) needs a pure
+   boundary or a directly typed replacement; merely wrapping its AST-dispatch
+   union is insufficient. Physical emission callbacks may exist below
+   acceptance, but never in `PreparedIrProgram` or serialized semantic data.
+   B owns only this async physical bridge; C supplies backend consumption.
+4. **Native scheduler closure.** Extract the existing typed Promise, queue,
+   settlement, reaction, and drive helper materializers from
+   `async-scheduler.ts`, retaining thenable assimilation and rejection tracking.
+   Resolve its real callback/thenable dependencies in `closed-method-dispatch`,
+   `object-runtime`, `registry/error-types`, and native-string helpers through
+   their actual typed runtime materializers. Source-authored helper bodies must
+   already be semantic prepared units; replay may not invoke `stdlib-selfhost`
+   or `from-ast` to regenerate them. Request each concrete subordinate
+   extraction before touching those owners. This is remaining implementation
+   work, not an assumption that the current broad helper modules are pure.
+5. **Authenticated bridge handoff.** Reconcile the complete extracted import
+   closure of `ir-async-frame.ts` and `ir-async-runtime-adapters.ts`, then run a
+   fresh-process import and actual frame/materializer execution with
+   `typescript`, `ts-api`, `from-ast`, async source planners, `codegen/index`, and
+   `compiler` blocked. Keep the existing plan/manifest/adapter authentication.
+   Regenerated runtime evidence is compared to decoded evidence before
+   reattachment; copied objects do not acquire authority by shape alone.
+
+Focused regressions must retain the B producer suite's numeric result 29,
+native Promise identity, exact two-tick trace, nine stable import identities,
+fully declared settle-only execution, and typed minimal-plan refusal before
+allocation. Also run `issue-4103-ir-async-runtime-providers`,
+`issue-4104-ir-async-plan-runtime-consumer`,
+`issue-3527-linear-suspension-preparation`,
+`issue-3527-linear-suspension-runtime`, `issue-3527-settled-owner-runtime`,
+`issue-3527-async-call-closure`, `async-frame-host-throw-rejects`,
+`issue-4167-async-rejection-identity`, `issue-3587-async-rejection-delivery`,
+`issue-2906-async-multiawait`, `issue-2895-async-frame`,
+`issue-2895-drain-hook`, and `issue-4574-standalone-native-async-family` as their
+respective engine/materializer paths change. Add a nonempty module-load trace,
+a deliberately rejected frontend import, and shared-exception-tag stability
+controls. Gate every heavy job on finite numeric `load1 < cores - 2`; retain
+normal hooks and report actual counts rather than proposed denominators.
+
+Fresh zero-await owner support, the shared frame's all-core host adapter
+requirement, and missing linear async providers remain explicit gaps. C/root
+own actual unchanged mixed-application emission and replay through both
+backends. Its source digest remains
+`236fa7d971bf9b86aafa778a9a441b2440bae2e2c2c0ae7fdab3f6e517c517fb`.
+Neither import tests nor the completed seven-original-unit preparation are
+evidence of seven emitted-once bodies, zero direct bodies, or cross-backend
+runtime success.
+
+#### Read-only ownership and PR census
+
+The remote assignment read succeeded (`ref_read: ok`) at
+`issue-assignments` tip `b125009976288361bf8d7bf7e59daf6b038a090b`, with
+2,068 records and 754 held claims, observed 2026-09-05 23:40 UTC
+(2026-09-06 local). An initial sandbox DNS failure was retried read-only;
+it was not interpreted as an empty ledger. No claims were changed.
+
+- B retains `3518:semantic-runtime-producers` as
+  `ttraenkler/astra-ir-producers-b-20260905`. A holds
+  `3518:authoritative-preparation`; external Claude Fable holds
+  `3518:backend-consumption-replay`; D holds `3518:application-evidence`;
+  root holds `3518:integration-consolidation`. Their distinct linked worktrees
+  are present. This follow-up does not transfer any of those surfaces.
+- Protected held claims include R1's `c31-closure-host-bridge` (and c30/c32/c33,
+  `w1g-implicit-ctor-param`), R2's `program-abi-session-seal` and
+  `scoped-prepared-abi-seal`, R3's `w1c-super-accessor`, and R4's `r4m1`/`w2b`.
+  A missing linked worktree for a historical claim is not permission to edit.
+- R7's `r7-b2-linear-suspension-liveness` and
+  `r7-b3-settled-nonthenable-owners` remain held by their Luna owners, with both
+  linked worktrees present. R6's a1/f3s1/f3s2/f3s3 claims remain held. This plan
+  preserves their immutable source planning and canonical provider evidence.
+- The fresh open-PR census returned 11 PRs. No listed PR changes `func-space.ts`,
+  `registry/types.ts`, or `closures/funcref-wrapper-types.ts`. This is only a
+  read-only snapshot; root still grants the exact source slices.
+- PR 5632 (`codex/3525-m2-p2a-luna-20260905`, head `5aec08c33b3381ddb55a33a152d05833bb9d7b78`)
+  changes `src/ir/integration.ts`; its `3525:m2-p2a-atomic-init-batch` claim and
+  linked worktree remain present. A owns reconciliation of its import hunk.
+- PR 5400 (head `0023f522023156ea63d973fab1fed932b2ccfa09`) changes
+  `registry/imports.ts` in `fixupModuleGlobalIndices` for NewTarget. PR 5063
+  (head `d070b5583e66be23903031e4bed0556559026d34`) changes that file in
+  `addIteratorImports` for yield-star throw. Read diffs confirm these are
+  separate functions from `addImport`/`ensureExnTag`; preserve them and request
+  only the two physical registration functions, never broad registry ownership.
+  The current 3371 claim is `ttraenkler/fable-es6`; the open PR does not itself
+  establish that claimant's identity or release another owner.
+- Broad transitive modules also overlap open work: `object-runtime.ts` in
+  PR 5397, `generators-native.ts` in PR 5063, and `codegen/index.ts` in
+  PRs 5640/5632/5400/5397. The proposed first slice edits none of them. Later
+  extraction requests must identify the exact shared functions and refreshed
+  owners, without taking C's emitter work or A's compiler wiring.
 
 ## Objective
 
