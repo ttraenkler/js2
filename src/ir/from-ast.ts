@@ -1,4 +1,7 @@
 // Copyright (c) 2026 Loopdive GmbH. Licensed under Apache-2.0 WITH LLVM-exception.
+import { localLogicalAssignment } from "./logical-assignment.js";
+import { isEmptyAmbientMapConstruction } from "./native-map-construction.js";
+import { inferredClosureSignature, type InferredClosureCarriers } from "./inferred-closure-signature.js";
 //
 // AST → IR lowering.
 //
@@ -103,6 +106,10 @@ import { irCountedStringAppendSiteIdIsCurrent } from "./counted-string-append-pr
 import { timerArg, timerResult } from "./timer-shim-lowering.js";
 import { irBool, irTypeIsBoolean, lowerBooleanToString } from "./boolean-brand.js";
 import { collectOuterWrites, declarationHasNestedCapture, nestedFunctionUsedAsValue } from "./closure-captures.js";
+import { hasDirectNestedRecursion } from "./direct-nested-recursion.js";
+import { constEnumValue } from "./const-enum-value.js";
+import { numericSwitchCaseValue, stringSwitchCaseValue } from "./switch-case-value.js";
+import { isAmbientUndefined } from "./ambient-undefined.js";
 import { planArrayLiteralSpread } from "./array-spread-shape.js";
 import { objectLiteralDataPropertyName } from "./property-key-fold.js";
 import { collectDynamicStringLocalWidening } from "./dynamic-local-widening.js";
@@ -153,6 +160,7 @@ import {
   emitForwardingAwareLinearVecLen,
   emitSafeNarrowedI32VecGet,
   emitSafeVecGet,
+  emitSafeDynamicVecGet,
   emptyLiteralElementValType,
   isNarrowedI32Vec,
   lowerNarrowedI32Element as lowerNarrowedI32ElementWith,
@@ -278,11 +286,22 @@ interface IrSlotRepresentation {
   readonly asType?: IrType;
 }
 
+/** Preserve the logical element type while resolving its canonical storage. */
+function resolveIrVectorElement(type: IrType, resolver: IrFromAstResolver | undefined): ValType | undefined {
+  return (
+    asVal(type) ??
+    (type.kind === "string"
+      ? resolver?.resolveString?.()
+      : type.kind === "dynamic"
+        ? resolver?.resolveDynamic?.()
+        : undefined)
+  );
+}
+
 /** Resolve a logical vec type without exposing its physical type index to inference. */
 function resolveIrVecType(type: IrType, cx: Pick<LowerCtx, "resolver" | "funcName">): ResolvedIrVecType | null {
   if (type.kind === "vec") {
-    const elementValType =
-      asVal(type.elementType) ?? (type.elementType.kind === "string" ? cx.resolver?.resolveString?.() : undefined);
+    const elementValType = resolveIrVectorElement(type.elementType, cx.resolver);
     if (!elementValType) return null;
     const lowering = cx.resolver?.resolveVecForElement?.(elementValType);
     if (!lowering) return null;
@@ -386,6 +405,8 @@ export interface IrExternClassMeta {
  * until Phase 3, so from-ast doesn't see them.
  */
 export interface IrFromAstResolver extends PreparedAsyncFromAstResolver {
+  /** Field type proved against the exact source allocation and checker fact. */
+  sourceObjectFieldType?(receiver: IrType, expression: ts.PropertyAccessExpression): IrType | undefined;
   /** Resolve the pre-collected exact JS-host indirect-eval import. */
   hostIndirectEvalTarget?(): IrFuncRef | null;
   /** Exact pre-scanned sparse constructor sites. */
@@ -913,6 +934,7 @@ export interface AstToIrOptions {
    * `oracleBackend` option/env actually governs these paths.
    */
   readonly oracle?: TypeOracle;
+  readonly inferredClosureCarriers?: InferredClosureCarriers;
   /**
    * (#3765) Direct-codegen's whole-program proof that an implicit-any local
    * always contains a number. IR consumes the same proof before rejecting an
@@ -1334,6 +1356,7 @@ export function lowerFunctionAstToIr(
     generatorBufferSlot,
     checker: options.checker,
     oracle: options.oracle,
+    inferredClosureCarriers: options.inferredClosureCarriers,
     // #4177 — outer function only; lifted-closure contexts deliberately omit
     // it (see the LowerCtx field doc).
     latticeParamFacts: collectLatticeParamFacts(fn, params),
@@ -1613,7 +1636,7 @@ function denseArrayReductionPlan(stmts: readonly ts.Statement[]): DenseArrayRedu
 }
 
 function lowerStatementList(stmts: readonly ts.Statement[], cx: LowerCtx): void {
-  stmts = orderTailFunctionDeclarations(stmts);
+  stmts = orderTailFunctionDeclarations(stmts, cx.checker);
   if (stmts.length < 1) {
     demoteToLegacy("body-shape-rejected", `ir/from-ast: empty statement list in ${cx.funcName}`);
   }
@@ -1863,7 +1886,7 @@ function lowerStatementList(stmts: readonly ts.Statement[], cx: LowerCtx): void 
         continue;
       }
 
-      const rawCond = lowerExpr(s.expression, cx, irVal({ kind: "i32" }));
+      const rawCond = lowerConditionExpression(s.expression, cx);
       // The move-only selector already admits dynamic conditions and the
       // structured-if path below uses this same canonical ToBoolean bridge.
       // Apply it before the early-return CFG split as well.
@@ -1912,7 +1935,7 @@ function lowerDiscardedExpression(expr: ts.Expression, cx: LowerCtx): void {
     return;
   }
   if (ts.isConditionalExpression(expr)) {
-    const rawCond = lowerExpr(expr.condition, cx, irVal({ kind: "i32" }));
+    const rawCond = lowerConditionExpression(expr.condition, cx);
     // (#4512) §7.1.2 ToBoolean — see lowerConditional. Host externref → demote.
     const cond = lowerToBooleanForCondition(rawCond, expr.condition, cx);
     if (cond === null) {
@@ -2098,14 +2121,14 @@ function lowerTail(stmt: ts.Statement, cx: LowerCtx): void {
   }
   if (ts.isIfStatement(stmt)) {
     if (!stmt.elseStatement) {
-      if (cx.returnType !== null) {
+      if (cx.returnType !== null && cx.returnType.kind !== "dynamic") {
         demoteToLegacy(
           "body-shape-rejected",
           `ir/from-ast: non-void Phase 1 if must have an else arm in ${cx.funcName}`,
         );
       }
       lowerIfBodyStatement(stmt, cx);
-      cx.builder.terminate({ kind: "return", values: [] });
+      cx.builder.terminate({ kind: "return", values: cx.returnType === null ? [] : [lowerUndefinedValue(cx)] });
       return;
     }
     // #1043: compile-time constant fold. After --define substitution of
@@ -2117,7 +2140,7 @@ function lowerTail(stmt: ts.Statement, cx: LowerCtx): void {
       lowerTail(taken, { ...cx, scope: new Map(cx.scope) });
       return;
     }
-    const rawCond = lowerExpr(stmt.expression, cx, irVal({ kind: "i32" }));
+    const rawCond = lowerConditionExpression(stmt.expression, cx);
     // (#4512) §7.1.2 ToBoolean — object/string/ref conditions lower to a
     // branded i32 truthiness; a raw host externref returns null → demote.
     const cond = lowerToBooleanForCondition(rawCond, stmt.expression, cx);
@@ -2148,12 +2171,17 @@ function lowerTail(stmt: ts.Statement, cx: LowerCtx): void {
   // only the block terminator differs. The selector proved one of:
   //   - void return  → control may fall out of the ladder into the implicit
   //     empty return (mirrors the `tail-if-noelse` void arm above);
-  //   - non-void     → `switchAllPathsTerminate` proved every clause leaves
+  //   - dynamic     → a boxed undefined represents normal completion;
+  //   - other non-void → `switchAllPathsTerminate` proved every clause leaves
   //     the function and a `default` covers the no-match path, so the
   //     instruction after the ladder is unreachable (same terminator the
   //     throw-tail arm uses).
   if (ts.isSwitchStatement(stmt)) {
     lowerSwitchStatement(stmt, { ...cx, scope: new Map(cx.scope) });
+    if (cx.returnType?.kind === "dynamic") {
+      cx.builder.terminate({ kind: "return", values: [lowerUndefinedValue(cx)] });
+      return;
+    }
     cx.builder.terminate(cx.returnType === null ? { kind: "return", values: [] } : { kind: "unreachable" });
     return;
   }
@@ -2425,6 +2453,7 @@ interface LowerCtx {
   readonly checker?: ts.TypeChecker;
   /** (#4218) Backend-selected oracle threaded from AstToIrOptions (see there). */
   readonly oracle?: TypeOracle;
+  readonly inferredClosureCarriers?: InferredClosureCarriers;
   /**
    * #4177 — the enclosing function's OWN never-written parameter facts from
    * the SAME signature resolution selection claimed the function with,
@@ -3639,6 +3668,12 @@ function bindSharedScalarCapture(name: string, value: IrValueId, type: IrType, c
   return true;
 }
 
+function lowerUndefinedValue(cx: LowerCtx): IrValueId {
+  const raw = cx.builder.emitCall(irRuntimeFuncRef(IR_UNDEFINED_VALUE_FN), [], irVal({ kind: "externref" }));
+  if (raw === null) throw new Error("undefined producer returned void");
+  return cx.builder.emitBox(raw, irDynamic());
+}
+
 /** An uninitialized lexical local starts as undefined, never numeric zero/null. */
 function lowerUninitializedLocal(declaration: ts.VariableDeclaration, name: string, cx: LowerCtx): void {
   const list = declaration.parent;
@@ -3648,10 +3683,8 @@ function lowerUninitializedLocal(declaration: ts.VariableDeclaration, name: stri
       `ir/from-ast: uninitialized declaration is not a mutable local (${cx.funcName})`,
     );
   }
-  const raw = cx.builder.emitCall(irRuntimeFuncRef(IR_UNDEFINED_VALUE_FN), [], irVal({ kind: "externref" }));
-  if (raw === null) throw new Error("undefined producer returned void");
   const type = irDynamic();
-  const value = cx.builder.emitBox(raw, type);
+  const value = lowerUndefinedValue(cx);
   if (declarationHasNestedCapture(declaration, cx.checker)) {
     const cell = cx.builder.emitTypedRefCellNew(value, type);
     cx.scope.set(name, { kind: "local", value: cell, type: { kind: "boxed", inner: type } });
@@ -4055,6 +4088,25 @@ function lowerHostDateGetterCall(expr: ts.CallExpression, cx: LowerCtx): IrValue
   return result;
 }
 
+function lowerConstantExpression(expr: ts.Expression, cx: LowerCtx): IrValueId | null {
+  if (isAmbientUndefined(expr, cx.checker)) {
+    return lowerUndefinedValue(cx);
+  }
+  const value = ts.isNumericLiteral(expr)
+    ? Number(expr.text)
+    : expr.kind === ts.SyntaxKind.TrueKeyword
+      ? true
+      : expr.kind === ts.SyntaxKind.FalseKeyword
+        ? false
+        : ts.isStringLiteral(expr) || ts.isNoSubstitutionTemplateLiteral(expr)
+          ? expr.text
+          : constEnumValue(expr, cx.checker);
+  if (typeof value === "number") return cx.builder.emitConst({ kind: "f64", value }, IR_F64);
+  if (typeof value === "boolean") return cx.builder.emitConst({ kind: "bool", value }, IR_BOOL);
+  if (typeof value === "string") return cx.builder.emitStringConst(value);
+  return null;
+}
+
 function lowerExpr(expr: ts.Expression, cx: LowerCtx, hint: IrType): IrValueId {
   if (ts.isParenthesizedExpression(expr)) {
     return lowerExpr(expr.expression, cx, hint);
@@ -4148,20 +4200,8 @@ function lowerExpr(expr: ts.Expression, cx: LowerCtx, hint: IrType): IrValueId {
     if (!externShaped) return operand;
     return cx.builder.emitAwait(operand, preparedAsyncAwaitResultType(expr.expression, cx.resolver));
   }
-  if (ts.isNumericLiteral(expr)) {
-    return cx.builder.emitConst({ kind: "f64", value: Number(expr.text) }, irVal({ kind: "f64" }));
-  }
-  if (expr.kind === ts.SyntaxKind.TrueKeyword) {
-    return cx.builder.emitConst({ kind: "bool", value: true }, IR_BOOL);
-  }
-  if (expr.kind === ts.SyntaxKind.FalseKeyword) {
-    return cx.builder.emitConst({ kind: "bool", value: false }, IR_BOOL);
-  }
-  // Slice 1 (#1169a) — strings, templates, typeof, .length, null-keyword.
-  if (ts.isStringLiteral(expr) || expr.kind === ts.SyntaxKind.NoSubstitutionTemplateLiteral) {
-    const lit = expr as ts.StringLiteral | ts.NoSubstitutionTemplateLiteral;
-    return cx.builder.emitStringConst(lit.text);
-  }
+  const constant = lowerConstantExpression(expr, cx);
+  if (constant !== null) return constant;
   if (ts.isTemplateExpression(expr)) {
     return lowerTemplateExpression(expr, cx);
   }
@@ -4661,7 +4701,7 @@ function lowerArrayLiteral(expr: ts.ArrayLiteralExpression, cx: LowerCtx, hint: 
         `ir/from-ast: empty array literal needs a vec-typed hint to infer element type (${cx.funcName})`,
       );
     }
-    const elemVT = asVal(hintElemIr)!;
+    const elemVT = resolveIrVectorElement(hintElemIr, cx.resolver)!;
     const vec = cx.resolver?.resolveVecForElement?.(elemVT);
     if (!vec) {
       demoteToLegacy(
@@ -4714,7 +4754,9 @@ function lowerArrayLiteral(expr: ts.ArrayLiteralExpression, cx: LowerCtx, hint: 
   // `getContextualType` cannot recover at this site. Empty literals are excluded
   // (handled above): with a wide hint they already build a correct wide vec, so
   // there is no narrow build to let escape.
-  if (arrayLiteralWideningEscapes(expr, cx)) {
+  // An explicit dynamic-element plan boxes every value below; it is not a
+  // packed narrow representation and cannot leak one into a wider sink.
+  if (hintElemIr?.kind !== "dynamic" && arrayLiteralWideningEscapes(expr, cx)) {
     throw new IrUnsupportedError(
       "array-representation-unsupported",
       "build",
@@ -4735,7 +4777,7 @@ function lowerArrayLiteral(expr: ts.ArrayLiteralExpression, cx: LowerCtx, hint: 
         // `[...[a, b], c]` — inline the operand literal's elements verbatim.
         // The operand is never allocated (same expansion the call-argument
         // spread already uses), and source order is preserved.
-        for (const inner of shape.elements) elementIds.push(lowerExpr(inner, cx, elementHint));
+        for (const inner of shape.elements) elementIds.push(lowerNestedCallArgument(inner, elementHint, cx));
         continue;
       }
       // `const a = [1, 2]; … [...a, c]` — lower the source ONCE (so any
@@ -4779,7 +4821,7 @@ function lowerArrayLiteral(expr: ts.ArrayLiteralExpression, cx: LowerCtx, hint: 
       }
       continue;
     }
-    elementIds.push(lowerExpr(el as ts.Expression, cx, elementHint));
+    elementIds.push(lowerNestedCallArgument(el as ts.Expression, elementHint, cx));
   }
 
   // A literal that is nothing but spreads of EMPTY sources (`[...a]` with
@@ -4818,8 +4860,7 @@ function lowerArrayLiteral(expr: ts.ArrayLiteralExpression, cx: LowerCtx, hint: 
   // carries string semantics into a capability-owned boundary.
   const storedElementIds = elementIds;
   const storedElementType = elementType;
-  const elemVT =
-    asVal(storedElementType) ?? (storedElementType.kind === "string" ? cx.resolver?.resolveString?.() : undefined);
+  const elemVT = resolveIrVectorElement(storedElementType, cx.resolver);
   if (!elemVT) {
     // Non-scalar (nested vec / object / closure / …) element types are out of
     // scope for this slice. Typed-unsupported rather than a bare `Error`: the
@@ -4849,7 +4890,10 @@ function lowerArrayLiteral(expr: ts.ArrayLiteralExpression, cx: LowerCtx, hint: 
     vec.valueType ??
     ({ kind: "ref", typeIdx: vec.vecStructTypeIdx } as ValType);
   const resultType =
-    elemVT.kind === "f64" || elemVT.kind === "i32" || storedElementType.kind === "string"
+    elemVT.kind === "f64" ||
+    elemVT.kind === "i32" ||
+    storedElementType.kind === "string" ||
+    storedElementType.kind === "dynamic"
       ? irVec(storedElementType, false)
       : irVal(vecValueType);
   return cx.builder.emitVecNewFixed(storedElementIds, storedElementType, resultType);
@@ -5399,6 +5443,9 @@ function lowerPropertyAccess(expr: ts.PropertyAccessExpression, cx: LowerCtx): I
     }
     return cx.builder.emitStringLen(recv, inferStringEncoding(expr.expression, cx));
   }
+
+  const sourceFieldType = cx.resolver?.sourceObjectFieldType?.(recvType, expr);
+  if (sourceFieldType) return cx.builder.emitObjectGet(recv, propName, sourceFieldType);
 
   if (recvType.kind === "object") {
     // Slice 2 — named field read on a known shape.
@@ -6241,6 +6288,9 @@ function lowerElementAccess(expr: ts.ElementAccessExpression, cx: LowerCtx): IrV
         const raw = cx.builder.emitVecGet(recv, idxI32, elemIr);
         return narrowedI32 ? cx.builder.emitUnary("f64.convert_i32_s", raw, IR_F64) : raw;
       }
+      if (elemIr.kind === "dynamic") {
+        return emitSafeDynamicVecGet(recv, idxI32, idxF64, cx.builder, () => lowerUndefinedValue(cx));
+      }
       if (elemIr.kind === "string") {
         demoteToLegacy(
           "element-access-unsupported",
@@ -6897,7 +6947,10 @@ function lowerClosureCall(
   }
   const expandedArgExprs = expandStaticSpreadArgs(argExprs, cx);
   const defaultParamStart = signature.defaultParamStart ?? signature.params.length;
-  if (expandedArgExprs.length < defaultParamStart || expandedArgExprs.length > signature.params.length) {
+  if (
+    expandedArgExprs.length < (signature.optionalParamStart ?? defaultParamStart) ||
+    expandedArgExprs.length > signature.params.length
+  ) {
     demoteToLegacy("call-arity-unsupported", `ir/from-ast: closure call arity mismatch in ${cx.funcName}`);
   }
   const args: IrValueId[] = [];
@@ -6905,9 +6958,11 @@ function lowerClosureCall(
     const expected = signature.params[i]!;
     const argument = expandedArgExprs[i];
     const argVal =
-      i >= defaultParamStart && (argument === undefined || isUnshadowedUndefinedExpression(argument, cx))
-        ? emitExpressionDefaultMissingF64(expected, cx)
-        : lowerExpr(argument!, cx, expected);
+      argument === undefined && signature.optionalParamStart !== undefined && i >= signature.optionalParamStart
+        ? lowerUndefinedValue(cx)
+        : i >= defaultParamStart && (argument === undefined || isUnshadowedUndefinedExpression(argument, cx))
+          ? emitExpressionDefaultMissingF64(expected, cx)
+          : lowerNestedCallArgument(argument!, expected, cx);
     if (!irTypeAssignable(cx.builder.typeOf(argVal), expected)) {
       demoteToLegacy(
         "call-resolution-unsupported",
@@ -6930,6 +6985,20 @@ function lowerClosureCall(
  * it as mutable), wrap it here and rebind `cx.scope[name]` so subsequent
  * outer reads/writes go through the cell.
  */
+function lowerNestedCallArgument(expression: ts.Expression, expected: IrType, cx: LowerCtx): IrValueId {
+  if (expected.kind === "dynamic" && expression.kind === ts.SyntaxKind.NullKeyword) {
+    const type = irVal({ kind: "externref" });
+    return cx.builder.emitBox(cx.builder.emitConst({ kind: "null", ty: type }, type), irDynamic());
+  }
+  const value = lowerExpr(expression, cx, expected);
+  const actual = cx.builder.typeOf(value);
+  if (expected.kind === "dynamic" && actual.kind !== "dynamic") {
+    const boxed = boxBoundReference(value, actual, cx) ?? boxConcreteToDynamic(value, actual, expression, cx);
+    if (boxed !== null) return boxed;
+  }
+  return value;
+}
+
 function lowerNestedFuncCall(
   binding: {
     kind: "nestedFunc";
@@ -6943,7 +7012,10 @@ function lowerNestedFuncCall(
   if (binding.signature.returnType === null) {
     unsupportedVoidCallExpression(`ir/from-ast: void nested calls are not in value position scope (${cx.funcName})`);
   }
-  if (argExprs.length !== binding.signature.params.length) {
+  if (
+    argExprs.length < (binding.signature.optionalParamStart ?? binding.signature.params.length) ||
+    argExprs.length > binding.signature.params.length
+  ) {
     demoteToLegacy("call-arity-unsupported", `ir/from-ast: nested func call arity mismatch in ${cx.funcName}`);
   }
   const args: IrValueId[] = [];
@@ -6987,10 +7059,10 @@ function lowerNestedFuncCall(
       }
     }
   }
-  for (let i = 0; i < argExprs.length; i++) {
+  for (let i = 0; i < binding.signature.params.length; i++) {
     const expected = binding.signature.params[i]!;
-    const argVal = lowerExpr(argExprs[i]!, cx, expected);
-    if (!irTypeEquals(cx.builder.typeOf(argVal), expected)) {
+    const argVal = i >= argExprs.length ? lowerUndefinedValue(cx) : lowerNestedCallArgument(argExprs[i]!, expected, cx);
+    if (!irTypeAssignable(cx.builder.typeOf(argVal), expected)) {
       demoteToLegacy(
         "call-resolution-unsupported",
         `ir/from-ast: nested arg ${i} type mismatch (expected ${describeIrType(expected)}, got ${describeIrType(cx.builder.typeOf(argVal))}) in ${cx.funcName}`,
@@ -7638,9 +7710,7 @@ function tryLowerNativeMapConstruction(expr: ts.NewExpression, cx: LowerCtx): Ir
   // Every cheap, PURE rejection first. Only a proven ambient `new Map()` may
   // reach the materializing resolver call below — see
   // `ensureNativeMapStorageType` for what asking too early cost.
-  if (!ts.isIdentifier(expr.expression) || expr.expression.text !== "Map") return null;
-  if ((expr.arguments?.length ?? 0) !== 0) return null;
-  if (cx.resolver?.isAmbientBinding?.(expr.expression) === false) return null;
+  if (!isEmptyAmbientMapConstruction(expr, cx.resolver?.isAmbientBinding)) return null;
   const storageType = cx.resolver?.ensureNativeMapStorageType?.();
   if (!storageType) return null;
   const result = cx.builder.emitCall(irRuntimeFuncRef(IR_NATIVE_MAP_NEW_FN), [], storageType);
@@ -9256,6 +9326,11 @@ function lowerPropertyCompound(
  * matches those arms, but its RHS is itself an assignment they cannot lower.
  */
 function lowerAdoptedMutatingStatement(expr: ts.Expression, cx: LowerCtx): boolean {
+  const logical = localLogicalAssignment(expr);
+  if (logical) {
+    lowerLogicalAssignment(logical, cx);
+    return true;
+  }
   if (ts.isBinaryExpression(expr)) {
     const op = expr.operatorToken.kind;
     // S3 — `a = b = e;`.
@@ -9298,6 +9373,17 @@ function lowerAdoptedMutatingStatement(expr: ts.Expression, cx: LowerCtx): boole
     return true;
   }
   return false;
+}
+
+/** Read once, conditionally write, and merge branch-specific string facts. */
+function lowerLogicalAssignment(logical: NonNullable<ReturnType<typeof localLogicalAssignment>>, cx: LowerCtx): void {
+  const raw = lowerExpr(logical.target, cx, IR_I32);
+  const cond = coerceLoopCondToBool(raw, logical.target, cx, "if");
+  const keepScope = new Map(cx.scope);
+  const branchCx: LowerCtx = { ...cx, scope: new Map(cx.scope) };
+  const write = cx.builder.collectBodyInstrs(() => lowerIdentifierAssignment(logical.target, logical.value, branchCx));
+  cx.builder.emitIfStmt({ cond, then: logical.whenTruthy ? write : [], else: logical.whenTruthy ? [] : write });
+  joinScopeStringEncodingFacts(cx.scope, [keepScope, branchCx.scope]);
 }
 
 /**
@@ -9663,6 +9749,8 @@ function coerceReturnValue(value: IrValueId, cx: LowerCtx, sourceExpression?: ts
   if (declared?.kind === "dynamic") {
     const actual = cx.builder.typeOf(value);
     if (actual.kind === "dynamic") return value;
+    const reference = boxBoundReference(value, actual, cx);
+    if (reference !== null) return reference;
     if (sourceExpression) {
       const boxed = boxConcreteToDynamic(value, actual, sourceExpression, cx);
       if (boxed !== null) return boxed;
@@ -10003,6 +10091,39 @@ function lowerForInStatement(stmt: ts.ForInStatement, cx: LowerCtx): void {
  * externref/ref_extern → `null` (demote). MUST be called inside the loop
  * cond-buffer closure so it re-runs each iteration.
  */
+/** Condition-only short circuiting normalizes truthiness without changing value-position operators. */
+function lowerConditionExpression(expression: ts.Expression, cx: LowerCtx): IrValueId {
+  const expr = peelParensExpr(expression);
+  if (ts.isPrefixUnaryExpression(expr) && expr.operator === ts.SyntaxKind.ExclamationToken) {
+    const value = coerceLoopCondToBool(lowerConditionExpression(expr.operand, cx), expr.operand, cx, "if");
+    return cx.builder.emitUnary("i32.eqz", value, IR_BOOL);
+  }
+  if (
+    !ts.isBinaryExpression(expr) ||
+    (expr.operatorToken.kind !== ts.SyntaxKind.AmpersandAmpersandToken &&
+      expr.operatorToken.kind !== ts.SyntaxKind.BarBarToken)
+  )
+    return lowerExpr(expression, cx, irVal({ kind: "i32" }));
+  const and = expr.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken;
+  const left = coerceLoopCondToBool(lowerConditionExpression(expr.left, cx), expr.left, cx, "if");
+  const skippedScope = new Map(cx.scope);
+  const rightCx: LowerCtx = { ...cx, scope: new Map(cx.scope) };
+  let right: IrValueId;
+  const body = cx.builder.collectBodyInstrs(() => {
+    right = coerceLoopCondToBool(lowerConditionExpression(expr.right, rightCx), expr.right, rightCx, "if");
+  });
+  const skipped = cx.builder.emitConst({ kind: "bool", value: !and }, IR_BOOL);
+  joinScopeStringEncodingFacts(cx.scope, [skippedScope, rightCx.scope]);
+  return cx.builder.emitIfElse({
+    cond: left,
+    then: and ? body : [],
+    thenValue: and ? right! : skipped,
+    else: and ? [] : body,
+    elseValue: and ? skipped : right!,
+    resultType: IR_BOOL,
+  });
+}
+
 function lowerToBooleanForCondition(
   condValue: IrValueId,
   conditionExpr: ts.Expression,
@@ -10088,7 +10209,7 @@ function lowerWhileStatement(stmt: ts.WhileStatement, cx: LowerCtx): void {
   // produces no value). (#1980)
   let condResult: IrValueId | null = null;
   const condInstrs = loopCx.builder.collectBodyInstrs(() => {
-    const raw = lowerExpr(stmt.expression, loopCx, irVal({ kind: "i32" }));
+    const raw = lowerConditionExpression(stmt.expression, loopCx);
     // #2136 — an f64 (numeric-truthiness) condition was previously bailed to
     // legacy (#1980) because the lowerer's unconditional `i32.eqz` on an f64
     // emitted invalid Wasm. Instead, coerce it to an i32 bool via ToBoolean
@@ -10150,7 +10271,7 @@ function lowerDoStatement(stmt: ts.DoStatement, cx: LowerCtx): void {
   // Cond buffer — re-evaluated each iteration (after the body).
   let condResult: IrValueId | null = null;
   const condInstrs = loopCx.builder.collectBodyInstrs(() => {
-    const raw = lowerExpr(stmt.expression, bodyCx, irVal({ kind: "i32" }));
+    const raw = lowerConditionExpression(stmt.expression, bodyCx);
     condResult = coerceLoopCondToBool(raw, stmt.expression, bodyCx, "do");
   });
   if (condResult === null || condResult === undefined) {
@@ -10605,7 +10726,7 @@ function lowerForStatement(stmt: ts.ForStatement, cx: LowerCtx, bodyOverride?: (
       );
       return;
     }
-    const raw = lowerExpr(cond, loopCx, irVal({ kind: "i32" }));
+    const raw = lowerConditionExpression(cond, loopCx);
     // #2136 — coerce a numeric-truthiness `for` cond (e.g. `for (...; k; ...)`
     // with f64 `k`) to an i32 bool via ToBoolean inside the cond buffer,
     // instead of bailing to legacy (#1980). Mirrors the while-loop arm.
@@ -11347,7 +11468,7 @@ function lowerWithStatement(stmt: ts.WithStatement, cx: LowerCtx): void {
  * sub-buffer with a cloned scope (arm-local `let`s don't leak).
  */
 function lowerIfBodyStatement(stmt: ts.IfStatement, cx: LowerCtx): void {
-  const raw = lowerExpr(stmt.expression, cx, irVal({ kind: "i32" }));
+  const raw = lowerConditionExpression(stmt.expression, cx);
   // Coerce through the shared ToBoolean path used by loop conditions.
   const cond = coerceLoopCondToBool(raw, stmt.expression, cx, "if");
   const thenCx: LowerCtx = { ...cx, scope: new Map(cx.scope) };
@@ -11467,8 +11588,8 @@ function lowerBreakContinueStatement(stmt: ts.BreakStatement | ts.ContinueStatem
 /**
  * #2952 slice 4 — lower `switch (disc) { case <numeric literal>: ... }` to
  * the `switch` IR instr (block-per-case ladder; see IrInstrSwitch in
- * nodes.ts). The selector admits only numeric-literal case tests, so
- * clause selection is a compile-time table; the disc must lower to
+ * nodes.ts). Literal and checker-proven const-enum case tests share a
+ * compile-time table (string tests first become indices); numeric discs lower to
  * i32/f64 (ref/string/dynamic discs throw → clean legacy demote, same
  * discipline as loop conds, #2136).
  *
@@ -11480,7 +11601,9 @@ function lowerBreakContinueStatement(stmt: ts.BreakStatement | ts.ContinueStatem
 function lowerSwitchStatement(stmt: ts.SwitchStatement, cx: LowerCtx): void {
   const clauses = stmt.caseBlock.clauses;
   const stringTestTexts = clauses.map((clause) =>
-    ts.isCaseClause(clause) ? stringLiteralCaseTestValue(clause.expression) : null,
+    ts.isCaseClause(clause)
+      ? stringSwitchCaseValue(clause.expression, (expr) => constEnumValue(expr, cx.checker))
+      : null,
   );
   const isStringSwitch = stringTestTexts.some((text) => text !== null);
 
@@ -11518,7 +11641,7 @@ function lowerSwitchStatement(stmt: ts.SwitchStatement, cx: LowerCtx): void {
       // String switch: the test IS the clause index (the dispatch chain
       // above already resolved the literal comparison). Numeric switch:
       // the literal's value, as slice 4.
-      const v = dispatch ? k : numericLiteralValue(clause.expression);
+      const v = dispatch ? k : numericSwitchCaseValue(clause.expression, (expr) => constEnumValue(expr, cx.checker));
       if (v === null) {
         // invariant (producer-promise): the selector's own gate already decided this predicate — #4502.
         throw new Error(
@@ -11609,33 +11732,6 @@ function lowerStringSwitchDispatch(
     cx.builder.emitIfStmt({ cond: matched, then, else: [] });
   }
   return { disc: cx.builder.emitSlotRead(matchSlot) };
-}
-
-/**
- * #2952 slice 6b — the text of a string-literal case test. `null` for any
- * other expression shape (numeric literals take the slice-4 path; everything
- * else is selector-rejected).
- */
-function stringLiteralCaseTestValue(expr: ts.Expression): string | null {
-  if (ts.isStringLiteral(expr) || ts.isNoSubstitutionTemplateLiteral(expr)) return expr.text;
-  return null;
-}
-
-/**
- * #2952 slice 4 — the numeric value of a literal case test: a plain
- * NumericLiteral or a prefix-minus NumericLiteral. `null` for any other
- * expression shape (the selector mirror rejects those).
- */
-function numericLiteralValue(expr: ts.Expression): number | null {
-  if (ts.isNumericLiteral(expr)) return Number(expr.text.replace(/_/g, ""));
-  if (
-    ts.isPrefixUnaryExpression(expr) &&
-    expr.operator === ts.SyntaxKind.MinusToken &&
-    ts.isNumericLiteral(expr.operand)
-  ) {
-    return -Number(expr.operand.text.replace(/_/g, ""));
-  }
-  return null;
 }
 
 /**
@@ -12130,7 +12226,7 @@ function tryLowerExactMixedPrimitiveWrapperCall(expr: ts.CallExpression, cx: Low
   const proof = proveExactMixedPrimitiveWrapperCall(expr, cx);
   if (proof === null) return null;
   try {
-    const rawCond = lowerExpr(proof.conditional.condition, cx, irVal({ kind: "i32" }));
+    const rawCond = lowerConditionExpression(proof.conditional.condition, cx);
     const cond = lowerToBooleanForCondition(rawCond, proof.conditional.condition, cx);
     if (cond === null) {
       throw new IrInvariantError(
@@ -12303,7 +12399,7 @@ function lowerConditional(expr: ts.ConditionalExpression, cx: LowerCtx): IrValue
         );
       }
 
-      const rawCond = lowerExpr(expr.condition, cx, irVal({ kind: "i32" }));
+      const rawCond = lowerConditionExpression(expr.condition, cx);
       const cond = lowerToBooleanForCondition(rawCond, expr.condition, cx);
       if (cond === null) {
         throw new IrInvariantError(
@@ -12361,7 +12457,7 @@ function lowerConditional(expr: ts.ConditionalExpression, cx: LowerCtx): IrValue
     }
   }
 
-  const rawCond = lowerExpr(expr.condition, cx, irVal({ kind: "i32" }));
+  const rawCond = lowerConditionExpression(expr.condition, cx);
   // (#4512) §7.1.2 ToBoolean — dynamic lowers via `dyn.truthy`, object/string/ref
   // via the shared coercion, a raw host externref returns null → demote. The
   // coercion is emitted before the `if` so the condition evaluates once.
@@ -13920,20 +14016,20 @@ function tryLowerUndefinedCompare(expr: ts.BinaryExpression, op: ts.SyntaxKind, 
     return cx.builder.emitConst({ kind: "bool", value: isStrictEq }, IR_BOOL);
   }
   const other = leftU ? expr.right : expr.left;
+  const v = lowerExpr(other, cx, irVal({ kind: "externref" }));
+  const t = cx.builder.typeOf(v);
   // A typed array index has a non-undefined TypeScript element type even when
   // the runtime index is out of bounds. Until the IR carries first-class
   // `undefined` through a numeric-vector read, only a proven in-bounds access
   // may participate in the never-undefined fold below. Unproven reads stay on
   // the direct SAFE path instead of folding `a[i] === undefined` to false.
-  if (ts.isElementAccessExpression(other) && !isProvenInBoundsIr(other, cx)) {
+  if (t.kind !== "dynamic" && ts.isElementAccessExpression(other) && !isProvenInBoundsIr(other, cx)) {
     throw new IrUnsupportedError(
       "nullish-value-unsupported",
       "build",
       `ir/from-ast: unproven indexed read cannot be compared with undefined (${cx.funcName})`,
     );
   }
-  const v = lowerExpr(other, cx, irVal({ kind: "externref" }));
-  const t = cx.builder.typeOf(v);
   // #2949 S5.2 — a dynamic (boxed-any) operand: strict `=== undefined` /
   // `!== undefined` is the exact Undefined-partition tag test (cheaper and
   // more precise than boxing `undefined` into the carrier + the general
@@ -14133,9 +14229,9 @@ function tryLowerDynamicEq(
   if (!loose && !strict) return null;
   const negate = op === ts.SyntaxKind.ExclamationEqualsToken || op === ts.SyntaxKind.ExclamationEqualsEqualsToken;
 
-  const dynL = lt.kind === "dynamic" ? lhs : boxConcreteToDynamic(lhs, lt, expr.left, cx);
+  const dynL = dynamicEqualityOperand(lhs, lt, expr.left, loose, cx);
   if (dynL === null) return null;
-  const dynR = rt.kind === "dynamic" ? rhs : boxConcreteToDynamic(rhs, rt, expr.right, cx);
+  const dynR = dynamicEqualityOperand(rhs, rt, expr.right, loose, cx);
   if (dynR === null) return null;
   return cx.builder.emitDynEq(dynL, dynR, { loose, negate });
 }
@@ -14211,12 +14307,27 @@ function tryLowerPrimitiveWrapperLooseEquality(
   );
 }
 
-/**
- * #2949 S5.2 — box a CONCRETE equality operand into the boxed-any carrier, tag-
- * refined from its literal kind / IR type. Returns `null` when the operand has
- * no sound carrier box in this slice, so the caller demotes cleanly rather than
- * mis-tagging (e.g. a boxed boolean must carry tag-4, never the number default).
- */
+/** Preserve reference identity at call, return and strict-equality boundaries; reject unbound raw refs. */
+function boxBoundReference(value: IrValueId, type: IrType, cx: LowerCtx): IrValueId | null {
+  return type.kind === "object" ||
+    type.kind === "class" ||
+    (type.kind === "val" && type.typeRef && (type.val.kind === "ref" || type.val.kind === "ref_null"))
+    ? cx.builder.emitBox(value, irDynamic())
+    : null;
+}
+
+function dynamicEqualityOperand(
+  value: IrValueId,
+  type: IrType,
+  expression: ts.Expression,
+  loose: boolean,
+  cx: LowerCtx,
+): IrValueId | null {
+  if (type.kind === "dynamic") return value;
+  return (!loose ? boxBoundReference(value, type, cx) : null) ?? boxConcreteToDynamic(value, type, expression, cx);
+}
+
+/** Box concrete primitives with their proven tags; unknown carriers remain unsupported. */
 function boxConcreteToDynamic(v: IrValueId, t: IrType, operand: ts.Expression, cx: LowerCtx): IrValueId | null {
   if (t.kind === "string") {
     return cx.builder.emitBox(v, irDynamic(JS_TAG_IDS.String));
@@ -14573,6 +14684,8 @@ function closureDefaultParamStart(
 type IrClosureLiteral = ts.ArrowFunction | ts.FunctionExpression | ts.MethodDeclaration | ts.FunctionDeclaration;
 
 function lowerClosureExpression(expr: IrClosureLiteral, cx: LowerCtx): IrValueId {
+  const inferred = inferredClosureSignature(cx.oracle, expr, cx.inferredClosureCarriers);
+  if (inferred) return lowerClosureExpressionWithSignature(expr, inferred, undefined, cx);
   const defaultParamStart = closureDefaultParamStart(expr.parameters, cx.funcName, cx);
   const params: IrType[] = expr.parameters.map((p) => {
     if (!p.type) {
@@ -14842,23 +14955,26 @@ function lowerNestedFunctionDeclaration(fn: ts.FunctionDeclaration, cx: LowerCtx
     cx.scope.set(innerName, { kind: "local", value, type: cx.builder.typeOf(value) });
     return;
   }
-  const params: IrType[] = fn.parameters.map((p) => {
-    if (!ts.isIdentifier(p.name) || !p.type) {
-      demoteToLegacy(
-        "body-shape-rejected",
-        `ir/from-ast: nested func params must be Identifier-named with annotations (${cx.funcName})`,
-      );
-    }
-    return typeNodeToIr(p.type, `param ${p.name.text} of ${cx.funcName}.${innerName}`);
-  });
-  if (!fn.type) {
+  const inferred = inferredClosureSignature(cx.oracle, fn, cx.inferredClosureCarriers);
+  const params: readonly IrType[] =
+    inferred?.params ??
+    fn.parameters.map((p) => {
+      if (!ts.isIdentifier(p.name) || !p.type) {
+        demoteToLegacy(
+          "body-shape-rejected",
+          `ir/from-ast: nested func params must be Identifier-named with annotations (${cx.funcName})`,
+        );
+      }
+      return typeNodeToIr(p.type, `param ${p.name.text} of ${cx.funcName}.${innerName}`);
+    });
+  if (!fn.type && !inferred) {
     demoteToLegacy(
       "body-shape-rejected",
       `ir/from-ast: nested func must have a return type annotation (${cx.funcName})`,
     );
   }
-  const returnType = typeNodeToIr(fn.type, `return type of ${cx.funcName}.${innerName}`);
-  const signature: IrClosureSignature = { params, returnType };
+  const returnType = inferred?.returnType ?? typeNodeToIr(fn.type!, `return type of ${cx.funcName}.${innerName}`);
+  const signature: IrClosureSignature = inferred ?? { params, returnType };
 
   const captures = analyseCaptures(fn, cx);
   const liftedIdentity = allocateLoweredLiftedFunctionArtifact(
@@ -14897,6 +15013,9 @@ function liftNestedFunction(
   }
   const builder = new IrFunctionBuilder(liftedIdentity, [signature.returnType], false, cx.allocRegistry);
   const scope = new Map<string, ScopeBinding>();
+  if (fn.name && hasDirectNestedRecursion(fn, cx.checker)) {
+    scope.set(fn.name.text, { kind: "nestedFunc", target: irUnitFuncRef(liftedIdentity), signature, captures });
+  }
 
   // Prepend capture params before the user's params.
   for (const cap of captures) {
@@ -14960,6 +15079,7 @@ function liftNestedFunction(
     funcKind: "regular",
     checker: cx.checker,
     oracle: cx.oracle,
+    inferredClosureCarriers: cx.inferredClosureCarriers,
     numericLocalScalarForDecl: cx.numericLocalScalarForDecl,
     allocRegistry: cx.allocRegistry,
   };
@@ -15102,6 +15222,7 @@ function liftClosureBody(
     funcKind: "regular",
     checker: cx.checker,
     oracle: cx.oracle,
+    inferredClosureCarriers: cx.inferredClosureCarriers,
     numericLocalScalarForDecl: cx.numericLocalScalarForDecl,
     allocRegistry: cx.allocRegistry,
   };

@@ -1141,6 +1141,14 @@ describe("#3525 whole-program callable binding graph", () => {
         (outcome) => outcome.code === "late-preparation-unsupported" && outcome.stage === "resolve",
       ),
     ).toBe(true);
+    // Preserve the exact atomic refusal for every affected structural owner,
+    // including same-spelled functions in distinct source files. A generic
+    // final-context failure loses the evidence needed to extend preparation.
+    for (const outcome of exactOutcomes(generated, unitIds)) {
+      expect(outcome.detail).toContain("contains non-neutral ArrayLiteralExpression");
+      expect(outcome.detail).toContain("retaining direct bodies");
+      expect(outcome.detail).not.toContain("failed final-context IR preparation");
+    }
   });
 
   it("declines a checker-resolved module global before allocator-bearing lowering", () => {

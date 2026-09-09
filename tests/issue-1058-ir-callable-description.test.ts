@@ -17,6 +17,8 @@ import { buildIrPlanningIdentityContext } from "../src/ir/planning-identity.js";
 import { ts } from "../src/ts-api.js";
 import { describeProgramAbiSupportType } from "../src/codegen/program-abi-support-type-description.js";
 import { irSupportTypeRef, irTypeBindingKey } from "../src/ir/abi-bindings.js";
+import { lowerPreparedClosureSupportType } from "../src/ir/prepared-closure-support.js";
+import { ClosureStructRegistry } from "../src/ir/closure-struct-registry.js";
 
 function fixture(sourceText = "export function run(): number { return 42; }") {
   const source = ts.createSourceFile("/repo/issue-1058.ts", sourceText, ts.ScriptTarget.Latest, true);
@@ -66,11 +68,48 @@ function supportTypeFixture() {
       func,
     });
   });
-  return { ...f, type, request, id, units };
+  const carrier = { ...irVal({ kind: "ref", typeIdx: 99 }), typeRef: support!.cellTypeRef };
+  const typeIdx = f.ctx.mod.types.indexOf(type);
+  expect(typeIdx).toBeGreaterThanOrEqual(0);
+  return { ...f, type, typeIdx, request, id, units, carrier };
 }
+
+it("resolves a provisional carrier by allocation identity after index movement", () => {
+  const f = supportTypeFixture();
+  f.ctx.mod.types.unshift({ kind: "struct", name: "padding", fields: [] });
+  expect(lowerPreparedClosureSupportType(f.ctx, f.carrier)).toEqual({ kind: "ref", typeIdx: f.typeIdx + 1 });
+  expect(f.session.hasPlan(f.id)).toBe(false);
+  expect(f.session.locatorBindingId(f.session.typeCellFor(f.type)!)).toBeUndefined();
+});
+
+it("prepares a closure over a provisional carrier without publishing its binding", () => {
+  const f = supportTypeFixture();
+  const nullable = { ...irVal({ kind: "ref_null", typeIdx: 99 }), typeRef: f.carrier.typeRef };
+  const signature = { params: [f.carrier], returnType: nullable };
+  const registry = new ClosureStructRegistry(f.ctx, (type) => lowerPreparedClosureSupportType(f.ctx, type));
+  const closure = registry.resolveSubtype(signature, [f.carrier]);
+  expect(closure).not.toBeNull();
+  expect(f.ctx.mod.types[closure!.funcTypeIdx]).toMatchObject({
+    params: [expect.anything(), { kind: "ref", typeIdx: f.typeIdx }],
+    results: [{ kind: "ref_null", typeIdx: f.typeIdx }],
+  });
+  expect(f.session.hasPlan(f.id)).toBe(false);
+  expect(f.session.locatorBindingId(f.session.typeCellFor(f.type)!)).toBeUndefined();
+});
+
+it.each(["shape", "allocation", "foreign-session"] as const)("rejects a %s candidate carrier mismatch", (change) => {
+  const f = supportTypeFixture();
+  if (change === "shape") f.type.fields[0]!.mutable = false;
+  if (change === "allocation") f.ctx.mod.types[f.typeIdx] = { ...f.type };
+  if (change === "foreign-session") f.ctx.programAbiTypes = supportTypeFixture().ctx.programAbiTypes;
+  expect(() => lowerPreparedClosureSupportType(f.ctx, f.carrier)).toThrow(/exact candidate|no exact Program ABI/);
+  expect(f.session.hasPlan(f.id)).toBe(false);
+});
 
 it.each(["abort", "seal"] as const)("publishes candidate support types only on %s", (action) => {
   const f = supportTypeFixture();
+  expect(lowerPreparedClosureSupportType(f.ctx, f.carrier)).toEqual({ kind: "ref", typeIdx: f.typeIdx });
+  expect(f.session.hasPlan(f.id)).toBe(false);
   const unitId = f.units[0]!.id;
   const token = describePreparedSupportTypes(f.ctx, [unitId], [f.id]);
   const scope = f.session.beginPreparedComponentScope("support-control", [unitId]);
@@ -84,6 +123,8 @@ it.each(["abort", "seal"] as const)("publishes candidate support types only on %
   expect(f.session.hasPlan(f.id)).toBe(false);
   expect(scope.abi.get(f.id)).toBeDefined();
   scope[action]();
+  expect(f.session.hasPlan(f.id)).toBe(action === "seal");
+  expect(lowerPreparedClosureSupportType(f.ctx, f.carrier)).toEqual({ kind: "ref", typeIdx: f.typeIdx });
   expect(f.session.hasPlan(f.id)).toBe(action === "seal");
   const secondId = f.units[1]!.id;
   const second = f.session.beginPreparedComponentScope("support-second", [secondId]);

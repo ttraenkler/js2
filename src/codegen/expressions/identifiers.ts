@@ -102,6 +102,7 @@ import {
   runtimeEvalSharedValueUnwrapInstrs,
 } from "../global-environment.js";
 import { runtimeEvalStateMayShadowBinding } from "../direct-eval-environment.js";
+import { emitRuntimeEnumObjectRead } from "../runtime-enum-object.js";
 import { emitStandaloneIntrinsicEvalValue } from "./eval-inline.js";
 import { emitHostEvalGlobalBindingSeed } from "./runtime-eval-provider.js";
 import { emitStandaloneFunctionIntrinsicValue } from "../function-intrinsic-carrier.js"; // (#4442) THE `%Function%` emitter
@@ -1445,6 +1446,8 @@ function compileIdentifierCore(
     if (valueType) return valueType;
   }
 
+  const enumObject = emitRuntimeEnumObjectRead(ctx, fctx, id);
+  if (enumObject) return enumObject;
   const namespaceObject = tryEmitCompiledModuleNamespaceObject(ctx, fctx, id);
   if (namespaceObject) return namespaceObject;
 

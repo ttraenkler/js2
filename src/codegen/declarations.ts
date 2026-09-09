@@ -88,6 +88,8 @@ import { _hasRuntimeComputedKey, objectLiteralForcesHostPath } from "./literals.
 import { needsImplicitArgumentsObject } from "./helpers/body-uses-arguments.js";
 import { mappedFormalNeedsExternref } from "./mapped-arguments-formal-widening.js";
 import { markIdentityPreservingStructuralParam } from "./identity-preserving-structural-param.js";
+import { parameterNeedsAccessorCarrier, prepareAccessorParameterCarriers } from "./accessor-parameter-carrier.js";
+import { hasRuntimeEnumObject, prepareRuntimeEnumObjects } from "./runtime-enum-object.js";
 import { genericCallbackResultDeclaration } from "./generic-callback-result.js";
 import { genericStructFactorySourceResultAbi } from "./generic-struct-factory.js";
 import { emitThrowJsError, noJsHost } from "./js-errors.js";
@@ -496,6 +498,8 @@ export function prepareIdentityPreservingStructuralParams(
   ctx: CodegenContext,
   sourceFiles: readonly ts.SourceFile[],
 ): void {
+  prepareAccessorParameterCarriers(ctx, sourceFiles);
+  prepareRuntimeEnumObjects(ctx, sourceFiles);
   const candidates = new Map<ts.FunctionDeclaration, Set<number>>();
   const directFunctionDeclaration = (identifier: ts.Identifier): ts.FunctionDeclaration | undefined => {
     const oracleDeclaration = ctx.oracle.valueDeclarationOf(identifier);
@@ -1460,6 +1464,10 @@ function lowerParamType(
   }
   if (nativeParam === null) {
     wasmType = preserveIdentityForStructuralParam(ctx, param, index, stmt, wasmType, paramType);
+    if (parameterNeedsAccessorCarrier(ctx, param)) {
+      markIdentityPreservingStructuralParam(ctx, param);
+      wasmType = { kind: "externref" };
+    }
   }
   if (jsArrayParamNeedsOpenObjectCarrier(ctx, param, stmt, wasmType)) {
     wasmType = { kind: "externref" };
@@ -4063,6 +4071,10 @@ export function collectDeclarations(ctx: CodegenContext, sourceFile: ts.SourceFi
   // run before `new Ctor()` captures the prototype, and `obj.prop = v` must run between
   // `var before = ...typeof obj.prop` and `var after = ...obj.prop === v`).
   for (const stmt of sourceFile.statements) {
+    if (ts.isEnumDeclaration(stmt) && hasRuntimeEnumObject(ctx, stmt)) {
+      ctx.moduleInitStatements.push(stmt);
+      continue;
+    }
     // A linked module's default-export expression is evaluated once, in source
     // order, even when that expression is an identifier. Give it a graph-local
     // cell so an importer observes that snapshot instead of following the

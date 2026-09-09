@@ -1,4 +1,6 @@
 // Copyright (c) 2026 Loopdive GmbH. Licensed under Apache-2.0 WITH LLVM-exception.
+import { localLogicalAssignment } from "./logical-assignment.js";
+import { numericSwitchCaseValue, stringSwitchCaseValue } from "./switch-case-value.js";
 //
 // Per-function selector — decides which functions to route through the IR
 // path vs. the legacy direct AST→Wasm emission.
@@ -429,6 +431,17 @@ export interface IrModuleInitAssessment {
 }
 
 export interface IrSelectionOptions extends IrAsyncSelectionOptions {
+  readonly isAmbientUndefined?: (expression: ts.Expression) => boolean;
+  readonly constEnumValue?: (expression: ts.Expression) => string | number | undefined;
+  readonly orderNestedDeclarations?: (statements: readonly ts.Statement[]) => readonly ts.Statement[];
+  readonly hasDirectNestedRecursion?: (declaration: ts.FunctionDeclaration) => boolean;
+  /** Pure target and constructor-identity proof; independent of module storage admission. */
+  readonly supportsNativeMapConstruction?: (expression: ts.NewExpression) => boolean;
+  readonly inferredReturnedClosureSignature?: (call: ts.CallExpression) => IrClosureSignature | undefined;
+  /** Shared oracle-backed, fixed-arity plan for an incompletely annotated closure. */
+  readonly inferredClosureSignature?: (
+    node: import("./inferred-closure-signature.js").InferredClosureDeclaration,
+  ) => IrClosureSignature | undefined;
   readonly experimentalIR?: boolean;
   /**
    * Exact shared #3518 proof for a counted string append loop. When omitted,
@@ -3446,6 +3459,21 @@ function phase1MutatingStatementVerdict(
   localClasses: ReadonlySet<string>,
   topLevel: boolean,
 ): Phase1MutatingVerdict | null {
+  const logical = localLogicalAssignment(expr);
+  if (logical) {
+    const { target, value } = logical;
+    if (
+      !scope.has(target.text) ||
+      currentModuleBindingResolver?.(target) ||
+      isUnrepresentableModuleBinding(target) ||
+      projectionBindingMutationIsUnsupported(target.text, expr)
+    )
+      return { ok: false, arm: "logical-assignment-target", node: target };
+    if (!isPhase1Expr(target, scope, localClasses) || !isPhase1Expr(value, scope, localClasses))
+      return { ok: false, arm: "logical-assignment-value", node: value };
+    clearProjectionBinding(target.text);
+    return { ok: true };
+  }
   if (ts.isBinaryExpression(expr)) {
     const op = expr.operatorToken.kind;
     // S3 — `a = b = e;`.
@@ -3672,7 +3700,7 @@ function isPhase1StatementListInScope(
   // (the lowerer synthesizes the implicit empty-values return).
   isVoidReturn: boolean = false,
 ): boolean {
-  stmts = orderTailFunctionDeclarations(stmts);
+  stmts = currentSelectionOptions?.orderNestedDeclarations?.(stmts) ?? orderTailFunctionDeclarations(stmts);
   if (stmts.length < 1)
     return shapeNo("stmt-list-empty", stmts.length ? stmts[0]! : ({ kind: ts.SyntaxKind.Block } as ts.Node));
   for (let i = 0; i < stmts.length - 1; i++) {
@@ -3898,27 +3926,17 @@ function isPhase1StatementListInScope(
     // `thenArmTerminates` fork in `from-ast.ts` exactly (#1979).
     // (#2856 calendar residual) A converging top-level `if/else` followed by
     // more statements is already representable by the structured `if.stmt`
-    // instruction used inside loop/body buffers. Keep this arm deliberately
-    // narrower than the tail-CFG path below: neither branch may return out of
-    // the function, and branch-local declarations do not escape. This is the
-    // exact shape of calendar::onDay's selection-state update before its two
-    // trailing render calls.
+    // instruction used inside loop/body buffers. Branch-local declarations
+    // do not escape; partial returns use the existing early.return instruction
+    // while enclosing cleanup and generator barriers remain in force.
     if (ts.isIfStatement(s) && s.elseStatement) {
       if (!isPhase1ConditionExpr(s.expression, scope, localClasses)) {
         return shapeNo("nontail-ifelse-cond", s.expression);
       }
-      if (
-        !withProjectionEvidenceScope(() =>
-          isPhase1BodyStatement(s.thenStatement, new Set(scope), localClasses, /* inLoop */ false),
-        )
-      ) {
+      if (!isPhase1ReturningGuardBody(s.thenStatement, scope, localClasses)) {
         return shapeNo("nontail-ifelse-then", s.thenStatement);
       }
-      if (
-        !withProjectionEvidenceScope(() =>
-          isPhase1BodyStatement(s.elseStatement!, new Set(scope), localClasses, /* inLoop */ false),
-        )
-      ) {
+      if (!isPhase1ReturningGuardBody(s.elseStatement, scope, localClasses)) {
         return shapeNo("nontail-ifelse-else", s.elseStatement);
       }
       continue;
@@ -3948,12 +3966,9 @@ function isPhase1StatementListInScope(
       // from-ast's `lowerStatementList(rest)` in the continuation block. The
       // then-arm scope is cloned so arm-local `let`s don't leak into `<rest>`.
       // Not in a loop here → `inLoop=false` (break/continue in the guard stay
-      // rejected; a `return` would have made `thenArmTerminates` true above).
-      if (
-        !withProjectionEvidenceScope(() =>
-          isPhase1BodyStatement(s.thenStatement, new Set(scope), localClasses, /* inLoop */ false),
-        )
-      )
+      // rejected). Partial returns may leave the function without making the
+      // entire then-arm terminating, so admit them through the scoped guard.
+      if (!isPhase1ReturningGuardBody(s.thenStatement, scope, localClasses))
         return shapeNo("nontail-if-then-guard", s.thenStatement);
       continue;
     }
@@ -4402,17 +4417,6 @@ interface BreakScope {
 const NO_BREAKS: BreakScope = { inSwitch: false, names: NO_LABELS };
 
 /**
- * #2952 slice 4 — the numeric value of a claimable `case` test: a plain
- * NumericLiteral or prefix-minus NumericLiteral. EXACT mirror of
- * from-ast's `numericLiteralValue` (selector↔builder parity). `null`
- * for any other expression shape.
- */
-function stringCaseTestValue(expr: ts.Expression): string | null {
-  if (ts.isStringLiteral(expr) || ts.isNoSubstitutionTemplateLiteral(expr)) return expr.text;
-  return null;
-}
-
-/**
  * #2952 slice 6b — is there an indexed read anywhere in this value's own
  * producer subtree? (Nested closures are skipped: their bodies produce a
  * different value.)
@@ -4467,25 +4471,13 @@ function switchDiscHasIrStringCarrier(expr: ts.Expression, seen = new Set<ts.Var
   return switchDiscHasIrStringCarrier(declaration.initializer, seen);
 }
 
-function numericCaseTestValue(expr: ts.Expression): number | null {
-  if (ts.isNumericLiteral(expr)) return Number(expr.text.replace(/_/g, ""));
-  if (
-    ts.isPrefixUnaryExpression(expr) &&
-    expr.operator === ts.SyntaxKind.MinusToken &&
-    ts.isNumericLiteral(expr.operand)
-  ) {
-    return -Number(expr.operand.text.replace(/_/g, ""));
-  }
-  return null;
-}
-
 /**
  * #2952 slice 4 — shape-check `switch (disc) { case <numeric literal>:
  * ...; default: ... }`. Backed by `lowerSwitchStatement` (block-per-case
  * ladder). Constraints:
  *   - disc: Phase-1 expression (i32/f64 at lowering — ref/string discs
  *     demote there, same discipline as loop conds, #2136);
- *   - every case test a numeric literal (compile-time dispatch table);
+ *   - case tests are literals or checker-proven const-enum values;
  *   - at most one `default` (dup default is a JS SyntaxError anyway);
  *   - clause statements are body statements sharing ONE scope across
  *     clauses (§14.12 — one declaration scope; mirrors from-ast's shared
@@ -4514,9 +4506,9 @@ function isPhase1SwitchStatement(
     let stringTests = 0;
     for (const clause of stmt.caseBlock.clauses) {
       if (ts.isCaseClause(clause)) {
-        if (numericCaseTestValue(clause.expression) !== null) {
+        if (numericSwitchCaseValue(clause.expression, currentSelectionOptions?.constEnumValue) !== null) {
           numericTests++;
-        } else if (stringCaseTestValue(clause.expression) !== null) {
+        } else if (stringSwitchCaseValue(clause.expression, currentSelectionOptions?.constEnumValue) !== null) {
           stringTests++;
         } else {
           return shapeNo("switch-case-test-nonliteral", clause.expression);
@@ -5319,9 +5311,11 @@ function isPhase1Tail(
     if (!stmt.elseStatement) {
       // A void function may end in a statement-position guard and then fall
       // through to its implicit empty return. The builder emits `if.stmt`
-      // followed by `return []`; non-void functions still require both tails.
-      if (!isVoidReturn) return shapeNo("tail-if-noelse", stmt);
+      // followed by `return []`. A proved nested dynamic result instead
+      // carries canonical undefined on the missing arm.
+      if (!isVoidReturn && !tailHasDynamicClosureResult(stmt)) return shapeNo("tail-if-noelse", stmt);
       if (!isPhase1ConditionExpr(stmt.expression, scope, localClasses)) return false;
+      if (!isVoidReturn) return isPhase1ReturningGuardBody(stmt.thenStatement, scope, localClasses);
       return withProjectionEvidenceScope(() =>
         isPhase1BodyStatement(stmt.thenStatement, new Set(scope), localClasses, /* inLoop */ false),
       );
@@ -5446,7 +5440,7 @@ function isPhase1Tail(
     // A void function may fall out of the switch into its implicit empty
     // return, exactly like the `tail-if-noelse` arm above — no coverage or
     // termination analysis is needed there.
-    if (isVoidReturn) return true;
+    if (isVoidReturn || tailHasDynamicClosureResult(stmt)) return true;
     if (!switchAllPathsTerminate(stmt)) return shapeNo("tail-switch-falls-through", stmt);
     return true;
   }
@@ -5592,6 +5586,21 @@ function tryAllPathsTerminate(stmt: ts.TryStatement): boolean {
 function blockLastStatementTerminates(block: ts.Block): boolean {
   const last = block.statements[block.statements.length - 1];
   return last !== undefined && thenArmTerminates(last);
+}
+
+/** Admission follows the exact nested callable result plan, not syntax alone. */
+function tailHasDynamicClosureResult(stmt: ts.SwitchStatement | ts.IfStatement): boolean {
+  const body = stmt.parent;
+  if (!currentDynamicRuntimeBuildable || !ts.isBlock(body) || body.statements.at(-1) !== stmt) return false;
+  const declaration = body.parent;
+  if (
+    !ts.isFunctionDeclaration(declaration) &&
+    !ts.isFunctionExpression(declaration) &&
+    !ts.isArrowFunction(declaration)
+  )
+    return false;
+  if (ts.isFunctionDeclaration(declaration) && ts.isSourceFile(declaration.parent)) return false;
+  return currentSelectionOptions?.inferredClosureSignature?.(declaration)?.returnType?.kind === "dynamic";
 }
 
 /**
@@ -5788,10 +5797,7 @@ function isPhase1VarDecl(stmt: ts.VariableStatement, scope: Set<string>, localCl
       isConst &&
       ts.isIdentifier(initializer) &&
       initializerScope.has(initializer.text) &&
-      // Nested function declarations are name-only direct-call targets in
-      // from-ast. They deliberately have no first-class SSA value, so an
-      // alias would pass selection but fail while lowering the bare read.
-      !currentNestedFunctionNames.has(initializer.text) &&
+      // Address-taken nested declarations are lifted as first-class closures.
       currentCallableArities.has(initializer.text)
         ? initializer.text
         : null;
@@ -5919,26 +5925,36 @@ function isPhase1NestedFunc(
   // Every param + return must have an explicit primitive / object
   // annotation. Slice 3 doesn't run propagation across closure
   // boundaries, so propagation overrides aren't applicable.
-  if (!fn.type) return shapeNo("nested-function-return-type-missing", fn);
-  if (annotationToResolvedKind(fn.type) === null) return shapeNo("nested-function-return-type", fn.type);
+  const inferred = currentSelectionOptions?.inferredClosureSignature?.(fn);
+  if (!fn.type && !inferred) return shapeNo("nested-function-return-type-missing", fn);
+  if (!inferred && fn.type && annotationToResolvedKind(fn.type) === null)
+    return shapeNo("nested-function-return-type", fn.type);
 
   const closureScope = new Set(scope);
   for (const p of fn.parameters) {
     if (!ts.isIdentifier(p.name)) return shapeNo("nested-function-param-name", p.name);
-    if (p.questionToken || p.dotDotDotToken || p.initializer) return shapeNo("nested-function-param-shape", p);
-    if (!p.type || annotationToResolvedKind(p.type) === null) return shapeNo("nested-function-param-type", p.type ?? p);
+    if ((p.questionToken && inferred?.optionalParamStart === undefined) || p.dotDotDotToken || p.initializer)
+      return shapeNo("nested-function-param-shape", p);
+    if (!inferred && (!p.type || annotationToResolvedKind(p.type) === null))
+      return shapeNo("nested-function-param-type", p.type ?? p);
     if (closureScope.has(p.name.text)) return shapeNo("nested-function-param-shadow", p.name);
     closureScope.add(p.name.text);
   }
 
-  // Reject self-reference syntactically — slice 3 doesn't yet support
-  // recursive nested funcs (would need a closure-name binding inside
-  // the lifted body).
   if (!fn.body) return shapeNo("nested-function-body-missing", fn);
-  if (bodyReferencesIdentifier(fn.body, fn.name.text)) {
+  const directRecursion = currentSelectionOptions?.hasDirectNestedRecursion?.(fn) === true;
+  if (bodyReferencesIdentifier(fn.body, fn.name.text) && !directRecursion) {
     return capabilityNo("call-resolution-unsupported", "nested-function-self-reference", fn);
   }
   const projectionBindings = enterProjectionBindingScope(fn.parameters);
+  if (directRecursion) {
+    closureScope.add(fn.name.text);
+    recordCallableProjection(
+      fn.name.text,
+      { min: inferred?.optionalParamStart ?? fn.parameters.length, max: fn.parameters.length },
+      fn.type,
+    );
+  }
   const outerMutableSlotNames = currentMutableSlotNames;
   currentMutableSlotNames = new Set();
   let bodyAccepted = false;
@@ -5952,7 +5968,11 @@ function isPhase1NestedFunc(
 
   // Add the nested function name to the OUTER scope.
   scope.add(fn.name.text);
-  recordCallableProjection(fn.name.text, fn.parameters.length, fn.type);
+  recordCallableProjection(
+    fn.name.text,
+    { min: inferred?.optionalParamStart ?? fn.parameters.length, max: fn.parameters.length },
+    fn.type,
+  );
   return true;
 }
 
@@ -6030,6 +6050,9 @@ function closureLiteralCallableArity(
   expr: ts.ArrowFunction | ts.FunctionExpression,
   outerScope: ReadonlySet<string>,
 ): CallableArityRange {
+  const inferred = currentSelectionOptions?.inferredClosureSignature?.(expr);
+  if (inferred?.optionalParamStart !== undefined)
+    return { min: inferred.optionalParamStart, max: inferred.params.length };
   const min = closureLiteralDefaultParamStart(expr.parameters, true, outerScope);
   if (min === null) return exactCallableArity(expr.parameters.length);
   return { min, max: expr.parameters.length };
@@ -6064,7 +6087,8 @@ function isPhase1ClosureLiteral(
     return shapeNo("closure-async", expr);
   if (expr.typeParameters && expr.typeParameters.length > 0) return shapeNo("closure-type-params", expr);
 
-  if (!expr.type || annotationToResolvedKind(expr.type) === null)
+  const inferred = currentSelectionOptions?.inferredClosureSignature?.(expr);
+  if (!inferred && (!expr.type || annotationToResolvedKind(expr.type) === null))
     return shapeNo("closure-return-type", expr.type ?? expr);
 
   const inner = new Set(scope);
@@ -6075,8 +6099,9 @@ function isPhase1ClosureLiteral(
   const defaultParamStart = closureLiteralDefaultParamStart(expr.parameters, allowNumericDefaultSuffix, scope);
   if (defaultParamStart === null) return shapeNo("closure-param-default", expr);
   for (const p of expr.parameters) {
-    if (p.questionToken || p.dotDotDotToken) return shapeNo("closure-param-shape", p);
-    if (!p.type || !isPhase1ClosureParameterTypeNode(p.type, p, expr))
+    if ((p.questionToken && inferred?.optionalParamStart === undefined) || p.dotDotDotToken)
+      return shapeNo("closure-param-shape", p);
+    if (!inferred && (!p.type || !isPhase1ClosureParameterTypeNode(p.type, p, expr)))
       return shapeNo("closure-param-type", p.type ?? p);
     if (ts.isIdentifier(p.name)) {
       if (inner.has(p.name.text)) return shapeNo("closure-param-shadow", p.name);
@@ -6839,6 +6864,20 @@ function isUnrepresentableModuleBinding(node: ts.Identifier): boolean {
   return resolver !== null && resolver(node) === undefined && resolver.isDirectModuleBinding(node);
 }
 
+/** Structured guard buffers may return; enclosing cleanup/generator barriers still apply. */
+function isPhase1ReturningGuardBody(
+  stmt: ts.Statement,
+  scope: ReadonlySet<string>,
+  localClasses: ReadonlySet<string>,
+): boolean {
+  earlyReturnLoopDepth++;
+  try {
+    return withProjectionEvidenceScope(() => isPhase1BodyStatement(stmt, new Set(scope), localClasses, false));
+  } finally {
+    earlyReturnLoopDepth--;
+  }
+}
+
 /**
  * Module values may enter an IR condition only when their representation is
  * semantically boolean. Numeric i32/f64 values still need JS ToBoolean, and
@@ -6850,12 +6889,19 @@ function isPhase1ConditionExpr(
   scope: ReadonlySet<string>,
   localClasses: ReadonlySet<string>,
 ): boolean {
-  let truthinessOperand = unwrapPhase1Parens(expr);
-  while (
-    ts.isPrefixUnaryExpression(truthinessOperand) &&
-    truthinessOperand.operator === ts.SyntaxKind.ExclamationToken
+  const truthinessOperand = unwrapPhase1Parens(expr);
+  if (ts.isPrefixUnaryExpression(truthinessOperand) && truthinessOperand.operator === ts.SyntaxKind.ExclamationToken) {
+    return isPhase1ConditionExpr(truthinessOperand.operand, scope, localClasses);
+  }
+  if (
+    ts.isBinaryExpression(truthinessOperand) &&
+    (truthinessOperand.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken ||
+      truthinessOperand.operatorToken.kind === ts.SyntaxKind.BarBarToken)
   ) {
-    truthinessOperand = unwrapPhase1Parens(truthinessOperand.operand);
+    return (
+      isPhase1ConditionExpr(truthinessOperand.left, scope, localClasses) &&
+      isPhase1ConditionExpr(truthinessOperand.right, scope, localClasses)
+    );
   }
   if (!trackedModuleInfluenceIsBoolean(truthinessOperand)) {
     return shapeNo("condition-module-value-nonbool", expr);
@@ -8396,6 +8442,8 @@ function directReturnedCallableSignature(
 ): IrClosureSignature | null {
   const candidate = unwrapProjectionExpression(expression);
   if (!ts.isCallExpression(candidate) || !ts.isIdentifier(candidate.expression)) return null;
+  const inferred = currentSelectionOptions?.inferredReturnedClosureSignature?.(candidate);
+  if (inferred) return inferred;
   const name = candidate.expression.text;
   if (scope.has(name) || currentNestedFunctionNames.has(name) || currentLexicalValueBindingNames.has(name)) {
     return null;
@@ -9230,6 +9278,7 @@ function phase1NewExpression(
   const ctorName = expr.expression.text;
   const isLocalClass = localClassValueIsUnshadowed(ctorName, scope) && localClasses.has(ctorName);
   const isAmbientConstructor = !isLocalClass && selectorSeesAmbientBinding(expr.expression);
+  if (!isLocalClass && currentSelectionOptions?.supportsNativeMapConstruction?.(expr) === true) return true;
   if (currentSelectionOptions?.isHoleyArrayConstructor?.(expr) === true) {
     if (ctorName !== "Array" || isLocalClass || scope.has("Array")) {
       return capabilityNo("constructor-resolution-unsupported", "expr-new-holey-array-identity", expr);
@@ -9311,13 +9360,17 @@ function phase1NewExpression(
   return true;
 }
 
-function isPhase1Expr(expr: ts.Expression, scope: ReadonlySet<string>, localClasses: ReadonlySet<string>): boolean {
-  if (
+function hasUnprovenModuleExternConsumer(expr: ts.Expression, scope: ReadonlySet<string>): boolean {
+  return (
     (expressionTouchesModuleExtern(expr) || expressionTouchesModuleMapGetAlias(expr)) &&
     !moduleExternConsumerIsProven(expr, scope)
-  ) {
-    return shapeNo("expr-module-extern-consumer", expr);
-  }
+  );
+}
+
+function isPhase1Expr(expr: ts.Expression, scope: ReadonlySet<string>, localClasses: ReadonlySet<string>): boolean {
+  if (currentDynamicRuntimeBuildable && currentSelectionOptions?.isAmbientUndefined?.(expr)) return true;
+  if (currentSelectionOptions?.constEnumValue?.(expr) !== undefined) return true;
+  if (hasUnprovenModuleExternConsumer(expr, scope)) return shapeNo("expr-module-extern-consumer", expr);
   if (ts.isParenthesizedExpression(expr)) return isPhase1Expr(expr.expression, scope, localClasses);
   // (#3583) Type-erased assertion wrappers emit nothing; `lowerExpr` unwraps the identical operand shape.
   // Other `isAsExpression` sites are analysis-local, not this shape gate; these

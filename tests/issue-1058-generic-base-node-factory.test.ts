@@ -190,10 +190,12 @@ describe("#1058 generic base-node factories", () => {
     expect(exports.controlKind()).toBe(2);
   });
 
-  it("keeps a memoized callback's later factory capture live", async () => {
-    const result = await compileMulti(
-      {
-        "./core.ts": `
+  it.each(["gc", "standalone"] as const)(
+    "keeps a memoized callback's later factory capture live in %s",
+    async (target) => {
+      const result = await compileMulti(
+        {
+          "./core.ts": `
           export function memoize<T>(callback: () => T): () => T {
             let value: T;
             return () => {
@@ -205,7 +207,7 @@ describe("#1058 generic base-node factories", () => {
             };
           }
         `,
-        "./factory.ts": `
+          "./factory.ts": `
           import { memoize } from "./core.js";
 
           interface Rules { value: number; }
@@ -219,18 +221,27 @@ describe("#1058 generic base-node factories", () => {
             return factory;
           }
         `,
-        "./entry.ts": `
+          "./entry.ts": `
           import { createFactory } from "./factory.js";
           const factory = createFactory();
           export function test(): number { return factory.create(); }
         `,
-      },
-      "./entry.ts",
-      { target: "gc", platform: "node", skipSemanticDiagnostics: true },
-    );
+        },
+        "./entry.ts",
+        {
+          target,
+          ...(target === "gc" ? { platform: "node" as const } : {}),
+          experimentalIR: true,
+          skipSemanticDiagnostics: true,
+        },
+      );
 
-    expect((await instantiate(result)).test()).toBe(42);
-  });
+      if (target === "standalone" && result.success) {
+        expect(WebAssembly.Module.imports(new WebAssembly.Module(result.binary))).toEqual([]);
+      }
+      expect((await instantiate(result)).test()).toBe(42);
+    },
+  );
 
   it("dispatches a captured callable returned by a cross-module generic memoizer", async () => {
     const result = await compileMulti(
@@ -952,10 +963,12 @@ describe("#1058 generic base-node factories", () => {
     expect((await instantiate(result)).test()).toBe(539);
   });
 
-  it("preserves a literal's nominal identity across a diamond interface return", async () => {
-    const result = await compileMulti(
-      {
-        "./types.ts": `
+  it.each(["gc", "standalone"] as const)(
+    "preserves a literal's nominal identity across a diamond interface return in %s",
+    async (target) => {
+      const result = await compileMulti(
+        {
+          "./types.ts": `
           export type Mutable<T> = { -readonly [P in keyof T]: T[P] };
           export interface Node {
             kind: number;
@@ -979,7 +992,7 @@ describe("#1058 generic base-node factories", () => {
           export interface StringLiteral extends LiteralExpression, Declaration { singleQuote?: boolean; }
           export interface BaseNodeFactory { createBaseNode(kind: number): Node; }
         `,
-        "./base.ts": `
+          "./base.ts": `
           import type { BaseNodeFactory, Mutable, Node } from "./types.js";
 
           function RuntimeNode(this: Mutable<Node>, kind: number, pos: number, end: number): void {
@@ -1003,7 +1016,7 @@ describe("#1058 generic base-node factories", () => {
             }
           }
         `,
-        "./factory.ts": `
+          "./factory.ts": `
           import type { BaseNodeFactory, Declaration, Mutable, Node, StringLiteral } from "./types.js";
 
           export function createNodeFactory(baseFactory: BaseNodeFactory) {
@@ -1035,7 +1048,7 @@ describe("#1058 generic base-node factories", () => {
             return { createStringLiteral };
           }
         `,
-        "./parser.ts": `
+          "./parser.ts": `
           import type { LiteralExpression, LiteralLikeNode } from "./types.js";
           import { createBaseNodeFactory } from "./base.js";
           import { createNodeFactory } from "./factory.js";
@@ -1054,18 +1067,28 @@ describe("#1058 generic base-node factories", () => {
             return node.text.length * 100 + node.kind;
           }
         `,
-      },
-      "./parser.ts",
-      { target: "gc", platform: "node", skipSemanticDiagnostics: true },
-    );
+        },
+        "./parser.ts",
+        {
+          target,
+          ...(target === "gc" ? { platform: "node" as const } : {}),
+          experimentalIR: true,
+          skipSemanticDiagnostics: true,
+        },
+      );
 
-    expect((await instantiate(result)).test()).toBe(311);
-  });
+      if (target === "standalone" && result.success)
+        expect(WebAssembly.Module.imports(new WebAssembly.Module(result.binary))).toEqual([]);
+      expect((await instantiate(result)).test()).toBe(311);
+    },
+  );
 
-  it("keeps TypeScript's LiteralLikeNode view on the shared syntax-node carrier", async () => {
-    const result = await compileMulti(
-      {
-        "./src/compiler/types.ts": `
+  it.each(["gc", "standalone"] as const)(
+    "keeps TypeScript's LiteralLikeNode view on the shared syntax-node carrier in %s",
+    async (target) => {
+      const result = await compileMulti(
+        {
+          "./src/compiler/types.ts": `
           // The brands are never actually given values. At runtime they have zero cost.
           export type Mutable<T> = { -readonly [P in keyof T]: T[P] };
           export interface Node {
@@ -1092,7 +1115,7 @@ describe("#1058 generic base-node factories", () => {
           export interface StringLiteral extends LiteralExpression, Declaration { singleQuote?: boolean; }
           export interface BaseNodeFactory { createBaseNode(kind: number): Node; }
         `,
-        "./src/compiler/base.ts": `
+          "./src/compiler/base.ts": `
           import type { BaseNodeFactory, Mutable, Node } from "./types.js";
 
           function RuntimeNode(this: Mutable<Node>, kind: number, pos: number, end: number): void {
@@ -1116,7 +1139,7 @@ describe("#1058 generic base-node factories", () => {
             }
           }
         `,
-        "./src/compiler/factory.ts": `
+          "./src/compiler/factory.ts": `
           import type { BaseNodeFactory, Declaration, Mutable, Node, StringLiteral } from "./types.js";
 
           export function createNodeFactory(baseFactory: BaseNodeFactory) {
@@ -1148,7 +1171,7 @@ describe("#1058 generic base-node factories", () => {
             return { createStringLiteral };
           }
         `,
-        "./src/compiler/parser.ts": `
+          "./src/compiler/parser.ts": `
           import type { LiteralExpression, LiteralLikeNode } from "./types.js";
           import { createBaseNodeFactory } from "./base.js";
           import { createNodeFactory } from "./factory.js";
@@ -1167,13 +1190,21 @@ describe("#1058 generic base-node factories", () => {
             return node.text.length * 100 + node.kind;
           }
         `,
-      },
-      "./src/compiler/parser.ts",
-      { target: "gc", platform: "node", skipSemanticDiagnostics: true },
-    );
+        },
+        "./src/compiler/parser.ts",
+        {
+          target,
+          ...(target === "gc" ? { platform: "node" as const } : {}),
+          experimentalIR: true,
+          skipSemanticDiagnostics: true,
+        },
+      );
 
-    expect((await instantiate(result)).test()).toBe(311);
-  });
+      if (target === "standalone" && result.success)
+        expect(WebAssembly.Module.imports(new WebAssembly.Module(result.binary))).toEqual([]);
+      expect((await instantiate(result)).test()).toBe(311);
+    },
+  );
 
   it("keeps concrete type members on the TypeElement carrier while iterating", async () => {
     const result = await compileMulti(

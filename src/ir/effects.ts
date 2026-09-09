@@ -136,8 +136,11 @@ export function effectsOf(instr: IrInstr, cache: Map<IrInstr, IrEffects> = new M
     case "extern.regex": // NOTE: DCE-kept (may throw) — see KNOWN DIVERGENCE above.
       break;
     // Reads of mutable heap state.
-    case "global.get":
     case "object.get":
+      fx.readsHeap = true;
+      fx.control = instr.physicalReceiver === true;
+      break;
+    case "global.get":
     case "class.get":
     case "class.instanceof": // (#3144) reads the receiver's __tag struct field
     case "vec.get":
@@ -436,8 +439,9 @@ export function verifyEmissionSchedule(
  * count. (#2134 slice 1: moved VERBATIM from `passes/dead-code.ts` — an
  * explicit hand-audited list, deliberately NOT derived from `effectsOf` yet.
  * Today's list carries policy quirks (e.g. `slot.read` is always-keep for the
- * for-of body's load/use pattern; a dead `object.get` whose read could trap
- * IS droppable) whose honest table-derivation needs per-quirk equivalence
+ * for-of body's load/use pattern; a dead logical-object `object.get` whose read
+ * could trap IS droppable; explicit physical-reference reads are retained)
+ * whose honest table-derivation needs per-quirk equivalence
  * proofs — #2134 slice 3.)
  *
  * - `raw.wasm` — opaque Wasm ops with unknown effects (spec #1167a mandates
@@ -448,6 +452,7 @@ export function verifyEmissionSchedule(
  */
 export function isSideEffecting(i: IrInstr): boolean {
   return (
+    (i.kind === "object.get" && i.physicalReceiver === true) ||
     i.kind === "raw.wasm" ||
     i.kind === "call" ||
     i.kind === "global.set" ||

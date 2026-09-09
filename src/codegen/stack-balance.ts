@@ -29,6 +29,7 @@ import { coercionPlan } from "./coercion-plan.js";
 import type { BlockType, FuncTypeDef, Instr, TypeDef, ValType, WasmFunction, WasmModule } from "../ir/types.js";
 import { STABLE_FUNC_BASE, absoluteFuncIndexCached } from "../emit/resolve-layout.js"; // (#1916 S3)
 import { walkInstructionDag } from "./walk-instructions.js";
+import { instructionBodyPostorder } from "../ir/instruction-body-postorder.js";
 import type { CodegenError } from "./context/types.js";
 import { profileCount, profilePhase } from "../compile-profile.js";
 
@@ -1254,7 +1255,7 @@ function getTagArity(tagIdx: number, tags: Array<{ typeIdx: number }>, types: Ty
 }
 
 /**
- * Recursively fix stack mismatches in a body of instructions.
+ * Fix nested stack mismatches with an explicit diagnostic-aware work stack.
  * Returns the total number of fixups applied.
  */
 function fixBody(
@@ -1267,6 +1268,33 @@ function fixBody(
   visited: WeakSet<Instr[]>,
   path: DiagnosticPath,
 ): number {
+  const pending = [fixBodySteps(body, types, sigs, tags, boxNumberIdx, unboxNumberIdx, visited, path)];
+  let result = 0;
+  while (pending.length) {
+    const step = pending[pending.length - 1]!.next(result);
+    if (step.done) {
+      result = step.value;
+      pending.pop();
+    } else {
+      pending.push(fixBodySteps(step.value, types, sigs, tags, boxNumberIdx, unboxNumberIdx, visited, path));
+      result = 0;
+    }
+  }
+  return result;
+}
+
+// Suspended generators retain diagnostic push/pop positions while the driver
+// uses an explicit work stack. Each yielded child returns its own fixup count.
+function* fixBodySteps(
+  body: Instr[],
+  types: TypeDef[],
+  sigs: FuncSigInfo,
+  tags: Array<{ typeIdx: number }>,
+  boxNumberIdx: number | null,
+  unboxNumberIdx: number | null,
+  visited: WeakSet<Instr[]>,
+  path: DiagnosticPath,
+): Generator<Instr[], number, number> {
   if (visited.has(body)) return 0;
   visited.add(body);
   let fixups = 0;
@@ -1279,11 +1307,11 @@ function fixBody(
 
       // Recurse into branches first
       pushDiagnosticPath(path, instrIndex, "if.then");
-      fixups += fixBody(ifInstr.then, types, sigs, tags, boxNumberIdx, unboxNumberIdx, visited, path);
+      fixups += yield ifInstr.then;
       popDiagnosticPath(path);
       if (ifInstr.else) {
         pushDiagnosticPath(path, instrIndex, "if.else");
-        fixups += fixBody(ifInstr.else, types, sigs, tags, boxNumberIdx, unboxNumberIdx, visited, path);
+        fixups += yield ifInstr.else;
         popDiagnosticPath(path);
       }
 
@@ -1309,7 +1337,7 @@ function fixBody(
       const bodyArm: DiagnosticPathArm =
         instr.op === "block" ? "block.body" : instr.op === "loop" ? "loop.body" : "try_table.body";
       pushDiagnosticPath(path, instrIndex, bodyArm);
-      fixups += fixBody(blockInstr.body, types, sigs, tags, boxNumberIdx, unboxNumberIdx, visited, path);
+      fixups += yield blockInstr.body;
 
       const expected = blockTypeExpected(blockInstr.blockType, types);
       fixups += fixBranch(
@@ -1335,17 +1363,17 @@ function fixBody(
 
       // Recurse into all branches
       pushDiagnosticPath(path, instrIndex, "try.body");
-      fixups += fixBody(tryInstr.body, types, sigs, tags, boxNumberIdx, unboxNumberIdx, visited, path);
+      fixups += yield tryInstr.body;
       popDiagnosticPath(path);
       for (let catchIndex = 0; catchIndex < (tryInstr.catches || []).length; catchIndex++) {
         const c = tryInstr.catches[catchIndex]!;
         pushDiagnosticPath(path, instrIndex, "try.catch", catchIndex);
-        fixups += fixBody(c.body, types, sigs, tags, boxNumberIdx, unboxNumberIdx, visited, path);
+        fixups += yield c.body;
         popDiagnosticPath(path);
       }
       if (tryInstr.catchAll) {
         pushDiagnosticPath(path, instrIndex, "try.catchAll");
-        fixups += fixBody(tryInstr.catchAll, types, sigs, tags, boxNumberIdx, unboxNumberIdx, visited, path);
+        fixups += yield tryInstr.catchAll;
         popDiagnosticPath(path);
       }
 
@@ -1914,7 +1942,7 @@ const SIMPLE_PRODUCERS: ReadonlySet<string> = new Set([
  * in linear instruction streams.
  */
 function fixCallArgTypesInBody(
-  body: Instr[],
+  root: Instr[],
   localTypes: ValType[],
   globalTypes: ValType[],
   types: TypeDef[],
@@ -1925,102 +1953,35 @@ function fixCallArgTypesInBody(
   unboxNumberIdx: number | null,
   visited = new WeakSet<Instr[]>(),
 ): number {
-  if (visited.has(body)) return 0;
-  visited.add(body);
   let fixups = 0;
-
-  // Process nested blocks recursively first
-  for (const instr of body) {
-    if (instr.op === "if") {
-      const ifInstr = instr as any;
-      if (ifInstr.then)
-        fixups += fixCallArgTypesInBody(
-          ifInstr.then,
-          localTypes,
-          globalTypes,
-          types,
-          mod,
-          numImports,
-          sigs,
-          boxNumberIdx,
-          unboxNumberIdx,
-          visited,
-        );
-      if (ifInstr.else)
-        fixups += fixCallArgTypesInBody(
-          ifInstr.else,
-          localTypes,
-          globalTypes,
-          types,
-          mod,
-          numImports,
-          sigs,
-          boxNumberIdx,
-          unboxNumberIdx,
-          visited,
-        );
-    } else if (instr.op === "block" || instr.op === "loop" || instr.op === "try_table") {
-      const blockInstr = instr as any;
-      if (blockInstr.body)
-        fixups += fixCallArgTypesInBody(
-          blockInstr.body,
-          localTypes,
-          globalTypes,
-          types,
-          mod,
-          numImports,
-          sigs,
-          boxNumberIdx,
-          unboxNumberIdx,
-          visited,
-        );
-    } else if (instr.op === "try") {
-      const tryInstr = instr as any;
-      if (tryInstr.body)
-        fixups += fixCallArgTypesInBody(
-          tryInstr.body,
-          localTypes,
-          globalTypes,
-          types,
-          mod,
-          numImports,
-          sigs,
-          boxNumberIdx,
-          unboxNumberIdx,
-          visited,
-        );
-      if (tryInstr.catches) {
-        for (const c of tryInstr.catches) {
-          if (c.body)
-            fixups += fixCallArgTypesInBody(
-              c.body,
-              localTypes,
-              globalTypes,
-              types,
-              mod,
-              numImports,
-              sigs,
-              boxNumberIdx,
-              unboxNumberIdx,
-              visited,
-            );
-        }
-      }
-      if (tryInstr.catchAll)
-        fixups += fixCallArgTypesInBody(
-          tryInstr.catchAll,
-          localTypes,
-          globalTypes,
-          types,
-          mod,
-          numImports,
-          sigs,
-          boxNumberIdx,
-          unboxNumberIdx,
-          visited,
-        );
-    }
+  for (const body of instructionBodyPostorder(root, visited)) {
+    fixups += fixCallArgTypesInBodyLeaf(
+      body,
+      localTypes,
+      globalTypes,
+      types,
+      mod,
+      numImports,
+      sigs,
+      boxNumberIdx,
+      unboxNumberIdx,
+    );
   }
+  return fixups;
+}
+
+function fixCallArgTypesInBodyLeaf(
+  body: Instr[],
+  localTypes: ValType[],
+  globalTypes: ValType[],
+  types: TypeDef[],
+  mod: WasmModule,
+  numImports: number,
+  sigs: FuncSigInfo,
+  boxNumberIdx: number | null,
+  unboxNumberIdx: number | null,
+): number {
+  let fixups = 0;
 
   // Fix call argument type mismatches.
   // Conservative approach: only fix SIMPLE patterns where a value-producing
@@ -3215,7 +3176,7 @@ function isDeclaredRefSubtypeAssignable(actual: ValType, expected: ValType, type
  * emitCoercedLocalSet (e.g., in destructuring, closures, for-of).
  */
 function fixLocalSetCoercion(
-  body: Instr[],
+  root: Instr[],
   localTypes: ValType[],
   globalTypes: ValType[],
   types: TypeDef[],
@@ -3226,102 +3187,35 @@ function fixLocalSetCoercion(
   unboxNumberIdx: number | null,
   visited = new WeakSet<Instr[]>(),
 ): number {
-  if (visited.has(body)) return 0;
-  visited.add(body);
   let fixups = 0;
-
-  // Recurse into nested blocks first
-  for (const instr of body) {
-    if (instr.op === "if") {
-      const ifInstr = instr as any;
-      if (ifInstr.then)
-        fixups += fixLocalSetCoercion(
-          ifInstr.then,
-          localTypes,
-          globalTypes,
-          types,
-          mod,
-          numImports,
-          sigs,
-          boxNumberIdx,
-          unboxNumberIdx,
-          visited,
-        );
-      if (ifInstr.else)
-        fixups += fixLocalSetCoercion(
-          ifInstr.else,
-          localTypes,
-          globalTypes,
-          types,
-          mod,
-          numImports,
-          sigs,
-          boxNumberIdx,
-          unboxNumberIdx,
-          visited,
-        );
-    } else if (instr.op === "block" || instr.op === "loop" || instr.op === "try_table") {
-      const blockInstr = instr as any;
-      if (blockInstr.body)
-        fixups += fixLocalSetCoercion(
-          blockInstr.body,
-          localTypes,
-          globalTypes,
-          types,
-          mod,
-          numImports,
-          sigs,
-          boxNumberIdx,
-          unboxNumberIdx,
-          visited,
-        );
-    } else if (instr.op === "try") {
-      const tryInstr = instr as any;
-      if (tryInstr.body)
-        fixups += fixLocalSetCoercion(
-          tryInstr.body,
-          localTypes,
-          globalTypes,
-          types,
-          mod,
-          numImports,
-          sigs,
-          boxNumberIdx,
-          unboxNumberIdx,
-          visited,
-        );
-      if (tryInstr.catches) {
-        for (const c of tryInstr.catches) {
-          if (c.body)
-            fixups += fixLocalSetCoercion(
-              c.body,
-              localTypes,
-              globalTypes,
-              types,
-              mod,
-              numImports,
-              sigs,
-              boxNumberIdx,
-              unboxNumberIdx,
-              visited,
-            );
-        }
-      }
-      if (tryInstr.catchAll)
-        fixups += fixLocalSetCoercion(
-          tryInstr.catchAll,
-          localTypes,
-          globalTypes,
-          types,
-          mod,
-          numImports,
-          sigs,
-          boxNumberIdx,
-          unboxNumberIdx,
-          visited,
-        );
-    }
+  for (const body of instructionBodyPostorder(root, visited)) {
+    fixups += fixLocalSetCoercionLeaf(
+      body,
+      localTypes,
+      globalTypes,
+      types,
+      mod,
+      numImports,
+      sigs,
+      boxNumberIdx,
+      unboxNumberIdx,
+    );
   }
+  return fixups;
+}
+
+function fixLocalSetCoercionLeaf(
+  body: Instr[],
+  localTypes: ValType[],
+  globalTypes: ValType[],
+  types: TypeDef[],
+  mod: WasmModule,
+  numImports: number,
+  sigs: FuncSigInfo,
+  boxNumberIdx: number | null,
+  unboxNumberIdx: number | null,
+): number {
+  let fixups = 0;
 
   // Now fix local.set/local.tee mismatches in this body
   for (let i = 0; i < body.length; i++) {

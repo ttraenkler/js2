@@ -7,7 +7,7 @@ import { irUnitFuncRef } from "../ir/callable-bindings.js";
 import type { IrBindingId, IrSourceId, IrUnitId } from "../ir/identity.js";
 import type { IrIntegrationError } from "../ir/integration.js";
 import type { IrFuncRef } from "../ir/nodes.js";
-import { IrInvariantError } from "../ir/outcomes.js";
+import { IrInvariantError, type IrPreparationFailure } from "../ir/outcomes.js";
 import {
   planMultiPreparedModuleInit,
   type MultiPreparedModuleInitPlanningInput,
@@ -50,6 +50,7 @@ interface CallableAttemptCensus {
   readonly identityContext: IrPlanningIdentityContext;
   readonly attemptedUnitIds: ReadonlySet<IrUnitId>;
   readonly componentIndexByUnitId: ReadonlyMap<IrUnitId, number>;
+  readonly preparationFailuresByUnitId: Map<IrUnitId, IrPreparationFailure>;
 }
 
 /**
@@ -671,6 +672,7 @@ function publishCallableAttemptCensus(
     identityContext: input.identityContext,
     attemptedUnitIds: authoritativeAttempted,
     componentIndexByUnitId,
+    preparationFailuresByUnitId: new Map(),
   });
   // Keep the compatibility projection separate from the private authority so
   // a consumer mutation cannot silently rewrite the trusted denominator.
@@ -1082,6 +1084,7 @@ export function planMultiPreparedCallableComponents(input: MultiPreparedCallable
         aggregateProgramCallableUse,
         rewriteAggregateCallableRef,
         assertPreflightCurrent,
+        recordPreparationFailure: (unitId, failure) => recordCallablePreparationFailure(input.ctx, unitId, failure),
       });
       if (component) {
         // Retain the receipt before any post-return validation so a malformed
@@ -1125,6 +1128,29 @@ export function planMultiPreparedCallableComponents(input: MultiPreparedCallable
   }
 }
 
+function recordCallablePreparationFailure(ctx: CodegenContext, unitId: IrUnitId, failure: IrPreparationFailure): void {
+  const census = currentCallableAttemptCensus(ctx, "callable preparation failure");
+  if (!census?.attemptedUnitIds.has(unitId) || census.preparationFailuresByUnitId.has(unitId)) {
+    throw new IrInvariantError("selection-preparation-mismatch", "resolve", `non-exact callable failure ${unitId}`);
+  }
+  census.preparationFailuresByUnitId.set(unitId, failure);
+}
+
+function preserveCallablePreparationFailures(
+  census: CallableAttemptCensus,
+  plan: IrOverlayPlan,
+  sourceAttempted: ReadonlySet<IrUnitId>,
+): void {
+  // Late overlays rebuild source plans. The exact census, not the earlier
+  // plan's object identity or a synthetic function name, owns this evidence.
+  for (const unitId of sourceAttempted) {
+    const failure = census.preparationFailuresByUnitId.get(unitId);
+    if (failure && !plan.preparationFailuresByUnitId.has(unitId)) {
+      plan.preparationFailuresByUnitId.set(unitId, failure);
+    }
+  }
+}
+
 export function removeMultiIrAttemptedCallableUnits(
   ctx: CodegenContext,
   plan: IrOverlayPlan,
@@ -1132,7 +1158,7 @@ export function removeMultiIrAttemptedCallableUnits(
 ): IrSelection {
   const census = currentCallableAttemptCensus(ctx, "ordinary overlay withdrawal", plan.identityPlan.identityContext);
   const attempted = census?.attemptedUnitIds;
-  if (!attempted?.size) return selection;
+  if (!census || !attempted?.size) return selection;
   const retained = new Set(
     [...selection.funcs].map((name) => {
       const unitId = plan.identityPlan.functionUnitIdByLegacyName.get(name);
@@ -1147,6 +1173,7 @@ export function removeMultiIrAttemptedCallableUnits(
     }),
   );
   const sourceAttempted = new Set([...plan.functionClaimsByUnitId.keys()].filter((unitId) => attempted.has(unitId)));
+  preserveCallablePreparationFailures(census, plan, sourceAttempted);
   if (sourceAttempted.size === 0) return selection;
   const sourceIds = new Set(
     [...plan.functionClaimsByUnitId.keys()].map(

@@ -13,7 +13,9 @@ import type {
 } from "../ir/ast-lowering-plans.js";
 import type { IrBindingId, IrSourceId, IrUnitId } from "../ir/identity.js";
 import type { IrProgramCallableBindingGraph, IrProgramCallableUse } from "../ir/program-callable-bindings.js";
-import { IrInvariantError } from "../ir/outcomes.js";
+import { IrInvariantError, type IrPreparationFailure } from "../ir/outcomes.js";
+import type { IrIntegrationReport } from "../ir/integration-report.js";
+import type { PendingPreparedProgramComponentReceipt } from "../ir/prepared-component-publication.js";
 import { buildIrLegacyUnitProjection, type IrPlanningIdentityContext } from "../ir/planning-identity.js";
 import type { IrClosureSignature, IrFuncRef, IrType } from "../ir/nodes.js";
 import type { IrSelection } from "../ir/select.js";
@@ -51,6 +53,46 @@ export interface MultiPreparedCallableComponentPlanningInput {
   ) => IrProgramCallableUse | undefined;
   readonly rewriteAggregateCallableRef: (ref: IrFuncRef, namesByUnitId: ReadonlyMap<IrUnitId, string>) => IrFuncRef;
   readonly assertPreflightCurrent: () => void;
+  readonly recordPreparationFailure: (unitId: IrUnitId, failure: IrPreparationFailure) => void;
+}
+
+function recordAtomicCallableFailures(
+  input: MultiPreparedCallableComponentPlanningInput,
+  report: IrIntegrationReport,
+  pendingReceipt: PendingPreparedProgramComponentReceipt | undefined,
+): void {
+  const group = input.group;
+  const terminalFailures = (report.terminalEvidence ?? []).filter((evidence) => evidence.kind === "failed");
+  const failedUnitIds = terminalFailures.map(({ unitId }) => unitId);
+  const terminalPublicErrors = terminalFailures.flatMap(({ diagnosticVisibility, errors }) =>
+    diagnosticVisibility === "report" ? [...(errors ?? [])] : [],
+  );
+  if (
+    pendingReceipt !== undefined ||
+    (report.compiledArtifactEvidence?.length ?? 0) !== 0 ||
+    report.compiled.length !== 0 ||
+    (report.terminalEvidence?.length ?? 0) !== group.length ||
+    (report.terminalCompiledOwners?.length ?? 0) !== 0 ||
+    (report.syntheticCompiledArtifacts?.length ?? 0) !== 0 ||
+    (report.preparedCountedStringAppendReceipts?.length ?? 0) !== 0 ||
+    report.errors.length !== terminalPublicErrors.length ||
+    report.errors.some((error, index) => error !== terminalPublicErrors[index]) ||
+    new Set(report.errors).size !== report.errors.length ||
+    terminalFailures.length !== group.length ||
+    new Set(failedUnitIds).size !== group.length ||
+    !group.every(({ unitId }) => failedUnitIds.includes(unitId)) ||
+    terminalFailures.some(({ error, errors }) =>
+      [error, ...(errors ?? [])].some(({ outcome }) => outcome.kind !== "unsupported"),
+    )
+  ) {
+    pendingReceipt?.abort();
+    throw new IrInvariantError(
+      "selection-preparation-mismatch",
+      "patch",
+      "atomic callable component reported a non-exact failure population or pending artifact",
+    );
+  }
+  for (const { unitId, error } of terminalFailures) input.recordPreparationFailure(unitId, error.outcome);
 }
 
 export function prepareMultiPreparedCallableGroup(
@@ -244,35 +286,7 @@ export function prepareMultiPreparedCallableGroup(
       );
     }
     if (report.errors.length > 0 || terminalFailures.length > 0) {
-      const failedUnitIds = terminalFailures.map(({ unitId }) => unitId);
-      const terminalPublicErrors = terminalFailures.flatMap(({ diagnosticVisibility, errors }) =>
-        diagnosticVisibility === "report" ? [...(errors ?? [])] : [],
-      );
-      if (
-        pendingReceipt !== undefined ||
-        (report.compiledArtifactEvidence?.length ?? 0) !== 0 ||
-        report.compiled.length !== 0 ||
-        (report.terminalEvidence?.length ?? 0) !== group.length ||
-        (report.terminalCompiledOwners?.length ?? 0) !== 0 ||
-        (report.syntheticCompiledArtifacts?.length ?? 0) !== 0 ||
-        (report.preparedCountedStringAppendReceipts?.length ?? 0) !== 0 ||
-        report.errors.length !== terminalPublicErrors.length ||
-        report.errors.some((error, index) => error !== terminalPublicErrors[index]) ||
-        new Set(report.errors).size !== report.errors.length ||
-        terminalFailures.length !== group.length ||
-        new Set(failedUnitIds).size !== group.length ||
-        !group.every(({ unitId }) => failedUnitIds.includes(unitId)) ||
-        terminalFailures.some(({ error, errors }) =>
-          [error, ...(errors ?? [])].some(({ outcome }) => outcome.kind !== "unsupported"),
-        )
-      ) {
-        pendingReceipt?.abort();
-        throw new IrInvariantError(
-          "selection-preparation-mismatch",
-          "patch",
-          "atomic callable component reported a non-exact failure population or pending artifact",
-        );
-      }
+      recordAtomicCallableFailures(input, report, pendingReceipt);
       continue;
     }
 

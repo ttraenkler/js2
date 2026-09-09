@@ -1,4 +1,5 @@
 // Copyright (c) 2026 Loopdive GmbH. Licensed under Apache-2.0 WITH LLVM-exception.
+import { checkObjectRule } from "./physical-object-field.js";
 //
 // IR invariant verifier — validates an IrFunction against the invariants in
 // spec #1131 §1.3. Phase 1 enforces the subset that the Phase 1 builder can
@@ -2456,7 +2457,7 @@ function verifyInstrTypeRules(
   };
 
   const checkInstr = (instr: IrInstr, blockId: number): void => {
-    if (checkRoadmapRule(instr, blockId, roadmap)) return;
+    if (checkObjectRule(instr, blockId, roadmap) || checkRoadmapRule(instr, blockId, roadmap)) return;
     switch (instr.kind) {
       case "intrinsic": {
         for (const message of verifyIrIntrinsicInstruction(instr, typeOf)) {

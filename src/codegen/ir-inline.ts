@@ -518,10 +518,7 @@ function inspectSharedInstructionArrayOwnership(mod: WasmModule): SharedInstruct
 
 export function countInstrs(body: Instr[]): number {
   let n = 0;
-  for (const instr of body) {
-    n++;
-    for (const child of childBodies(instr)) n += countInstrs(child);
-  }
+  forEachInstr(body, () => n++);
   return n;
 }
 
@@ -533,11 +530,13 @@ export function countInstrs(body: Instr[]): number {
  */
 function effectiveSize(body: Instr[]): number {
   let n = 0;
-  for (const instr of body) {
-    n++;
-    for (const child of childBodies(instr)) {
-      if (isColdRegion(child)) continue;
-      n += effectiveSize(child);
+  const stack = [body];
+  while (stack.length > 0) {
+    for (const instr of stack.pop()!) {
+      n++;
+      for (const child of childBodies(instr)) {
+        if (!isColdRegion(child)) stack.push(child);
+      }
     }
   }
   return n;
@@ -550,9 +549,17 @@ function isColdRegion(body: Instr[]): boolean {
 }
 
 function forEachInstr(body: Instr[], visit: (i: Instr) => void): void {
-  for (const instr of body) {
+  const stack = [{ body, next: 0 }];
+  while (stack.length > 0) {
+    const frame = stack[stack.length - 1]!;
+    if (frame.next === frame.body.length) {
+      stack.pop();
+      continue;
+    }
+    const instr = frame.body[frame.next++]!;
     visit(instr);
-    for (const child of childBodies(instr)) forEachInstr(child, visit);
+    const children = childBodies(instr);
+    for (let i = children.length - 1; i >= 0; i--) stack.push({ body: children[i]!, next: 0 });
   }
 }
 
@@ -611,23 +618,41 @@ function calleeIsSafe(fn: WasmFunction, results: ValType[]): DeclineReason | nul
 // ---------------------------------------------------------------------------
 
 function cloneInstr(instr: Instr): Instr {
+  const result = cloneInstrShell(instr);
+  const stack = [{ source: instr, target: result }];
+  while (stack.length > 0) {
+    const { source, target } = stack.pop()!;
+    const sources = childBodies(source);
+    const targets = childBodies(target);
+    for (let i = 0; i < sources.length; i++) {
+      for (const child of sources[i]!) {
+        const cloned = cloneInstrShell(child);
+        targets[i]!.push(cloned);
+        stack.push({ source: child, target: cloned });
+      }
+    }
+  }
+  return result;
+}
+
+function cloneInstrShell(instr: Instr): Instr {
   switch (instr.op) {
     case "block":
     case "loop":
     case "try_table":
-      return { ...instr, body: instr.body.map(cloneInstr) };
+      return { ...instr, body: [] };
     case "if":
       return {
         ...instr,
-        then: instr.then.map(cloneInstr),
-        ...(instr.else ? { else: instr.else.map(cloneInstr) } : {}),
+        then: [],
+        ...(instr.else ? { else: [] } : {}),
       };
     case "try":
       return {
         ...instr,
-        body: instr.body.map(cloneInstr),
-        catches: instr.catches.map((c) => ({ tagIdx: c.tagIdx, body: c.body.map(cloneInstr) })),
-        ...(instr.catchAll ? { catchAll: instr.catchAll.map(cloneInstr) } : {}),
+        body: [],
+        catches: instr.catches.map((c) => ({ tagIdx: c.tagIdx, body: [] })),
+        ...(instr.catchAll ? { catchAll: [] } : {}),
       };
     case "br_table":
       return { ...instr, targets: [...instr.targets] };
@@ -1033,6 +1058,40 @@ function shouldSkipModuleInitInlineCallee(
   return true;
 }
 
+function propagateInlineHotness(
+  mod: WasmModule,
+  hot: Float64Array,
+  sharedFunctionPositions: ReadonlySet<number>,
+  posOf: (handle: number) => number,
+  loopWeight: number,
+): void {
+  for (let round = 0; round < 2; round++) {
+    const next = Float64Array.from(hot);
+    for (let ci = 0; ci < mod.functions.length; ci++) {
+      // Incoming loop depth is ambiguous for shared arrays; preserve the
+      // existing whole-caller exclusion rather than choosing one parent.
+      if (sharedFunctionPositions.has(ci)) continue;
+      const stack = [{ body: mod.functions[ci]!.body, depth: 0 }];
+      while (stack.length > 0) {
+        const { body, depth } = stack.pop()!;
+        for (const instr of body) {
+          if (instr.op === "call") {
+            const p = posOf(instr.funcIdx);
+            if (p >= 0 && p < next.length) {
+              const weight = hot[ci]! * Math.pow(loopWeight, depth);
+              if (weight > next[p]!) next[p] = Math.min(weight, 1e9);
+            }
+          }
+          for (const child of childBodies(instr)) {
+            stack.push({ body: child, depth: instr.op === "loop" ? depth + 1 : depth });
+          }
+        }
+      }
+    }
+    hot.set(next);
+  }
+}
+
 export function inlineUserFunctions(ctx: CodegenContext): void {
   const opts = parseInlineOptions(process.env.JS2WASM_IR_INLINE);
   if (!opts.enabled) return;
@@ -1100,30 +1159,7 @@ export function inlineUserFunctions(ctx: CodegenContext): void {
   // #3927 §7's objection to frequency ranking does not reach this.
   const LOOP_WEIGHT = 10;
   const hot = new Float64Array(mod.functions.length).fill(1);
-  for (let round = 0; round < 2; round++) {
-    const next = Float64Array.from(hot);
-    for (let ci = 0; ci < mod.functions.length; ci++) {
-      // Loop depth is an incoming-context property. A multiply-parented array
-      // can have incompatible depths, so leave the whole caller opaque rather
-      // than selecting an arbitrary parent.
-      if (sharedFunctionPositions.has(ci)) continue;
-      const walk = (body: Instr[], depth: number): void => {
-        for (const instr of body) {
-          if (instr.op === "call") {
-            const p = posOf(instr.funcIdx);
-            if (p >= 0 && p < next.length) {
-              const w = hot[ci] * Math.pow(LOOP_WEIGHT, depth);
-              if (w > next[p]) next[p] = Math.min(w, 1e9);
-            }
-          }
-          if (instr.op === "loop") walk(instr.body, depth + 1);
-          else for (const child of childBodies(instr)) walk(child, depth);
-        }
-      };
-      walk(mod.functions[ci].body, 0);
-    }
-    hot.set(next);
-  }
+  propagateInlineHotness(mod, hot, sharedFunctionPositions, posOf, LOOP_WEIGHT);
 
   // --- counter global (needs to exist before any body references it) --------
   const counterGlobalIdx = installInlineCounter(ctx, opts);
@@ -1167,217 +1203,220 @@ export function inlineUserFunctions(ctx: CodegenContext): void {
     const callerType = funcTypeOf(caller);
     if (!callerType) continue;
 
-    const rewriteBody = (body: Instr[], loopDepth: number): void => {
-      for (let k = 0; k < body.length; k++) {
-        const instr = body[k];
-        if (instr.op === "loop") {
-          rewriteBody(instr.body, loopDepth + 1);
-          continue;
-        }
-        const kids = childBodies(instr);
-        if (kids.length > 0) {
-          for (const child of kids) rewriteBody(child, loopDepth);
-          continue;
-        }
-        if (instr.op !== "call") continue;
-        stats.callSites++;
-        const abs = absoluteFuncIndex(mod, instr.funcIdx);
-        const cp = abs - numImportFuncs;
-        if (cp < 0 || cp >= mod.functions.length) {
-          bump(stats.declines, "import");
-          continue;
-        }
-        const callee = mod.functions[cp];
-        if (shouldSkipModuleInitInlineCallee(callee, moduleInitBoundary, declined)) continue;
-        if (sharedFunctionPositions.has(cp)) {
-          declined(callee.name, "unsafe:shared-ir");
-          continue;
-        }
-        const calleeType = funcTypeOf(callee);
-        if (!calleeType) {
-          bump(stats.declines, "unsafe:empty-body");
-          continue;
-        }
-        if (cp === ci) {
-          declined(callee.name, "self-recursive");
-          continue;
-        }
-        if (isColdByConstruction(callee.name)) {
-          declined(callee.name, "cold-callee");
-          continue;
-        }
-        // (#4483) See `poisonObserved` above — never merge two activations that
-        // disagree about strictness while the module observes `.caller`. An
-        // unknown caller strictness (a trampoline / runtime helper) counts as
-        // disagreement: such a body is never instrumented at all.
-        if (poisonObserved) {
-          const calleeStrict = sourceStrictnessOf(callee);
-          if (calleeStrict !== undefined && sourceStrictnessOf(caller) !== calleeStrict) {
-            declined(callee.name, "caller-poison-strictness");
-            continue;
-          }
-        }
-        const calleeView = precomposedAdapterPositions.has(cp) ? callee : originalOf(cp);
-        const calleeBody = calleeView.body;
-        // (#4157 shard-slowdown fix) The four analyses below are functions of
-        // the callee's ORIGINAL body only (guaranteed stable by the
-        // copy-on-write contract of `snapshot`), so they are computed once per
-        // callee, not once per call site. A hot helper is a callee at hundreds
-        // of sites per compile; re-walking its body at each was the dominant
-        // per-compile cost of this pass. Memoization changes no decision —
-        // every cached value is exactly what the per-site computation returned.
-        let facts = calleeFacts.get(cp);
-        if (facts === undefined) {
-          facts = {
-            unsafe: calleeIsSafe({ ...callee, body: calleeBody }, calleeType.results),
-            rawSize: countInstrs(calleeBody),
-            effSize: effectiveSize(calleeBody),
-            isLeaf: !hasCall(calleeBody),
-            loops: hasLoop(calleeBody),
-          };
-          calleeFacts.set(cp, facts);
-        }
-        const unsafe = facts.unsafe;
-        if (unsafe) {
-          declined(callee.name, unsafe);
-          continue;
-        }
-
-        const nParams = calleeType.params.length;
-        const siteCost = nParams + 2;
-        const rawSize = facts.rawSize;
-        const effSize = facts.effSize;
-        const isLeaf = facts.isLeaf;
-
-        // Rule 2 — specialisation delta. Measured on the actual site facts.
-        let specBody: Instr[] | null = null;
-        let specSize = effSize;
-        if (opts.specialise && nParams > 0) {
-          const consts = constArgs(body, k, calleeType.params);
-          if (consts.some((c) => c !== null)) {
-            const s = specialise(calleeBody.map(cloneInstr), consts);
-            specSize = effectiveSize(s);
-            if (specSize < effSize) specBody = s;
-          }
-        }
-
-        // Rule 1 — call-site frequency. `hot[ci]` is the caller's own estimated
-        // frequency (propagated one step across the call graph); the site's own
-        // loop nesting multiplies it. Both come from the SOURCE BEING COMPILED,
-        // never from an observed corpus.
-        const weight = Math.min(hot[ci] * Math.pow(LOOP_WEIGHT, loopDepth), 1e9);
-        // A hotter site earns a larger body budget — one extra `loopMax` per
-        // decade of estimated frequency.
-        const loopBudget = opts.loopMax * Math.max(1, Math.log10(weight));
-        // Everything the loop-leaf rule asks EXCEPT rule 5, so the near-miss
-        // below can name the one callee the rule turned away on cost grounds.
-        const loopLeafFits = opts.loop && weight >= LOOP_WEIGHT && isLeaf && effSize <= loopBudget;
-
-        let rule: string | null = null;
-        if (opts.adapters && isAdapter(callee.name)) rule = "adapter";
-        else if (opts.specialise && specSize <= siteCost) rule = "specialised";
-        else if (
-          opts.single &&
-          callerCount[cp] === 1 &&
-          !addressTaken[cp] &&
-          !singleCallerIneligible.has(cp) &&
-          effSize <= opts.singleMax
-        )
-          rule = "single-caller";
-        else if (loopLeafFits && !facts.loops) rule = "loop-leaf";
-        // (#4157 entry 48) `hot` — the no-rule hole. Same hotness bar and
-        // weight-scaled budget as loop-leaf, but caller count and leaf-ness do
-        // not gate: nested calls in the copy stay calls (no chaining in one
-        // pass), and multi-caller only means the body is copied at more than
-        // one site, which is exactly what the growth cap is for.
-        // Rule 5 deliberately does NOT gate this one — see the module header.
-        else if (opts.hot && weight >= LOOP_WEIGHT && effSize <= opts.hotMax * Math.max(1, Math.log10(weight)))
-          rule = "hot";
-
-        if (!rule) {
-          // Rule 5's near-miss gets its own name: "no-rule" would hide the one
-          // decline whose CAUSE is a cost-model judgement rather than a missing
-          // rule, and this bucket is how a future retune prices it.
-          const reason = loopLeafFits && facts.loops ? "loop-in-callee" : "no-rule";
-          // Verbose: carry the per-callee facts in the key — they are
-          // per-callee constants, so identical strings aggregate and the
-          // report shows WHY each hot candidate missed every rule.
-          if (opts.verbose)
-            bump(
-              stats.declinedCallees,
-              `${callee.name} ${reason} eff=${effSize} leaf=${isLeaf ? 1 : 0} callers=${callerCount[cp]}`,
-            );
-          bump(stats.declines, reason);
-          bump(stats.declines, `${calleeFamily(callee.name)}:${reason}`);
-          continue;
-        }
-        if (growth + rawSize > opts.growth) {
-          declined(callee.name, "growth-cap");
-          continue;
-        }
-        bump(stats.byRule, rule);
-        bump(stats.byRule, `${rule}:${calleeFamily(callee.name)}`);
-        if (opts.verbose)
-          process.stderr.write(`[ir-inline]   ${rule}: ${callee.name} -> ${caller.name ?? `func#${ci}`}\n`);
-        stats.inlined++;
-        growth += rawSize - 1;
-        stats.addedInstrs += rawSize - 1;
-        if (opts.report) continue;
-
-        // ---- the rewrite --------------------------------------------------
-        // First mutation of this caller: preserve its original body NOW, so a
-        // later read of it as a CALLEE still sees the pre-pass content
-        // (copy-on-write contract of `snapshot`, see its declaration).
-        preserveOriginal(ci);
-        const base = callerType.params.length + caller.locals.length;
-        const fresh: LocalDef[] = [];
-        for (let p = 0; p < nParams; p++)
-          fresh.push({ name: `__inl${stats.inlined}_p${p}`, type: calleeType.params[p] });
-        // The locals must come from the same view as the body. Ordinary
-        // callees use the stable snapshot; the exact precomposed Map adapters
-        // use their live composed body and its freshly added locals together.
-        for (const l of calleeView.locals) fresh.push({ name: `__inl${stats.inlined}_${l.name}`, type: l.type });
-        caller.locals.push(...fresh);
-
-        const source = specBody ?? calleeBody.map(cloneInstr);
-        const relocated = relocate(stripCensusPrefix(source), base, 0);
-
-        const seq: Instr[] = [];
-        for (let p = nParams - 1; p >= 0; p--) seq.push({ op: "local.set", index: base + p });
-        if (counterGlobalIdx >= 0) {
-          seq.push(
-            { op: "global.get", index: counterGlobalIdx },
-            { op: "i32.const", value: 1 },
-            { op: "i32.add" },
-            { op: "global.set", index: counterGlobalIdx },
-          );
-        }
-        const bt = blockTypeFor(calleeType.results);
-        if (opts.poison === "trap") {
-          // `unreachable` is stack-polymorphic, so it satisfies `bt` whatever
-          // the result type is. Any executed site turns 422 into a trap.
-          seq.push({ op: "block", blockType: bt, body: [{ op: "unreachable" }] });
-          stats.poisoned++;
-        } else {
-          seq.push({ op: "block", blockType: bt, body: relocated });
-          if (opts.poison === "soft") {
-            const r = calleeType.results[0];
-            if (r && r.kind === "i32") {
-              seq.push({ op: "i32.const", value: 1 }, { op: "i32.add" });
-              stats.poisoned++;
-            } else if (r && r.kind === "f64") {
-              seq.push({ op: "f64.const", value: 1 }, { op: "f64.add" });
-              stats.poisoned++;
-            }
-          }
-        }
-
-        body.splice(k, 1, ...seq);
-        k += seq.length - 1;
+    const frames = [{ body: caller.body, loopDepth: 0, next: 0 }];
+    while (frames.length > 0) {
+      const frame = frames[frames.length - 1]!;
+      const { body, loopDepth } = frame;
+      if (frame.next >= body.length) {
+        frames.pop();
+        continue;
       }
-    };
+      const k = frame.next++;
+      const instr = body[k];
+      if (instr.op === "loop") {
+        frames.push({ body: instr.body, loopDepth: loopDepth + 1, next: 0 });
+        continue;
+      }
+      const kids = childBodies(instr);
+      if (kids.length > 0) {
+        for (let i = kids.length - 1; i >= 0; i--) frames.push({ body: kids[i]!, loopDepth, next: 0 });
+        continue;
+      }
+      if (instr.op !== "call") continue;
+      stats.callSites++;
+      const abs = absoluteFuncIndex(mod, instr.funcIdx);
+      const cp = abs - numImportFuncs;
+      if (cp < 0 || cp >= mod.functions.length) {
+        bump(stats.declines, "import");
+        continue;
+      }
+      const callee = mod.functions[cp];
+      if (shouldSkipModuleInitInlineCallee(callee, moduleInitBoundary, declined)) continue;
+      if (sharedFunctionPositions.has(cp)) {
+        declined(callee.name, "unsafe:shared-ir");
+        continue;
+      }
+      const calleeType = funcTypeOf(callee);
+      if (!calleeType) {
+        bump(stats.declines, "unsafe:empty-body");
+        continue;
+      }
+      if (cp === ci) {
+        declined(callee.name, "self-recursive");
+        continue;
+      }
+      if (isColdByConstruction(callee.name)) {
+        declined(callee.name, "cold-callee");
+        continue;
+      }
+      // (#4483) See `poisonObserved` above — never merge two activations that
+      // disagree about strictness while the module observes `.caller`. An
+      // unknown caller strictness (a trampoline / runtime helper) counts as
+      // disagreement: such a body is never instrumented at all.
+      if (poisonObserved) {
+        const calleeStrict = sourceStrictnessOf(callee);
+        if (calleeStrict !== undefined && sourceStrictnessOf(caller) !== calleeStrict) {
+          declined(callee.name, "caller-poison-strictness");
+          continue;
+        }
+      }
+      const calleeView = precomposedAdapterPositions.has(cp) ? callee : originalOf(cp);
+      const calleeBody = calleeView.body;
+      // (#4157 shard-slowdown fix) The four analyses below are functions of
+      // the callee's ORIGINAL body only (guaranteed stable by the
+      // copy-on-write contract of `snapshot`), so they are computed once per
+      // callee, not once per call site. A hot helper is a callee at hundreds
+      // of sites per compile; re-walking its body at each was the dominant
+      // per-compile cost of this pass. Memoization changes no decision —
+      // every cached value is exactly what the per-site computation returned.
+      let facts = calleeFacts.get(cp);
+      if (facts === undefined) {
+        facts = {
+          unsafe: calleeIsSafe({ ...callee, body: calleeBody }, calleeType.results),
+          rawSize: countInstrs(calleeBody),
+          effSize: effectiveSize(calleeBody),
+          isLeaf: !hasCall(calleeBody),
+          loops: hasLoop(calleeBody),
+        };
+        calleeFacts.set(cp, facts);
+      }
+      const unsafe = facts.unsafe;
+      if (unsafe) {
+        declined(callee.name, unsafe);
+        continue;
+      }
 
-    rewriteBody(caller.body, 0);
+      const nParams = calleeType.params.length;
+      const siteCost = nParams + 2;
+      const rawSize = facts.rawSize;
+      const effSize = facts.effSize;
+      const isLeaf = facts.isLeaf;
+
+      // Rule 2 — specialisation delta. Measured on the actual site facts.
+      let specBody: Instr[] | null = null;
+      let specSize = effSize;
+      if (opts.specialise && nParams > 0) {
+        const consts = constArgs(body, k, calleeType.params);
+        if (consts.some((c) => c !== null)) {
+          const s = specialise(calleeBody.map(cloneInstr), consts);
+          specSize = effectiveSize(s);
+          if (specSize < effSize) specBody = s;
+        }
+      }
+
+      // Rule 1 — call-site frequency. `hot[ci]` is the caller's own estimated
+      // frequency (propagated one step across the call graph); the site's own
+      // loop nesting multiplies it. Both come from the SOURCE BEING COMPILED,
+      // never from an observed corpus.
+      const weight = Math.min(hot[ci] * Math.pow(LOOP_WEIGHT, loopDepth), 1e9);
+      // A hotter site earns a larger body budget — one extra `loopMax` per
+      // decade of estimated frequency.
+      const loopBudget = opts.loopMax * Math.max(1, Math.log10(weight));
+      // Everything the loop-leaf rule asks EXCEPT rule 5, so the near-miss
+      // below can name the one callee the rule turned away on cost grounds.
+      const loopLeafFits = opts.loop && weight >= LOOP_WEIGHT && isLeaf && effSize <= loopBudget;
+
+      let rule: string | null = null;
+      if (opts.adapters && isAdapter(callee.name)) rule = "adapter";
+      else if (opts.specialise && specSize <= siteCost) rule = "specialised";
+      else if (
+        opts.single &&
+        callerCount[cp] === 1 &&
+        !addressTaken[cp] &&
+        !singleCallerIneligible.has(cp) &&
+        effSize <= opts.singleMax
+      )
+        rule = "single-caller";
+      else if (loopLeafFits && !facts.loops) rule = "loop-leaf";
+      // (#4157 entry 48) `hot` — the no-rule hole. Same hotness bar and
+      // weight-scaled budget as loop-leaf, but caller count and leaf-ness do
+      // not gate: nested calls in the copy stay calls (no chaining in one
+      // pass), and multi-caller only means the body is copied at more than
+      // one site, which is exactly what the growth cap is for.
+      // Rule 5 deliberately does NOT gate this one — see the module header.
+      else if (opts.hot && weight >= LOOP_WEIGHT && effSize <= opts.hotMax * Math.max(1, Math.log10(weight)))
+        rule = "hot";
+
+      if (!rule) {
+        // Rule 5's near-miss gets its own name: "no-rule" would hide the one
+        // decline whose CAUSE is a cost-model judgement rather than a missing
+        // rule, and this bucket is how a future retune prices it.
+        const reason = loopLeafFits && facts.loops ? "loop-in-callee" : "no-rule";
+        // Verbose: carry the per-callee facts in the key — they are
+        // per-callee constants, so identical strings aggregate and the
+        // report shows WHY each hot candidate missed every rule.
+        if (opts.verbose)
+          bump(
+            stats.declinedCallees,
+            `${callee.name} ${reason} eff=${effSize} leaf=${isLeaf ? 1 : 0} callers=${callerCount[cp]}`,
+          );
+        bump(stats.declines, reason);
+        bump(stats.declines, `${calleeFamily(callee.name)}:${reason}`);
+        continue;
+      }
+      if (growth + rawSize > opts.growth) {
+        declined(callee.name, "growth-cap");
+        continue;
+      }
+      bump(stats.byRule, rule);
+      bump(stats.byRule, `${rule}:${calleeFamily(callee.name)}`);
+      if (opts.verbose)
+        process.stderr.write(`[ir-inline]   ${rule}: ${callee.name} -> ${caller.name ?? `func#${ci}`}\n`);
+      stats.inlined++;
+      growth += rawSize - 1;
+      stats.addedInstrs += rawSize - 1;
+      if (opts.report) continue;
+
+      // ---- the rewrite --------------------------------------------------
+      // First mutation of this caller: preserve its original body NOW, so a
+      // later read of it as a CALLEE still sees the pre-pass content
+      // (copy-on-write contract of `snapshot`, see its declaration).
+      preserveOriginal(ci);
+      const base = callerType.params.length + caller.locals.length;
+      const fresh: LocalDef[] = [];
+      for (let p = 0; p < nParams; p++) fresh.push({ name: `__inl${stats.inlined}_p${p}`, type: calleeType.params[p] });
+      // The locals must come from the same view as the body. Ordinary
+      // callees use the stable snapshot; the exact precomposed Map adapters
+      // use their live composed body and its freshly added locals together.
+      for (const l of calleeView.locals) fresh.push({ name: `__inl${stats.inlined}_${l.name}`, type: l.type });
+      caller.locals.push(...fresh);
+
+      const source = specBody ?? calleeBody.map(cloneInstr);
+      const relocated = relocate(stripCensusPrefix(source), base, 0);
+
+      const seq: Instr[] = [];
+      for (let p = nParams - 1; p >= 0; p--) seq.push({ op: "local.set", index: base + p });
+      if (counterGlobalIdx >= 0) {
+        seq.push(
+          { op: "global.get", index: counterGlobalIdx },
+          { op: "i32.const", value: 1 },
+          { op: "i32.add" },
+          { op: "global.set", index: counterGlobalIdx },
+        );
+      }
+      const bt = blockTypeFor(calleeType.results);
+      if (opts.poison === "trap") {
+        // `unreachable` is stack-polymorphic, so it satisfies `bt` whatever
+        // the result type is. Any executed site turns 422 into a trap.
+        seq.push({ op: "block", blockType: bt, body: [{ op: "unreachable" }] });
+        stats.poisoned++;
+      } else {
+        seq.push({ op: "block", blockType: bt, body: relocated });
+        if (opts.poison === "soft") {
+          const r = calleeType.results[0];
+          if (r && r.kind === "i32") {
+            seq.push({ op: "i32.const", value: 1 }, { op: "i32.add" });
+            stats.poisoned++;
+          } else if (r && r.kind === "f64") {
+            seq.push({ op: "f64.const", value: 1 }, { op: "f64.add" });
+            stats.poisoned++;
+          }
+        }
+      }
+
+      body.splice(k, 1, ...seq);
+      frame.next += seq.length - 1;
+    }
   }
 
   report(stats, opts, mod, sharedFunctionPositions);

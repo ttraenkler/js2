@@ -9,6 +9,7 @@
 
 import { ts, forEachChild } from "../ts-api.js";
 import type { ValType } from "../ir/types.js";
+import { planEnumObject } from "../ir/enum-object-plan.js";
 import type { CodegenContext, ExternClassInfo } from "./context/types.js";
 import type { NodeBuiltinImport } from "../import-resolver.js";
 import { hasDeclareModifier } from "./ast-modifiers.js";
@@ -2070,8 +2071,9 @@ export function collectEnumDeclarations(ctx: CodegenContext, sourceFile: ts.Sour
   for (const stmt of sourceFile.statements) {
     if (!ts.isEnumDeclaration(stmt)) continue;
     const enumName = stmt.name.text;
+    const objectPlan = planEnumObject(stmt, ctx.checker);
     let nextValue = 0;
-    for (const member of stmt.members) {
+    for (const [memberIndex, member] of stmt.members.entries()) {
       const memberName = (member.name as ts.Identifier).text;
       const key = `${enumName}.${memberName}`;
       // Ask the checker first: unlike the literal-only fallback below, this
@@ -2081,7 +2083,7 @@ export function collectEnumDeclarations(ctx: CodegenContext, sourceFile: ts.Sour
       // TypeScript's SyntaxKind relies on this for its deprecated aliases;
       // drifting after one of them assigns computed object-table entries to
       // the wrong numeric slot.
-      const checkerValue = ctx.checker.getConstantValue(member);
+      const checkerValue = objectPlan?.members[memberIndex]?.value ?? ctx.checker.getConstantValue(member);
       if (typeof checkerValue === "string") {
         ctx.enumStringValues.set(key, checkerValue);
         if (!ctx.stringGlobalMap.has(checkerValue)) stringEnumLiterals.push(checkerValue);

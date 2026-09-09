@@ -124,7 +124,12 @@ function ownPrimitiveType(type: IrType): IrType | undefined {
 }
 
 function ownSignature(signature: IrClosureSignature): IrClosureSignature | undefined {
-  if (signature.defaultParamStart !== undefined || signature.returnType === null) return undefined;
+  if (
+    signature.optionalParamStart !== undefined ||
+    signature.defaultParamStart !== undefined ||
+    signature.returnType === null
+  )
+    return undefined;
   const params = signature.params.map(ownPrimitiveType);
   const returnType = ownPrimitiveType(signature.returnType);
   if (!returnType || params.some((type) => type === undefined)) return undefined;

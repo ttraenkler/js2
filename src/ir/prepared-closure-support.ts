@@ -13,6 +13,7 @@ import { addFuncType } from "../codegen/registry/types.js";
 import { objectFieldsHashKey } from "./object-method-key.js";
 import { resolveIrDynamicCarrierType } from "../codegen/any-helpers.js";
 import { irTypeBindingKey } from "./abi-bindings.js";
+import { resolvePreparedPhysicalType } from "./prepared-physical-type.js";
 import { orderedObjectFields } from "./object-layout.js";
 import type { IrUnitId } from "./identity.js";
 import type { PreparedComponentClosureSupportEvidence } from "./prepared-component-dependencies.js";
@@ -90,19 +91,9 @@ export function lowerPreparedClosureSupportType(
     if (type.val.kind !== "ref" && type.val.kind !== "ref_null") {
       throw new Error("prepared closure symbolic physical type ref is attached to a scalar");
     }
-    const ref = type.typeRef;
-    const session = ctx.programAbiSession;
-    const draft = session?.getDraft(ref.binding.bindingId);
-    if (
-      draft?.intent.kind !== "type" ||
-      draft.slotPolicy === "none" ||
-      draft.structuralReferenceKey !== irTypeBindingKey(ref.binding)
-    ) {
-      throw new Error("prepared closure physical carrier has no exact Program ABI type plan");
-    }
     return {
       kind: type.val.kind,
-      typeIdx: session!.resolveCurrentIndex(ref.binding.bindingId, "type", irTypeBindingKey(ref.binding)),
+      typeIdx: resolvePreparedPhysicalType(ctx, type.typeRef),
     };
   }
   if (type.kind === "val" && type.val.kind !== "ref" && type.val.kind !== "ref_null") return type.val;

@@ -71,10 +71,9 @@ export function containsUnplannedNestedExecutableSyntax(
       return;
     }
     if (ts.isFunctionDeclaration(node)) {
-      if (!node.body) {
-        invalid = true;
-        return;
-      }
+      // A signature-only overload has no executable body or derived unit.
+      // Selection already required its exact implementation in the same run.
+      if (!node.body) return;
       ts.forEachChild(node.body, visit);
       return;
     }

@@ -6,6 +6,44 @@ import type { CodegenError } from "../src/codegen/context/types.js";
 import { STABLE_FUNC_BASE } from "../src/emit/resolve-layout.js";
 import type { Instr, WasmModule } from "../src/ir/types.js";
 
+it.each(
+  (["block", "loop", "if"] as const).flatMap((op) =>
+    (["local", "call"] as const).map((consumer) => ({ op, consumer })),
+  ),
+)("#1058 coerces a $consumer operand below 12000 $op arms", ({ op, consumer }) => {
+  const last: Instr = consumer === "local" ? { op: "local.set", index: 1 } : { op: "call", funcIdx: 1 };
+  const leaf: Instr[] = [{ op: "local.get", index: 0 }, last];
+  let body = leaf;
+  for (let depth = 0; depth < 12000; depth++) {
+    body =
+      op === "if"
+        ? [
+            { op: "i32.const", value: 1 },
+            { op, blockType: { kind: "empty" }, then: body, else: [] },
+          ]
+        : [{ op, blockType: { kind: "empty" }, body }];
+  }
+  const mod = {
+    types: [
+      { kind: "func", params: [{ kind: "ref_null", typeIdx: 1 }], results: [] },
+      { kind: "struct", name: "Target", fields: [] },
+      { kind: "func", params: [{ kind: "externref" }], results: [] },
+    ],
+    imports: [],
+    globals: [],
+    tags: [],
+    funcOrdinalToPosition: [],
+    functions: [
+      { name: "deep", typeIdx: 0, locals: [{ name: "out", type: { kind: "externref" } }], body },
+      { name: "consume", typeIdx: 2, locals: [], body: [] },
+    ],
+  } as unknown as WasmModule;
+  expect(stackBalance(mod)).toBe(1);
+  expect(leaf).toEqual([{ op: "local.get", index: 0 }, { op: "extern.convert_any" }, last]);
+  expect(mod.codegenErrors ?? []).toEqual([]);
+  expect(stackBalance(mod)).toBe(0);
+});
+
 it("#1058 balances a shared instruction DAG once per function", () => {
   const leaf: Instr[] = [{ op: "nop" }];
   let shared = leaf;

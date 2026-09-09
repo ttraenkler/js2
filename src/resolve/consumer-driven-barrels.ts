@@ -292,9 +292,9 @@ function forEachVariableAnnotationTypeDependencyIdentifier(
 }
 
 /**
- * Retained exported variables contribute named property types to
- * `typeof Namespace`. Preserve those annotation dependencies without treating
- * private annotations or exported function signatures as runtime roots.
+ * Retained type declarations and exported variable annotations contribute
+ * checker-only dependencies. Preserve their complete alias/interface chains
+ * without treating private annotations or function signatures as runtime roots.
  */
 function forEachPublicRuntimeTypeDependencyIdentifier(
   node: ts.Node,
@@ -302,6 +302,10 @@ function forEachPublicRuntimeTypeDependencyIdentifier(
   callback: (identifier: ts.Identifier) => void,
 ): void {
   const visit = (current: ts.Node): void => {
+    if (ts.isTypeAliasDeclaration(current) || ts.isInterfaceDeclaration(current)) {
+      forEachTypeDeclarationDependencyIdentifier(current, callback);
+      return;
+    }
     if (
       ts.isVariableStatement(current) &&
       (forcedPublicDeclarations.has(current) || hasModifier(current, ts.SyntaxKind.ExportKeyword))

@@ -161,6 +161,35 @@ function repairBody(
   contextBlocked: WeakSet<Instr[]>,
   reportedBlocked: WeakSet<Instr[]>,
 ): number {
+  let fixups = 0;
+  const pending: { body: Instr[]; afterChildren: boolean }[] = [{ body, afterChildren: false }];
+  while (pending.length > 0) {
+    const frame = pending.pop()!;
+    if (frame.afterChildren) {
+      fixups += repairBodyOperands(frame.body, localTypes, globalTypes, env);
+      continue;
+    }
+    if (!enterBody(frame.body, env, visited, contextBlocked, reportedBlocked)) continue;
+    // Preserve recursive postorder: repair children before modeling their
+    // parent's producers. Physical DAG arrays are still entered only once.
+    pending.push({ body: frame.body, afterChildren: true });
+    for (let index = frame.body.length - 1; index >= 0; index--) {
+      const arms = nestedInstrArrays(frame.body[index]!);
+      for (let arm = arms.length - 1; arm >= 0; arm--) {
+        pending.push({ body: arms[arm]!, afterChildren: false });
+      }
+    }
+  }
+  return fixups;
+}
+
+function enterBody(
+  body: Instr[],
+  env: Env,
+  visited: WeakSet<Instr[]>,
+  contextBlocked: WeakSet<Instr[]>,
+  reportedBlocked: WeakSet<Instr[]>,
+): boolean {
   // This repair interprets local indices through the enclosing function. If a
   // physical body belongs to two functions, mutating it for either owner's
   // locals is unsound. Decline the rewrite, but fail closed: otherwise a
@@ -181,18 +210,15 @@ function repairBody(
       env.mod.codegenErrors.push(diagnostic);
       env.diagnostics?.push(diagnostic);
     }
-    return 0;
+    return false;
   }
-  if (visited.has(body)) return 0;
+  if (visited.has(body)) return false;
   visited.add(body);
-  let fixups = 0;
-  // Nested arms are separate instruction lists with their own stack — walk each
-  // on its own, exactly as the two legacy repairs do.
-  for (const instr of body) {
-    for (const arm of nestedInstrArrays(instr))
-      fixups += repairBody(arm, localTypes, globalTypes, env, visited, contextBlocked, reportedBlocked);
-  }
+  return true;
+}
 
+function repairBodyOperands(body: Instr[], localTypes: ValType[], globalTypes: ValType[], env: Env): number {
+  let fixups = 0;
   const producers = locateOperandProducers(body, env.mod);
   if (producers.size === 0) return fixups;
 

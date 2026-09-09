@@ -17,6 +17,7 @@ import { emitWat } from "./wat.js";
 import { WasmEncoder } from "./encoder.js";
 import { GC, OP, SECTION, SIMD, TYPE } from "./opcodes.js";
 import { resolveLayout, type ModuleLayout } from "./resolve-layout.js";
+import { encodeInstructionArrays, type InstrArrayEmitCache } from "./instruction-arrays.js";
 
 /** A source map entry: maps a wasm byte offset to a source position */
 export interface SourceMapEntry {
@@ -192,13 +193,6 @@ let layout: ModuleLayout | null = null;
  * function frame, so bytes validated for one function must never be reused in
  * another function with a different parameter/local count.
  */
-interface InstrArrayEmitCache {
-  shared: Set<Instr[]>;
-  bytes: WeakMap<Instr[], Uint8Array>;
-  encoding: WeakSet<Instr[]>;
-  remainingUses: Map<Instr[], number>;
-}
-
 let instrArrayEmitCache: InstrArrayEmitCache | null = null;
 
 /** Resolve a function handle to its final function-index-space position. */
@@ -1147,46 +1141,15 @@ function makeInstrArrayEmitCache(root: Instr[]): InstrArrayEmitCache {
   return { shared, bytes: new WeakMap(), encoding: new WeakSet(), remainingUses };
 }
 
-function finishInstrArrayUse(cache: InstrArrayEmitCache, instrs: Instr[]): void {
-  const remaining = (cache.remainingUses.get(instrs) ?? 1) - 1;
-  if (remaining > 0) {
-    cache.remainingUses.set(instrs, remaining);
-    return;
-  }
-  cache.remainingUses.delete(instrs);
-  cache.bytes.delete(instrs);
-}
-
 /** Encode one instruction array, reusing bytes only for shared DAG nodes. */
 function encodeInstrArray(instrs: Instr[], enc: WasmEncoder): void {
-  const cache = instrArrayEmitCache;
-  if (!cache || !cache.shared.has(instrs)) {
-    for (const instr of instrs) encodeInstr(instr, enc);
-    return;
-  }
-
-  const cached = cache.bytes.get(instrs);
-  if (cached) {
-    enc.bytes(cached);
-    finishInstrArrayUse(cache, instrs);
-    return;
-  }
-
-  if (cache.encoding.has(instrs)) {
-    throw new Error("Codegen error: cyclic instruction-array graph cannot be emitted");
-  }
-
-  cache.encoding.add(instrs);
-  try {
-    const child = new WasmEncoder();
-    for (const instr of instrs) encodeInstr(instr, child);
-    const bytes = child.finish();
-    cache.bytes.set(instrs, bytes);
-    enc.bytes(bytes);
-    finishInstrArrayUse(cache, instrs);
-  } finally {
-    cache.encoding.delete(instrs);
-  }
+  encodeInstructionArrays(instrs, enc, instrArrayEmitCache, {
+    leaf: encodeInstr,
+    blockType: encodeBlockType,
+    tag: (index) => {
+      if (valCtx) vIdx("exception tag", index, valCtx.numTags);
+    },
+  });
 }
 
 export function encodeInstr(instr: Instr, enc: WasmEncoder): void {
@@ -1198,35 +1161,12 @@ export function encodeInstr(instr: Instr, enc: WasmEncoder): void {
       enc.byte(OP.nop);
       break;
     case "block":
-      enc.byte(OP.block);
-      encodeBlockType(instr.blockType, enc);
-      encodeInstrArray(instr.body, enc);
-      enc.byte(OP.end);
-      break;
     case "loop":
-      enc.byte(OP.loop);
-      encodeBlockType(instr.blockType, enc);
-      encodeInstrArray(instr.body, enc);
-      enc.byte(OP.end);
+    case "if":
+    case "try":
+    case "try_table":
+      encodeInstrArray([instr], enc);
       break;
-    case "if": {
-      enc.byte(OP.if);
-      encodeBlockType(instr.blockType, enc);
-      encodeInstrArray(instr.then, enc);
-      const hasElse = instr.else && instr.else.length > 0;
-      const needsElse = hasElse || instr.blockType.kind === "val";
-      if (needsElse) {
-        enc.byte(OP.else);
-        if (hasElse) {
-          encodeInstrArray(instr.else!, enc);
-        } else {
-          // Valued if with no else — emit unreachable to satisfy validator
-          enc.byte(OP.unreachable);
-        }
-      }
-      enc.byte(OP.end);
-      break;
-    }
     case "br":
       enc.byte(OP.br);
       enc.u32(instr.depth);
@@ -1762,59 +1702,6 @@ export function encodeInstr(instr: Instr, enc: WasmEncoder): void {
       enc.byte(OP.rethrow);
       enc.u32(instr.depth);
       break;
-    case "try_table": {
-      enc.byte(OP.try_table);
-      encodeBlockType(instr.blockType, enc);
-      enc.u32(instr.catches.length);
-      for (const clause of instr.catches) {
-        switch (clause.kind) {
-          case "catch":
-            enc.byte(0x00);
-            if (clause.tagIdx === undefined) throw new Error("try_table catch is missing a tag index");
-            if (valCtx) vIdx("exception tag", clause.tagIdx, valCtx.numTags);
-            enc.u32(clause.tagIdx);
-            enc.u32(clause.depth);
-            break;
-          case "catch_ref":
-            enc.byte(0x01);
-            if (clause.tagIdx === undefined) throw new Error("try_table catch_ref is missing a tag index");
-            if (valCtx) vIdx("exception tag", clause.tagIdx, valCtx.numTags);
-            enc.u32(clause.tagIdx);
-            enc.u32(clause.depth);
-            break;
-          case "catch_all":
-            enc.byte(0x02);
-            enc.u32(clause.depth);
-            break;
-          case "catch_all_ref":
-            enc.byte(0x03);
-            enc.u32(clause.depth);
-            break;
-        }
-      }
-      encodeInstrArray(instr.body, enc);
-      enc.byte(OP.end);
-      break;
-    }
-    case "try": {
-      enc.byte(OP.try);
-      encodeBlockType(instr.blockType, enc);
-      encodeInstrArray(instr.body, enc);
-      // Encode catch clauses (catch $tag)
-      for (const c of instr.catches) {
-        if (valCtx) vIdx("exception tag", c.tagIdx, valCtx.numTags);
-        enc.byte(OP.catch);
-        enc.u32(c.tagIdx);
-        encodeInstrArray(c.body, enc);
-      }
-      // Encode catch_all clause
-      if (instr.catchAll) {
-        enc.byte(OP.catch_all);
-        encodeInstrArray(instr.catchAll, enc);
-      }
-      enc.byte(OP.end);
-      break;
-    }
     // Memory load/store (linear memory)
     case "i32.load":
       enc.byte(OP.i32_load);

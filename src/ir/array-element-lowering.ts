@@ -16,7 +16,7 @@ import { IrFunctionBuilder } from "./builder.js";
 import { irIntrinsicFuncRef } from "./callable-bindings.js";
 import type { I32PureNames } from "./i32-pure-bitwise.js";
 import type { IrVecLowering } from "./lower.js";
-import { asVal, irVal, type IrConst, type IrType, type IrValueId } from "./nodes.js";
+import { asVal, irVal, irDynamic, type IrConst, type IrType, type IrValueId } from "./nodes.js";
 import { demoteToLegacy, IrUnsupportedError } from "./outcomes.js";
 import type { ValType } from "./types.js";
 import { irVecElemSetSymbol } from "./vector-runtime.js";
@@ -490,6 +490,32 @@ export function emitSafeNarrowedI32VecGet(
     elseValue,
     resultType: IR_F64,
   });
+}
+
+/** Tagged element reads retain their logical type and return actual undefined out of bounds. */
+export function emitSafeDynamicVecGet(
+  recv: IrValueId,
+  index: IrValueId,
+  originalIndex: IrValueId,
+  builder: IrFunctionBuilder,
+  makeUndefined: () => IrValueId,
+): IrValueId {
+  const length = builder.emitVecLenI32(recv);
+  let cond = builder.emitBinary("i32.lt_u", index, length, irVal({ kind: "i32" }));
+  if (asVal(builder.typeOf(originalIndex))?.kind === "f64") {
+    const roundTrip = builder.emitUnary("f64.convert_i32_s", index, irVal({ kind: "f64" }));
+    const exact = builder.emitBinary("f64.eq", originalIndex, roundTrip, irVal({ kind: "i32" }));
+    cond = builder.emitBinary("i32.and", cond, exact, irVal({ kind: "i32" }));
+  }
+  let thenValue!: IrValueId;
+  const thenBody = builder.collectBodyInstrs(() => {
+    thenValue = builder.emitVecGet(recv, index, irDynamic());
+  });
+  let elseValue!: IrValueId;
+  const elseBody = builder.collectBodyInstrs(() => {
+    elseValue = makeUndefined();
+  });
+  return builder.emitIfElse({ cond, then: thenBody, thenValue, else: elseBody, elseValue, resultType: irDynamic() });
 }
 
 /**

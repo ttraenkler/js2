@@ -12,6 +12,14 @@ export function resolveCheckerSignaturePosition(
   let type = checker.getTypeAtLocation(node);
   let annotation: ts.TypeNode | undefined;
   for (const step of path) {
+    if (step === "element") {
+      if (!checker.isArrayType(type)) return undefined;
+      const element = checker.getIndexTypeOfType(type, ts.IndexKind.Number);
+      if (!element) return undefined;
+      type = element;
+      annotation = undefined;
+      continue;
+    }
     const signatures = type.getCallSignatures();
     if (signatures.length !== 1) return undefined;
     const signature = signatures[0]!;

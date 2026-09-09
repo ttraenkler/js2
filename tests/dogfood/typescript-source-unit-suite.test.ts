@@ -29,6 +29,26 @@ it("accepts a complete zero-import source unit result", () => {
   expect(sourceUnitFileSucceeded(passingResult())).toBe(true);
 });
 
+it.each([
+  ["compilerCore", 11],
+  ["base64", 1],
+  ["comments", 3],
+  ["parsePseudoBigInt", 5],
+] as const)("requires all original %s callbacks for full-source coverage", (name, count) => {
+  const result = passingResult();
+  result.file = `src/testRunner/unittests/${name}.ts`;
+  result.expectedTests = count;
+  for (const lane of ["native", "wasm"] as const) {
+    result[lane].count = count;
+    result[lane].statuses = Array(count).fill(true);
+  }
+  expect(sourceUnitFileSucceeded(result)).toBe(true);
+  result.wasm.statuses.pop();
+  expect(sourceUnitFileSucceeded(result)).toBe(false);
+  result.wasm.count = count - 1;
+  expect(sourceUnitFileSucceeded(result)).toBe(false);
+});
+
 it("rejects empty, partial, failed and unknown-file results", () => {
   expect(sourceUnitFileSucceeded(undefined)).toBe(false);
   for (const lane of ["native", "wasm"] as const) {

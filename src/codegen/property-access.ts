@@ -434,6 +434,7 @@ import { tryEmitPrimitiveAbsentPropertyRead } from "./primitive-absent-property.
 import { tryEmitPrimitiveProtoMemberGet } from "./primitive-proto-member-get.js"; // (#4668) PRESENT prop of a number/boolean primitive → chain walk
 import { isForeignEvalNode } from "./expressions/eval-source.js";
 import { identityPreservingStructuralParamCarrier } from "./identity-preserving-structural-param.js";
+import { emitRuntimeEnumObjectRead } from "./runtime-enum-object.js";
 import { ensureFunctionProtoEdge, FUNCTION_PROTO_HAS_INSTANCE_MEMBER } from "./function-proto-has-instance.js";
 import {
   finalizeStructAndDynamicMemberGet,
@@ -3919,6 +3920,8 @@ export function compilePropertyAccess(
   fctx: FunctionContext,
   expr: ts.PropertyAccessExpression,
 ): ValType | null {
+  const enumObject = emitRuntimeEnumObjectRead(ctx, fctx, expr);
+  if (enumObject) return enumObject;
   // Optional chaining: obj?.prop
   if (expr.questionDotToken) {
     return compileOptionalPropertyAccess(ctx, fctx, expr);

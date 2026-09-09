@@ -28,6 +28,8 @@ import {
 import type { ProgramAbiSession, ProgramAbiTypeCell } from "./program-abi-session.js";
 import { canonicalProgramAbiTypeDef, canonicalProgramAbiValType } from "./program-abi-signatures.js";
 import { DOM_CALLBACK_AUTHORITY_FIELD } from "../dom-capability-contract.js";
+import type { OracleTypeKey } from "../checker/oracle.js";
+import { prepareSourceParameterCarrierBinding } from "./source-parameter-carrier-binding.js";
 
 const PROGRAM_ABI_TYPE_ROLE = Object.freeze({
   retainedModuleType: 0,
@@ -45,6 +47,7 @@ const PROGRAM_ABI_TYPE_ROLE = Object.freeze({
   nativeMapCarrier: 12,
   /** (#3521) Source/unit-qualified reserved fnctor struct layout. */
   fnctorLayout: 13,
+  sourceParameterCarrier: 14,
   classLayout: 0,
 } as const);
 
@@ -290,7 +293,7 @@ function canonicalEntrySource(session: ProgramAbiSession): IrSourceId {
  * `vec<i32>` 1, `vec<externref>` 2, `vec<string>` 3 — unchanged bytes for
  * every module that only uses flat vectors.
  */
-const VECTOR_LEAF_ORDINALS = ["f64", "i32", "externref", "string"] as const;
+const VECTOR_LEAF_ORDINALS = ["f64", "i32", "externref", "string", "dynamic"] as const;
 
 /**
  * Stable Program ABI ordinal for one logical vector carrier.
@@ -372,6 +375,21 @@ export class ProgramAbiTypeRegistry {
   /** Read-only candidate view used before a prepared scope publishes ownership. */
   provisionalSupportTypes(): readonly PreparedProgramAbiProvisionalBinding[] {
     return [...this.candidateSupportTypes.values()];
+  }
+
+  /** Recheck source evidence and describe, but never publish, its physical carrier. */
+  prepareSourceParameterCarrier(typeKey: OracleTypeKey): IrType | undefined {
+    if (this.planned)
+      throw new ProgramAbiInvariantError("planning-sealed", "source carrier requested after type planning");
+    return prepareSourceParameterCarrierBinding({
+      ctx: this.ctx,
+      session: this.session,
+      identityContext: this.identityContext,
+      typeKey,
+      candidates: this.candidateSupportTypes,
+      owners: this.candidateTypeOwners,
+      roleOrdinal: PROGRAM_ABI_TYPE_ROLE.sourceParameterCarrier,
+    });
   }
 
   private publishCandidateSupportRefs(refs: readonly IrTypeRef[]): void {

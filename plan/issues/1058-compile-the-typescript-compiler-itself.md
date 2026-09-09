@@ -3,7 +3,7 @@ id: 1058
 title: "Compile the TypeScript compiler itself to Wasm — self-hosting stress test"
 status: in_progress
 created: 2026-04-11
-updated: 2026-09-08
+updated: 2026-09-09
 priority: high
 feasibility: hard
 model: fable
@@ -13,6 +13,10 @@ sprint: Backlog
 depends_on: [1042, 1044, 1046]
 required_by: [1059, 1066, 1165, 1584]
 loc-budget-allow:
+  # 2026-09-09: +2 lines import/call the leaf adapter for shared dynamic binding planning.
+  - src/codegen/destructuring-params.ts
+  # 2026-09-08: one import for the physical-field verifier rule; implementation is in its IR subsystem.
+  - src/ir/verify.ts
   # 2026-09-08: typed ref-cell construction keeps logical dynamic payloads
   # intact until carrier resolution; the scalar API delegates to this builder.
   - src/ir/builder.ts
@@ -106,6 +110,12 @@ loc-budget-allow:
   # identity so parser metadata survives element-type widening.
   - src/runtime.ts
 func-budget-allow:
+  # 2026-09-09: +1 call settles destination locals before alternative arms; implementation is in a leaf module.
+  - src/codegen/destructuring-params.ts::destructureParamArray
+  # 2026-09-08: one context field threads the explicit inferred carrier provider; logic stays in leaf modules.
+  - src/ir/from-ast.ts::lowerFunctionAstToIr
+  # 2026-09-08: one resolver callback reads exact symbolic struct fields; no inline allocation algorithm.
+  - src/ir/integration.ts::makeResolver
   # 2026-09-08: +9 lines detect/reserve the canonical undefined IR provider
   # before lowering; its adapter implementation stays in a separate module.
   - src/ir/integration.ts::preregisterDynamicSupport
@@ -167,6 +177,7 @@ func-budget-allow:
   - src/codegen/ir-inline.ts::inlineUserFunctions
   - src/codegen/expressions/assignment.ts::compilePropertyAssignment
   - src/codegen/index.ts::resolveWasmType
+  - src/codegen/index.ts::planIrOverlay
   - src/codegen/expressions/identifiers.ts::compileIdentifierCore
   - src/codegen/expressions/eval-inline.ts::tryStaticEvalInline
   - src/codegen/binary-ops.ts::compileBinaryExpression
@@ -227,6 +238,68 @@ oracle-ratchet-allow:
   - src/codegen/closures/callback-classification.ts
 ---
 # #1058 — Compile the TypeScript compiler to Wasm (self-hosting stress test)
+
+## Wrap-up handoff — 2026-09-09
+
+Publication check: the existing PR's head `49a37ae` contains a newer main merge.
+Its CI quality job `102258710224` is red; the shepherd reports 31 unclassified
+compiler modules plus target references in inventory artifact `10079198885`.
+Reconcile new modules with their intended architecture layers and rerun the
+inventory gate; do not weaken it. This wrap-up does not claim CI is green.
+Final local source typecheck and numeric regression rerun pass after replacing
+an unavailable TypeFlags aggregate with the existing conservative object check.
+
+Work is paused at the user's request. PR: https://github.com/loopdive/js2/pull/5753.
+The standalone TypeScript 5 goal remains incomplete; neither the complete upstream
+unit suite nor self-hosting is proven. Prefer shared IR planning for follow-up work.
+
+Latest complete full-source measurement (TypeScript 5.9.3,
+`c63de15a992d37f0d6cec03ac7631872838602cb`): **20/28 callbacks pass across 6 of
+256 upstream unit files**. Factory is 3/3, compilerCore 11/11, base64 1/1,
+comments 3/3, diagnosticCollection 0/5, and parsePseudoBigInt 2/5. Every selected
+file compiles to valid zero-import standalone Wasm; native controls pass 28/28.
+The separate projection suite passes 25/25 across five files; these overlapping
+results must not be added to the full-source denominator. The source-runner
+verification tests pass 9/9 and enforce per-file callback floors.
+
+This snapshot includes stack-safe physical instruction traversals; shared IR
+closure, signature, enum, undefined and recursion planning; exact accessor
+parameter carriers; demand-driven runtime enum objects; and dynamic tuple binding
+destination planning. The latter takes the original factory source tests from
+0/3 to 3/3. Detailed positive controls and removal-attribution evidence follow
+below. Narrow backend adapters remain where the current compiler requires them;
+this is not a claim that the entire compiler now routes through IR.
+
+The newest fix rejects primitive receivers as structural evidence for an unrelated
+user class. Its numeric `toString(radix)` regression passes 2/2 (GC and standalone),
+with an actual class-method positive control in each. The full-source radix suite
+has **not** been rerun with this fix; keep its recorded result at 2/5 until measured.
+
+Next steps, in order:
+
+1. Run `node --experimental-wasm-exnref --import tsx tests/dogfood/typescript-source-unit-suite.mjs parsePseudoBigInt`
+   to validate the latest fix against the unchanged upstream callbacks.
+2. Investigate diagnosticCollection parent propagation. All five diagnostic
+   probes pass statement count, non-null node and VariableStatement kind, then
+   fail `node.parent === file`. Native passes 5/5. Separate direct parent
+   assignment, `setParent`, `setParentRecursive`, and parser parent setup using
+   `tests/dogfood/fixtures/typescript-source-node-parent-workload.ts`.
+3. Resolve the remaining IR acceptance failures before claiming full IR coverage:
+   multi-module factory routing, source object position, nested result carriers,
+   optional closure length, and imported-class Map field construction.
+4. Expand the full-source unit denominator, then attempt the full standalone
+   compiler/self-hosting milestone. Do not infer runtime correctness from successful
+   compilation or zero imports alone.
+
+Known red neighbors are retained, not silently skipped: seven typed-object
+destructuring cases in #1553b and three explicit-undefined cases in #1553e are
+unchanged with the dynamic binding fix removed. The broader run was 41/51; the
+focused binding controls were 17/17. Enum formatting has three pre-existing
+plain-object failures (9/12 total, all eight enum cases pass). Full test262 and
+the full upstream unit suite have not been run. Local `.tmp` logs and generated
+diagnostic copies are intentionally not committed; the commands, committed
+regressions and evidence in this issue are the durable handoff.
+
 
 ## Main synchronization check — 2026-09-08
 
@@ -1169,6 +1242,146 @@ do not treat opaque reference transport as support for Node field access or
 local Map operations. Full factory results have NOT been rerun for this kernel
 change; the last original-source measurement remains 0/3 Wasm versus 3/3 native.
 
+Shared inferred-signature integration is now in progress. A pure plan cached
+by the exact compilation oracle and AST declaration is consumed by selection
+and both nested lowering routes. Scalar/literal-union and higher-order callable
+positions are resolved through exact signature-position facts; object/any facts
+still cannot establish a Node representation. Keep unsupported defaults,
+optional/rest/generic/async/generator declarations out of this new route.
+
+Initial source integration verifies **13/13** new tests: four zero-import
+standalone source programs emit their owner through IR only (direct nested
+call, address-taken declaration, arrow, returned callback), eight unsupported
+boundary controls refuse the plan, and one exact higher-order plan is reused.
+The selector now projects the exact inferred callable result at a call site,
+and no longer applies the stale prohibition on aliases of nested declarations:
+`nestedFunctionUsedAsValue` already lifts those through closure objects.
+
+Broader run: **58/60 across seven files**, with two failures in existing GC
+destructuring import-parity assertions (object: extra `__unwrap_for_wasm`;
+numeric array: that plus `__copy_wasm_struct_sidecar`). Both standalone rows
+pass. A paired candidate control disables BOTH new inference entry points and
+reproduces the same two failures (**2/4** in the destructuring file), while the
+new direct-nested positive test loses IR admission as expected (**0/1**, twelve
+other tests filtered). Thus those two GC import failures are independent of
+the new inference route; this is a kill-switch comparison on the candidate,
+not an assertion that a separate pristine HEAD was tested. Temporary control
+returns are removed. Logs: `.tmp/ts5-inferred-regression.log`,
+`.tmp/ts5-inferred-destructuring-control.log`, and
+`.tmp/ts5-inferred-disabled-positive-control.log`.
+
+The function-budget allowance for `planIrOverlay` covers precisely the two
+new selector resolver callbacks (+2 lines), not a new direct-codegen emitter.
+Inference itself lives in the new IR module, with bounded traversal, exact
+oracle-position evidence, and no checker calls added under codegen. Original
+factory execution still needs exact Node carrier/field-layout integration and
+local Map support; the full TypeScript goal is not complete.
+
+Final restored-candidate check: **56/56 across six files**, including the
+13 new inference tests, returned/literal closure ownership in both lanes,
+signature facts/positions and source object layouts
+(`.tmp/ts5-inferred-final-tests.log`). The separately attributed two GC
+destructuring import failures remain unresolved; excluding that file from the
+final six-file run does not turn the broader 58/60 measurement into green.
+Typecheck, lint/format, LOC/function budgets, oracle/coercion ratchets and diff
+checks pass. All current test/gate handles are terminal; changes are not yet
+committed. Before adding nominal carrier support, construct its exact source
+evidence before the first inference query (or explicitly revise the cache
+contract): the current pure per-oracle/node cache retains negative results.
+
+Original-source revalidation after inferred-signature integration (2026-09-08):
+the direct project worker completed in **146,998 ms**, emitting valid
+**62,956,028-byte**, zero-import standalone Wasm. Runtime remains **0/3**;
+all three failures are unchanged (export-assignment parenthesizer null
+dereference, arrow-factory illegal cast, and null/undefined guest property
+access). The complete ledger contains **661 rows, 0 IR bodies, 633 legacy
+bodies**. `createParenthesizerRules` still first rejects at
+`nested-function-return-type-missing`; `createNodeFactory` still rejects at
+`expr-ident-not-in-scope`. Log: `.tmp/ts5-factory-inferred-signatures.log`.
+This direct worker does not run native reference tests; the earlier 3/3 native
+measurement is not a new result from this run. Worker handle 81756 is terminal.
+
+An independent original-AST probe verifies all six exact signature positions
+and shared Expression identity again, then invokes the new inference planner
+on the three real helpers: `mixingBinaryOperatorsRequiresParentheses` now has
+the exact `(f64, f64) -> i32` plan; both cached parenthesizer helpers correctly
+decline Node-bearing callbacks without carrier evidence. Log:
+`.tmp/ts5-original-inferred-plans.log`; probe handle 93048 is terminal.
+
+Representation boundary traced for the next implementation: `object.get` in
+`lower.ts` requires an `IrType.object`, and `ObjectStructRegistry.resolve` in
+`integration.ts` derives/reuses storage from the logical field shape.
+`from-ast.ts::lowerPropertyAccess` likewise reads fields only from known
+logical object/class shapes (or other explicit supported families). A plain
+symbolic `val.typeRef` solves closure transport, but cannot by itself lower
+`node.kind` or repeated `node.parent` reads. The exact source-owned carrier
+adapter therefore needs a field-layout contract as well as the signature
+position witness; do not substitute dynamic values or manufacture an
+anonymous recursive struct expansion. No temporary production instrumentation
+was used for this rerun; only the worktree-local original-AST probe changed.
+
+Physical Node field kernel (2026-09-08, in progress): reuse `object.get/set`
+with a bound `val.typeRef` receiver instead of introducing cyclic anonymous
+object shapes. The final resolver resolves the symbolic carrier through its
+existing scoped Program ABI path, then reads the exact allocated struct's
+unique named field. Missing/duplicate fields, unbound receivers, mismatched
+physical value types and immutable writes fail explicitly. A non-null ref may
+widen to the same nullable field type on writes; unrelated carriers cannot.
+Prepared instruction support records the receiver's explicit type reference,
+so existing ABI ownership validation remains authoritative.
+
+Reader audit: object operand walkers in `nodes`, `verify`, inline-small,
+monomorphize and async-linear preparation preserve instruction metadata;
+ownership records reads/writes and escape records stored values independently
+of receiver shape. Mutable heap reads/writes remain ordered by `effects.ts`.
+No shared allocation map is added or mutated. The audit exposed the existing
+DCE policy that drops dead logical-object reads even when they can trap.
+New physical reads therefore carry `physicalReceiver: true`: the builder sets
+it, the verifier requires it for bound physical receivers, the effect model
+records control effects, and DCE retains them. Existing logical reads are
+unchanged; this does not claim to repair the broader historical trap policy.
+
+Verification so far: **53/53 across three files** (seven carrier tests,
+35 prepared-component dependency tests, eleven effect/scheduler controls) in
+`.tmp/ts5-physical-object-effects-tests.log`. The new real zero-import Wasm
+kernel relocates a recursive struct from index 1 to 0 while IR retains stale
+candidate index 99, traverses `parent`, mutates its numeric field, replaces
+the parent's reference, and verifies both mutation directions. An unused
+nullable field read survives DCE and traps on null; missing control metadata
+is rejected by verification. This is IR-kernel evidence, NOT source Node
+admission, and the original factory has not been rerun for this field change.
+Next supply source-owned nominal parameter/field type evidence to the
+inferred-signature and property-access producers. Keep literal/anonymous
+object allocation unchanged and do not invent dynamic carriers for Node.
+
+The physical-field rule/lookup now lives in `physical-object-field.ts`.
+Shared object get/set dispatch was extracted there so `lower.ts` shrinks
+instead of growing its large emission function. Verification adds only one
+import and delegates through its existing rule-dispatch line; the two new
+narrow driver allowances cover that import and the one integration resolver
+callback, not an expanded verifier/emitter body. Final validation follows.
+
+Final kernel checkpoint: **86/86 across seven files** in
+`.tmp/ts5-physical-object-final-tests.log`, including ordinary source object
+layouts, the inferred-closure source tests, and closure ownership in GC and
+standalone. Typecheck, lint, formatting, LOC/function budgets and diff checks
+pass. All handles from this checkpoint are terminal; changes remain
+uncommitted. The two previously attributed GC destructuring import failures
+are not covered by this final seven-file run and remain unresolved.
+
+This supersedes the earlier assumption that field access must build an
+`IrType.object` shape for Node: the new symbolic physical get/set path avoids
+that expansion entirely. Next steps are producer integration, not another
+kernel representation: establish exact source-parameter-to-physical-slot
+witnesses and stable Program ABI type-cell references before inference is
+cached; resolve nominal signature positions using their opaque oracle keys;
+then let source property access obtain exact named-field types. Self-reference
+fields can retain the same symbolic type ref and physical nullability. Other
+reference fields require their own owned type ref, and externref/dynamic
+fields require an explicit value-representation contract rather than guessing
+from a TypeScript property name. No original factory rerun is warranted until
+those source producers can emit this newly supported IR form.
+
 Integration trace: `select.ts::isPhase1NestedFunc` rejects missing returns,
 and `isPhase1ClosureLiteral` separately requires annotated returns/parameters.
 `from-ast.ts::lowerNestedFunctionDeclaration` (direct-call capture parameters)
@@ -1377,6 +1590,1992 @@ These changes remain local and uncommitted; no full-source factory gain or full
 upstream-suite completion is claimed.
 The post-change selected standalone adapter remains **25/25**, with **251/256
 upstream files deferred** (`.tmp/ts5-projected-after-ir-named-values.log`).
+
+### Provisional physical carrier preparation (2026-09-08, uncommitted)
+
+The next source Node bridge must not publish required type bindings during
+selection: rejected candidates can lose their allocations to DCE. Existing
+`candidateSupportTypes` and `candidateTypeOwners` already retain read-only
+descriptions; prepared component sealing selects the consumed bindings, and
+`describePreparedSupportTypes` authenticates their cells before the transaction
+publishes them. Their writers remain the type registry's support preparation
+and promotion paths; this change adds a read-only preparation consumer.
+
+`resolvePreparedPhysicalType` now lets closure preparation resolve an exact
+candidate type without `ensurePlan`, structural-reference registration or
+locator publication. Published bindings retain the existing session resolver.
+Candidates must belong to this session, match the exact symbolic key and shape,
+and retain their session-owned allocator cell in the current module. Candidate
+IR indexes are never authority. A stale allocation, changed shape or foreign
+registry fails closed. Final emitted IR continues to require scoped ABI
+resolution; this is not permission to emit unpublished bindings.
+
+Tests cover index movement, shape/allocation/session refusals, nullable closure
+results and captures, and resolution before and after both scope abort and seal.
+The first run was **30/34**: four new assertions incorrectly assumed the fixture
+carrier was at index 1, but context initialization allocates preceding types.
+Tests now record the exact fixture allocation before moving/replacing it; the
+production resolver was unchanged by that correction. Final verification:
+**35/35 across three files** (`.tmp/ts5-provisional-carrier-final-tests.log`),
+plus **35/35 prepared dependency tests**
+(`.tmp/ts5-provisional-carrier-dependencies.log`). Source typechecking, lint,
+formatting, LOC/function budgets and `git diff --check` pass. No new budget
+allowance was needed; the large closure support module shrinks. All processes
+are terminal. Changes remain uncommitted. No original-source factory rerun is
+claimed: source identity mapping and inference-provider wiring are still the
+next implementation step.
+
+### Exact source parameter carrier evidence (2026-09-08, uncommitted)
+
+`collectSourceParameterCarriers` implements the read-only source-to-allocation
+join needed by the Node inference provider. It uses TypeOracle's opaque exact
+signature-position key, inventoried declaration identity in both directions,
+the source declaration's handle, and the structural callable registry's exact
+handle/function agreement. Only ordinary top-level functions with matching
+source/physical arity contribute. Nested, async, generator, generic, optional,
+rest, default, destructured and explicit-this boundaries are not slot evidence.
+
+All eligible witnesses for one source type must agree on the identical allocated
+struct and nullability. Scalar or conflicting layouts invalidate that key;
+display names and structural similarity never merge allocations. Deterministic
+unit order selects the anchor when witnesses agree. This is a current planning
+snapshot, not a final type binding, and performs no type-cell creation or shared
+registry mutation. Allocation/ownership mutations remain with the existing
+source callable registry, function allocator and type registry; callers must
+authenticate the snapshot again when creating a provisional binding.
+
+**6/6 tests** pass in `.tmp/ts5-source-carrier-evidence-tests.log`, including
+same-display-name functions, a recursive allocation, conflicting layout,
+nullability and scalar witnesses, hidden capture slots, wrong arity and aliased
+declaration handles. Source typechecking and lint pass. The collector is not yet
+wired into production selection: next add provisional source-owned type binding
+reuse, then provide those symbolic types to inference without retaining an old
+negative cache entry. No TypeScript factory execution gain is claimed here.
+
+### Source-owned provisional carrier bindings (2026-09-08, uncommitted)
+
+`ProgramAbiTypeRegistry.prepareSourceParameterCarrier` now re-collects exact
+source evidence before creating a symbolic `IrType.val` reference. An unowned
+allocation receives a provisional binding ordered by its inventoried source
+function and parameter index (type role 14). An already owned allocation reuses
+its exact support binding after shape/key validation. The existing support type
+description helper now accepts either a source anchor or a unit anchor; existing
+source-anchored callers retain their previous order.
+
+This adds one writer to the existing candidate-support and candidate-type-owner
+maps, not a new publication path. Their prepared dependency/sealing readers and
+promotion paths remain unchanged. Repeated requests reuse one candidate;
+changed source evidence is rechecked, and replacement of an already described
+slot fails before a new type cell is created. Scope abort/seal coverage uses
+the actual source-owned description and the existing transaction implementation.
+
+The first focused run passed **32/32 across three files**. The replacement guard
+now runs before type-cell creation. An initial LOC gate rejected the registry
+crossing 1,500 lines; the implementation was extracted to
+`source-parameter-carrier-binding.ts`, retaining the registry entry point and
+central role ordinal. No budget allowance was added. The extracted final run
+passes **67/67 across four files**
+(`.tmp/ts5-source-carrier-binding-extracted-tests.log`); lint and LOC/function
+gates pass. Post-extraction source typechecking also passes
+(`.tmp/ts5-source-carrier-binding-extracted-tsc.log`); all processes are terminal.
+Tests cover owner reuse, no duplicate assignment, no publication
+before acceptance, abort, seal and changed source evidence.
+Inference-provider integration remains next; this method is not yet called by production selection. Preserve cache
+lifetime explicitly when connecting it, and require an original factory ledger
+before claiming additional TypeScript source functions are IR-owned.
+
+### Source carrier inference provider wiring (2026-09-08, uncommitted)
+
+Selection and AST lowering now share an explicit context-scoped
+`InferredClosureCarriers` provider. Only exact object/class signature facts may
+request a symbolic physical reference; any, unknown, unsupported unions and raw
+unbound references remain refused. Provider plans are cached separately from
+analysis-only plans, authenticated against the same oracle, and negative carrier
+lookups are not cached because source allocations can arrive after an earlier
+selection pass. Existing positive plans are shared by selection and both nested
+lowering routes. The provider is passed explicitly through AST options and both
+lifted contexts, not installed in global oracle state.
+
+The production planner and integration's standalone selector both use the
+provider; all four integration AST entry paths receive it. The new lifecycle
+test first caches an analysis-only refusal, then tries the carrier provider
+before allocation, adds an exact source witness, and verifies successful
+inference and actual nested AST lowering with bound physical parameters. A
+different compilation's provider is refused. **31/31 across three files** pass
+(`.tmp/ts5-inference-carrier-wiring-tests.log`); source typechecking and lint pass.
+The function gate requires a one-line context-field allowance for
+`lowerFunctionAstToIr`; no inference implementation was placed in that driver.
+
+The original generated factory project worker completed with the full IR ledger
+enabled (`.tmp/ts5-factory-source-carrier-wiring.log`, handle 49043 terminal):
+**149,963 ms**, valid zero-import **62,956,028-byte** standalone Wasm, still
+**0/3 runtime tests**. Its **661 rows contain 0 IR bodies and 633 legacy bodies**.
+`createParenthesizerRules` still rejects at `nested-function-return-type-missing`;
+`createNodeFactory` still rejects at `expr-ident-not-in-scope`. The export-default
+parenthesizer null dereference, arrow-factory illegal cast, and guest null
+property access remain. This direct worker does not execute a native reference.
+
+This falsifies any claim that wiring alone admitted the actual factory. Next
+inspect the exact failing original nested declaration, requested opaque type
+key, current carrier witness population and allocation timing at that selector
+query. Both production registries are constructed with the same identity context
+in `create-context.ts`, so a different context instance has not been established
+as the cause. Do not loosen ownership or slot checks based on the unchanged
+generic rejection text. Source property producer work is still outstanding.
+
+Additional dependency/description checks pass **50/50 across two files**
+(`.tmp/ts5-inference-carrier-wiring-dependencies.log`), for **81/81 focused tests**
+across five files. Formatting, lint, source typechecking, LOC/function gates and
+diff checks pass. All processes are terminal; changes remain uncommitted. No
+legacy emitter was extended.
+
+### Demanded type alias dependency loss (2026-09-08, uncommitted)
+
+The original selector trace identifies the immediate inference blocker:
+`getParenthesizeLeftSideOfBinaryForOperator` at parenthesizerRules.ts:95 has
+an `any` fact for its `BinaryOperator` parameter in the actual pruned graph.
+Its returned callable and Expression parameter/result identities are present;
+the provider is installed. Inference refuses the `any` before asking for those
+Node leaves. Both registries share the same identity context. Trace log:
+`.tmp/ts5-factory-carrier-trace.log` (worker 39477 terminal). Temporary tracing
+was removed completely from production files before the fix below.
+
+Two regression tests reproduce the mechanism in module and namespace barrels:
+a demanded exported alias is retained but the private aliases it references are
+blanked. Both checker signature facts become `any` (**0/2**, 14 unrelated tests
+filtered, `.tmp/ts5-demanded-type-chain-before.log`). The existing checker-only
+closure already follows dependencies of exported variable annotations; it now
+also follows retained interface/type-alias roots. Runtime roots and unrelated
+function signatures remain unchanged. Both tests require the transitive aliases
+to survive and dead types/functions to remain pruned.
+
+After the fix, **40/40 across three files** pass
+(`.tmp/ts5-demanded-type-chain-after.log`), including all 16 barrel tests and
+the inferred/source-carrier suites. An independent probe of the actual
+consumer-driven factory graph (**30 files**) now gets numeric union operator
+facts for **both original helpers**, rather than any
+(`.tmp/ts5-demanded-original-types.log`). This is source fact evidence, not an
+IR body or runtime pass claim. No legacy emission was added; this repairs the
+shared checker input that IR inference consumes.
+
+The fresh original factory worker (58000 terminal) now moves the parenthesizer
+rejection to **`nontail-compound-or-binary-stmt:BinaryExpression`**, past the
+missing inferred signature. The node factory still rejects the out-of-scope
+identifier. However, the candidate **does not compile successfully**: after
+**151,391 ms**, binary emission fails with `RangeError: Maximum call stack size
+exceeded`, repeatedly alternating `encodeInstrArray` (binary.ts:1164) and the
+block arm of `encodeInstr` (binary.ts:1203). There are **662 ledger rows, 0 IR
+bodies and 633 legacy bodies**; no binary/import/runtime success is established
+for this candidate. Log: `.tmp/ts5-factory-retained-type-chain.log`.
+
+Next priority is to restore real-factory compilation by removing recursive
+structured-control traversal in the shared binary encoder while preserving
+the existing instruction-DAG byte cache, cycle detection, per-function
+validation and source maps. Cover blocks, loops, if/else and try/try_table. The
+existing `tests/issue-1058-binary-emitter-dag.test.ts` only tests depth 18, so it
+does not protect a deeply nested non-shared chain. Do not paper over this with
+a larger process stack or drop the now-correct type facts. Then resume the
+parenthesizer's logical-assignment admission on IR.
+
+Broader barrel checks: **9/10 across three files**, with the standalone
+computed-option arity-cap case trapping in `__module_init`. Removing only the
+four-line retained-type closure change leaves the same trap, while the two new
+alias tests revert to `any` (**0/3 control tests**, 21 filtered;
+`.tmp/ts5-demanded-type-chain-disabled-control.log`). Restoring it makes the
+alias tests **2/2** again (14 filtered;
+`.tmp/ts5-demanded-type-chain-restored-control.log`). This is a mechanism
+kill-switch control, not pristine-HEAD attribution; the unrelated trap remains
+unresolved and tests were not weakened. The four-line change is restored.
+Typechecking, lint, formatting and LOC/function gates pass. All processes are
+terminal. Changes remain uncommitted and are not ready to claim factory success.
+
+### Iterative binary instruction-array emission (2026-09-08, uncommitted)
+
+A 10,000-level block/loop chain reproduces the factory's emitter failure
+(**0/1**, 3 filtered, `.tmp/ts5-deep-binary-before.log`). Shared-DAG depth 18
+coverage did not protect deep non-shared structured control.
+
+`src/emit/instruction-arrays.ts` now drives emission with an explicit task stack
+for arrays, delimiters and catch headers. Blocks, loops, if/else, try and
+try_table no longer recurse through the JavaScript stack. Ordinary instructions
+still use the existing encoder. Only multiply referenced arrays get separate
+byte buffers; the existing per-function cache, incoming-edge use accounting,
+inline validation and source map behavior remain. Active arrays are checked
+for cycles even when they are not shared, and failure clears active cache state.
+The old large binary module shrinks instead of gaining another traversal.
+
+**9/9 tests** pass (`.tmp/ts5-deep-binary-controls.log`): deep controls, exact catch
+and table clause bytes, the valued-if missing-else trap, cycle refusal, invalid
+tag/local checks, reuse after failure, shared-DAG byte parity and source maps.
+Broader binary/exception tests pass **27/27 across four files**, including the
+binary emitter self-compilation acceptance test
+(`.tmp/ts5-deep-binary-regressions.log`). Source typechecking, lint, formatting,
+LOC/function budgets and diff checks pass. No size allowance was added.
+
+The original factory worker completed (92368 terminal): **159,382 ms**, valid
+zero-import **63,780,391-byte** standalone Wasm, restoring compilation with the
+correct retained type chains. Log: `.tmp/ts5-factory-iterative-emitter.log`.
+Runtime remains **0/3**, with the same parenthesizer null dereference,
+arrow-factory illegal cast and guest null property access. This direct worker
+does not run a native reference. The ledger contains **662 rows, 0 IR bodies
+and 633 legacy bodies**; the parenthesizer still rejects at
+`nontail-compound-or-binary-stmt`, and the node factory at the out-of-scope
+identifier. Next return to the IR logical-assignment boundary (`||=` in the
+parenthesizer cache), not a legacy emitter workaround. All processes are
+terminal. Changes remain uncommitted; the full TypeScript goal is incomplete.
+
+### IR local logical-assignment statements (2026-09-08, uncommitted)
+
+The selector and lowerer now share `localLogicalAssignment` for identifier
+`||=` and `&&=` statements. Admission retains exact local-scope, module-storage
+and projection-mutation guards and rejects unsupported RHS expressions. The
+builder reads the old value once, uses the existing conditional ToBoolean path,
+and emits the existing identifier write only on the required branch. Branch
+string-encoding facts are joined afterwards. No AST rewrites or legacy emission
+were added. Property targets, expression-result uses and `??=` remain outside
+this statement plan.
+
+The mutation/capture audit finds logical operators already inside the shared
+PlusEquals-through-CaretEquals token range; those collectors need no widening.
+**6/6 initial tests** pass with zero imports and IR-only owner emission:
+numeric truthiness, skipping a throwing RHS, captured outer writes and loop
+placement (`.tmp/ts5-ir-logical-assignment-string-throw-tests.log`). Numeric
+throws and Error construction were unsuitable test instruments because existing
+IR gates refuse them; the final tests use the existing string-throw path without
+weakening IR ownership assertions. Two typecheck errors in the first lowerer
+draft were corrected by supplying its normal condition hint and `if` context.
+
+Expanded tests pass **8/8** (`.tmp/ts5-ir-logical-assignment-final-tests.log`),
+including signed zero, NaN, fractions/infinities and explicit member/result
+refusals. The broader run is **63/65 across three files**: two existing
+`issue-5163-mutating-statements` rows expect `unsupported` but observe `emitted`
+for a boolean field write and a nested-receiver property compound. Neither
+source contains logical assignment. No expectations were changed and no
+pristine-HEAD baseline is claimed; these assertions remain to be revalidated
+against actual runtime/ownership evidence. Log:
+`.tmp/ts5-ir-logical-assignment-regressions.log`. Source typechecking, lint,
+formatting, LOC/function budgets and diff checks pass.
+The original factory worker completed (23329 terminal): **162,204 ms**, valid
+zero-import **63,780,391-byte** standalone Wasm. Runtime remains **0/3** with
+the same three errors. The **662 ledger rows contain 0 IR bodies and 633 legacy
+bodies**. `createParenthesizerRules` now rejects at
+**`constructor-resolution-unsupported`**, past the logical-assignment statement;
+the node factory still rejects the out-of-scope identifier. Log:
+`.tmp/ts5-factory-ir-logical-assignment.log`. The direct worker does not run a
+native reference. Next trace the actual cache's `new Map()` constructor binding
+and add the missing IR native Map construction/storage plan; do not assume a
+global constructor by display name. All processes are terminal. Changes remain
+uncommitted; full TypeScript standalone/runtime acceptance is still incomplete.
+
+### Empty native Map construction in IR functions (2026-09-08, uncommitted)
+
+The existing native Map allocator already lowers empty Maps for module
+initializers. Function-level selection now admits that same producer through
+an explicit native-storage capability, sharing a pure identity/shape predicate
+with lowering. The predicate requires positive ambient binding evidence,
+zero runtime arguments and zero or two erased type arguments. Lowering no longer
+treats a missing identity resolver as authorization. Native runtime allocation
+still happens only after proof, through the existing materializing resolver;
+ordinary method/type queries remain non-materializing.
+
+**14/14 across two files** pass (`.tmp/ts5-ir-map-construction-tests.log`):
+two IR-only function executions with zero imports, identity/argument refusals,
+same-named local-class non-pollution, and all five existing native Map tests.
+Source typechecking passes. This does not implement local Map methods or Map
+callback-value storage: those existing adapters are module-binding-only and
+number-key/value-oriented. Lint and LOC/function budget gates also pass.
+
+The factory worker completed in **156,740 ms**, producing a valid standalone
+binary of **63,780,391 bytes with zero imports**
+(`.tmp/ts5-factory-ir-map-construction.log`). Its 662 outcome rows still record
+**0 IR bodies and 633 legacy bodies**. `createParenthesizerRules` still rejects
+at `constructor-resolution-unsupported`; `createNodeFactory` still rejects at
+`expr-ident-not-in-scope:Identifier`. Runtime remains **0/3**, with the same
+parenthesizer null dereference, arrow-function cast failure, and guest null
+property access. The focused constructor coverage is not evidence that the
+real cache is admitted. Next work must investigate that remaining IR selection
+boundary before claiming progress on factory execution. Per user direction,
+new support belongs in IR/shared planning, not legacy direct codegen.
+
+### Preserve native Map identity in multi-source IR selection (2026-09-08, uncommitted)
+
+The constructor refusal above was not missing ambient checker evidence. Both
+original parenthesizer Map expressions resolve to ambient `lib.d.ts` symbols
+(`.tmp/ts5-map-identity.mts`). A temporary selector trace in the real factory
+recorded native capability `true`, local class `false`, but ambient identity
+`false` (`.tmp/ts5-factory-map-selection-trace.log`). Multi-source preselection
+deliberately disables module-storage resolution; the old Map selector obtained
+ambient identity only through that disabled resolver.
+
+The Map capability is now a pure expression predicate, combining the target
+capability with checker-only constructor identity and the shared empty-Map
+shape proof. It does not enable module storage, other constructor families, or
+legacy codegen. Lowering independently requires the same positive identity.
+The temporary production trace is removed.
+
+A multi-source exported entry function now emits an IR overlay and executes
+to 42 without imports. This driver still emits a direct body before the IR
+overlay (`r2Withdrawal: multi-source-driver`); it is not IR-first routing.
+The original cross-file-call probe instead reached the separate conservative
+final-preparation boundary; no cross-file-call support is claimed here.
+Disabling only the independent ambient proof makes the isolated positive
+control fail again with constructor-resolution-unsupported (0/1, nine filtered,
+`.tmp/ts5-map-multi-disabled-control.log`). This is a mechanism kill-switch,
+not a pristine-HEAD baseline. The proof has been restored.
+
+The initial focused suite passed 15/15 across two files. The additional imported
+class named Map negative/runtime control exposes an unresolved invalid-binary
+failure: `__sget_value` expects f64 but receives `(ref null 57)`.
+The final focused result is **15/16 across two files**
+(`.tmp/ts5-map-multi-final-controls.log`). That same validation failure occurs
+with the independent ambient proof disabled (0/1, ten filtered,
+`.tmp/ts5-map-imported-runtime-disabled.log`); again, mechanism attribution,
+not a pristine-HEAD baseline. The failing runtime assertion remains in the test.
+An earlier whole-binary absence assertion for `__map_new` also failed with the
+proof disabled; the test now checks absence of the specific `__ir_map_new`
+adapter instead, without claiming whole-module native-helper absence.
+The proof is restored, and no temporary production trace or switch remains.
+Source typechecking, lint, formatting and LOC/function budgets pass.
+
+The real factory rerun completed in **164,831 ms**, with a valid standalone
+**63,780,391-byte, zero-import binary**
+(`.tmp/ts5-factory-map-identity-fixed.log`). The parenthesizer now advances to
+**call-resolution-unsupported**; nodeFactory still reports
+`expr-ident-not-in-scope:Identifier`. The 662 ledger rows still contain
+**0 IR bodies and 633 legacy bodies** and runtime is unchanged at **0/3**.
+This proves the constructor-selection boundary moved, not that the factory
+works. Next work must resolve the parenthesizer's call boundary in IR and
+retain the imported-class invalid-binary regression as an explicit open check.
+
+### Exact parenthesizer call boundary and sibling graph (2026-09-08)
+
+The real factory trace now identifies the rejected call, not merely its reason
+category: **expr-nested-call-before-binding: parenthesizeLeftSideOfBinary**
+(`.tmp/ts5-factory-call-selection-trace.log`). The trace worker completed in
+174,637 ms with the same valid 63,780,391-byte binary and 0/3 runtime results.
+The temporary production trace was removed after capturing this evidence.
+
+The original pruned checker graph contains **39 nested declarations, 37 with
+bodies** inside `createParenthesizerRules`. Exact checker-symbol dependency
+analysis (`.tmp/ts5-parenthesizer-dependencies.mts` and its matching `.log`)
+finds two self-recursive helpers: `getLiteralKindOfBinaryPlusOperand` and
+`hasJSDocPostfixQuestion`. It finds no mutual-recursion cycle. The first cache
+helper depends on `parenthesizeLeftSideOfBinary`, which depends on
+`parenthesizeBinaryOperand`, then `binaryOperandNeedsParentheses`, including
+the recursive literal-kind helper. Therefore merely moving the later sibling
+before its caller is insufficient for the actual parenthesizer.
+
+The shared `orderTailFunctionDeclarations` helper currently moves the function
+suffix before the terminal return but retains source order. Selection binds
+each nested declaration only after checking its body and explicitly rejects
+self-reference. Direct nested lowering already allocates a symbolic lifted
+target before building its body and prepends captured parameters, but does
+not install a self binding in the lifted scope. That is the relevant shared
+IR mechanism to extend, with captured-parameter forwarding and direct-call
+identity proofs, before dependency ordering can admit the real graph. Closure
+value recursion must not be assumed to use the same ABI. The two bodyless
+overload declarations also need explicit handling; they are not extra runtime
+functions. Keep original AST identities for all ordering/planning work.
+
+Next implementation: prove and lower direct nested self calls in IR, with
+runtime recursion and mutable-capture controls; then add checker-identity
+sibling dependency ordering shared by selection and lowering. Do not treat
+Map method work as the next observed rejection: the current measured stop is
+the sibling call above. Map callback storage remains an additional known gap.
+
+### Direct nested recursion through symbolic IR targets (2026-09-08, uncommitted)
+
+Added a checker-identity proof for nested self calls that use only the direct
+lifted-function ABI. Escaped function values, aliases, shorthand escape,
+optional calls and self references from a further nested callback do not get
+this proof. Missing checker identity refuses admission. The same proof gates
+selection and the self binding installed in the lifted function's scope.
+Recursive calls use the already allocated symbolic unit target and existing
+capture-parameter forwarding; mutable captures reuse their refcell rather than
+allocating a fresh recursion-local cell. No legacy emitter change is involved.
+
+The original checker graph confirms **both actual recursive parenthesizer
+helpers** meet this identity proof (`.tmp/ts5-parenthesizer-direct-recursion.log`):
+`getLiteralKindOfBinaryPlusOperand` and `hasJSDocPostfixQuestion`. This is identity
+admission evidence, not complete lowering/execution of those helpers.
+
+Initial standalone verification is **11/11 across two files**, including
+factorial, immutable capture, mutable captured counter, repeated exported calls
+and existing tail-declaration/capture tests. All three new positive runtime
+cases require IR-only body emission and zero imports. Source typechecking
+passes. The expanded proof/closure regression run passes **30/30 across three
+files** (`.tmp/ts5-direct-recursion-regressions.log`). Removing only the lifted
+self binding makes all three new recursive runtime controls fail (0/3, seven
+filtered, `.tmp/ts5-direct-recursion-disabled.log`); restoring it passes all
+10 recursion tests (`.tmp/ts5-direct-recursion-restored.log`). This is a
+mechanism kill-switch, not a pristine-HEAD baseline. No temporary switch
+remains. Formatting, lint, source typechecking, LOC/function budgets and
+`git diff --check` pass; no new budget allowance was required.
+Sibling dependency ordering remains necessary before the actual factory can
+reach this new recursive-call support. Full factory runtime remains unproven
+beyond the earlier 0/3 measurement.
+
+### Shared sibling declaration ordering (2026-09-08, uncommitted)
+
+IR selection and lowering now use the same checker-backed declaration ordering.
+Each contiguous function-only run is ordered by exact sibling symbol references;
+shorthand function values count, type-only references do not. No declaration
+crosses an executable statement. Original nodes are preserved. Missing
+declaration identity, duplicate implementations and mutual recursion retain
+the source order; direct self edges stay with the self-recursion support above.
+An explicit stack orders dependencies without recursive graph traversal.
+Only signature-only overloads with their exact implementation in the same run
+are erased. The IR-first nested-executable guard now recognizes these bodyless
+declarations as non-executable after enclosing selector admission.
+
+Verification: **53/53 across five files** pass
+(`.tmp/ts5-sibling-order-final-tests.log`), including a 1,200-function ordering
+chain, shadowed parameters, executable barriers, mutual recursion, paired and
+unpaired overloads, closure captures, recursion and consumer-driven barrels.
+New runtime tests require IR-only body emission, zero imports and result 42.
+The overload runtime test initially exposed the IR-first guard above; the guard
+was fixed rather than weakening its no-legacy assertion. An initial source
+typecheck rejected an unjustified Statement-array cast; a type-guard filter
+replaced it and the subsequent source typecheck passed.
+
+The factory run completed in **167,507 ms**, producing the same valid standalone
+**63,780,391-byte zero-import binary** (`.tmp/ts5-factory-sibling-order.log`).
+The parenthesizer advances from the sibling call-order failure to
+**expr-ident-not-in-scope:Identifier**. NodeFactory has that same coarse arm.
+The 662 ledger rows still contain **0 IR bodies and 633 legacy bodies**;
+runtime remains **0/3**. This run preceded the final bodyless-overload IR-first
+guard correction; it is not an execution claim for either factory function.
+Next diagnosis must identify the exact identifier and its binding authority.
+
+Removing only sibling ordering makes the closure runtime control fail (0/1,
+six filtered, `.tmp/ts5-sibling-order-disabled.log`). This is a mechanism
+kill-switch, not a pristine-HEAD baseline. The temporary early return is
+removed and the ordering is restored; all **7/7** sibling-order tests pass
+again (`.tmp/ts5-sibling-order-restored.log`). Final source typechecking,
+formatting, lint, LOC/function budgets and `git diff --check` pass.
+
+### Checker-backed const enum values in IR (2026-09-08, uncommitted)
+
+The exact identifier trace confirms the preceding scope refusals name erased
+enum bindings: `SyntaxKind` in parenthesizerRules, and `NodeFactoryFlags`,
+`TransformFlags` and `SyntaxKind` in nodeFactory
+(`.tmp/ts5-factory-identifier-trace.log`). The temporary production trace is
+removed. Shared `constEnumValue` now requires a checker-proven const enum
+receiver and static identifier/namespace chain before reading its constant
+value. Numeric and string values use the same IR literal producers as source
+literals. Ordinary runtime enums, variable aliases, calls/getters/casts as
+receivers, optional access and nonliteral computed access are not folded.
+No enum runtime storage or legacy emitter support is added.
+
+Two multi-source safety consumers also needed exact erased-value evidence:
+the import-use walker ignores a certified constant access, and imported-name
+collection now distinguishes a resolved module with only erased exports from
+an unresolved callable surface. Runtime-valued exports retain the previous
+conservative behavior; merged runtime flags do not qualify as erased.
+The namespace-import test exposed this distinction: the old scan marked every
+function as cross-file when a fully resolved namespace had zero functions.
+
+The initial focused regression set passes **33/33 across three files**
+(`.tmp/ts5-const-enum-regressions.log`), including numeric/string/zero/computed
+constants and named/namespace imports, with actual zero-import execution.
+The tests require IR body emission, not IR-first routing. Disabling only the
+constant resolver makes both imported-enum controls fail (0/2, eight filtered,
+`.tmp/ts5-const-enum-disabled.log`). This is mechanism attribution, not a
+pristine-HEAD baseline. The temporary switch is removed. A function-budget
+failure at `lowerExpr` was addressed by extracting shared constant lowering,
+not granting growth. The existing module-consumer predicate was also extracted
+to avoid expanding the large selector function. The expanded post-extraction
+runtime regression set passes **51/51 across five files**
+(`.tmp/ts5-const-enum-final-regressions.log`). The subsequent affected
+constant/Map-consumer tests pass **15/15 across two files**
+(`.tmp/ts5-const-enum-module-consumer.log`). Final source typechecking,
+formatting, lint, function-budget and diff-whitespace checks pass; the LOC
+budget also passed before the size-reducing extractions. No new allowance
+was added. There are no pending factory workers or temporary production traces.
+
+The real factory run completed in **154,093 ms** with a valid standalone
+**63,780,391-byte zero-import binary** (`.tmp/ts5-factory-const-enum.log`). The
+parenthesizer now reaches **nested-function-return-type-missing**; nodeFactory
+still has an identifier-scope refusal. The ledger remains **662 rows, 0 IR
+bodies, 633 legacy bodies**, with **0/3 runtime**. This run preceded the
+namespace-only cross-file guard correction and literal-helper extraction.
+Next diagnosis: identify the nested declaration whose inferred signature is
+not available after dependency ordering, and inspect its exact oracle facts.
+
+### Optional Expression boundary and first-class undefined prerequisite (2026-09-08, uncommitted)
+
+The real trace identifies **binaryOperandNeedsParentheses** as the missing
+signature (`.tmp/ts5-factory-missing-signature.log`): its fourth parameter is
+required but typed **Expression | undefined**, not an optional parameter.
+The original pruned graph oracle still reports precise number-enum, Expression,
+boolean and undefinable Expression facts, with a boolean result
+(`.tmp/ts5-parenthesizer-signatures.log`). This is a representation/inference
+gap, not lost checker types. The next helper `parenthesizeBinaryOperand` also
+has an optional Expression parameter, which introduces an additional arity
+requirement. Existing signature planning and source-carrier evidence reject
+these unions. Do not equate undefined with a raw null GC reference: existing
+strict null/undefined tests and source argument bridges need preserved meaning.
+
+Added the prerequisite to materialize an ambient `undefined` expression using
+the existing canonical undefined provider and boxed dynamic carrier. Checker
+`isUndefinedSymbol` proves the binding; a same-named parameter or missing
+checker does not qualify. Selection requires the dynamic runtime capability.
+Explicit expressions and uninitialized locals now share one producer helper.
+No new singleton, host import in standalone, or legacy emission arm is added.
+
+**33/33 across four files** pass (`.tmp/ts5-undefined-value-regressions.log`),
+including explicit initialization/assignment, strict undefined versus null,
+parameter shadowing, existing uninitialized/captured locals in both gc and
+standalone, logical assignments and const enums. The new standalone tests
+execute the IR body with zero imports and return 42. The provider currently
+defers IR-first sealing: tests explicitly record both legacy and IR body
+emission with `r2Withdrawal: unsealed-component`. This is IR overlay support,
+not an IR-first claim. Early fixtures using explicit any annotations and
+dynamic typeof exposed separate unsupported paths; the final value tests use
+inferred locals and strict tag comparisons. Those broader paths remain open.
+
+The signature trace worker finished in **159,600 ms**, with the same valid
+63,780,391-byte, zero-import binary and **0/3 runtime**; this predates the
+undefined expression change. The new producer does not by itself admit
+Expression | undefined signatures. Next work remains explicit union carrier
+planning and argument/guard semantics, followed by optional-parameter calls.
+
+Disabling the ambient proof makes both new value controls fail (0/2, three
+filtered, `.tmp/ts5-undefined-value-disabled.log`). This is a mechanism
+kill-switch, not a pristine-HEAD baseline. The proof is restored; no temporary
+production switch or trace remains.
+
+The restored value suite passes **5/5** (`.tmp/ts5-undefined-value-restored.log`).
+Final source typechecking, formatting, lint and `git diff --check` pass;
+LOC/function budgets passed without a new allowance.
+
+### IR optional reference union arguments (2026-09-08, uncommitted)
+
+New work remains in shared IR signature planning and IR call lowering, not the
+legacy direct emitter. The backend carrier provider explicitly opts into boxed
+object/class unions with null or undefined. Plain oracle consumers retain their
+refusal. Nested direct and closure calls use the existing canonical IR boxing
+operation; no new runtime representation or legacy codegen arm was added.
+
+`issue-1058-ir-reference-union.test.ts` passes **5/5**: capability refusal/control,
+direct and closure calls distinguishing object/null/undefined, separately boxed
+object identity, and guarded field access. Each runtime test checks emitted IR,
+zero imports and actual results. These are not assertions of IR-first execution.
+Source typechecking, lint and LOC/function budgets pass without a new allowance.
+Evidence: `.tmp/ts5-reference-union-fields.log`,
+`.tmp/ts5-reference-union-tsc.log`, `.tmp/ts5-reference-union-func.log` and
+`.tmp/ts5-reference-union-loc.log`.
+
+The real standalone factory probe completed in **161,938 ms**: valid
+**63,780,391-byte** Wasm, **zero imports**, **662 outcome rows**, **0 IR bodies**,
+**633 legacy bodies**, and **0/3 runtime checks passing**. The parenthesizer's
+selection boundary moved from missing nested signature to
+`switch-case-test-nonliteral:PropertyAccessExpression`. Node factory still stops
+at `expr-ident-not-in-scope:Identifier`. Evidence:
+`.tmp/ts5-factory-reference-union.log`. Compilation is not runtime acceptance.
+
+The combined reference-union, inferred-closure and undefined-value regression run
+passes **23/23 across 3 files**
+(`.tmp/ts5-reference-union-regressions-final.log`). Formatting and
+`git diff --check` also pass after formatting the new field-access test.
+
+Next: reuse the checker-proven const-enum value resolver for IR switch cases.
+Required union arguments are distinct from optional-parameter arity, which remains
+unsupported here. Dynamic-to-physical argument conversion, concrete object return
+boxing, and actual TypeScript Node field access are not proven by this slice.
+The full TypeScript unit suite and self-hosting goal remain incomplete.
+
+### IR const-enum switch cases (2026-09-08, in progress)
+
+Addressing the measured parenthesizer selection boundary using a shared
+`switch-case-value.ts` proof for selector and builder. Existing literal cases
+and checker-proven erased enum values use the existing numeric/string dispatch
+lowering. Runtime enum reads are not folded. Initial validation passes **14/14**
+across existing const-enum and new switch tests; the wider switch regression run
+passes **76/76 across 3 files**. The final new suite passes **5/5**, including an
+additional proof control for absent checker evidence, runtime enum and variable
+alias refusal, zero and empty-string values. Runtime coverage checks actual
+values and IR emission for numeric/string duplicate cases, default placement,
+fallthrough and named/namespace imports, with zero standalone imports.
+These assertions do not claim IR-first execution.
+
+Source typechecking, scoped lint, formatting, `git diff --check` and both size
+gates pass without new allowances. Logs: `.tmp/ts5-const-enum-switch-tests.log`,
+`.tmp/ts5-const-enum-switch-regressions.log`,
+`.tmp/ts5-const-enum-switch-final.log`, and
+`.tmp/ts5-const-enum-switch-{tsc,func,loc}.log`.
+
+The real factory probe completed in **163,285 ms**, producing valid
+**63,780,391-byte** standalone Wasm with **zero imports**, **662 outcome rows**,
+**0 IR bodies**, **633 legacy bodies** and **0/3 passing runtime checks**
+(`.tmp/ts5-factory-const-enum-switch.log`). The parenthesizer now stops at
+`tail-switch-falls-through:SwitchStatement`; node factory retains its identifier
+scope refusal. This advances selection, not factory runtime acceptance.
+
+Disabling only the two enum-resolver calls in the new shared switch helper makes
+all **4/4 runtime positives fail** (one proof test filtered out), demonstrating
+that they depend on this mechanism rather than silently passing via fallback
+(`.tmp/ts5-const-enum-switch-disabled.log`). The production calls are restored;
+the restored suite passes **5/5** (`.tmp/ts5-const-enum-switch-restored.log`),
+with scoped lint and `git diff --check` also passing.
+
+Next inspect tail-switch completion. The source's `binaryOperandNeedsParentheses`
+ends in a switch over `compareValues(...)` with all three `Comparison` enum cases
+but no default. The current selector requires an explicit default regardless of
+checker exhaustiveness. Do not simply treat annotations as runtime proof or add
+an unreachable default: preserve JavaScript's unmatched-path semantics and align
+the selector, inferred result representation and builder's tail handling.
+
+### IR tail-switch undefined completion (2026-09-08, in progress)
+
+Implementing boxed inferred results for nested functions ending in a switch
+without a default. This preserves the actual unmatched-path undefined value
+even when TypeScript treats the enum cases as exhaustive. The shared signature
+provider must explicitly support implicit undefined results; selector admission
+uses that same dynamic result plan, and IR lowering materializes the canonical
+undefined singleton on fallthrough. No legacy direct emitter change.
+
+Initial runtime suite passes **5/5**; the wider regression run passes **67/67
+across 4 files** (tail-switch completion, inferred closures, reference unions and
+existing switch/control-flow tests). Final new suite passes **7/7**, adding
+capability refusal/positive proof and break/empty-last-case completion. Runtime
+checks cover numeric zero, false, empty strings, other matched values and actual
+undefined for unmatched inputs, through direct nested, address-taken nested and
+arrow calls. Each runtime fixture asserts emitted IR and zero module imports,
+not IR-first execution. Logs: `.tmp/ts5-tail-switch-undefined.log`,
+`.tmp/ts5-tail-switch-regressions.log`, `.tmp/ts5-tail-switch-final.log`.
+Source typechecking, scoped lint, formatting, diff checking and both size gates
+pass without new allowances (`.tmp/ts5-tail-switch-{tsc,func,loc}.log`).
+Fully annotated return
+signatures are not widened by this inference path; returned callback signature
+propagation and other implicit-return statement shapes are not proven here.
+
+The real factory run completed in **171,868 ms** with valid **63,780,391-byte**
+standalone Wasm, **zero imports**, **662 outcome rows**, **0 IR bodies**,
+**633 legacy bodies**, and **0/3 runtime checks passing**
+(`.tmp/ts5-factory-tail-switch-undefined.log`). The parenthesizer's refusal moved
+past tail-switch completion to `nested-function-return-type-missing`; the node
+factory still has its identifier-scope refusal. Identify the exact next nested
+declaration before widening signatures further. The source contains optional
+parameters and callback-valued returns that remain separate proof obligations.
+
+Attribution: disabling only the backend's implicit-undefined-return capability
+makes the numeric runtime positive fail (**0/1**, six filtered out;
+`.tmp/ts5-tail-switch-disabled.log`). The capability is restored, with no
+production kill switch remaining. The restored suite passes **7/7**
+(`.tmp/ts5-tail-switch-restored.log`); final formatting, scoped lint and
+`git diff --check` pass.
+
+### Next signature diagnosis and optional-argument audit (2026-09-08, in progress)
+
+The diagnostic run `.tmp/ts5-factory-next-signature.log` identifies
+`parenthesizeBinaryOperand(binaryOperator: SyntaxKind, operand: Expression,
+isLeftSideOfBinary: boolean, leftOperand?: Expression)` as the next missing
+signature. Temporary declaration-name instrumentation has been removed.
+
+If optional arguments are confirmed, `IrClosureSignature.defaultParamStart` is
+not a drop-in representation: its readers pad omitted numeric expression-default
+arguments with a reserved sentinel, check exact default plans during closure
+construction, compare signatures, reject unsupported object-method/class-field
+plans and emit JavaScript function length. An optional TypeScript parameter has
+no runtime expression default and does not reduce function length. A separate
+minimum call arity must preserve those semantics, pad with canonical undefined,
+and be checked by signature equality, both direct and closure call lowerers,
+selector callable projections and unsupported consumers. Current nested direct
+calls require exact arity; closure calls only support the expression-default
+suffix.
+
+Implementation now adds separate `optionalParamStart` signature metadata.
+Only an explicitly capable provider plans a trailing optional suffix; these
+parameters use boxed dynamic values. Signature equality distinguishes optional
+from exact arity, selector projections carry minimum/maximum arity, and direct
+and closure calls pad omitted optional arguments with canonical undefined.
+Concrete primitive arguments use existing tagged boxing; dynamic refinements
+are accepted by the shared assignability relation. Expression-default metadata
+and emitted function length remain unchanged. Object-method/class-field plans
+that cannot handle this calling convention explicitly refuse it.
+
+The initial object direct/closure tests pass **2/2**, while a numeric test exposed
+a missing concrete-to-dynamic argument box. After that fix, runtime positives
+pass **3/3** (`.tmp/ts5-optional-arguments-boxed.log`). The wider run is **22/23
+across 3 files**: the new function-length runtime test retains a failure because
+IR property access on closure `.length` is unsupported, not because the new
+metadata reduces length (`.tmp/ts5-optional-arguments-regressions.log`).
+Capability and signature-equality controls pass. This is not a green full suite.
+
+An ordinary, fully annotated non-optional closure produces the same `.length`
+IR property-access refusal, valid zero-import fallback Wasm and actual value 2
+(`.tmp/ts5-ordinary-length-control.log`). This is a same-worktree shape control,
+not a pristine-HEAD baseline. The optional length test retains its IR-positive
+assertion; it is not skipped or weakened. Expression-default closure ownership
+regressions pass **8/8** (`.tmp/ts5-optional-default-regressions.log`). Source
+typechecking, scoped lint, diff checking and both size gates pass without new
+allowances (`.tmp/ts5-optional-arguments-final-{tsc,func,loc}.log`).
+
+The real factory run completes in **158,725 ms**, with valid **63,780,391-byte**
+standalone Wasm, **zero imports**, **662 outcome rows**, **0 IR bodies**,
+**633 legacy bodies**, and **0/3 runtime checks passing**
+(`.tmp/ts5-factory-optional-arguments.log`). Parenthesizer selection advances to
+`nested-function-param-type:UnionType`; node factory retains its scope refusal.
+Next inspect fully annotated nested declarations: the shared inference entry
+currently bypasses them even if a parameter is an optional-reference union.
+The source's `parenthesizeRightSideOfBinary` has a required Expression-or-undefined
+parameter and explicit Expression return. Confirm the exact next declaration
+before broadening this bypass. Closure `.length` remains an additional open IR
+property-read boundary.
+
+Attribution: disabling only `supportsOptionalArguments` makes both optional-object
+runtime positives fail (**0/2**, three filtered out;
+`.tmp/ts5-optional-arguments-disabled.log`). The capability is restored. The
+restored new suite is **4/5**, with only the documented closure-length IR claim
+failure (`.tmp/ts5-optional-arguments-restored.log`). That test now verifies the
+actual zero-import fallback value 2 before checking IR emission, so the value is
+measured even while the IR route remains unsupported. Final formatting and
+`git diff --check` pass; no diagnostic or kill switch remains in production.
+
+### Annotated reference signatures (2026-09-08, in progress)
+
+Three focused runtime tests reproduce the fully annotated signature bypass
+(**0/3**, `.tmp/ts5-annotated-reference-before.log`): direct and closure calls
+through an aliased reference-or-undefined parameter, plus an explicitly annotated
+optional numeric parameter. Shared signature planning now checks whether a fully
+annotated declaration requires a supported boxed reference boundary or optional
+argument plan before bypassing it. Ordinary annotated scalar signatures retain
+their existing path. The optional-reference fact predicate is shared with the
+actual position planner; no legacy codegen change. The same three tests now
+pass **3/3** (`.tmp/ts5-annotated-reference-after.log`). The real diagnostic run
+confirms `parenthesizeRightSideOfBinary`, parameter `leftSide: Expression |
+undefined`, as the exact refusal (`.tmp/ts5-factory-annotated-signature.log`).
+Temporary diagnostic instrumentation has been removed.
+
+The expanded suite initially passed **30/31 across 4 files**: its union-result
+test exposed strict equality between a boxed result and a concrete object
+(`.tmp/ts5-annotated-reference-regressions.log`). Extracted the existing bound
+reference boxing predicate from nested call arguments and reused it only for
+strict dynamic equality. Unbound raw references still refuse; loose equality
+and arithmetic retain the old conversion path. Source operands are already
+evaluated before boxing and the canonical equality runtime observes identity.
+The new result test checks both operand orders, same-object equality and a
+distinct object. The final expanded suite passes **31/31 across 4 files**
+(`.tmp/ts5-annotated-reference-final.log`), including inference, reference unions
+and expression-default closure ownership. No IR-first claim is made by the new
+runtime tests; they assert actual values, emitted IR and zero module imports.
+
+Equality regressions pass **27/27 across 3 files**
+(`.tmp/ts5-annotated-equality-regressions.log`). Final source typechecking,
+scoped lint, formatting, diff checking and both size gates pass without new
+allowances (`.tmp/ts5-annotated-reference-final-{tsc,func,loc}.log`).
+
+The factory probe started after the annotation fix but before the strict-equality
+follow-up. It completed in **160,826 ms** with valid **63,780,391-byte** standalone
+Wasm, **zero imports**, **662 outcome rows**, **0 IR bodies**, **633 legacy bodies**
+and **0/3 runtime checks passing** (`.tmp/ts5-factory-annotated-reference.log`).
+The parenthesizer advances to `nested-function-param-shape:Parameter`; node
+factory retains its identifier-scope refusal. Identify the exact next parameter
+and whether its full signature could be planned before further arity changes.
+
+Attribution: restoring only the unconditional fully-annotated bypass makes all
+three annotated-call positives fail (**0/3**, two tests filtered;
+`.tmp/ts5-annotated-reference-disabled.log`). The carrier-aware gate is restored,
+with no production diagnostic or kill switch remaining. The restored new suite
+passes **5/5** (`.tmp/ts5-annotated-reference-restored.log`); final formatting and
+`git diff --check` also pass.
+
+### Result-only physical carrier evidence (2026-09-08, in progress)
+
+The exact refusal is `parenthesizeLeftSideOfAccess`: its optional boolean is
+supported, but the signature planner lacks a physical carrier for its
+`LeftHandSideExpression` result (`.tmp/ts5-factory-next-parameter.log`). The
+30-file source-graph probe found **0 eligible top-level parameter witnesses and
+0 eligible top-level result witnesses** for that type
+(`.tmp/ts5-parenthesizer-result-evidence.log`). Simply adding top-level results
+would not address this boundary.
+
+Added read-only result evidence from exact registered source function
+declarations, including nested functions. Unlike parameters, the single result
+has no hidden-capture offset. Generic/async/generator functions remain excluded;
+declaration, inventory, session, handle, function and exact struct allocation must
+agree. Multiple, scalar, missing or conflicting physical result witnesses refuse
+the key. Result-only evidence supplements absent parameter keys, never overrides
+or redeems a present conflicting parameter entry. Binding uses a separate stable
+source-result role while retaining existing provisional ownership checks and
+revalidation; original parameter role/label remain unchanged.
+
+Carrier tests pass **18/18** (`.tmp/ts5-result-carrier-tests.log`), including
+nested hidden-capture isolation, layout/nullability/scalar/arity conflicts,
+parameter-conflict non-redemption, and allocation replacement before publication.
+The combined run is **25/26 across 3 files**
+(`.tmp/ts5-result-carrier-regressions.log`). All evidence and symbolic-carrier
+tests pass; the new end-to-end class identity test remains IR-rejected. Focused
+diagnosis shows its nested declaration has **no registered handle or function
+allocation at selection time**, not an incompatible result layout
+(`.tmp/ts5-result-carrier-runtime-witness.log`); selection reports missing nested
+signature (`.tmp/ts5-result-carrier-runtime-diag.log`). Keep the runtime-positive
+assertion and address allocation timing in future work; do not fabricate evidence
+or weaken the test. Temporary diagnostics were removed.
+
+The real factory run **does advance** past the carrier/parameter-shape boundary
+to `logical-value-unsupported` in `createParenthesizerRules`. It completed in
+**162,230 ms**, with valid **63,780,391-byte** standalone Wasm, **zero imports**,
+**662 outcome rows**, **0 IR bodies**, **633 legacy bodies**, and **0/3 runtime
+checks passing** (`.tmp/ts5-factory-result-carriers.log`). Node factory retains its
+identifier-scope refusal. Thus this result evidence is available in the factory
+workflow even though the isolated fresh nested-allocation case remains open.
+Next identify the exact logical-value selection reason in the real parenthesizer.
+
+Source typechecking, scoped lint, formatting, diff checking and both size gates
+pass without new allowances (`.tmp/ts5-result-carrier-{tsc,func,loc}.log`).
+Attribution: disabling only result-evidence supplementation makes its positive
+control fail while the original parameter-evidence control still passes
+(**1/2**, sixteen filtered; `.tmp/ts5-result-carrier-disabled.log`). Restoring it
+returns the evidence suite to **18/18** (`.tmp/ts5-result-carrier-restored.log`).
+Final formatting, scoped lint and `git diff --check` pass. No production
+diagnostic or kill switch remains.
+
+### Mixed truthiness in IR conditions (2026-09-08, in progress)
+
+The real refusal is the `parenthesizeLeftSideOfAccess` condition combining
+`isLeftHandSideExpression(...)`, an optional arguments array and `optionalChain`
+(`.tmp/ts5-factory-logical-diagnosis.log`). Selector treated logical operators as
+value-producing boolean-only expressions even in condition position.
+
+Condition selection now recursively checks logical operands through the existing
+condition-leaf gates. A shared IR condition lowerer short-circuits each operand
+and uses the existing ToBoolean operations. Wired into if, loops and conditional
+expressions; value-position `&&`/`||` retain their old representation rules.
+Right-side instructions live only in the selected branch, and encoding facts
+join across executed/skipped paths. No legacy direct-codegen change.
+
+Initial tests pass **4/5**: numeric/string/negated conditions handle 0, -0, NaN
+and nonzero values; mixed loop and ternary conditions also pass. The effect-count
+fixture exposed an independent unsupported capture of a sibling nested function
+declaration. It now uses an arrow closure binding to isolate the intended
+short-circuit behavior without removing the effect-count assertion. The wider
+run then passes **66/66 across 3 files**, including existing truthiness and
+tail-switch tests (`.tmp/ts5-logical-condition-regressions.log`). The final new
+suite passes **6/6**, adding both AND and OR effect-count controls
+(`.tmp/ts5-logical-condition-final.log`). Runtime assertions require emitted IR,
+zero module imports and actual results; they do not claim IR-first execution.
+
+Typechecking, scoped lint, formatting, diff checking and both size gates pass
+without new allowances (`.tmp/ts5-logical-condition-{tsc,func,loc}.log`).
+Temporary source diagnostics were removed.
+
+The factory run completes in **172,130 ms**, with valid **63,780,323-byte**
+standalone Wasm, **zero imports**, **662 outcome rows**, **0 IR bodies**,
+**633 legacy bodies**, and **0/3 runtime checks passing**
+(`.tmp/ts5-factory-logical-condition.log`). Parenthesizer selection advances to
+`body-return-context:ReturnStatement`; node factory retains its scope refusal.
+Next locate the exact return context and its control-flow obligation rather
+than treating this selection advance as runtime acceptance.
+
+Attribution: bypassing only `lowerConditionExpression` back to ordinary value
+lowering makes the three mixed-condition positives fail (**0/3**, three filtered;
+`.tmp/ts5-logical-condition-disabled.log`). The condition lowerer is restored;
+no production diagnostic or kill switch remains. The restored condition suite
+passes **6/6** (`.tmp/ts5-logical-condition-restored.log`), and final formatting
+and `git diff --check` pass.
+
+### Partial returns in structured guards (2026-09-08, in progress)
+
+The real parenthesizer refusal is a return of
+`factory.restoreOuterExpressions(expression, updated,
+OuterExpressionKinds.PartiallyEmittedExpressions)` with return-admitting depth
+0 and barrier depth 0 (`.tmp/ts5-factory-return-diagnosis.log`). A partial guard
+does not terminate on every path, so it enters the existing structured body-if
+route, whose selector formerly rejected returns outside loops/switches.
+
+Three focused tests reproduce the refusal (**0/3**;
+`.tmp/ts5-guard-return-before.log`). Scoped guard-body admission now enables the
+existing IR early-return instruction for normal partial guards and non-tail
+if/else branches. Generator and cleanup barriers remain unchanged, and the
+temporary depth increment is restored in finally. This is a selector change,
+not a new legacy lowering path. Tests check all branch outcomes and that
+continuation side effects execute only on fallthrough paths. Wider regressions
+pass **22/22 across 4 files** (`.tmp/ts5-guard-return-regressions.log`). Final
+focused suite passes **4/4**, including a finally barrier control that remains
+IR-rejected and proves cleanup effects on returned and fallthrough paths
+(`.tmp/ts5-guard-return-final.log`). New positive tests assert actual values,
+emitted IR and zero imports, not IR-first execution. Source typechecking,
+scoped lint, formatting, diff checking and both size gates pass without new
+allowances (`.tmp/ts5-guard-return-{tsc,func,loc}.log`). Temporary diagnostics
+were removed.
+
+The factory run completed in **157,699 ms** with valid **63,780,323-byte**
+standalone Wasm, **zero imports**, **662 outcome rows**, **0 IR bodies**,
+**633 legacy bodies** and **0/3 runtime checks passing**
+(`.tmp/ts5-factory-guard-return.log`). Parenthesizer selection advances to
+`nested-function-param-type:TypeOperator`; node factory retains its scope
+refusal. Next identify the exact parameter annotation and required storage
+representation before extending signature admission.
+
+Attribution: disabling only the scoped guard return-depth increment makes all
+three positive guard tests fail (**0/3**, one filtered out;
+`.tmp/ts5-guard-return-disabled.log`). The scoped increment/decrement is restored;
+the restored suite passes **4/4** (`.tmp/ts5-guard-return-restored.log`). Final
+formatting and `git diff --check` pass. No production diagnostic or kill switch
+remains.
+
+### Readonly array signatures and IR-first direction (2026-09-08, in progress)
+
+User direction: put new work in IR/shared planning where possible, not the
+legacy direct codegen path. Keep legacy fallback distinct from evidence of
+IR execution; no new legacy implementation was added for array signatures.
+
+The diagnostic identifies `parenthesizeConstituentTypesOfUnionType` and its
+`members: readonly TypeNode[]` parameter
+(`.tmp/ts5-factory-array-diagnosis.log`). The temporary production trace is
+removed. Shared signature-position evidence now projects exact array element
+identity; the inferred IR closure planner uses an explicit array capability
+and constructs vector signatures only for supported element representations.
+The codegen-side change supplies the capability to shared IR planning.
+
+Focused verification passes **15/15 across 2 files**: 12 signature-position
+tests and 3 array runtime tests (`.tmp/ts5-array-signature-tests.log`). The
+runtime cases cover direct and aliased calls with readonly numeric array
+parameters plus a readonly array result. Each requires emitted IR, zero
+imports and the actual value 42. This does not yet prove TypeNode object-array
+support or factory runtime success.
+
+Expanded tests pass **34/34 across 4 files**
+(`.tmp/ts5-array-signature-regressions.log`), including explicit capability and
+oracle identity controls, and refusal of unresolved object elements, nested
+arrays, callback arrays and tuples. A subsequent optional-array planning
+control passes **1/1**, four filtered out, and retains the dynamic boundary
+needed for omitted arguments (`.tmp/ts5-array-optional-before.log`). Disabling
+only the production array capability makes all three numeric-array runtime
+positives fail their IR-emission assertions (**0/3**, two filtered out;
+`.tmp/ts5-array-signature-disabled.log`); the capability is restored, and the
+final suite passes **35/35 across 4 files**
+(`.tmp/ts5-array-signature-restored.log`). Source
+typechecking, scoped lint, function and LOC gates pass with no new allowances
+(`.tmp/ts5-array-signature-{tsc,func,loc}.log`).
+
+The fresh factory run completes in **158,171 ms**, validates a
+**63,780,323-byte** standalone module with **zero imports**, and records
+**662 rows / 0 IR bodies / 633 legacy bodies / 0/3 runtime checks**
+(`.tmp/ts5-factory-array-signatures.log`). Parenthesizer selection advances from
+`nested-function-param-type:TypeOperator` to
+`nested-function-param-type:UnionType`; node factory retains
+`expr-ident-not-in-scope:Identifier`. The source-only 30-file oracle probe
+confirms exact `TypeNode` element identity and a separate `NodeArray<TypeNode>`
+class result, not an intrinsic array
+(`.tmp/ts5-parenthesizer-array-evidence.log`). Next identify the exact union
+parameter and its required representation; do not treat crossing a selector
+boundary as runtime success.
+
+### Multiple-reference union signatures (2026-09-08, in progress)
+
+Following array signature support, the real source contains non-optional
+`TypeNode | NamedTupleMember` parameters in the tuple parenthesizer and
+`hasJSDocPostfixQuestion`. The 30-file source oracle probe reports two class
+parts, not a single optional reference
+(`.tmp/ts5-parenthesizer-union-evidence.log`). A temporary trace identifies the
+exact refusal as `hasJSDocPostfixQuestion(type: TypeNode | NamedTupleMember)`
+(`.tmp/ts5-factory-union-diagnosis.log`); the trace is removed.
+
+The shared planner now admits unions with multiple object/class parts via its
+existing explicit tagged-reference capability. It does not merge physical
+layouts or infer a common raw reference type. Mixed primitive/reference
+storage remains refused. Three focused tests initially fail **0/3**
+(`.tmp/ts5-multi-reference-before.log`), then pass with the shared gate widened.
+The expanded four-file suite passes **19/19**, including distinct-layout
+direct and aliased argument/result identity, field reads, and null/undefined
+distinction (`.tmp/ts5-multi-reference-final.log`). All runtime positives
+require IR emission, zero imports and actual expected values. No new legacy
+direct codegen implementation was added.
+
+A recursive discriminated-union test initially hits the separate
+`vardecl-typenode:TypeReference` restriction on explicitly typed local object
+variables (`.tmp/ts5-multi-reference-recursion-diagnosis.log`). Passing the same
+nested object directly into the typed parameter instead exercises recursion;
+the final focused file passes **5/5**
+(`.tmp/ts5-multi-reference-recursion-contextual.log`). This does not resolve the
+local annotation restriction. Source typechecking, scoped lint and both size
+gates pass (`.tmp/ts5-multi-reference-{tsc,func,loc}.log`).
+
+The factory remeasurement completes in **157,141 ms**, validates the
+**63,780,323-byte** standalone module with **zero imports**, and records
+**662 rows / 0 IR bodies / 633 legacy bodies / 0/3 runtime checks**
+(`.tmp/ts5-factory-multi-reference.log`). Parenthesizer advances from the
+identified union parameter to `nested-function-param-type:TypeOperator`;
+node factory retains `expr-ident-not-in-scope:Identifier`. Identify this next
+readonly annotation before extending vector element storage; the source has
+a readonly array of `TypeNode | NamedTupleMember`, but the exact new refusal
+has not yet been traced.
+
+Attribution: restoring only the former single-optional-reference gate makes
+all five new tests fail while all five existing optional-reference tests
+still pass (**5/10 overall**, `.tmp/ts5-multi-reference-disabled.log`). The
+multi-reference rule is restored; the final four-file suite passes **20/20**
+(`.tmp/ts5-multi-reference-restored.log`). No temporary production trace remains.
+
+### Reference-union array elements (2026-09-08, in progress)
+
+After multi-reference signatures, investigate the next readonly-array
+annotation. IR vectors currently resolve physical scalar/string element
+storage but not the dynamic tagged element type produced by a reference union
+signature. Audit construction, layout preparation and reads together; preserve
+the packed-array widening guard unless elements are explicitly boxed into the
+canonical dynamic representation. Add direct and aliased standalone runtime
+tests requiring actual field values, IR emission and zero imports. This work
+stays in IR and shared preparation, not legacy direct codegen.
+
+The exact refusal is
+`parenthesizeElementTypesOfTupleType(types: readonly (TypeNode | NamedTupleMember)[])`
+(`.tmp/ts5-factory-array-union-diagnosis.log`). The temporary trace is removed.
+Initial direct/aliased reference-array tests fail **0/2**
+(`.tmp/ts5-reference-array-before.log`). Shared signature planning now permits
+dynamic elements only when the existing reference-union capability proves that
+representation. IR array construction boxes each such element explicitly,
+preserves the logical vector type, and uses the canonical dynamic storage
+type. Scalar/string construction is unchanged; the packed widening guard is
+bypassed only with an explicit dynamic-element plan.
+
+Preparation now accepts this element carrier and includes `dynamic` in the
+deterministic depth-major vector ordering (existing leaf relative ordering is
+preserved). Dynamic async fulfilled resumes remain refused because they lack
+a proved host materializer. Tagged reads preserve the logical element type;
+bounds checks use canonical undefined for missing elements and additionally
+require an exact numeric-index round trip, rejecting fractional indices and
+NaN rather than truncating them into valid elements. The existing indexed
+undefined-comparison refusal remains for non-dynamic reads.
+
+Construction/preparation positives pass **2/2**
+(`.tmp/ts5-reference-array-prepared.log`). The expanded run initially passes
+**100/101 across 4 files**, with only the new indexed-undefined comparison
+control refused (`.tmp/ts5-reference-array-regressions.log`). After the
+representation-specific comparison fix, bounds/widening regressions pass
+**24/24 across 3 files** (`.tmp/ts5-reference-array-bounds.log`). The new tests
+cover distinct layouts, direct/aliased calls, array results, element identity,
+empty arrays, negative and fractional indices, NaN, infinity, and negative
+zero. They require IR emission, zero imports and actual result 42.
+
+The factory run (before the final indexed-undefined comparison follow-up)
+completes in **175,425 ms**, validates a **63,780,323-byte** standalone module
+with **zero imports**, and records **662 rows / 0 IR bodies / 633 legacy
+bodies / 0/3 runtime checks** (`.tmp/ts5-factory-reference-array.log`).
+Parenthesizer advances to `tail-if-noelse:IfStatement`; node factory retains
+`expr-ident-not-in-scope:Identifier`. Next diagnose the exact trailing guard
+and its implicit completion; do not conflate selection progress with a
+working compiler.
+
+Attribution: disabling only dynamic-element signature admission makes all
+three new runtime tests fail while all five existing numeric-array/planning
+controls pass (**5/8 overall**, `.tmp/ts5-reference-array-disabled.log`). The
+dynamic-element admission is restored; the final regression suite passes
+**122/122 across 6 files** (`.tmp/ts5-reference-array-restored.log`). Final
+source typechecking, scoped lint,
+formatting, diff checks and size gates pass with no new allowances
+(`.tmp/ts5-reference-array-final-{tsc,func,loc}.log`). No production trace or
+kill switch remains.
+
+### Trailing guards with undefined completion (2026-09-08, in progress)
+
+The parenthesizer source has exactly one function declaration ending directly
+in an if without else: `parenthesizeTypeArguments`, line 668. Its guarded
+factory result is annotated `NodeArray<TypeNode> | undefined`; the other path
+falls through. Current selector and builder admit this tail only for void
+returns, despite shared planning already carrying the optional reference
+result as dynamic. Extend the IR structured guard route with canonical
+undefined completion and test both returning and fallthrough paths. Preserve
+generator/cleanup barriers and avoid a legacy direct-codegen implementation.
+
+The initial tests fail **0/3** (`.tmp/ts5-tail-guard-before.log`). Shared
+completion planning now recognizes direct trailing guards as well as switches
+without defaults. Selection admits a non-void trailing guard only with a
+proved nested dynamic result and checks its body through the scoped
+return-admitting helper. Construction emits the existing structured guard
+followed by canonical undefined on fallthrough. Fully annotated scalar
+signatures keep their existing route; generator and cleanup exclusions stay
+in force.
+
+The first expanded run passes **13/14**, exposing a separate concrete-object
+return boxing gap (`.tmp/ts5-tail-guard-after.log`). Dynamic return coercion
+now reuses the same exact-layout reference boxing helper as call arguments and
+strict identity, still refusing unbound raw refs. The suite then passes
+**20/20** (`.tmp/ts5-tail-guard-boxed.log`). Final focused regressions pass
+**21/21 across 4 files** (`.tmp/ts5-tail-guard-final.log`), covering direct,
+aliased and arrow calls, both condition outcomes, an entered guard that falls
+through its inner condition, object identity and captured side effects,
+capability refusal, existing switch completion and finally-barrier controls.
+Every new runtime positive requires emitted IR, zero imports and actual
+expected values.
+
+The full factory run completes in **157,482 ms**, validates a
+**63,780,323-byte** standalone module with **zero imports**, and records
+**662 rows / 0 IR bodies / 633 legacy bodies / 0/3 runtime checks**
+(`.tmp/ts5-factory-tail-guard.log`). Parenthesizer clears the body-shape
+refusal and now reports `type-resolution-unsupported` with
+`object TypeNode TypeReference could not be lowered to IrType.object`.
+Here `TypeNode` is part of the diagnostic wording; inspect the actual source
+annotation before assuming it names TypeScript's `TypeNode` interface. Node
+factory retains `expr-ident-not-in-scope:Identifier`. Next trace this object
+annotation resolution and its physical carrier evidence in the shared IR path.
+
+Attribution: disabling only non-void trailing-guard admission makes all four
+new runtime cases fail, while the pure planner control and all seven existing
+switch tests pass (**8/12 overall**, `.tmp/ts5-tail-guard-disabled.log`). Guard
+admission is restored; the restored suite passes **21/21 across 4 files**
+(`.tmp/ts5-tail-guard-restored.log`). Source typechecking, scoped lint, formatting, diff and
+size gates pass without new allowances
+(`.tmp/ts5-tail-guard-final-tsc.log`, `.tmp/ts5-tail-guard-{func,loc}.log`).
+
+### Source object-position carrier resolution (2026-09-08, in progress)
+
+After trailing guards, parenthesizer reaches source signature resolution but
+its object annotation cannot be expanded to a finite IR object shape. Trace
+the exact annotation and test whether existing source-parameter/result carrier
+evidence can supply the same allocator-backed symbolic reference already used
+by inferred nested signatures. Do not infer layouts from type names or bypass
+physical ABI checks; preserve existing finite-object resolution first. This
+is shared IR boundary planning, not new legacy direct codegen.
+
+The diagnostic identifies `ParenthesizerRules` among failed source positions
+(`.tmp/ts5-factory-object-position-diagnosis.log`); this is the factory's return
+annotation, not TypeScript's `TypeNode` interface. Both temporary production
+traces are removed. After finite shape expansion refuses, source position
+resolution now consults existing allocator-authenticated parameter/result
+carrier evidence by exact checker type key.
+
+The focused recursive `Item` parameter test initially fails **0/1** at source
+type resolution (`.tmp/ts5-source-object-position-before.log`). The fallback
+advances it to field access. The AST resolver now connects exact symbolic
+physical references to existing `object.get` lowering, only when the actual
+field storage matches the semantic number/boolean fact. Reference fields and
+packed-number widening remain unproved and refused. It resolves the exact
+candidate allocation, not a provisional integer index or display-name alias.
+Evidence/kernel tests pass **27/27 across 2 files**, including new checks for
+missing symbolic identity, replaced allocations and mismatched packed storage
+(`.tmp/ts5-source-object-position-evidence.log`).
+
+The new runtime test is **still failing its IR-emission assertion**, not
+skipped. Its caller creates `object{value:f64}` while the source callable
+expects the registered `Item` reference, so that boundary is not sealed.
+Initial wiring produced an unplanned-draft error while lowering a physical
+field (`.tmp/ts5-source-object-position-stack.log`). Unscoped lowering now
+withdraws with typed `type-resolution-unsupported` when the requested type is
+an authenticated but unpublished candidate; it does not publish ownership or
+bypass the sealed resolver. Unknown non-candidate references retain invariant
+failure. Compilation succeeds again, but the focused function still falls
+back (`.tmp/ts5-source-object-position-unsealed.log`). Next fix source-object
+construction/call/result compatibility and inspect why the component is not
+sealed. This is not yet an end-to-end IR source-object success.
+
+The runtime control now executes before its still-required IR assertion:
+it validates the zero-import module and gets **42**, then fails only on
+`read.irBodyEmitted` (**8/9 across 3 files**,
+`.tmp/ts5-source-object-position-runtime-control.log`). The full factory run
+completes in **158,652 ms**, validates a **63,780,323-byte** standalone module
+with **zero imports**, and records **662 rows / 0 IR bodies / 633 legacy
+bodies / 0/3 runtime checks** (`.tmp/ts5-factory-source-object-position.log`).
+Parenthesizer advances to `late-preparation-unsupported`:
+`createParenthesizerRules failed final-context IR preparation`; node factory
+retains its scope refusal. Trace the final-context rejection next; do not
+claim a successful source-object boundary from this movement alone.
+
+The resolver size gate initially flags one added line. Related physical-field
+and dynamic-carrier callbacks are now extracted together, preserving their
+context and existing behavior rather than adding a budget allowance. Both
+size gates pass (`.tmp/ts5-source-object-position-final-{func,loc}.log`).
+Post-extraction regressions pass **35/35 across 4 files**
+(`.tmp/ts5-source-object-position-final-regressions.log`), excluding the
+explicitly recorded failing end-to-end source-object test above. No production
+diagnostic or kill switch remains. This slice remains in progress, including
+end-to-end attribution once the IR assertion can actually pass.
+Final source typechecking, scoped lint, formatting and diff checks pass
+(`.tmp/ts5-source-object-position-extracted-tsc.log`).
+
+### Final-context retention diagnosis (2026-09-08, in progress)
+
+The first diagnostic run finds no attempted IR build/patch evidence for
+`createParenthesizerRules` when the generic final-context failure is recorded
+(`.tmp/ts5-factory-final-preparation-diagnosis.log`). Thus this verdict does
+not itself prove an object construction failure: a retention filter can remove
+the owner before construction. Trace the exact set mutation and R2 withdrawal
+reason before changing ABI construction. Preserve dependency closure and
+source identity checks; do not resurrect a removed owner without its required
+component.
+
+The completed retention diagnostic traces the removal to
+`makeMultiIrSafeSelection` during `compileMultiIrOverlaySource`, not to an
+attempted factory body build or an R2 withdrawal
+(`.tmp/ts5-factory-retention-diagnosis.log`). Its multi-module filter checks
+import use, nested runtime declarations, cross-file boundaries, name/slot
+identity, and generic materialization, then closes the blocked dependency
+component. The exact triggering predicate/component edge remains to be
+isolated; do not bypass these checks based on this stack alone. The run
+compiled valid 63,780,323-byte Wasm in 157,479 ms with zero imports, but
+**0/3 runtime checks passed** and **0/662 outcome rows emitted IR bodies**
+(633 legacy-body rows).
+
+Separately, the small source-object-position witness has an R2 admission
+withdrawal of `param-signature-unstable`, followed by the typed refusal
+`provisional physical carrier requires a sealed IR component`
+(`.tmp/ts5-source-object-r2-diagnosis.log`). This is a different blocker from
+the factory's multi-module retention filter. The witness still returns 42
+with zero imports, but its required IR-emission assertion fails. Temporary
+diagnostic logging was removed after recording these findings.
+
+User direction reaffirmed: implement new support in IR or shared planning,
+not the legacy direct-codegen path. The next investigation is multi-module
+IR retention with exact ownership and boundary evidence intact.
+
+The predicate-level run (`.tmp/ts5-factory-multi-filter-diagnosis.log`) now
+identifies **two independently true guards** for `createParenthesizerRules`:
+cross-file target with conservative standalone callers and no program-callable
+boundary, plus nested runtime declarations. It has exactly one registered
+function with the expected name; collision, import alias, synthetic-name
+collision, unsupported import use, generic materialization, and type-parameter
+guards are all false. The owner was not already blocked by imported-call
+checks. This rules out simply relaxing a name-collision check.
+
+A new multi-module captured factory witness returns 42 with zero imports but
+fails required IR emission (`.tmp/ts5-multi-module-factory-before.log`). Work
+now checks whether already-proved program-callable components can own nested
+functions without the older flat-name exclusion, with distinct modules using
+the same nested function name as a collision control. Unproved cross-file
+boundaries must remain excluded; this alone will not complete the real factory.
+
+The completed factory run remains valid/zero-import/63,780,323 bytes,
+158,985 ms, **0/3 runtime checks**, **0/662 IR-emitting outcome rows**.
+The expanded witness has **0/2 tests passing**: both validate Wasm, have no
+imports, and return 42 before failing their explicit IR-emission assertions.
+Using a local `const add = makeAdder(40)` exposes the imported planner's
+separate explicit refusal: `callable target ... returns a callable value`.
+
+An experiment admitting nested declarations only when
+`hasProgramCallableBoundary` is true still left **0/2 passing**. Diagnostic
+evidence confirms that the scalar `left`/`right` owners DO have this boundary;
+their aggregate then fails in `src/ir/integration.ts` declaration preflight:
+`owner ... contains non-neutral FunctionDeclaration; retaining direct bodies`
+(`.tmp/ts5-multi-module-nested-component-diagnosis.log`). This supersedes the
+unverified hypothesis that the local dependency graph caused that refusal.
+The next required work is explicit nested-function support in component
+preflight, including its effects/ownership proof, not just changing the M0
+filter. Returning a callable across imports remains a distinct follow-up.
+
+The existing `stages one exact cross-source component` test in
+`issue-3525-multi-prepared-callable-bindings.test.ts` passes **1/1 selected**
+(51 unselected), proving the basic route is active on the same harness
+(`.tmp/ts5-multi-module-callable-positive-control.log`). The ineffective gate
+experiment and all temporary tracing were removed; no new legacy codegen
+support or relaxed safety gate remains from this investigation.
+
+Component allocator investigation (in progress):
+`atomicDeferredComponentPreflightFailure` and the independent post-build
+`atomicDeferredComponentIsAllocatorNeutral` currently restrict deferred
+components to scalar operations. `prepareClosureTransaction` still calls
+shared closure-support allocation and derived callable-slot allocation before
+opening/sealing the component scopes. Thus allowing nested syntax alone
+cannot establish atomic preparation: detached type/function allocation must
+be supported first. Do not weaken either gate to claim captured closure support.
+
+The adapter currently validates a complete, unsupported atomic-failure
+population and then discards its precise outcomes. Preserve those outcomes
+by exact unit ID in each candidate source plan, so the final public report
+does not replace the actual refusal with a generic final-context failure.
+The existing array-bearing multi-module test is being strengthened to assert
+this evidence for all five owners, including duplicate source names, while
+retaining its allocator-read-only and clean-fallback checks.
+
+Implemented refusal preservation in the IR multi-module adapter. The first
+attempt (writing only the early candidate's source plan) still failed the
+new assertion: late overlays build new plans. Exact unsupported outcomes now
+live in the private callable-attempt census, keyed by structural unit ID and
+guarded by its existing graph/identity currentness checks. The late withdrawal
+copies only source-local attempted failures into the new source plan and
+preserves any earlier refusal. No executable body, type, import, or provider
+is published by this evidence transfer. Atomic failure-population validation
+was extracted intact before recording; foreign/duplicate/pending-artifact
+failures still throw, not become ordinary fallback records.
+
+Validation:
+
+- Strengthened array-refusal test fails before the change with
+  `same failed final-context IR preparation`; it now checks the actual
+  `contains non-neutral ArrayLiteralExpression` reason for all five owners.
+- Focused success/helper-fallback/array-fallback controls: **3/3 pass**.
+- Full callable binding suite: **52/52 pass**, restored after attribution
+  (`.tmp/ts5-callable-refusal-evidence-restored.log`). The first full attempt
+  exhausted the configured 512 MB heap; the successful full runs use the
+  repository-supported `VITEST_FORK_MAX_OLD_SPACE_SIZE=2048`, one worker.
+- Removing only the late evidence transfer gives **2/3 pass**, failing just
+  the new refusal assertion; restoring it restores **52/52**.
+- Function/LOC gates pass for 125 changed source files, net +4724 LOC,
+  with no new allowance. Formatting, lint, and diff checks pass.
+- Source typecheck passes (`.tmp/ts5-callable-refusal-evidence-final-tsc.log`).
+
+The closure-allocation implementation must cover the real shared mutations:
+`ClosureStructRegistry` allocates wrapper/subtype definitions and updates
+struct-name, reverse-name, and closure-info maps; derived-slot preparation
+mints/pushes functions and updates `irUnitFuncMap`. Deferred preparation must
+stage those effects and commit them with the existing authenticated receipt,
+or abort with every prefix unchanged. Account for derived-unit registration,
+ref-cell types, and wrapper-root allocation too. Do not implement this as
+snapshot/restore of only `mod.types`, or merely whitelist nested declarations.
+Both new captured-factory witnesses remain failing IR-emission requirements;
+this evidence fix does not change the last measured real factory's **0/3**.
+
+### Real factory runtime narrowing (2026-09-08, in progress)
+
+The pinned `createNodeFactory` constructs a memoized callback over `factory`
+before initializing that binding. Revalidated the existing forward-capture
+control in both GC and standalone, explicitly enabling IR and checking zero
+standalone imports. Added a closer four-module witness: the memoizer lazily
+creates a rules object whose returned named function calls back into the
+factory, and executes it twice. Both targets return the expected 84. Combined
+base-node factory and lazy-parenthesizer controls pass **17/17 across two
+files** (`.tmp/ts5-factory-forward-capture-controls.log`). Therefore a simple
+forward capture or generic memoizer explanation is not established; do not
+patch capture semantics based on the large factory's null error alone.
+
+Added an uncommitted diagnostic probe at `.tmp/ts5-real-factory-stages.ts`
+against the pinned TypeScript source namespace. Its six checks separate
+string-literal creation, the original class-expression input, direct
+parenthesizer invocation, export-assignment invocation, object-literal
+creation, and arrow-function invocation. It retains the real factories and
+checks node kinds; this is a diagnostic population, not upstream-suite
+completion. The raw-source native import via `tsx` failed during namespace
+initialization (`AssertionLevel.None`), before any check. A separate native
+control uses the installed TypeScript 5.9.3 bundle (same reported version as
+the pinned source); do not describe it as execution of the raw source graph.
+
+The actual pinned source, bundled using the same esbuild approach as the
+source-unit harness, also passes **6/6**
+(`.tmp/ts5-real-factory-stages-source-native.log`). The first Wasm probe
+compiled valid zero-import 60,762,534-byte output in 157,001 ms, but executed
+**0 checks**: the standalone worker requires the numeric
+`runStandaloneUpstreamTest(index)` export, not its host-lane boolean entry.
+Added that exact wrapper before rerunning. Do not count the pre-wrapper
+compile as runtime evidence or restart while its worker handle remains live.
+
+The corrected numeric probe is terminal with a compile error (126,029 ms,
+no binary): `Maximum call stack size exceeded` at
+`src/codegen/ir-inline.ts:1170:25`, in recursive `rewriteBody`. Native bundled
+pinned-source checks return **6/6 numeric ones** with the same wrapper.
+This is a real-source compilation blocker, not a runtime result. Added a
+12,000-region inliner witness requiring a real leaf call replacement and
+preservation of the callee body. Replace depth-recursive traversal and
+snapshot cloning while preserving existing shared-DAG exclusions, loop
+depth, call-site order, and the rule against recursively inlining inserted
+instructions during the same pass.
+
+Implemented stack-safe inliner traversal in `src/codegen/ir-inline.ts`:
+instruction counting/safety walks, cold-region size accounting, the two-round
+loop-hotness propagation, copy-on-write body cloning, and the mutating
+call-site walk now use explicit stacks. Rewrite frames retain the current
+body/index/loop depth, traverse child bodies in the original order, and
+advance past inserted instructions exactly as the former recursive loop did.
+No cost rule, growth limit, shared-array exclusion, or runtime provider was
+changed. The existing call-site relocation/specialization logic is unchanged.
+
+Validation: the initial depth witness overflows in the hotness walk while
+the shared-DAG/ordinary-call control passes (**1/2** before). Expanded block,
+loop, and conditional depth witnesses pass **4/4**, each requiring an actual
+call replacement and a 12,002-instruction result. Removing only iterative
+hotness traversal causes **3 failures / 1 passing control**; restored inliner
+and existing semantic/loop-callee tests pass **29/29 across three files**
+(`.tmp/ts5-inline-deep-restored.log`). Source typecheck, formatting, lint,
+diff checks, and function/LOC budgets pass (126 changed source files,
+net +4763 LOC; no new allowance).
+
+Real-source retry is `.tmp/ts5-real-factory-stages-stack-safe.log`, worker
+handle 5930. It started only after the previous probe was terminal and the
+attribution edit was restored. Keep the six-stage diagnostic separate from
+the original three upstream callbacks; neither its compilation nor the
+focused inliner results establish TypeScript runtime acceptance.
+
+Retry 5930 is terminal: **compile success**, valid **60,762,625-byte** Wasm,
+**zero imports**, 151,327 ms. The corrected real-source diagnostic now runs
+and passes **3/6** against **6/6** from the bundled pinned source:
+
+| Check | Standalone result |
+| --- | --- |
+| String-literal creation | pass |
+| Original class-expression input with static property | pass |
+| Direct `factory.parenthesizer.parenthesizeExpressionOfExportDefault` | null dereference in its trampoline |
+| `factory.createExportAssignment` | same trampoline null dereference |
+| Object-literal creation | pass |
+| `factory.createArrowFunction` | illegal cast in `createArrowFunction` |
+
+The stack fix therefore removes the measured compile blocker, not the
+factory runtime defects. Direct parenthesizer invocation reproduces the null
+without the original callback harness or the export-assignment wrapper; the
+input node can be constructed and its kind read successfully. Next inspect
+the exact parenthesizer trampoline's argument/environment ABI and nominal
+node conversion. Do not blame the upstream assertion shim or forward capture
+without new evidence. Source-map attribution still points to the trailing
+type-arguments declaration, so use actual emitted trampoline instructions
+rather than assuming that source line is the failing semantic operation.
+
+After the inliner change, factory controls also pass **17/17**
+(`.tmp/ts5-factory-controls-after-inline.log`), giving **46/46 focused checks**
+across five files with the 29 inliner checks. The original three upstream
+factory callbacks were not rerun in this diagnostic; their last measured
+status remains **0/3**. No worker from this turn remains live.
+
+### IR-first direction and parenthesizer handoff (2026-09-09)
+
+### Enum-formatting boundary investigation (2026-09-09, in progress)
+
+Numeric-method collision investigation: new focused test registers a Version
+class with toString alongside a runtime `number.toString(radix)` call.
+Both GC and standalone trap on the numeric call while the class control
+passes (`.tmp/ts5-numeric-tostring-collision-before.log`). The final structural
+class-inference fallback only excludes any/unknown and ignores callable
+properties during its field comparison, so Number's method-only surface can
+incorrectly match an unrelated class. Next exclude primitive receivers from
+that shared eligibility decision and verify real full-source radix callbacks.
+
+Next source-unit verification started: the existing source-unit runner is
+running the five original diagnosticCollection callbacks against complete
+compiler source modules, including its native reference and strict standalone
+import policy. Worker 26447, `.tmp/ts5-diagnostic-collection-current.log`.
+The pinned inventory remains 256 files/1,761 registration sites; the pin's
+five selected projection files do not cover that full scope. Previous turn
+made progress by fixing dynamic tuple destination identity and moving the
+original factory file from **0/3 to 3/3**.
+
+Projection regression remains **25/25** on the current tree
+(`.tmp/ts5-projection-regression-current.log`, driver terminal), and source-unit
+verifier controls passed **5/5**. Expanded the separate full-source runner to
+compilerCore's **11 original callbacks**, after checking that its only import
+is the same compiler namespace. Added a verdict control rejecting ten callbacks
+for that file. Its projection status is not promoted to full-source success:
+worker 85033 is now measuring the complete module graph in
+`.tmp/ts5-compiler-core-source-current.log`. DiagnosticCollection worker 26447
+remains live. Expanded verifier tests are in
+`.tmp/ts5-source-unit-verifier-expanded.log` (worker 34490).
+
+DiagnosticCollection completed **0/5 Wasm versus 5/5 native**, valid
+89,514,526-byte standalone Wasm, zero imports, 213,751 ms. All five trap in
+createDiagnosticForNode, source-attributed to utilities.ts:2364:5. Do not
+assume a shared cause with factory formatting. A diagnostic copy now checks
+statement count, node presence/kind/parent and diagnostic-message presence/code
+before the original calls, retaining all assertions. Worker 60532 logs to
+`.tmp/ts5-diagnostic-input-current.log` and requests emitted functions in
+`.tmp/ts5-diagnostic-input-types.txt.wat`.
+
+Full-source compilerCore completed **11/11 native and 11/11 standalone**:
+valid 1,202,989-byte Wasm, zero imports, 3,391 ms. This is separate from its
+projection run. Expanded verifier controls passed **6/6**. Added base64 (1),
+comments (3), and parsePseudoBigInt (5) to the same full-source runner after
+checking their compiler-only imports, with per-file callback-floor controls.
+Worker 50444 runs them sequentially, logging to
+`.tmp/ts5-source-{base64,comments,parsePseudoBigInt}-current.log`; worker 60532
+continues the diagnosticCollection input probe. No full-scope success claim.
+
+Input diagnostic completed **0/5**, all report `parsed node parent differs`.
+Statement count, non-null node and VariableStatement kind checks passed first;
+message checks were not reached. Valid 89,738,459-byte standalone Wasm,
+zero imports, 229,830 ms; bundled native diagnostic reference **5/5**.
+Emitted getSourceFileOfNode reads Node field 7 (parent) in its ancestor loop;
+createDiagnosticForNode then asserts the returned sourceFile non-null. This
+narrows the next investigation to parent linking / parent representation,
+not diagnostic message objects or formatting. The full-source batch worker
+50444 remains live; expanded verifier controls passed **9/9**.
+
+Full-source base64 passes **1/1 native and standalone** (8,038,824 bytes,
+91,692 ms); comments passes **3/3 native and standalone** (8,032,177 bytes,
+88,808 ms). Both validate with zero imports. ParsePseudoBigInt is the remaining
+live item in worker 50444's sequential batch. Reuse the existing
+`tests/dogfood/fixtures/typescript-source-node-parent-workload.ts` for the next
+parent investigation; its statement/parent/ancestor-lookup checks already
+match the diagnosticCollection parser call. Extend diagnosis with direct
+parent assignment versus generic setParent versus setParentRecursive, so a
+physical-field failure is distinguished from traversal/callback failure.
+
+Batch 50444 completed. Full-source parsePseudoBigInt is **2/5 Wasm versus
+5/5 native**: decimal and large-literal callbacks pass, binary/octal/hex
+callbacks trap in their closures. Valid 8,029,410-byte standalone Wasm,
+zero imports, 87,331 ms. Its projection still passes **5/5**, so this is a
+full-graph difference, not permission to drop those cases. The three failing
+callbacks use `testNumber.toString(radix)`; next isolate numeric radix calls
+in the presence of unrelated named toString methods. Earlier formatEnum WAT
+also showed a suspicious Version-receiver call on its numeric fallback, but
+that is a hypothesis until a focused test and fresh emission prove it.
+
+Current full-source runner covers six of 256 files, **20/28 callbacks pass**:
+factory 3/3, compilerCore 11/11, base64 1/1, comments 3/3,
+diagnosticCollection 0/5, parsePseudoBigInt 2/5. The separate projection
+suite remains 25/25; do not combine overlapping counts. Verifier tests 9/9,
+format/lint/diff checks pass. All workers from this continuation are terminal.
+No compiler production edits were made this turn; source-unit coverage and
+failure attribution advanced. Remaining full scope and self-hosting are open.
+
+Original factory callbacks now pass **3/3** with the binding plan, without
+changing their source/assertions: valid 63,959,222-byte standalone Wasm,
+zero imports, 164,661 ms (`.tmp/ts5-original-factory-binding-plan.log`).
+The destination-allocation adapter has been extracted to
+`src/codegen/dynamic-array-binding-locals.ts`; the existing emitter only
+imports/calls it (+2 file lines, +1 function line, explicitly granted above).
+Shared planning remains in IR. Removal attribution is running against the
+focused regression and the two failing neighbor files; restore the planner
+before further production verification. This is a factory-file milestone,
+not completion of all 256 upstream unit files or the standalone compiler goal.
+
+Removal attribution completed **12/23**: the same ten neighbor failures
+remain, plus the new standalone tuple-binding regression returns 0 again
+(`.tmp/ts5-dynamic-binding-removal.log`). GC remains the positive control.
+Restored the planner; no removal switch remains. Final focused confirmation
+is running in `.tmp/ts5-dynamic-binding-restored.log`; full typecheck and
+function/LOC gates are rerunning after adapter extraction. The next upstream
+source-unit target is diagnosticCollection (five original callbacks), then
+continue expanding the full pinned scope rather than treating factory as
+goal completion.
+
+Final confirmation after extraction/restoration: **17/17 across four files**.
+Typecheck, formatting/lint, diff and function/LOC gates pass (138 changed
+source files, net +5,101 LOC). The two-line adapter hookup is the only new
+growth allowance; implementation is in the new shared plan and leaf adapter.
+All workers from this continuation are terminal. No commits or pushes were
+performed in this continuation; the goal remains active.
+
+Kind-versus-formatting follow-up: diagnostic copy now checks that node.kind
+is numeric and equals the expected kind before formatting, and distinguishes
+both names being undefined from only the actual name. Worker 21282 is running
+this in `.tmp/ts5-factory-kind-diagnostic.log`. This does not modify upstream
+source or relax any original assertions. Previous turn counts as progress:
+it identified the undefined operand before concatenation, changing the next
+investigation from string concatenation to its producer/input.
+
+Worker 21282 completed: **0/3**, all report `both names undefined for correct
+kind`; node.kind is numeric and equals expected before either name is formatted.
+Valid standalone Wasm, 63,960,617 bytes, zero imports, 154,016 ms. Native
+diagnostic reference remains **3/3**. The next diagnostic adds explicit enum
+object/reverse-lookup and direct `formatEnum` checks before the two
+`formatSyntaxKind` calls. It also requests existing emitter function dumps
+for formatSyntaxKind/formatEnum/getEnumMembers/assertSyntaxKind at
+`.tmp/ts5-factory-format-types.txt.wat`, with run output in
+`.tmp/ts5-factory-enum-lookup-diagnostic.log`. Explicit enum use may itself
+change graph demand; any success is diagnostic, not an original-test pass.
+
+Lookup diagnostic completed **0/3**, all report `direct formatEnum is
+undefined`; the enum-object and reverse-lookup checks passed first. Valid
+63,995,443-byte standalone Wasm, zero imports, 162,061 ms. The emitted
+`formatEnum` gives a concrete binding mismatch: the tuple-1115 arm stores
+its string field into local 293 (WAT function-relative lines 4880–4882),
+but the return reads local 323 (line 7149). `destructureParamArray` builds
+multiple tuple arms and re-allocates a declaration binding when a later arm
+has an externref field, redirecting localMap after earlier arm stores have
+already been emitted (`destructuring-params.ts`, tuple widening near 2468).
+Next establish a focused multi-carrier regression, then settle destination
+representation before emitting alternative branches. Strengthened nested
+namespace control passes **2/2**, using runtime numeric inputs and a circular
+enum barrel (`.tmp/ts5-nested-namespace-enum-string.log`).
+
+Focused regression established: a branded SortedReadonlyArray return forces
+dynamic tuple dispatch; an ordinary readonly-array return stays typed and
+passes. With the branded return, standalone reads the stale name slot and
+returns 0 instead of 42 (GC passes). New shared
+`src/ir/dynamic-array-binding-plan.ts` identifies dynamic declaration bindings
+before branch emission; the existing destructuring adapter allocates their
+common externref destination up front, leaving boxed captures and rest carriers
+alone. The focused regression and existing declaration/generator controls now
+pass **15/15** (`.tmp/ts5-destructuring-branch-after2.log`). An initial wiring
+attempt hit the object-pattern branch and was corrected before this passing
+run. Original factory callbacks are being rerun, without diagnostic source
+changes, in `.tmp/ts5-original-factory-binding-plan.log`.
+
+Broader controls measured **41/51 across eight files**; seven typed-object
+checks in issue-1553b and three explicit-undefined checks in issue-1553e fail.
+Attribution is pending removal of the new planning step after the live factory
+worker completes (`.tmp/ts5-dynamic-binding-neighbors.log`). Typecheck, lint,
+format and diff checks pass. Function budget currently rejects +15 lines in
+destructureParamArray; plan to extract the allocation adapter before final
+gates, rather than retain this inline block in the large emitter.
+
+Full factory string-operand investigation: diagnostic copy
+`.typescript-upstream-suite-generated/source-modules/factory-string-diagnostic.ts`
+retains the original assertions but evaluates both formatted names into locals
+and checks null/undefined before constructing their template. Worker 19408
+is running it, logging `.tmp/ts5-factory-string-diagnostic.log`. A new
+two-target nested callback/namespace string control is running separately in
+`.tmp/ts5-nested-namespace-string.log`. These are attribution probes, not
+upstream success evidence.
+
+Diagnostic worker 19408 completed: **0/3**, each reports the explicit guest
+error `actual name is undefined`. This identifies the actual-name operand
+from `Debug.formatSyntaxKind(node.kind)` before concatenation; it does not
+yet establish whether `node.kind` is correct or whether expected-name formatting
+also fails. The same diagnostic copy passes **3/3** bundled pinned-source
+JavaScript. The nested namespace/callback string control passes **2/2**
+(GC and standalone), with formatting/lint/diff checks passing. Next inspect
+the node kind and expected kind, then compare direct enum reverse lookup and
+both formatted names within the full factory graph. Do not patch string
+concatenation to hide the undefined result. All workers from this continuation
+are terminal; original upstream status remains **0/3**.
+
+Runtime integration update: shared `src/ir/enum-object-reference.ts` resolves
+declaration identity and runtime demand; `src/codegen/runtime-enum-object.ts`
+adapts the shared ordered plan to the existing module initializer. Top-level,
+statically planned enums allocate at their declaration, with declaration-owned
+globals shared by imports. New semantic work stays in shared IR planning;
+the backend changes are initialization/read adapters, not a second enum planner.
+The real-source formatting probe now passes **6/6**, up from **1/6**:
+valid 8,114,807-byte standalone Wasm, zero imports, 90,954 ms
+(`.tmp/ts5-real-enum-runtime.log`). The namespace matrix is **9/12**:
+all eight enum cases pass; three pre-existing plain-object cases still fail.
+Focused ordering/identity and enum controls are **24/25**; the combined GC
+ordering/identity check returns 0 rather than 42, while standalone passes.
+Investigate before declaring this adapter ready. Typecheck log is empty;
+all three workers are terminal. Full TypeScript unit-suite success remains
+unproven; the original factory callbacks still need a fresh run.
+
+Split the combined runtime-order assertion into eight labeled checks per
+target (`.tmp/ts5-enum-runtime-order-detail.log`): **15/16 assertions pass**,
+with only the GC early-read `typeof` check failing. All identity, post-init,
+reverse-alias and string-member checks pass in both targets, and the standalone
+early read passes. This isolates the next investigation to early-read behavior
+in GC, without yet attributing it to ordering versus undefined representation.
+
+GC early-read fix: `canonicalUndefinedExternInstrs` only looks up the host
+`__get_undefined` helper and otherwise emits null. The enum-read adapter now
+registers/flushed-shifts that helper before requesting canonical undefined.
+The runtime-order checks now pass in both targets, along with plan/IR enum
+controls: **22/22 tests across four files**
+(`.tmp/ts5-enum-runtime-undefined-controls.log`). Four new shared-demand tests
+also pass: folded/type-only erasure, wrapped/reverse demand, shadow/getter
+refusal, and exact namespace declaration identity
+(`.tmp/ts5-enum-demand-controls.log`). The original upstream factory callbacks
+are running in worker 3226, `.tmp/ts5-original-factory-runtime-enum.log`;
+do not restart a silent worker. Formatting and lint pass for this increment.
+
+Worker 3226 completed: original factory callbacks remain **0/3**, versus a
+fresh bundled pinned-source native reference **3/3**. Compilation succeeds:
+valid 63,959,234-byte standalone Wasm, zero imports, 161,467 ms. All three
+now trap in `__str_concat` called by `assertSyntaxKind`, not the earlier
+enum-formatting null-object location. Next probe separates formatting of
+StringLiteral/ParenthesizedExpression/ArrowFunction from template concatenation
+and repeated cached formatting (`.tmp/ts5-real-enum-template-stages.ts`).
+Typecheck, diff and function/LOC gates pass (135 changed source files,
+net +5,053 LOC; no new allowance).
+
+The formatting/template boundary probe completed **8/8** in standalone and
+**8/8** against bundled pinned source. Wasm is valid, 8,115,807 bytes,
+zero imports, 84,065 ms (`.tmp/ts5-real-enum-template-stages.log`). It covers
+StringLiteral, ParenthesizedExpression and ArrowFunction, dynamic function
+parameters, both template substitutions, and repeated cache use. Therefore
+the full factory trap is not reproduced by these operations alone; next
+inspect the full factory calling context and its actual string operands.
+The enum/parenthesizer neighbor run is **27/30**, with all 18 accessor/lazy
+parenthesizer tests passing and only the same three plain-object namespace
+failures (`.tmp/ts5-enum-and-parenthesizer-final.log`). Removing host undefined
+registration reproduces exactly the GC early-read failure while standalone
+and the other labeled assertions pass (`.tmp/ts5-enum-undefined-removal.log`).
+Registration is restored; final confirmation is in
+`.tmp/ts5-enum-undefined-restored.log`. No upstream assertion or harness was
+weakened, and no production diagnostic switch is retained.
+
+Restored confirmation completed **6/6 across two files** (worker 76395
+terminal). Both real-source workers and all test/typecheck/gate workers from
+this continuation are terminal. Full goal remains active and incomplete.
+
+Enum object planning started in `src/ir/enum-object-plan.ts`. It produces
+source-owned, ordered forward/reverse writes for checker-proven constant enum
+members. Numeric aliases retain every write (last reverse name wins); string
+members do not create reverse entries. Ambient/merged declarations and
+runtime-valued initializers decline this static plan. The existing enum
+constant collector now consumes its member values, retaining its prior
+fallback for unplanned declarations. This is shared semantic planning, **not
+runtime object materialization yet**, and does not fix the 1/6 formatting
+probe. Runtime allocation must execute at the declaration's initialization
+point; a namespace getter that eagerly synthesizes the object would incorrectly
+move initialization. Next connect the plan to that source-ordered allocation
+and to namespace export bindings, with early-read and shared-identity tests.
+
+Tests compare ordinary/const enum planned assignments with actual TypeScript
+emit (`preserveConstEnums: true`), plus aliases, string members, negative
+values, ambient/merged refusal and same-name declaration identity. Controls
+are running as worker 98006 in `.tmp/ts5-enum-plan-controls.log`.
+
+Controls completed **23/23 across four files**, including existing IR enum
+and imported switch cases. Typecheck, formatting/lint, diff and function/LOC
+gates pass (132 changed source files, net +4,855 LOC; no new allowance).
+Removing the planner result fails all three positive plan checks while the
+two refusal controls pass (**2/5**, `.tmp/ts5-enum-plan-kill.log`, worker
+30134 terminal). Restored the planner; final controls are in
+`.tmp/ts5-enum-plan-restored.log`. No runtime-formatting gain is claimed.
+
+Initialization integration location identified: the source-order collection
+loop in `collectDeclarations` appends to `ctx.moduleInitStatements`, while
+`collectRuntimeModuleInitializers` currently skips enum declarations. The
+enum-object plan must be attached to declaration-owned storage and evaluated
+in that ordering, not added as an arbitrary first-use namespace snapshot.
+
+Restored confirmation completed **23/23** (worker 68319 terminal). The
+planner-removal experiment is absent, and this turn has no live workers.
+
+Stack-balancing continuation: six new 12,000-level local/call operand tests
+across block/loop/if initially fail, while five existing ownership/diagnostic
+controls pass (**5/11**, `.tmp/ts5-stack-balance-deep-before.log`). Both local
+and call repair passes now consume a shared iterative physical-body postorder
+in `src/ir/instruction-body-postorder.ts`, retaining their unchanged leaf
+coercion logic and per-pass visited sets. That exposed the next recursive
+`fixBody` diagnostic walk in the same tests. Converted its recursive child
+calls into suspended generator steps driven by an explicit stack: diagnostic
+push/pop placement, branch repair ordering, tag arities and fixup counts stay
+in their original code. All **11/11** now pass, with no missing-value defaults
+or validation bypass added (`.tmp/ts5-stack-balance-deep-all-walks.log`).
+
+Real-source probe worker 81395 is running in
+`.tmp/ts5-real-enum-stack-balance-safe.log`. Broader controls are worker 77523
+in `.tmp/ts5-stack-balance-neighbors.log`; typecheck is worker 85918 in
+`.tmp/ts5-stack-balance-final-tsc.log`. No full-source runtime success claimed.
+
+Terminal result: the same real-source enum-formatting probe now **compiles
+and validates**, 7,932,836 bytes, 87,689 ms, **zero imports**, and executes
+all six checks. Numeric enum-member control passes; the five runtime
+enum-object/formatting checks fail (**1/6**). Its 289 outcome rows still show
+0 IR body emissions; these shared physical-IR traversal fixes remove compile
+barriers, not the remaining source IR admission gaps. Worker 81395 is terminal.
+
+Broader controls pass **40/40 across four files**. Independently restoring
+recursion in the new postorder helper or in the diagnostic driver makes all
+six deep tests fail while the five original controls still pass (**5/11**
+for each removal). Logs: `.tmp/ts5-stack-balance-postorder-kill.log` and
+`.tmp/ts5-stack-balance-branch-driver-kill.log`. Both experiments are restored;
+final controls are running as worker 92316 in
+`.tmp/ts5-stack-balance-restored.log`. Typecheck, formatting/lint, diff and
+function/LOC gates pass (130 changed source files, net +4,807 LOC; no new
+allowance). Next: runtime enum/namespace materialization, now reproducible
+without the walker stack overflows. Full upstream suite remains unfinished.
+
+Final restored confirmation: **40/40**, worker 92316 terminal. No removal
+experiment remains, and no worker from this stack-balancing turn is live.
+
+Stack-overflow fix in progress: replaced recursive cross-hierarchy operand
+repair traversal with an explicit postorder work stack. The same shared-array
+visited set, cross-function ownership refusal, diagnostics, operand producer
+model and coercion rules remain in effect. Separated body admission from
+single-body operand repair; no new coercion cases or legacy emission paths.
+Three 12,000-level block/loop/if regressions fail on the old walker, while its
+three original controls pass (**3/6**). After the change all **6/6** pass,
+including idempotence and cross-function refusal
+(`.tmp/ts5-cross-hierarchy-deep-before.log`,
+`.tmp/ts5-cross-hierarchy-deep-after.log`). Real-source formatting probe worker
+26641 is running in `.tmp/ts5-real-enum-stack-safe.log`; broader controls and
+typecheck are running in `.tmp/ts5-cross-hierarchy-neighbors.log` (worker
+88853) and `.tmp/ts5-cross-hierarchy-tsc.log` (worker 61204).
+No compile/runtime gain claimed yet.
+
+Terminal result: the real probe advances past this walker, then fails at
+`src/codegen/stack-balance.ts:3234:23` in recursive `fixLocalSetCoercion`
+(87,068 ms, no binary; worker 26641 terminal). That next walk is the concrete
+continuation target, not a reason to weaken validation. Broader tests are
+**31/32 across four files**. The call-argument producer value control still
+fails validation (`probe`: struct.new expects externref but receives
+`ref.null 6`). Removal of only the iterative traversal reproduces that exact
+failure and restores all three deep-nesting failures (**5/9** across two
+files, `.tmp/ts5-cross-hierarchy-kill.log`, worker 18239 terminal).
+Thus the value-control failure is not attributable to the new walker.
+Restored the iterative implementation; focused confirmation is running in
+`.tmp/ts5-cross-hierarchy-restored.log`. Typecheck, formatting, lint, diff and
+function/LOC gates pass (128 changed source files, net +4,868 LOC; no new
+allowance). Existing cross-function-body refusal remains intact.
+
+Restored confirmation completed successfully (worker 20933); all processes
+from this operand-walker turn are terminal. The recursive removal experiment
+is no longer present in source.
+
+Added `.tmp/ts5-real-enum-debug-stages.ts`, separating a numeric enum-member
+control, enum-object presence/reverse lookup, `Debug.formatSyntaxKind`, and
+`Debug.formatEnum`. Its initial version also used `typeof ts.Debug`, demanding
+the entire Debug namespace and bringing the checker into the source closure.
+That version fails compilation with a stack overflow in
+`src/codegen/cross-hierarchy-operands.ts:155:10`; no runtime result. Native
+bundled pinned source passes all six initial checks. Removed the whole-Debug
+probe (not a required upstream test) in favor of the numeric enum control;
+member-only worker 64215 is live in
+`.tmp/ts5-real-enum-debug-member-stages.log`. The stack-safe shared walk remains
+a full-goal follow-up, not an excuse to exclude checker coverage.
+
+New `issue-1058-enum-namespace-format.test.ts` distinguishes ordinary enum,
+const enum and an explicit object with reverse keys; GC/standalone; direct
+provider/circular barrel. Current **1/12**, only the direct-provider GC object
+control passes (`.tmp/ts5-enum-namespace-object-controls.log`, worker 20091
+terminal). All enum cases throw, including non-circular ordinary enums.
+The direct standalone object case returns 0 rather than 42 (reverse-key read
+does not match), while circular object cases also throw. Do not treat all
+these signatures as one proven root cause.
+
+Source inspection: `namespaceFunctionExports` in
+`src/codegen/module-namespace-value.ts` admits immutable const globals and
+functions but rejects enum declarations and runtime ModuleDeclarations,
+declining the whole imported namespace. The existing enum declaration collector
+populates constant member maps, not an enum object. This is the next missing
+runtime-value capability to investigate through shared module/IR planning;
+do not patch upstream assertions or change const enums to test-only objects.
+
+Worker 64215 is now terminal: the member-only real-source diagnostic also
+fails compilation at the same cross-hierarchy operand walk (81,680 ms,
+checker source attribution, no binary or runtime result). Therefore removing
+`typeof ts.Debug` did not isolate that compile failure; do not claim it was
+the sole reason checker code remained reachable. Preserve both logs. A next
+bounded route is adding just `formatSyntaxKind` to the already-compiling
+ten-stage factory probe, or making the shared operand walker stack-safe with
+an independently attributed deep-IR regression. Formatting, lint and diff
+checks pass for the new matrix; its failures remain explicitly unresolved.
+No worker from this enum-investigation turn remains live.
+
+Implemented shared accessor-argument parameter-carrier planning in
+`src/codegen/accessor-parameter-carrier.ts`. A pre-ABI source scan records
+exact direct-call parameter declarations that receive an accessor literal,
+directly or through its variable initializer. Imported callable aliases resolve
+to their declarations; spelling alone is not authority. Spread positions,
+generic functions, rest parameters and explicit native annotations do not gain
+this evidence. Both source ABI selection and the IR parameter override consult
+the same fact. Existing identity-preserving member dispatch handles the open
+carrier, without a new legacy body-emission branch or changes to upstream TS.
+
+The real-source ten-stage factory probe now passes **10/10**, previously
+**7/10**, in valid zero-import standalone Wasm (60,768,178 bytes,
+154,779 ms; `.tmp/ts5-real-factory-accessor-carrier.log`, worker 48211
+terminal). This fixes the measured parenthesizer/export/arrow failures.
+Its 601 outcome rows still show **0 IR bodies**: this runtime improvement
+comes from the shared ABI used by the existing fallback, not full-factory
+IR migration. A separate typed accessor reader is verified IR-emitted and
+returns 42 in zero-import standalone mode.
+
+The reduced matrix passes **16/16**. Mechanism removal (only the new query
+returns false) yields **12/18**, with the four typed-getter cases and both
+new planning/IR tests failing; the dynamic/non-getter controls remain passing
+(`.tmp/ts5-accessor-parameter-kill.log`, worker 34829 terminal). Restored
+the implementation. Full restored three-file controls are running as worker
+32487 (`.tmp/ts5-accessor-parameter-restored.log`); original upstream factory
+callbacks are running as worker 73501
+(`.tmp/ts5-original-factory-accessor-carrier.log`). Do not restart them merely
+because output is silent. Prior typecheck passed; final verification pending.
+
+Terminal verification: restored controls **35/35 across three files**;
+typecheck, formatting/lint, diff check and function/LOC gates pass (127 changed
+source files, net +4,842 LOC; no new allowance). Original upstream factory
+callbacks remain **0/3**, valid 63,770,828-byte standalone binary, zero imports,
+160,865 ms. All three now report `Cannot access property on null or undefined
+at 445:33`; worker 73501 is terminal. Do not infer that this location names
+the root semantic operation, or that the assertion shim is at fault. The
+ten-stage probe's 10/10 does not cover all upstream assertions.
+
+Broader structural neighbors: **24/26 across four files**. The standalone
+user-class-Map and user-interface-Map controls fail (invalid Wasm / module-init
+stack underflow respectively). Removing only the accessor-carrier decision
+reproduces the same two failures, **9/11** in their file
+(`.tmp/ts5-accessor-map-neighbor-kill.log`, worker 71250 terminal); these are
+not attributable to this carrier change. The mechanism is restored again;
+final two-file confirmation is in `.tmp/ts5-accessor-final-restored.log`.
+Other logs: `.tmp/ts5-accessor-parameter-final-tsc.log`,
+`.tmp/ts5-accessor-func-gate.log`, `.tmp/ts5-accessor-loc-gate.log`, and
+`.tmp/ts5-accessor-structural-neighbors.log`.
+
+Final restored confirmation is **18/18 across two files** (worker 19547
+terminal); no removal switch remains. The upstream callback source eagerly
+formats both enum names in `assertSyntaxKind`'s message. Pinned
+`src/compiler/debug.ts:445` is `return formatEnum(kind, (ts as any).SyntaxKind,
+false)`. That is a concrete next probe for the reported 445:33 location,
+not yet proof that namespace lowering causes the remaining failure. No worker
+from this carrier-fix turn remains live.
+
+User reaffirmed that new work should target IR/shared planning where possible,
+not add parallel fixes to legacy direct codegen. Keep runtime diagnosis separate
+from implementation placement: a failing legacy-emitted factory body does not
+by itself justify extending that path. Prefer an IR regression that asserts
+actual IR body emission as well as standalone execution; document any necessary
+legacy exception before implementing it.
+
+The retained inspection below is terminal. Its binary reproduces **3/6** with
+zero imports. Parenthesizer failures both trap at byte offset 13,931,903,
+opcode `0xd4` (`ref.as_non_null`), at the end of the inlined parenthesizer.
+This rules out its earlier `getLeftmostExpression(...).kind` read as the trap
+site. Next distinguish a failed `factory.createParenthesizedExpression`
+callable lookup from a callable that returns null; neither cause is proved yet.
+The arrow case separately traps at offset 14,155,207 on a Node cast.
+Expanded factory/carrier controls pass **19/19 across two files** in
+`.tmp/ts5-factory-carrier-expanded-controls.log`. These controls do not establish
+that the real factory works or that all upstream unit tests pass.
+
+### Parenthesizer trampoline trace (2026-09-08, completed diagnostic)
+
+Further carrier isolation (2026-09-09): the reduced getter fixture's WAT
+stores the factory in an `externref` local/cell, but `createRules` accepts
+`(ref null 39)` (the nominal Factory struct) and forwards that typed value
+into `wrap`. Trace: `.tmp/ts5-getter-capture-types.txt.wat`; worker 6186 is
+terminal. Added a parameter-carrier control to the matrix: changing only
+`createRules(factory: Factory)` to `createRules(factory: any)` makes all four
+getter cases pass. Final matrix **12/16**, with exactly the four typed-getter
+cases still failing (`.tmp/ts5-getter-parameter-carrier-matrix.log`, worker
+6007 terminal). This is a source-variation control, not a compiler fix and not
+permission to modify upstream TypeScript annotations.
+
+The next implementation candidate is shared source-parameter ABI planning:
+retain an open carrier when an exact direct-call argument is an accessor
+object, including an identifier resolved to its accessor-object initializer.
+`prepareIdentityPreservingStructuralParams` already scans the compilation's
+source files before ABI selection and handles imported callable identity for
+a different structural-identity case. Investigate its call order and consumers
+before reusing that preparation seam; IR must receive the same carrier fact.
+Do not merely widen all interface parameters or add a special case for the
+name Factory. The reduced typed `wrap` also emits a discarded property lookup
+and null return, so ABI admission and callable-member lowering both need
+verification; the dynamic control avoids both and does not distinguish them.
+
+Follow-up (2026-09-09): `.tmp/ts5-factory-dispatch-check.mjs` tests a copy
+of the retained binary, changing only the three-byte `ref.null Node218`
+non-callable arm at offset 13,931,895 to `unreachable; nop; nop`. Both
+parenthesizer failures move to that exact unreachable instruction. The three
+positive controls remain passing in both copies. This proves the lookup result
+fails the callable-root test; it is not a null result returned by the method.
+No production binary or compiler source was modified by this experiment.
+
+Expanded the source diagnostic to ten cases. Native bundled pinned source
+passes **10/10**; standalone is valid, zero imports, 60,777,307 bytes, and
+passes **7/10** (`.tmp/ts5-real-factory-dispatch-stages.log`, worker 36424
+terminal). All four added checks pass: method `typeof`, direct calls with
+class/object nodes, and an extracted-method call. The same original three
+cases still fail. The global factory method works; its lookup through the
+parenthesizer's captured factory does not. This is diagnostic expansion, not
+a runtime improvement from the previous 3/6.
+
+Expanded `issue-1058-lazy-parenthesizer-runtime.test.ts` into an eight-case
+matrix: GC/standalone, annotated/inferred factory, direct memoizer/getter.
+All four direct-memoizer cases pass; all four getter cases fail. Repeating with
+getter name `parenthesizer` distinct from the memoizer variable `rules` yields
+the same **4/8** (`.tmp/ts5-lazy-factory-getter-distinct-name.log`, worker
+89916 terminal). This removes a same-name collision as an explanation.
+GC failures report a null/undefined receiver inside `wrap`; annotated
+standalone returns NaN instead of 84. These are retained failing regressions,
+not a claimed fix or proof of the full-source root cause. Next trace the
+getter-bearing factory's forward-capture carrier through shared ABI planning;
+do not add a legacy-only workaround on the strength of this correlation.
+
+Started a bounded WAT/type trace of the same six-stage source probe using
+the existing `JS2WASM_DUMP_TYPES`/`JS2WASM_DUMP_WAT_FN` hooks. Retain all
+type declarations, but only the measured failing trampoline, its source
+function, arrow factory, and probe caller bodies. Paths:
+`.tmp/ts5-factory-trampoline-trace.log` and
+`.tmp/ts5-factory-trampoline-types.txt.wat` (worker 76465).
+No source compiler behavior is changed by the tracing hooks.
+
+The existing diamond-interface and LiteralLikeNode carrier controls were
+GC-only. Extended both to standalone, with explicit IR enablement and zero
+import assertions, to test the nominal node-view hypothesis independently
+of the large factory. Do not infer cross-target parity from their older GC
+passes; the new measurement is in `.tmp/ts5-node-carrier-standalone-control.log`.
+
+Both carrier controls pass in both targets (**4/4 selected**). Trace 76465
+is terminal and reproduces the same **3/6**, valid 60,762,625-byte zero-import
+binary. The emitted trampoline has its captured factory as `(ref null 526)`
+and user node as `(ref null 218)` (the canonical Node). The source body is
+inlined into that trampoline; there is no trampoline-side cast of the user
+node to a distinct Expression carrier. Potential null sites include the
+`getLeftmostExpression(...).kind` read and a failed factory-callable dispatch
+followed by `ref.as_non_null`. WAT alone has not identified which traps.
+
+Started `.tmp/ts5-factory-inspect.mts` (worker 17352), using the same source
+probe and compile options, retaining `.tmp/ts5-factory-inspect.wasm` and
+printing the actual trap offset and surrounding bytes per case. Its log is
+`.tmp/ts5-factory-inspect.log`. Inspect the opcode before choosing a fix;
+the stale trailing source position is not sufficient evidence.
 
 ### IR shared mutable captures (2026-09-08, uncommitted)
 

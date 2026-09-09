@@ -3,6 +3,9 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { compileProject, ModuleResolver, resolveAllImports } from "../src/index.js";
+import { analyzeMultiSource } from "../src/checker/index.js";
+import { TsCheckerOracle } from "../src/checker/oracle.js";
+import { ts } from "../src/ts-api.js";
 
 const fixtureRoots: string[] = [];
 
@@ -32,6 +35,38 @@ afterEach(() => {
 });
 
 describe("#1058 consumer-driven pure barrels", () => {
+  it.each([false, true])(
+    "retains the checker dependency chain of a demanded type alias (namespace=%s)",
+    (namespace) => {
+      const declarations = `
+      type Leaf = number;
+      type Middle = Leaf;
+      export type Operator = Middle;
+      type Dead = string;
+      function unreachable(): number { return 99; }
+    `;
+      const root = fixture({
+        "entry.ts": namespace
+          ? `import { Types } from "./barrel.js"; export function run(value: Types.Operator) { return value; }`
+          : `import { Operator } from "./barrel.js"; export function run(value: Operator) { return value; }`,
+        "barrel.ts": `export * from "./types.js";`,
+        "types.ts": namespace ? `export namespace Types { ${declarations} }` : declarations,
+      });
+      const contents = graph(root, true);
+      const ast = analyzeMultiSource(Object.fromEntries(contents), join(root, "entry.ts"), undefined, {
+        skipSemanticDiagnostics: true,
+      });
+      const entry = ast.sourceFiles.find((source) => source.fileName.endsWith("/entry.ts"))!;
+      const fn = entry.statements.find(ts.isFunctionDeclaration)!;
+      expect(new TsCheckerOracle(ast.checker).signaturePositionOf(fn, [0])?.fact).toEqual({ kind: "number" });
+      const provider = graphContent(contents, "types.ts");
+      expect(provider).toContain("type Middle");
+      expect(provider).toContain("type Leaf");
+      expect(provider).not.toContain("type Dead");
+      expect(provider).not.toContain("function unreachable");
+    },
+  );
+
   it("keeps the historical complete graph by default and prunes unused named re-exports only when opted in", () => {
     const root = fixture({
       "entry.ts": `import { run } from "./barrel.js"; export function test(): number { return run(); }`,

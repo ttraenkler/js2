@@ -736,6 +736,7 @@ export class IrFunctionBuilder {
     this.valueTypes.set(result, resultType);
     this.pushInstr({
       kind: "object.get",
+      ...(this.valueTypes.get(value)?.kind === "val" ? { physicalReceiver: true as const } : {}),
       value,
       name,
       result,

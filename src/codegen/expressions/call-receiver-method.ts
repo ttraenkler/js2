@@ -10,6 +10,7 @@
 // when nothing matched, so the caller in calls.ts continues its post-arm
 // dispatch. Moved verbatim: the emitted Wasm is byte-identical.
 import { ts, forEachChild } from "../../ts-api.js";
+import { allowsStructuralClassInference } from "../../ir/structural-class-receiver.js";
 import {
   isBigIntType,
   isBooleanType,
@@ -1693,8 +1694,7 @@ export function compileReceiverMethodCall(
       // happens to define the same method name is order-dependent and can run a
       // private-field body against an unrelated object. Leave those receivers
       // dynamic so their runtime identity selects the method.
-      const canInferClass =
-        recvProps.length > 0 && (receiverType.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown)) === 0;
+      const canInferClass = recvProps.length > 0 && allowsStructuralClassInference(receiverType, ctx.checker);
       const canonicalClasses = canInferClass
         ? new Set([...ctx.classSet].map((name) => canonicalClassExpressionName(ctx, name) ?? name))
         : [];

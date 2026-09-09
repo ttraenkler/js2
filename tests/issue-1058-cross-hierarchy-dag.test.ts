@@ -4,6 +4,35 @@ import { expect, it } from "vitest";
 import { repairCrossHierarchyOperands } from "../src/codegen/cross-hierarchy-operands.js";
 import type { Instr, WasmModule } from "../src/ir/types.js";
 
+it.each(["block", "loop", "if"] as const)("#1058 repairs operands below 12000 nested %s arms", (op) => {
+  const leaf: Instr[] = [
+    { op: "local.get", index: 0 },
+    { op: "local.set", index: 1 },
+  ];
+  let body = leaf;
+  for (let depth = 0; depth < 12000; depth++) {
+    body =
+      op === "if"
+        ? [
+            { op: "i32.const", value: 1 },
+            { op, blockType: { kind: "empty" }, then: body, else: [] },
+          ]
+        : [{ op, blockType: { kind: "empty" }, body }];
+  }
+  const mod = {
+    types: [
+      { kind: "func", params: [{ kind: "ref_null", typeIdx: 1 }], results: [] },
+      { kind: "struct", name: "Target", fields: [] },
+    ],
+    imports: [],
+    globals: [],
+    functions: [{ name: "deep", typeIdx: 0, locals: [{ name: "out", type: { kind: "externref" } }], body }],
+  } as unknown as WasmModule;
+  expect(repairCrossHierarchyOperands(mod)).toBe(1);
+  expect(leaf).toEqual([{ op: "local.get", index: 0 }, { op: "extern.convert_any" }, { op: "local.set", index: 1 }]);
+  expect(repairCrossHierarchyOperands(mod)).toBe(0);
+});
+
 it("#1058 repairs cross-hierarchy operands in a shared instruction DAG once", () => {
   const leaf: Instr[] = [
     { op: "local.get", index: 0 },

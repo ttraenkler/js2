@@ -13,7 +13,11 @@ function primitiveTypeName(type: IrType): string | undefined {
 
 /** Source hash suffix for a proven explicit primitive function/method signature. */
 export function primitiveSourceMethodSignature(signature: IrClosureSignature): string | undefined {
-  if (signature.defaultParamStart !== undefined || signature.params.some((type) => !primitiveTypeName(type)))
+  if (
+    signature.optionalParamStart !== undefined ||
+    signature.defaultParamStart !== undefined ||
+    signature.params.some((type) => !primitiveTypeName(type))
+  )
     return undefined;
   const result = signature.returnType === null ? "void" : primitiveTypeName(signature.returnType);
   return result === undefined ? undefined : `${signature.params.length}->${result}`;

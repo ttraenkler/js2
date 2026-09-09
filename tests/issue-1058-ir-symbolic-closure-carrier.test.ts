@@ -20,6 +20,10 @@ import { lowerPreparedClosureSupportType } from "../src/ir/prepared-closure-supp
 import { irPhysicalTypeKey, irTypeKey } from "../src/ir/type-key.js";
 import { createEmptyModule, type StructTypeDef } from "../src/ir/types.js";
 import { createTestIrFunctionIdentityFactory } from "./helpers/ir-identities.js";
+import { physicalObjectField, symbolicObjectAccess } from "../src/ir/physical-object-field.js";
+import { preparedInstructionSupport } from "../src/ir/prepared-instruction-support.js";
+import { deadCode } from "../src/ir/passes/dead-code.js";
+import { verifyIrFunction } from "../src/ir/verify.js";
 
 function nodeType(index: number): StructTypeDef {
   return {
@@ -189,5 +193,121 @@ describe("#1058 symbolic recursive closure carriers", () => {
     const child = makeNode(42, parent);
     expect(invoke(parent, child)).toBe(captured ? parent : child);
     expect(invoke(child, parent)).toBe(captured ? child : parent);
+  });
+
+  it("reads and writes named recursive fields through relocated symbolic references", () => {
+    const f = fixture();
+    const nextTypes = [nodeType(0), f.module.types[0]!, ...f.module.types.slice(2)];
+    f.session.applyTypeLayoutRemap({
+      previousTypes: f.module.types,
+      nextTypes,
+      targetsByOldIndex: f.module.types.map((_, index) => (index === 0 ? 1 : index === 1 ? 0 : index)),
+    });
+    f.module.types = nextTypes;
+    const ids = createTestIrFunctionIdentityFactory("symbolic-node-fields");
+    const number: IrType = { kind: "val", val: { kind: "f64" } };
+    const run = new IrFunctionBuilder(ids.next("run"), [number, number], true);
+    const child = run.addParam("child", f.carrier(99));
+    const replacement = run.addParam("replacement", f.carrier(99));
+    const value = run.addParam("value", number);
+    run.openBlock();
+    const parent = run.emitObjectGet(child, "parent", f.carrier(99, true));
+    run.emitObjectSet(parent, "value", value);
+    const before = run.emitObjectGet(parent, "value", number);
+    run.emitObjectSet(child, "parent", replacement);
+    const after = run.emitObjectGet(run.emitObjectGet(child, "parent", f.carrier(99, true)), "value", number);
+    run.terminate({ kind: "return", values: [before, after] });
+    const fn = run.finish();
+    const resolver: IrLowerResolver = {
+      resolveFunc: () => {
+        throw new Error("unexpected function");
+      },
+      resolveGlobal: () => {
+        throw new Error("unexpected global");
+      },
+      resolveType: (ref) => f.session.resolveCurrentIndex(ref.binding.bindingId, "type", irTypeBindingKey(ref.binding)),
+      internFuncType: (type) => addFuncType(f.ctx, type.params, type.results),
+      resolvePhysicalObjectField: (index, name) => physicalObjectField(f.module.types, index, name),
+    };
+    const handle = mintDefinedFunc(f.ctx);
+    pushDefinedFunc(f.ctx, handle, lowerIrFunctionToWasm(fn, resolver).func);
+    f.module.exports.push({ name: "run", desc: { kind: "func", index: handle } });
+    const probe = new IrFunctionBuilder(ids.next("probe"), [number], true);
+    const nullable = probe.addParam("node", f.carrier(99, true));
+    probe.openBlock();
+    probe.emitObjectGet(nullable, "parent", f.carrier(99, true));
+    probe.terminate({ kind: "return", values: [probe.emitConst({ kind: "f64", value: 1 }, number)] });
+    const probeFn = deadCode(probe.finish());
+    expect(probeFn.blocks[0]!.instrs.some((instr) => instr.kind === "object.get")).toBe(true);
+    expect(verifyIrFunction(probeFn)).toEqual([]);
+    const malformed = {
+      ...probeFn,
+      blocks: probeFn.blocks.map((block) => ({
+        ...block,
+        instrs: block.instrs.map((instr) =>
+          instr.kind === "object.get" ? { ...instr, physicalReceiver: undefined } : instr,
+        ),
+      })),
+    };
+    expect(verifyIrFunction(malformed).some((error) => error.message.includes("control-effect contract"))).toBe(true);
+    const probeHandle = mintDefinedFunc(f.ctx);
+    pushDefinedFunc(f.ctx, probeHandle, lowerIrFunctionToWasm(probeFn, resolver).func);
+    f.module.exports.push({ name: "probe", desc: { kind: "func", index: probeHandle } });
+    const make = mintDefinedFunc(f.ctx);
+    pushDefinedFunc(f.ctx, make, {
+      name: "make",
+      typeIdx: addFuncType(f.ctx, [{ kind: "f64" }, { kind: "ref_null", typeIdx: 0 }], [{ kind: "ref", typeIdx: 0 }]),
+      locals: [],
+      exported: true,
+      body: [
+        { op: "local.get", index: 0 },
+        { op: "local.get", index: 1 },
+        { op: "struct.new", typeIdx: 0 },
+      ],
+    });
+    f.module.exports.push({ name: "make", desc: { kind: "func", index: make } });
+    const module = new WebAssembly.Module(emitBinary(f.module));
+    expect(WebAssembly.Module.imports(module)).toEqual([]);
+    const exports = new WebAssembly.Instance(module, {}).exports;
+    const create = exports.make as (value: number, parent: unknown) => unknown;
+    const invoke = exports.run as (child: unknown, replacement: unknown, value: number) => number[];
+    const oldParent = create(10, null);
+    const newParent = create(20, null);
+    const node = create(30, oldParent);
+    expect(invoke(node, newParent, 77)).toEqual([77, 20]);
+    expect(invoke(node, oldParent, 88)).toEqual([88, 77]);
+    expect((exports.probe as (node: unknown) => number)(node)).toBe(1);
+    expect(() => (exports.probe as (node: unknown) => number)(null)).toThrow(WebAssembly.RuntimeError);
+    const get = fn.blocks[0]!.instrs.find((instr) => instr.kind === "object.get")!;
+    const support = preparedInstructionSupport(get, fn.unitId, new Map([[child, f.carrier(99)]]), undefined, {});
+    expect(support.typeRefs).toEqual([f.ref]);
+    expect(support.hasPreparedSupport).toBe(true);
+    expect(() => symbolicObjectAccess(f.carrier(), "missing", { kind: "f64" }, false, resolver)).toThrow(
+      /no exact field/,
+    );
+    expect(() => symbolicObjectAccess(f.carrier(), "value", { kind: "i32" }, false, resolver)).toThrow(
+      /mismatched physical type/,
+    );
+    const immutable = {
+      ...resolver,
+      resolvePhysicalObjectField: () => ({ fieldIdx: 0, type: { kind: "f64" as const }, mutable: false }),
+    };
+    expect(() => symbolicObjectAccess(f.carrier(), "value", { kind: "f64" }, true, immutable)).toThrow(/immutable/);
+    expect(() =>
+      symbolicObjectAccess(
+        { kind: "val", val: { kind: "ref", typeIdx: 0 } },
+        "value",
+        { kind: "f64" },
+        false,
+        resolver,
+      ),
+    ).toThrow(/bound physical reference/);
+    expect(
+      physicalObjectField(
+        [{ kind: "struct", name: "ambiguous", fields: [nodeType(0).fields[0]!, nodeType(0).fields[0]!] }],
+        0,
+        "value",
+      ),
+    ).toBeNull();
   });
 });

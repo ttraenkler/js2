@@ -1,5 +1,7 @@
 // Copyright (c) 2026 Loopdive GmbH. Licensed under Apache-2.0 WITH LLVM-exception.
 import { ts, forEachChild } from "../ts-api.js";
+import { inferredClosureSignature, inferredReturnedClosureSignature } from "../ir/inferred-closure-signature.js";
+import { irInferredClosureCarriers } from "./ir-inferred-closure-carriers.js";
 import { dataFieldsHashKey } from "./registry/data-fields-key.js";
 import { primitiveSourceMethodSignature } from "../ir/object-method-key.js";
 import { objectLiteralHasIndexedSpread } from "./indexed-object-spread.js";
@@ -150,6 +152,7 @@ import {
   type IrPromiseDelayLoweringPlans,
 } from "../ir/promise-delay-lowering.js";
 import {
+  makeIrAmbientBindingPredicate,
   makeIrArrayExpressionPredicate,
   makeIrDeclaredPrimitiveExpressionClassifier,
   makeIrLocalClassExpressionResolver,
@@ -158,6 +161,11 @@ import {
   makeIrRegExpExpressionPredicate,
   type IrModuleBindingResolver,
 } from "../ir/module-bindings.js"; // (#2856 Capability C)
+import { isEmptyAmbientMapConstruction } from "../ir/native-map-construction.js";
+import { hasDirectNestedRecursion } from "../ir/direct-nested-recursion.js";
+import { orderTailFunctionDeclarations } from "../ir/tail-function-declarations.js";
+import { constEnumValue } from "../ir/const-enum-value.js";
+import { isAmbientUndefined } from "../ir/ambient-undefined.js";
 import {
   collectPreparedIrAsyncOwners,
   prepareIrAsyncSelectionOptions,
@@ -357,6 +365,7 @@ import {
 } from "./source-scan-predicates.js"; // (#3104) whole-program AST pre-scan predicates
 // Re-exported for existing external consumers (e.g. tests/issue-1719-s1.test.ts).
 export { sourceOverridesArrayIterator } from "./source-scan-predicates.js";
+import { parameterNeedsAccessorCarrier } from "./accessor-parameter-carrier.js";
 import {
   fillApplyClosure,
   fillBindDynHelper,
@@ -1336,6 +1345,11 @@ function resolvePositionType(
       }
       const ir = objectIrTypeFromTsType(ctx, tsType);
       if (ir) return ir;
+      // Recursive or method-heavy source objects need not expand into a new
+      // shape when their exact checker identity already has a proved source
+      // allocation. Reuse the symbolic carrier, including its ABI checks.
+      const sourceCarrier = ctx.programAbiTypes?.prepareSourceParameterCarrier(ctx.oracle.typeKeyOf(node));
+      if (sourceCarrier) return sourceCarrier;
       throw new Error(`object TypeNode ${ts.SyntaxKind[node.kind]} could not be lowered to IrType.object`);
     }
     // #2859 / #3214 B0+B3 — function-typed source boundary
@@ -2808,6 +2822,7 @@ function resolveIrOverrideParamType(
   classShapes: IrClassShapeLookup,
   resolveImplicitParamType: ReturnType<typeof makeIrImplicitParamTypeResolver>,
 ): IrType {
+  if (parameterNeedsAccessorCarrier(ctx, parameter)) return irDynamic();
   const projected = resolveImplicitParamType(parameter);
   // Keep the established numeric parity-withdrawal path (#3551): lattice f64
   // may still form the speculative IR view, and the patch-time ABI guard then
@@ -2969,6 +2984,7 @@ function planIrOverlay(
           },
           identityContext,
         );
+  const isAmbientMapBinding = makeIrAmbientBindingPredicate(ast.checker);
   const classifyPrimitiveExpression = makeIrPrimitiveExpressionClassifier(ast.checker);
   const classifyDeclaredPrimitiveExpression = makeIrDeclaredPrimitiveExpressionClassifier(ast.checker);
   const isArrayExpression = makeIrArrayExpressionPredicate(ast.checker);
@@ -3126,6 +3142,15 @@ function planIrOverlay(
     {
       experimentalIR: true,
       trackFallbacks: collectFallbacks,
+      supportsNativeMapConstruction: (expression) =>
+        ctx.nativeStrings && isEmptyAmbientMapConstruction(expression, isAmbientMapBinding),
+      hasDirectNestedRecursion: (declaration) => hasDirectNestedRecursion(declaration, ast.checker),
+      orderNestedDeclarations: (statements) => orderTailFunctionDeclarations(statements, ast.checker),
+      constEnumValue: (expression) => constEnumValue(expression, ast.checker),
+      isAmbientUndefined: (expression) => isAmbientUndefined(expression, ast.checker),
+      inferredClosureSignature: (node) => inferredClosureSignature(ctx.oracle, node, irInferredClosureCarriers(ctx)),
+      inferredReturnedClosureSignature: (call) =>
+        inferredReturnedClosureSignature(ctx.oracle, call, irInferredClosureCarriers(ctx)),
       nestedClassFieldCallProofs,
       nestedClassFieldCallAdmission,
       ...(options.enableCountedStringAppendProof || options.countedStringAppendProof
@@ -3620,12 +3645,21 @@ function consumeIrOverlayReport(
   }
 }
 
-function functionBodyHasUnsupportedImportUse(fn: ts.FunctionDeclaration, plan: IrOverlayPlan): boolean {
+function functionBodyHasUnsupportedImportUse(
+  fn: ts.FunctionDeclaration,
+  plan: IrOverlayPlan,
+  checker: ts.TypeChecker,
+): boolean {
   if (!fn.body || !plan.importedFunctionResolver) return false;
   let found = false;
   const visit = (node: ts.Node): void => {
     if (found) return;
     if (node !== fn && ts.isFunctionLike(node)) return;
+    if (
+      (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) &&
+      constEnumValue(node, checker) !== undefined
+    )
+      return;
     if (ts.isIdentifier(node) && plan.importedFunctionResolver?.isImportBinding(node)) {
       const parent = node.parent;
       const isCertifiedDirectCall =
@@ -3774,7 +3808,7 @@ function makeMultiIrSafeSelection(
           registeredFunction?.name !== name ||
           safety.occupiedFunctionKeys.some((key) => key.startsWith(`${name}$`)) ||
           (crossFileTarget && (conservativeCrossFileCallers || hasCallableBoundary)))) ||
-      functionBodyHasUnsupportedImportUse(declaration, plan) ||
+      functionBodyHasUnsupportedImportUse(declaration, plan, ctx.checker) ||
       functionBodyContainsNestedRuntimeDeclaration(declaration, plan) ||
       functionTreeRequiresLegacyStructMaterialization(ctx, declaration) ||
       (declaration.typeParameters?.length ?? 0) > 0

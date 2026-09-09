@@ -76,8 +76,8 @@ export type TypeFact =
  */
 export type OracleTypeKey = symbol & { readonly __brand: "OracleTypeKey" };
 
-/** Zero-based parameter index or return slot, descending through callable types. */
-export type SignaturePositionPath = readonly (number | "return")[];
+/** Parameter/return slots of callable types, or exact intrinsic-array element types. */
+export type SignaturePositionPath = readonly (number | "return" | "element")[];
 
 export interface SignaturePositionFact {
   readonly fact: TypeFact;

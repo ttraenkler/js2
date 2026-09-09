@@ -2,7 +2,7 @@
 import { afterEach, expect, it } from "vitest";
 
 import type { CodegenContext } from "../src/codegen/context/types.js";
-import { inlineUserFunctions } from "../src/codegen/ir-inline.js";
+import { countInstrs, inlineUserFunctions } from "../src/codegen/ir-inline.js";
 import type { Instr, WasmModule } from "../src/ir/types.js";
 
 const FLAG = "JS2WASM_IR_INLINE";
@@ -56,4 +56,43 @@ it("#1058 leaves shared IR opaque while still inlining an ordinary function", ()
   expect(sharedLeaf).toEqual([{ op: "call", funcIdx: 1 }]);
   expect(functions[2]!.body).toEqual([{ op: "call", funcIdx: 0 }]);
   expect(functions[4]!.body.some((instr) => instr.op === "call" && instr.funcIdx === 3)).toBe(false);
+});
+
+it.each(["block", "loop", "if"] as const)("#1058 rewrites a call under 12000 nested %s regions", (op) => {
+  const leaf: Instr[] = [{ op: "call", funcIdx: 1 }];
+  let body = leaf;
+  for (let depth = 0; depth < 12000; depth++) {
+    body = [
+      op === "if"
+        ? { op, blockType: { kind: "empty" }, then: body, else: [] }
+        : { op, blockType: { kind: "empty" }, body },
+    ];
+  }
+  const functions = [
+    { name: "deep_caller", typeIdx: 0, locals: [], body },
+    { name: "ordinary_target", typeIdx: 0, locals: [], body: [{ op: "nop" } as Instr] },
+  ];
+  const mod = {
+    types: [{ kind: "func", params: [], results: [] }],
+    imports: [],
+    functions,
+    globals: [],
+    elements: [],
+    exports: [],
+    declaredFuncRefs: [],
+    funcOrdinalToPosition: [],
+  } as unknown as WasmModule;
+  const ctx = {
+    mod,
+    moduleInitChunkHelperNames: new Set<string>(),
+    numImportGlobals: 0,
+    callerStrictGlobalIdx: -1,
+    sourceFunctionStrictness: new Map(),
+    sourceFunctionStrictnessByBody: new WeakMap(),
+  } as unknown as CodegenContext;
+  delete process.env[FLAG];
+  inlineUserFunctions(ctx);
+  expect(leaf).toEqual([{ op: "block", blockType: { kind: "empty" }, body: [{ op: "nop" }] }]);
+  expect(functions[1]!.body).toEqual([{ op: "nop" }]);
+  expect(countInstrs(functions[0]!.body)).toBe(12002);
 });

@@ -55,7 +55,7 @@ export function preparedInstructionSupport(
   functionTypeRefs: readonly IrTypeRef[] | undefined,
   sidecars: PreparedInstructionSupportSidecars,
 ): PreparedInstructionSupport {
-  const typeRefs = sidecars.closureSupport?.instructionRefs.get(instr);
+  let typeRefs = sidecars.closureSupport?.instructionRefs.get(instr);
   const callableRefs = sidecars.dynamicInstructionSupport?.get(ownerUnitId)?.instructionCallables.get(instr) ?? [];
   const objectType =
     instr.kind === "object.new"
@@ -63,6 +63,14 @@ export function preparedInstructionSupport(
       : instr.kind === "object.get" || instr.kind === "object.set"
         ? valueTypes.get(instr.value)
         : undefined;
+  if (
+    (instr.kind === "object.set" || (instr.kind === "object.get" && instr.physicalReceiver === true)) &&
+    objectType?.kind === "val" &&
+    objectType.typeRef &&
+    (objectType.val.kind === "ref" || objectType.val.kind === "ref_null")
+  ) {
+    typeRefs = [...(typeRefs ?? []), objectType.typeRef];
+  }
   return {
     typeRefs,
     callableRefs,

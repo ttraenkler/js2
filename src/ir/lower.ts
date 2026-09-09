@@ -59,6 +59,7 @@ import type {
 } from "./backend/handles.js";
 import { WasmGcEmitter } from "./backend/wasmgc-emitter.js";
 import { objectConstructionValues } from "./object-construction-order.js";
+import { objectAccessLayout, type IrPhysicalObjectField } from "./physical-object-field.js";
 import {
   emitWasmInt32Coercion,
   emitWasmMathClz32,
@@ -121,6 +122,8 @@ export type {
 };
 
 export interface IrLowerResolver {
+  /** Exact named field of an already resolved symbolic struct allocation. */
+  resolvePhysicalObjectField?(typeIdx: number, name: string): IrPhysicalObjectField | null;
   resolveFunc(ref: IrFuncRef): number;
   /** Exact post-call carrier adaptation for a provider with a legacy ABI. */
   callResultAdapter?(ref: IrFuncRef): "native-string-from-externref" | undefined;
@@ -2355,16 +2358,14 @@ export function lowerIrFunctionBody<S, Slot>(
         return;
       }
       case "object.get": {
-        const valueIrType = typeOf(instr.value);
-        if (valueIrType.kind !== "object") {
-          throw new Error(
-            `ir/lower: object.get value must be an object IrType, got ${valueIrType.kind} (${func.name})`,
-          );
-        }
-        const obj = resolver.resolveObject?.(valueIrType.shape);
-        if (!obj) {
-          throw new Error(`ir/lower: resolver cannot lower object<${describeShape(valueIrType.shape)}> (${func.name})`);
-        }
+        const obj = objectAccessLayout(
+          typeOf(instr.value),
+          instr.name,
+          () => lowerIrTypeToValType(instr.resultType!, resolver, func.name),
+          false,
+          resolver,
+          instr.physicalReceiver,
+        );
         // (a2): route through emitFieldGet — byte-identical {op:"struct.get"}
         // on WasmGC, OP.STRUCT_GET <fieldIdx> on bytecode.
         emitValue(instr.value, out);
@@ -2372,16 +2373,13 @@ export function lowerIrFunctionBody<S, Slot>(
         return;
       }
       case "object.set": {
-        const valueIrType = typeOf(instr.value);
-        if (valueIrType.kind !== "object") {
-          throw new Error(
-            `ir/lower: object.set value must be an object IrType, got ${valueIrType.kind} (${func.name})`,
-          );
-        }
-        const obj = resolver.resolveObject?.(valueIrType.shape);
-        if (!obj) {
-          throw new Error(`ir/lower: resolver cannot lower object<${describeShape(valueIrType.shape)}> (${func.name})`);
-        }
+        const obj = objectAccessLayout(
+          typeOf(instr.value),
+          instr.name,
+          () => lowerIrTypeToValType(typeOf(instr.newValue), resolver, func.name),
+          true,
+          resolver,
+        );
         // (a2): route through emitFieldSet — byte-identical {op:"struct.set"}
         // on WasmGC, OP.STRUCT_SET <fieldIdx> on bytecode.
         emitValue(instr.value, out);

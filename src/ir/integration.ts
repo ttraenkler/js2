@@ -1,4 +1,8 @@
 // Copyright (c) 2026 Loopdive GmbH. Licensed under Apache-2.0 WITH LLVM-exception.
+import { physicalObjectField } from "./physical-object-field.js";
+import { sourceObjectFromAstResolver } from "../codegen/ir-source-object-field.js";
+import { irInferredClosureCarriers } from "../codegen/ir-inferred-closure-carriers.js";
+import { inferredClosureSignature, inferredReturnedClosureSignature } from "./inferred-closure-signature.js";
 //
 // Integration point between the legacy codegen pipeline and the IR path.
 //
@@ -280,6 +284,11 @@ import {
   type IrStaticNumericArrayPlan,
   type IrStaticRegExpTestPlan,
 } from "./module-bindings.js";
+import { isEmptyAmbientMapConstruction } from "./native-map-construction.js";
+import { hasDirectNestedRecursion } from "./direct-nested-recursion.js";
+import { orderTailFunctionDeclarations } from "./tail-function-declarations.js";
+import { constEnumValue } from "./const-enum-value.js";
+import { isAmbientUndefined } from "./ambient-undefined.js";
 import {
   lowerIrFunctionToWasm,
   lowerIrTypeToValType,
@@ -2506,6 +2515,15 @@ export function compileIrPathFunctions(
     selection ??
     planIrCompilation(sourceFile, {
       experimentalIR: true,
+      supportsNativeMapConstruction: (expression) =>
+        ctx.nativeStrings && isEmptyAmbientMapConstruction(expression, moduleBindingResolver.isAmbientBinding),
+      hasDirectNestedRecursion: (declaration) => hasDirectNestedRecursion(declaration, ctx.checker),
+      orderNestedDeclarations: (statements) => orderTailFunctionDeclarations(statements, ctx.checker),
+      constEnumValue: (expression) => constEnumValue(expression, ctx.checker),
+      isAmbientUndefined: (expression) => isAmbientUndefined(expression, ctx.checker),
+      inferredClosureSignature: (node) => inferredClosureSignature(ctx.oracle, node, irInferredClosureCarriers(ctx)),
+      inferredReturnedClosureSignature: (call) =>
+        inferredReturnedClosureSignature(ctx.oracle, call, irInferredClosureCarriers(ctx)),
       jsHostExterns,
       ...(standaloneDomCapability ? { standaloneDomCapability } : {}),
       ...(resolveHostVoidCallback ? { hostVoidCallbacks: resolveHostVoidCallback } : {}),
@@ -3231,6 +3249,7 @@ export function compileIrPathFunctions(
           // can discharge the widening-escape proof via `getContextualType`.
           checker: ctx.checker,
           oracle: ctx.oracle,
+          inferredClosureCarriers: irInferredClosureCarriers(ctx),
           // #3765: share direct-codegen's grounded numeric-local oracle with IR.
           numericLocalScalarForDecl: (decl) => ctx.usageInference.scalarForDecl(decl),
           hostDynamicClassMethodNames: ctx.hostDynamicClassMethodNames,
@@ -3460,6 +3479,7 @@ export function compileIrPathFunctions(
           allocRegistry,
           checker: ctx.checker,
           oracle: ctx.oracle,
+          inferredClosureCarriers: irInferredClosureCarriers(ctx),
           numericLocalScalarForDecl: (decl: ts.VariableDeclaration) => ctx.usageInference.scalarForDecl(decl),
           hostDynamicClassMethodNames: ctx.hostDynamicClassMethodNames,
         };
@@ -3663,6 +3683,7 @@ export function compileIrPathFunctions(
             // ArrayLiteral widening-escape proof in method bodies too.
             checker: ctx.checker,
             oracle: ctx.oracle,
+            inferredClosureCarriers: irInferredClosureCarriers(ctx),
             numericLocalScalarForDecl: (decl) => ctx.usageInference.scalarForDecl(decl),
             hostDynamicClassMethodNames: ctx.hostDynamicClassMethodNames,
           });
@@ -3856,6 +3877,7 @@ export function compileIrPathFunctions(
         allocRegistry,
         checker: ctx.checker,
         oracle: ctx.oracle,
+        inferredClosureCarriers: irInferredClosureCarriers(ctx),
         numericLocalScalarForDecl: (decl) => ctx.usageInference.scalarForDecl(decl),
         hostDynamicClassMethodNames: ctx.hostDynamicClassMethodNames,
       });
@@ -6857,6 +6879,7 @@ function makeFromAstResolver(
   const functionPrototypeCall = integrationFunctionPrototypeCallPolicy(ctx);
   return {
     ...preparedIrAsyncFromAstResolver(ctx),
+    ...sourceObjectFromAstResolver(ctx),
     hostIndirectEvalTarget() {
       if (ctx.standalone || ctx.wasi || ctx.strictNoHostImports || ctx.nativeStrings) return null;
       const functionIndex = ctx.funcMap.get("__extern_eval");
@@ -6941,12 +6964,6 @@ function makeFromAstResolver(
       return ensureFunctionPrototypeCallHelper(ctx) === undefined
         ? null
         : irRuntimeFuncRef(FUNCTION_PROTOTYPE_CALL_HELPER);
-    },
-    resolveDynamic() {
-      return resolveIrDynamicCarrierType(ctx);
-    },
-    dynamicCarrierIsExternref() {
-      return !ctx.fast;
     },
     fnctorNativeStringReplace(call: ts.CallExpression) {
       return (
@@ -7844,6 +7861,7 @@ function makeResolver(
   // not yet built; null = mode has no dynamic op lowering).
   let dynamicLoweringMemo: IrDynamicLowering | null | undefined;
   const resolver: IrLowerResolver = {
+    resolvePhysicalObjectField: (typeIdx, name) => physicalObjectField(ctx.mod.types, typeIdx, name),
     resolveFunc(ref: IrFuncRef): number {
       if (process.env.JS2WASM_TEST_INJECT_IR_RESOLVER_FAILURE === "function") {
         throw new IrInvariantError(
@@ -7925,6 +7943,17 @@ function makeResolver(
           "unknown-type-ref",
           "lower",
           `ir/integration: type ref "${ref.name}" has no ProgramAbiSession`,
+        );
+      }
+      if (
+        !preparedScopeLookup &&
+        !ctx.programAbiSession.getDraft(ref.binding.bindingId) &&
+        ctx.programAbiTypes?.provisionalSupportTypes().some((candidate) => candidate.draft.id === ref.binding.bindingId)
+      ) {
+        throw new IrUnsupportedError(
+          "type-resolution-unsupported",
+          "resolve",
+          "provisional physical carrier requires a sealed IR component",
         );
       }
       return preparedScopeLookup

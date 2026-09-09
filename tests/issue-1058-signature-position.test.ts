@@ -23,6 +23,16 @@ function fixture(source: string) {
   return { ...ast, oracle, fn };
 }
 
+it("projects exact element identities through readonly array positions", () => {
+  const f = fixture(
+    "interface Node { value: number; } function scalar(value: Node): Node { return value; } function array(values: readonly Node[]): readonly Node[] { return values; }",
+  );
+  const key = f.oracle.signaturePositionOf(f.fn("scalar"), [0])!.typeKey;
+  expect(f.oracle.signaturePositionOf(f.fn("array"), [0, "element"])?.typeKey).toBe(key);
+  expect(f.oracle.signaturePositionOf(f.fn("array"), ["return", "element"])?.typeKey).toBe(key);
+  expect(f.oracle.signaturePositionOf(f.fn("scalar"), [0, "element"])).toBeUndefined();
+});
+
 it("finds exact annotations inside an inferred cached callback return", () => {
   const f = fixture(`
     interface Expression { kind: number; parent?: Expression; }

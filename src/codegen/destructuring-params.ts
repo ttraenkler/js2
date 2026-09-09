@@ -6,6 +6,7 @@
  */
 import { ts } from "../ts-api.js";
 import type { Instr, ValType } from "../ir/types.js";
+import { prepareDynamicArrayBindingLocals } from "./dynamic-array-binding-locals.js";
 import { popBody, pushBody } from "./context/bodies.js";
 import { reportSilentFallback } from "./fallback-telemetry.js";
 import { allocLocal, getLocalType } from "./context/locals.js";
@@ -1856,6 +1857,7 @@ export function destructureParamArray(
     // or __vec_externref from untyped arrays). We convert to __vec_externref
     // since that's what the rest of the code expects for untyped patterns.
     if (paramType.kind === "externref") {
+      if (isDecl) prepareDynamicArrayBindingLocals(ctx, fctx, pattern);
       // Per JS spec: destructuring null/undefined must throw TypeError
       emitExternrefDestructureGuard(ctx, fctx, paramIdx);
 

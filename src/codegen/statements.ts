@@ -26,6 +26,7 @@ import { mintScopedClassIdentity } from "./class-bodies.js";
 import { emitCachedFuncClosureAccess, emitFuncRefAsClosure } from "./closures.js";
 import { reportError, reportErrorNoNode } from "./context/errors.js";
 import { allocLocal, getLocalType } from "./context/locals.js";
+import { emitRuntimeEnumObjectInit } from "./runtime-enum-object.js";
 import { attachSourcePos, getSourcePos } from "./context/source-pos.js";
 import type { CodegenContext, FunctionContext } from "./context/types.js";
 import { compileExpression, registerCompileStatement } from "./shared.js";
@@ -480,6 +481,7 @@ export function compileStatement(ctx: CodegenContext, fctx: FunctionContext, stm
 }
 
 function compileStatementInner(ctx: CodegenContext, fctx: FunctionContext, stmt: ts.Statement): void {
+  if (ts.isEnumDeclaration(stmt) && emitRuntimeEnumObjectInit(ctx, fctx, stmt)) return;
   // Skip import declarations — module imports not supported
   if (ts.isImportDeclaration(stmt)) return;
 

@@ -223,6 +223,8 @@ export interface IrClosureSignature {
    * numeric suffix with the reserved legacy missing-argument sentinel.
    */
   readonly defaultParamStart?: number;
+  /** Optional TS suffix: omitted arguments are undefined; does not change function.length. */
+  readonly optionalParamStart?: number;
   /** `null` is the canonical zero-result / JavaScript `void` signature. */
   readonly returnType: IrType | null;
 }
@@ -680,6 +682,7 @@ export function classShapeEquals(a: IrClassShape, b: IrClassShape): boolean {
 export function closureSignatureEquals(a: IrClosureSignature, b: IrClosureSignature): boolean {
   if (a.params.length !== b.params.length) return false;
   if ((a.defaultParamStart ?? a.params.length) !== (b.defaultParamStart ?? b.params.length)) return false;
+  if ((a.optionalParamStart ?? a.params.length) !== (b.optionalParamStart ?? b.params.length)) return false;
   for (let i = 0; i < a.params.length; i++) {
     if (!irTypeEquals(a.params[i]!, b.params[i]!)) return false;
   }
@@ -1338,10 +1341,13 @@ export interface IrInstrObjectNew extends IrInstrBase {
  * with a shape whose `fields` contain `name`. Lowering emits
  * `struct.get $obj_<shape> <fieldIdx>`.
  *
+ * Symbolically bound physical refs use the resolver's exact named-field contract.
  * Result type: the field's IrType (must match `resultType`).
  */
 export interface IrInstrObjectGet extends IrInstrBase {
   readonly kind: "object.get";
+  /** Bound physical receivers may be nullable; retain their read/trap in program order. */
+  readonly physicalReceiver?: true;
   readonly value: IrValueId;
   readonly name: string;
 }
@@ -1349,7 +1355,8 @@ export interface IrInstrObjectGet extends IrInstrBase {
 /**
  * Write a named field on an object. `value` must be `IrType.object`,
  * `newValue` must match the field's IrType. Void result. Lowering emits
- * `struct.set $obj_<shape> <fieldIdx>`.
+ * `struct.set $obj_<shape> <fieldIdx>`. Symbolically bound physical refs require
+ * the resolver's exact named-field/type/mutability contract.
  */
 export interface IrInstrObjectSet extends IrInstrBase {
   readonly kind: "object.set";

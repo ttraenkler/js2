@@ -108,6 +108,7 @@ function collectMultiImportedFunctionNames(
       }
     }
     if (target.flags & ts.SymbolFlags.Module) {
+      let allExportsErased = true;
       for (const exported of checker.getExportsOfModule(target)) {
         let value = exported;
         try {
@@ -116,6 +117,12 @@ function collectMultiImportedFunctionNames(
           for (const name of allFunctionNames) names.add(name);
           return true;
         }
+        if (
+          (value.flags & (ts.SymbolFlags.ConstEnum | ts.SymbolFlags.Interface | ts.SymbolFlags.TypeAlias)) === 0 ||
+          (value.flags & (ts.SymbolFlags.Value & ~ts.SymbolFlags.ConstEnum)) !== 0
+        ) {
+          allExportsErased = false;
+        }
         for (const declaration of value.declarations ?? []) {
           if (ts.isFunctionDeclaration(declaration) && declaration.name) {
             names.add(declaration.name.text);
@@ -123,6 +130,9 @@ function collectMultiImportedFunctionNames(
           }
         }
       }
+      // A resolved namespace containing only erased exports is a proven
+      // empty callable surface, not an unresolved import of every function.
+      if (allExportsErased) return true;
     }
     return found;
   };

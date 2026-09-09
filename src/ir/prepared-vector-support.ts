@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Loopdive GmbH. Licensed under Apache-2.0 WITH LLVM-exception.
 
 import type { CodegenContext } from "../codegen/context/types.js";
+import { resolveIrDynamicCarrierType } from "../codegen/any-helpers.js";
 import { definedFuncAt } from "../codegen/func-space.js";
 import {
   planProgramAbiEntrySourceSupportCallable,
@@ -79,6 +80,7 @@ export function prepareIrVectorSupport<T extends PreparedVectorEntry>(input: {
     const direct = asVal(elem);
     if (direct) return direct;
     if (elem.kind === "string") return input.resolveString();
+    if (elem.kind === "dynamic") return resolveIrDynamicCarrierType(input.ctx);
     if (elem.kind !== "vec") return null;
     const inner = physicalElementFor(elem.elementType);
     if (!inner) return null;
@@ -111,7 +113,8 @@ export function prepareIrVectorSupport<T extends PreparedVectorEntry>(input: {
         // for a vec-of-vecs element (see the async guard further down, which
         // keeps `fromExternFor`'s plain-`Error` invariant unreachable).
         const nestedVecElement = type.elementType.kind === "vec" && element !== null;
-        if (!element || (!materializerElement && !nativeStringElement && !nestedVecElement)) {
+        const dynamicElement = type.elementType.kind === "dynamic" && element !== null;
+        if (!element || (!materializerElement && !nativeStringElement && !nestedVecElement && !dynamicElement)) {
           // (#4486) The physical vec registry carries exactly three element
           // kinds. Everything else — most visibly a NESTED vec, i.e. the
           // `vec<vec<externref>>` a `string[][]` param resolves to — is a
@@ -171,7 +174,7 @@ export function prepareIrVectorSupport<T extends PreparedVectorEntry>(input: {
           // `classifyIrFailure` would bucket as an untyped invariant, i.e. a
           // HARD compile error — stays unreachable. This is the #4486 lesson
           // applied ahead of the regression rather than after it.
-          if (fulfilled && logicalType.elementType.kind === "vec") {
+          if (fulfilled && (logicalType.elementType.kind === "vec" || logicalType.elementType.kind === "dynamic")) {
             throw new IrUnsupportedError(
               "type-resolution-unsupported",
               "resolve",
