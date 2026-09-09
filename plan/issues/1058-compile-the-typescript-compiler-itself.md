@@ -241,6 +241,21 @@ oracle-ratchet-allow:
 
 ## Wrap-up handoff — 2026-09-09
 
+**Publication blocked; implementation is committed locally, not pushed.**
+Checkpoint `d45ba31dfc014cc66fb6a4731a73ea6fa6c819a0` and conflict-free signed
+merge `351c2405451f26d4a7d1a47d890dc742fd86e2f0` are on local branch
+`codex/1058-typescript-standalone` in `/private/tmp/ts2wasm-ts5-1058-resume`.
+The PR description carries the handoff, but its remote head remains `49a37ae`.
+The normal pre-push hook rejected net direct checker growth (+6):
+`src/codegen/accessor-parameter-carrier.ts`,
+`src/codegen/expressions/call-receiver-method.ts`, and
+`src/codegen/runtime-enum-object.ts`. Route the new source queries through
+`ctx.oracle`; do not bypass the hook or relax its baseline to publish.
+Post-merge source typecheck and 19 focused tests across five files pass.
+The local compiler-boundary inventory gate fails with 55 unclassified modules
+and 110 unclassified-target references. Both publication and CI repairs remain
+for the next lane; the user requested wrap-up rather than further implementation.
+
 Publication check: the existing PR's head `49a37ae` contains a newer main merge.
 Its CI quality job `102258710224` is red; the shepherd reports 31 unclassified
 compiler modules plus target references in inventory artifact `10079198885`.
