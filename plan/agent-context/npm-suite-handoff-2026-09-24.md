@@ -32,10 +32,10 @@ Root causes clustered and worked 09-23/24 (Opus 5.5 agents):
 | opaque "entry did not produce a runnable module" (10 pkgs) | **fixed**, PR #6052 merged — each package now reports its real error |
 | react `require is not defined` at module init | **fixed**, PR #6053 merged; react now blocks on browser globals → #6664 |
 | replace/replaceAll with a runtime RegExp (#1474/#1913) | **fixed**, PR #6054 merged (#6662); hono/marked/moment now block on match/search/split → #6665 |
-| standalone lanes inherit the JS-host compile failure on the dashboard | PR #6060 open (#6660) |
-| styled-components wasm-opt validation failure in `re` | PR #6067 open |
-| RegExp match/search/split as a VALUE (#6665) | agent running at handoff (workflow wf_07a07bbb-6a7) |
-| react browser globals: performance/MessageChannel/queueMicrotask (#6664) | agent running at handoff (same workflow) |
+| standalone lanes inherit the JS-host compile failure on the dashboard | PR #6060 open (#6660) — axios's real blocker `__get_builtin` #1472 Phase B |
+| styled-components wasm-opt validation failure in `re` | PR #6067 open (#6669 cross-module shadowing, #6670 dynamic key in closed struct) — next: 18 host imports (DOM globals, same family as #6664) |
+| RegExp match/search/split as a VALUE (#6665) | **fixed**, PR #6089 merged — hono now blocks on `Array.prototype.flat` (#2717); marked compiles, runtime `Infinite loop on byte: 35` (#6672); moment compiles, `Object.prototype.toString` unimplemented at init; lodash `stack-balance` closure capture (#6673); lodash-es 4 host imports (setTimeout/clearTimeout/runtime-eval); prettier generator lowering (#680) |
+| react browser globals: performance/MessageChannel/queueMicrotask (#6664) | PR #6087 open — 0 host imports; next blocker `console` read as a value is null (#6671) |
 | axios: real standalone blocker is `__get_builtin` #1472 in combined-stream (not #3587 as the dashboard said) | recorded in #6660, unowned |
 
 Current lane table (benchmarks/results/npm-compat.json, pre-#6047/#6054
@@ -71,7 +71,8 @@ refresh — CI regenerates on every merge):
 ## Open PRs of this effort
 
 - #6060 fix(#6660) standalone lanes report their own compile error — CLEAN, auto-enqueue
-- #6067 styled-components wasm-opt validation — check state
+- #6067 styled-components wasm-opt validation (#6669/#6670) — check state
+- #6087 fix(#6664) react browser globals Wasm-native — check state
 - #6044 fix(#6451) JS-host struct enumeration harness — BEHIND (JS-host lane, low priority)
 - #5911 fix(#6440) Promise.try — DIRTY + stale hold from the #6461 gate; needs a main merge + unhold (JS-host lane)
 
@@ -87,17 +88,20 @@ to dispatch more JS-host unit-test work; these are recorded, not queued.
 
 ## How to resume the standalone lane
 
-1. Read the wave-2 journal for the two agents still running at handoff:
-   `~/.claude/projects/-Users-thomas-Code-js2--claude-worktrees-npm-unit-test-failures-420ca0/ff1eafdb-376d-4510-b9db-2ae45f5b023f/subagents/workflows/wf_07a07bbb-6a7/journal.jsonl`
-   — they open PRs for #6665 and #6664 on their own.
+1. Wave 2 is complete (all five agents reported; PRs above).
 2. Per package: `npx tsx scripts/generate-npm-compat-report.mjs --only <pkg> --no-write --perf-only --lane standalone-dynamic`
    (`--inspect-ir`, `--inspect-wat`, `--inspect-binary`). Never hand-commit
    npm-compat.json. New host imports are forbidden in standalone; the
    precedent for an unavailable capability is #6659 (throw ReferenceError).
-3. Next blockers after #6665/#6664: hono `Array.prototype.flat` (#2717);
-   axios `__get_builtin` (#1472); react-dom `require("react")` linkage;
-   lodash/prettier after match/split; typescript/webpack standalone compile
-   > 25 min (#1058/#4287).
+3. Next blockers, per package (all filed): hono `Array.prototype.flat`
+   (#2717) · axios `__get_builtin` (#1472) · react `console` value read
+   (#6671) · marked untyped-chain exec null (#6672) · moment
+   `Object.prototype.toString` in standalone · lodash closure stack-balance
+   (#6673) · lodash-es setTimeout/runtime-eval imports · prettier generator
+   lowering (#680) · styled-components DOM-global imports (#6664 family) ·
+   react-dom `require("react")` linkage · typescript/webpack compile > 25 min
+   (#1058/#4287). Harness bug: npm-compat checksum-phase throws render as
+   `[object WebAssembly.Exception]` (recorded in #6672).
 
 ## Environment traps (all bit this effort)
 
