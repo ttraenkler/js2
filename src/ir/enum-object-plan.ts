@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Loopdive GmbH. Licensed under Apache-2.0 WITH LLVM-exception.
 import { ts } from "../ts-api.js";
+import type { TypeOracle } from "../checker/oracle.js";
 
 export interface EnumObjectWrite {
   readonly key: string;
@@ -19,9 +20,15 @@ export interface EnumObjectPlan {
  * Runtime-valued initializers and merged declarations need ordered evaluation
  * and therefore decline this static plan rather than silently dropping effects.
  */
-export function planEnumObject(declaration: ts.EnumDeclaration, checker: ts.TypeChecker): EnumObjectPlan | undefined {
-  const symbol = checker.getSymbolAtLocation(declaration.name);
-  if (!symbol || symbol.declarations?.length !== 1 || symbol.declarations[0] !== declaration) return undefined;
+export function planEnumObject(
+  declaration: ts.EnumDeclaration,
+  checker: ts.TypeChecker | Pick<TypeOracle, "declarationsOf" | "enumConstantValueOf">,
+): EnumObjectPlan | undefined {
+  const declarations =
+    "declarationsOf" in checker
+      ? checker.declarationsOf(declaration.name)
+      : checker.getSymbolAtLocation(declaration.name)?.declarations;
+  if (declarations?.length !== 1 || declarations[0] !== declaration) return undefined;
   if (declaration.getSourceFile().isDeclarationFile) return undefined;
   for (let node: ts.Node | undefined = declaration; node; node = node.parent) {
     if (
@@ -35,7 +42,8 @@ export function planEnumObject(declaration: ts.EnumDeclaration, checker: ts.Type
   const writes: EnumObjectWrite[] = [];
   for (const member of declaration.members) {
     if (!ts.isIdentifier(member.name) && !ts.isStringLiteral(member.name)) return undefined;
-    const value = checker.getConstantValue(member);
+    const value =
+      "enumConstantValueOf" in checker ? checker.enumConstantValueOf(member) : checker.getConstantValue(member);
     if (typeof value !== "number" && typeof value !== "string") return undefined;
     const forward = Object.freeze({ key: member.name.text, value });
     members.push(forward);

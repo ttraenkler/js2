@@ -2193,6 +2193,14 @@
       "nextBoundary": "Separate existing TS-wrapper, module-resolution and mixed identity/type/planning dependencies before frontend closure. This file was already unmigrated before the contracts-only frontend activation; no source behavior changed."
     },
     {
+      "path": "src/checker/enum-binding.ts",
+      "state": "unmigrated",
+      "layer": "mixed-needs-split",
+      "destination": "frontend-ts",
+      "owner": "1058",
+      "nextBoundary": "Replace TS AST binding identity with frontend-owned declaration contracts; this checker-only resolver exposes no registry or physical layout."
+    },
+    {
       "path": "src/checker/ts5-trace.ts",
       "state": "unmigrated",
       "layer": "mixed-needs-split",

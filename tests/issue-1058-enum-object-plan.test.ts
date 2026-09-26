@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Loopdive GmbH. Licensed under Apache-2.0 WITH LLVM-exception.
 import { expect, it } from "vitest";
 import { analyzeSource } from "../src/checker/index.js";
+import { TsCheckerOracle } from "../src/checker/oracle.js";
 import { planEnumObject } from "../src/ir/enum-object-plan.js";
 import { ts } from "../src/ts-api.js";
 
@@ -12,7 +13,12 @@ function plans(source: string) {
     ts.forEachChild(node, visit);
   };
   visit(ast.sourceFile);
-  return declarations.map((declaration) => planEnumObject(declaration, ast.checker));
+  const oracle = new TsCheckerOracle(ast.checker);
+  return declarations.map((declaration) => {
+    const plan = planEnumObject(declaration, oracle);
+    expect(plan).toEqual(planEnumObject(declaration, ast.checker));
+    return plan;
+  });
 }
 
 it.each(["enum", "const enum"])("plans %s aliases and reverse mappings in source assignment order", (kind) => {
@@ -48,6 +54,23 @@ it.each(["enum", "const enum"])("plans %s aliases and reverse mappings in source
 
 it("declines effectful initializers instead of erasing evaluation", () => {
   expect(plans(`function effect(): number { return 11; } enum Kind { Value = effect() }`)).toEqual([undefined]);
+});
+
+it("declines unknown oracle evidence rather than inventing enum values", () => {
+  const ast = analyzeSource(`enum Kind { A = 11 }`, "/repo/unknown-enum.ts");
+  const declaration = ast.sourceFile.statements.find(ts.isEnumDeclaration)!;
+  expect(
+    planEnumObject(declaration, {
+      declarationsOf: () => [declaration],
+      enumConstantValueOf: () => undefined,
+    }),
+  ).toBeUndefined();
+  expect(
+    planEnumObject(declaration, {
+      declarationsOf: () => [],
+      enumConstantValueOf: () => 11,
+    }),
+  ).toBeUndefined();
 });
 
 it("declines merged and ambient enum initialization", () => {

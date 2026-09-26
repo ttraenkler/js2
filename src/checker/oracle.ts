@@ -29,6 +29,7 @@ import { ts } from "../ts-api.js";
 import { symbolShadowsBuiltinGlobal } from "./builtin-shadow.js"; // (#5096) intrinsic-shadow claim gate
 import { higherOrderSignatureTypeFact } from "./higher-order-signature-fact.js";
 import { resolveCheckerSignaturePosition } from "./signature-position.js";
+import { checkerEnumDeclaration } from "./enum-binding.js";
 
 /** JS runtime tag classification (aligned with the #2104 JsTag module). */
 export type JsTag = "number" | "string" | "boolean" | "bigint" | "symbol" | "undefined" | "object" | "function";
@@ -177,6 +178,12 @@ export interface TypeOracle {
    * `valueDeclarationOf` does.
    */
   aliasedValueDeclarationOf(id: ts.Node): ts.Declaration | undefined;
+  /** Exact enum namespace binding; unknown does not authorize materialization. */
+  enumDeclarationOf(expression: ts.Expression): ts.EnumDeclaration | undefined;
+  /** Checker-foldable enum member/read value, without exposing checker types. */
+  enumConstantValueOf(
+    node: ts.EnumMember | ts.PropertyAccessExpression | ts.ElementAccessExpression,
+  ): string | number | undefined;
   /** All declarations for an exact binding, without exposing its Symbol. */
   declarationsOf(node: ts.Node): readonly ts.Declaration[];
   /** Declarations of the non-nullish receiver type, not its variable binding. */
@@ -514,6 +521,24 @@ export class TsCheckerOracle implements TypeOracle {
       if (sym === undefined) return undefined;
       const resolved = (sym.flags & ts.SymbolFlags.Alias) !== 0 ? this.checker.getAliasedSymbol(sym) : sym;
       return resolved?.valueDeclaration ?? resolved?.declarations?.[0];
+    } catch {
+      return undefined;
+    }
+  }
+
+  enumDeclarationOf(expression: ts.Expression): ts.EnumDeclaration | undefined {
+    try {
+      return checkerEnumDeclaration(expression, this.checker);
+    } catch {
+      return undefined;
+    }
+  }
+
+  enumConstantValueOf(
+    node: ts.EnumMember | ts.PropertyAccessExpression | ts.ElementAccessExpression,
+  ): string | number | undefined {
+    try {
+      return this.checker.getConstantValue(node);
     } catch {
       return undefined;
     }

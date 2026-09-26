@@ -378,6 +378,21 @@ export class DifferentialOracle implements TypeOracle {
     return this.compare("aliasedValueDeclarationOf", id, (o) => o.aliasedValueDeclarationOf(id), describeOptionalNode);
   }
 
+  enumDeclarationOf(node: ts.Expression): ts.EnumDeclaration | undefined {
+    return this.compare("enumDeclarationOf", node, (o) => o.enumDeclarationOf(node), describeOptionalNode);
+  }
+
+  enumConstantValueOf(
+    node: ts.EnumMember | ts.PropertyAccessExpression | ts.ElementAccessExpression,
+  ): string | number | undefined {
+    return this.compare(
+      "enumConstantValueOf",
+      node,
+      (o) => o.enumConstantValueOf(node),
+      (v) => `${typeof v}:${String(v)}`,
+    );
+  }
+
   declarationsOf(node: ts.Node): readonly ts.Declaration[] {
     return this.compare(
       "declarationsOf",

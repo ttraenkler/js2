@@ -269,6 +269,27 @@ oracle-ratchet-allow:
 
 ## Resumed main integration — 2026-09-27
 
+Continuation verification: pinned original `factory.ts` passes **3/3** source
+callbacks in standalone mode at `b740f04b75` (107,942 ms compile, 14,091,233
+bytes, zero imports). `compilerCore.ts` passes **11/11** (3,667 ms, 878,075
+bytes, zero imports). Both preserve original assertions and native callback
+counts, at TypeScript pin `c63de15a992d37f0d6cec03ac7631872838602cb`.
+The prior parser/binder host-lane evidence does not establish standalone
+acceptance. The other four source-unit files are being measured separately.
+
+Enum binding/constant evidence now crosses the shared oracle boundary while
+retaining the IR-owned enum plan, exact source binding checks and assignment
+order. The in-house oracle declines unsupported evidence; the differential
+backend compares results. Oracle/enum-plan/reference tests pass **19/19** and
+source typecheck and scoped lint pass. Execution regressions pass **30/32**;
+the two failing ordinary-object namespace cases reproduce at unmodified
+`b740f04b75` in a separate checkout with the same standalone lane and Vitest
+configuration (**10/12** in that file). They are not new enum-query regressions.
+The change-scoped oracle gate improves from ctxChecker +5 to **+2**, with
+getTypeAtLocation still **+1** (generator and structural receiver queries).
+Inventory still fails for older unclassified branch modules; the new enum
+binding leaf is explicitly registered, without claiming architecture completion.
+
 The user requested a main merge and continuation. The former temporary checkout
 was cleaned out, but branch `codex/1058-typescript-standalone` retained the signed
 handoff at `efd9aca79c5aba4bfd6670847be925a027ed219f`. Work now lives in

@@ -1,11 +1,15 @@
 // Copyright (c) 2026 Loopdive GmbH. Licensed under Apache-2.0 WITH LLVM-exception.
 import { expect, it } from "vitest";
 import { analyzeSource } from "../src/checker/index.js";
+import { TsCheckerOracle } from "../src/checker/oracle.js";
 import { runtimeEnumObjectDeclarations } from "../src/ir/enum-object-reference.js";
 
 function demanded(source: string) {
   const ast = analyzeSource(source, "/repo/enum-reference.ts");
-  return [...runtimeEnumObjectDeclarations([ast.sourceFile], ast.checker)];
+  const oracle = new TsCheckerOracle(ast.checker);
+  const declarations = [...runtimeEnumObjectDeclarations([ast.sourceFile], oracle)];
+  expect(declarations).toEqual([...runtimeEnumObjectDeclarations([ast.sourceFile], ast.checker)]);
+  return declarations;
 }
 
 it("does not materialize folded-only enum members or type references", () => {

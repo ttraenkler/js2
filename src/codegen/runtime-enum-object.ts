@@ -19,10 +19,10 @@ const bindings = new WeakMap<CodegenContext, Map<ts.EnumDeclaration, Binding>>()
 
 export function prepareRuntimeEnumObjects(ctx: CodegenContext, sources: readonly ts.SourceFile[]): void {
   const owned = new Map<ts.EnumDeclaration, Binding>();
-  for (const declaration of runtimeEnumObjectDeclarations(sources, ctx.checker)) {
+  for (const declaration of runtimeEnumObjectDeclarations(sources, ctx.oracle)) {
     // Function-local and merged enums require different allocation lifetimes.
     if (!ts.isSourceFile(declaration.parent)) continue;
-    const plan = planEnumObject(declaration, ctx.checker);
+    const plan = planEnumObject(declaration, ctx.oracle);
     if (!plan) continue;
     const global: GlobalDef = {
       name: `__enum_object_${ctx.mod.globals.length}`,
@@ -51,7 +51,7 @@ export function emitRuntimeEnumObjectRead(
   fctx: FunctionContext,
   expression: ts.Expression,
 ): ValType | undefined {
-  const declaration = enumObjectDeclaration(expression, ctx.checker);
+  const declaration = enumObjectDeclaration(expression, ctx.oracle);
   const binding = declaration && bindings.get(ctx)?.get(declaration);
   if (!binding) return undefined;
   // The canonical helper only looks up host undefined; without registering

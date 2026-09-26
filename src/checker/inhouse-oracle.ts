@@ -147,6 +147,17 @@ export class InHouseOracle implements TypeOracle {
     return this.valueDeclarationOf(id);
   }
 
+  enumDeclarationOf(_expression: ts.Expression): ts.EnumDeclaration | undefined {
+    // Cross-module enum binding and constant evaluation are not implemented.
+    return undefined;
+  }
+
+  enumConstantValueOf(
+    _node: ts.EnumMember | ts.PropertyAccessExpression | ts.ElementAccessExpression,
+  ): string | number | undefined {
+    return undefined;
+  }
+
   variableDeclarationOf(id: ts.Node): ts.VariableDeclaration | undefined {
     const decl = this.valueDeclarationOf(id);
     if (!decl || !ts.isVariableDeclaration(decl) || !ts.isIdentifier(decl.name)) return undefined;
