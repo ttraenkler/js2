@@ -101,6 +101,7 @@ import { isLazyIterForm, LAZY_ITER_METHODS } from "../iter-lazy-native.js";
 import { stringConstantExternrefInstrs } from "../native-strings.js";
 import { usesNativeNumberFormat } from "../number-format-native.js";
 import { ensureStandaloneRegExpCarrierTestHelper } from "../regexp-standalone.js";
+import { ensureStandaloneRegExpCarrierExecHelper } from "../regexp-exec-carrier.js";
 import {
   tryEmitStandaloneDynamicSpreadCall,
   tryEmitStandaloneTrailingSpreadCall,
@@ -260,6 +261,7 @@ function sourceDeletesBuiltinPrototypeMember(
 }
 import { resolvePromiseSubclassName } from "./promise-subclass.js";
 import { ensureTaToStringHelper, taToStringApplies } from "../ta-to-string.js"; // (#6651 E7)
+import { isHostResolvedBuiltinReceiver } from "../standalone-unavailable-globals.js"; // (#1472)
 import {
   BUILTIN_CLASS_NAMES,
   coerceNumberMethodArgToF64,
@@ -4203,6 +4205,8 @@ export function compileReceiverMethodCall(
         // indices are still append-safe. The dispatcher fill only reads it.
         if (ctx.standalone && methodName === "test" && arity === 1) {
           ensureStandaloneRegExpCarrierTestHelper(ctx);
+        } else if (ctx.standalone && methodName === "exec" && arity === 1) {
+          ensureStandaloneRegExpCarrierExecHelper(ctx); // (#6672) the exec twin
         }
         // (#2927) For the in-place array mutation forms (`push` arity 1 / `pop`
         // arity 0) the closed-method dispatcher grows a native `$__vec_base`
@@ -4737,8 +4741,7 @@ export function compileReceiverMethodCall(
           [{ kind: "externref" }],
         );
         // For built-in class identifiers, import __get_builtin to resolve real JS object
-        const receiverIsBuiltin =
-          ts.isIdentifier(propAccess.expression) && BUILTIN_CLASS_NAMES.has(propAccess.expression.text);
+        const receiverIsBuiltin = isHostResolvedBuiltinReceiver(ctx, propAccess.expression); // (#1472)
         const getBuiltinIdx = receiverIsBuiltin
           ? ensureLateImport(ctx, "__get_builtin", [{ kind: "externref" }], [{ kind: "externref" }])
           : undefined;

@@ -22,6 +22,8 @@ import {
 } from "../../checker/type-mapper.js";
 import type { Instr, ValType } from "../../ir/types.js";
 import { compileHostFreeCryptoCall, isHostFreeCryptoCall } from "./standalone-crypto.js";
+import { tryStandaloneQueueMicrotaskCall } from "./standalone-queue-microtask.js";
+import { tryStandaloneHostFreeCall } from "./standalone-dynamic-code.js"; // (#6675/#6676) timers, Function(src)
 import { compileArrayMethodCall, compileArrayPrototypeCall, resolveArrayInfo } from "../array-methods.js";
 import { emitGlobalThisGopdFold } from "../dyn-read.js"; // (#2984)
 import { tryEmitNullishReceiverCall } from "../nullish-receiver-coercible.js"; // (#4484 B) §7.3.2 on a syntactic null/undefined receiver
@@ -7632,7 +7634,7 @@ function compileCallExpression(
   // reactor (async-scheduler.ts). Only fires under --target wasi; everything else
   // falls through to the JS-host import path unchanged.
   {
-    const r = tryWasiTimerCall(ctx, fctx, expr);
+    const r = tryWasiTimerCall(ctx, fctx, expr) ?? tryStandaloneQueueMicrotaskCall(ctx, fctx, expr); // (#6664)
     if (r !== undefined) return r;
   }
 
@@ -7658,7 +7660,9 @@ function compileCallExpression(
   // runtime callable before the dynamic-dispatch candidate scan.
   const immediateFunctionCtor = isFunctionCtorImmediateCall(expr, ctx.checker);
   {
-    const r = tryStandaloneDynamicFunctionCtorValue(ctx, fctx, expr);
+    const r =
+      tryStandaloneHostFreeCall(ctx, fctx, expr, immediateFunctionCtor) ??
+      tryStandaloneDynamicFunctionCtorValue(ctx, fctx, expr);
     if (r !== undefined) return r;
     if (ctx.standalone && immediateFunctionCtor && ensureRuntimeEvalCallableCarrier(ctx, fctx)) {
       const dyn = tryEmitInlineDynamicCall(ctx, fctx, expr, true);

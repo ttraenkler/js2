@@ -529,6 +529,10 @@ async function compileStandaloneLane({
       skipSemanticDiagnostics: true,
       optimize: NPM_COMPAT_STANDALONE_OPTIMIZE_LEVEL,
       target: "standalone",
+      // The lane instantiates with ZERO imports, so no runtime-eval provider is
+      // linked: dynamic `Function(src)` must refuse in-module (EvalError), not
+      // import the interpreter.
+      runtimeEvalProvider: false,
       // Linked npm graphs can need their complete instance (including
       // internal callback exports) while module initialization runs. Keep
       // the binary host-free, but invoke the exported initializer
@@ -1642,6 +1646,8 @@ async function compileNpmCompatPerfLane({ setup, spec, lane, compileOptions }) {
       // The report owns its deployment tier. Per-package compatibility
       // options may not silently change the artifact being compared.
       target,
+      // Standalone lanes instantiate with zero imports: no runtime-eval provider.
+      ...(target === "standalone" ? { runtimeEvalProvider: false } : {}),
       semanticProviders: lane === "js-host-native" ? "native-first" : "auto",
       optimize: npmCompatOptimizationLevel(target === "standalone" ? "standalone" : "js-host"),
       preserveDebugNames,
@@ -1760,6 +1766,11 @@ async function compileNpmCompatPerfLane({ setup, spec, lane, compileOptions }) {
   return {
     result,
     exports,
+    // (#6672) The thrown-value renderer reads `instance.exports.__exn_tag`;
+    // handing it `exports` (as the checksum/measure catches did) meant the
+    // payload was never decoded and every such throw read
+    // `[object WebAssembly.Exception]`.
+    instance,
     moduleImports,
     compileDurationMs,
     moduleCompileDurationMs,
@@ -1947,7 +1958,7 @@ async function perfNpmCompatPackage(name, { setupFactory, report, compileOptions
       expectedChecksum = spec.nativeOperation(nativeModule, spec.staticInput);
       actualChecksum = compiled.exports.__npmCompatStandaloneBenchmark(1);
     } catch (error) {
-      return failedOptimizedPerfLane("standalone", "runtime-error", renderHarnessThrownText(error, compiled.exports), {
+      return failedOptimizedPerfLane("standalone", "runtime-error", renderHarnessThrownText(error, compiled.instance), {
         phase: "checksum",
         optimizationVerified: true,
         inputMode: "compile-time-static",
@@ -1978,7 +1989,7 @@ async function perfNpmCompatPackage(name, { setupFactory, report, compileOptions
         },
       );
     } catch (error) {
-      return failedOptimizedPerfLane("standalone", "runtime-error", renderHarnessThrownText(error, compiled.exports), {
+      return failedOptimizedPerfLane("standalone", "runtime-error", renderHarnessThrownText(error, compiled.instance), {
         phase: "measure",
         optimizationVerified: true,
         inputMode: "compile-time-static",
@@ -2015,7 +2026,7 @@ async function perfNpmCompatPackage(name, { setupFactory, report, compileOptions
       expectedChecksum = spec.nativeOperation(nativeModule, spec.dynamicInput(spec.staticInput, seed, 0));
       actualChecksum = compiled.exports.__npmCompatStandaloneDynamic(1, seed);
     } catch (error) {
-      return failedOptimizedPerfLane("standalone", "runtime-error", renderHarnessThrownText(error, compiled.exports), {
+      return failedOptimizedPerfLane("standalone", "runtime-error", renderHarnessThrownText(error, compiled.instance), {
         phase: "checksum",
         optimizationVerified: true,
         inputMode: "runtime-dynamic",
@@ -2047,7 +2058,7 @@ async function perfNpmCompatPackage(name, { setupFactory, report, compileOptions
         { inputMode: "runtime-dynamic" },
       );
     } catch (error) {
-      return failedOptimizedPerfLane("standalone", "runtime-error", renderHarnessThrownText(error, compiled.exports), {
+      return failedOptimizedPerfLane("standalone", "runtime-error", renderHarnessThrownText(error, compiled.instance), {
         phase: "measure",
         optimizationVerified: true,
         inputMode: "runtime-dynamic",
