@@ -309,6 +309,45 @@ This is only six files of the 256-file pinned inventory, not goal completion.
 Next: diagnose why the full diagnostic graph loses the parsed statement parent,
 using `.tmp/diagnostic-parent-probe.mjs` and the committed source-parent workload.
 
+Parent triage at `112e76feb6`: the standalone source-parent workload still passes
+**3/3**, including parent identity and ancestor lookup. A diagnostic copy of the
+five original collection callbacks compares no repair, direct assignment,
+`setParent`, `setParentRecursive(false)`, and `setParentRecursive(true)`.
+Native passes 5/5; Wasm outcomes are parent-null, later null-property error,
+later null-property error, pass, pass. Recursive repair restores the last two
+original callbacks without changing their assertions. This is diagnostic
+evidence, not acceptance: the unmodified suite remains 0/5. Next inspect the
+emitted parser parent-setup calls and default-boolean transport in the larger
+graph; don't patch upstream tests to insert the repair.
+
+Follow-up argc fix: a minimal standalone IR callback reproduced an explicit
+`true` becoming `false`. `tryRuntimeNamespaceMemberCall` projected the exact
+function handle but cleared optional-parameter metadata: only TS namespace
+declarations had saved metadata, not ordinary ESM declarations reached through
+`import * as ts`. The callee consequently consumed the zero-argument callback's
+stale argc and overwrote the supplied fourth argument with its false default.
+Top-level registration now captures the same declaration-owned metadata used
+by namespace projection; no new legacy-only lowering branch was added.
+Explicit true/false and omitted true/false controls pass **4/4**, namespace
+regressions **23/23**, source typecheck, scoped lint and both size gates pass.
+Explicit `undefined` still returns 0 instead of the expected 42 in the callback
+fixture and is an explicit pending test, not passing coverage. The legacy
+non-IR version of the original minimal callback throws before and after this
+fix; that separate problem remains unaddressed.
+
+The unmodified pinned `diagnosticCollection.ts` now passes **2/5** (the final
+two callbacks), native **5/5**, valid standalone Wasm, **zero imports**,
+137,610 ms compile and 17,150,148 bytes. The first three retain null-property
+errors. Latest six-file sample is therefore **25/28**, not full-inventory
+acceptance. Evidence: `.tmp/standalone-diagnostic-argc-network.log`,
+`.tmp/callback-default-verified.log`, `.tmp/namespace-metadata-fixed.log`,
+`.tmp/argc-related-tests.log`. Next locate the remaining three exceptions;
+preserve original assertions and exact callback counts. The initial rerun hit
+the system Git/Xcode license issue and the setup harness removed its generated
+upstream cache before failing to clone offline. The retry used bundled Git,
+restored the pinned checkout with network access, and verified its inventory.
+No project source or user work was removed.
+
 The user requested a main merge and continuation. The former temporary checkout
 was cleaned out, but branch `codex/1058-typescript-standalone` retained the signed
 handoff at `efd9aca79c5aba4bfd6670847be925a027ed219f`. Work now lives in

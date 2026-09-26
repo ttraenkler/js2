@@ -75,6 +75,17 @@ function declarationMetadata(ctx: CodegenContext, declaration: ts.FunctionDeclar
   return metadataByContext.get(ctx)?.get(declaration);
 }
 
+/** Retain declaration-owned call metadata for ESM as well as TS namespace members. */
+export function captureRuntimeModuleCallableMetadata(ctx: CodegenContext, declaration: ts.FunctionDeclaration): void {
+  if (!declaration.name) return;
+  let byDeclaration = metadataByContext.get(ctx);
+  if (!byDeclaration) {
+    byDeclaration = new WeakMap();
+    metadataByContext.set(ctx, byDeclaration);
+  }
+  byDeclaration.set(declaration, captureNameState(ctx, declaration.name.text));
+}
+
 /**
  * Register one runtime-namespace callable without publishing any permanent
  * bare-name compatibility metadata. The exact declaration keeps the produced
@@ -92,12 +103,7 @@ export function isolateRuntimeModuleCallableRegistration<T>(
   ctx.preRegisteredBodyless?.delete(name);
   try {
     const result = register();
-    let byDeclaration = metadataByContext.get(ctx);
-    if (!byDeclaration) {
-      byDeclaration = new WeakMap();
-      metadataByContext.set(ctx, byDeclaration);
-    }
-    byDeclaration.set(declaration, captureNameState(ctx, name));
+    captureRuntimeModuleCallableMetadata(ctx, declaration);
     return result;
   } finally {
     applyNameState(prior, name);

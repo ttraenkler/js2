@@ -185,6 +185,7 @@ import {
   pushProgramAbiTopLevelCallable,
 } from "./program-abi-source-callable-planning.js";
 import {
+  captureRuntimeModuleCallableMetadata,
   isolateRuntimeModuleCallableRegistration,
   withRuntimeModuleCallableBindings,
 } from "./runtime-module-callable-metadata.js";
@@ -3123,6 +3124,7 @@ export function collectDeclarations(ctx: CodegenContext, sourceFile: ts.SourceFi
         exported: isExported,
       };
       pushProgramAbiTopLevelCallable(ctx, stmt, funcIdx, func);
+      captureRuntimeModuleCallableMetadata(ctx, stmt);
 
       if (isExported) {
         ctx.mod.exports.push({
