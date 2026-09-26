@@ -49,7 +49,11 @@ import { tryStaticToNumber } from "./expressions/misc.js";
 import { emitNativeParseNumber } from "./parse-number-native.js";
 import { ensureObjectRuntime } from "./object-runtime.js";
 import { admitsObjectAddition, emitObjectAdd } from "./addition-to-primitive.js";
-import { admitsObjectRelational, reduceRelationalOperandsToPrimitive } from "./relational-to-primitive.js";
+import {
+  admitsObjectRelational,
+  admitsPrimitiveUnionRelational,
+  reduceRelationalOperandsToPrimitive,
+} from "./relational-to-primitive.js";
 // (#4491 T4) §13.15.3 `+` over object operands.
 import {
   addOperandCallableSourceText,
@@ -2209,17 +2213,20 @@ export function compileBinaryExpression(
   // ToNumber both sides, so `("a" as any) < ("b" as any)` yielded `false`.
   // Route to the runtime-dispatched compare before the f64 hint is applied.
   //
-  // Two arms, deliberately gated differently — see relational-to-primitive.ts:
+  // Arms are deliberately gated differently — see relational-to-primitive.ts:
   //  - ANY arm: unchanged, including its `anyValueTypeIdx < 0` exclusion.
   //  - OBJECT arm (§7.2.12): standalone only, and NOT subject to that exclusion
   //    (the AnyValue helpers do not in fact own this shape). #1374's host
   //    comparator hazard cannot recur there — no host operator is involved.
+  //  - Primitive unions that can hold strings on both sides retain runtime
+  //    string-vs-number dispatch rather than receiving the f64 hint (#1058).
   if (isRelational) {
     const leftIsAnyish = (leftTsType.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown)) !== 0;
     const rightIsAnyish = (rightTsType.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown)) !== 0;
     const anyArm = ctx.anyValueTypeIdx < 0 && (leftIsAnyish || rightIsAnyish);
     const objArm = admitsObjectRelational(ctx, leftTsType, rightTsType);
-    if ((anyArm || objArm) && !isBigIntType(leftTsType) && !isBigIntType(rightTsType)) {
+    const unionArm = admitsPrimitiveUnionRelational(ctx, leftTsType, rightTsType);
+    if ((anyArm || objArm || unionArm) && !isBigIntType(leftTsType) && !isBigIntType(rightTsType)) {
       return emitAnyRelational(ctx, fctx, expr, op);
     }
   }

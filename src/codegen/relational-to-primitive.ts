@@ -93,6 +93,28 @@ export function admitsObjectRelational(ctx: CodegenContext, left: ts.Type, right
   return isObjectOperandType(left) || isObjectOperandType(right);
 }
 
+/** Primitive unions may hold two strings: do not erase their lexical ordering. */
+export function admitsPrimitiveUnionRelational(ctx: CodegenContext, left: ts.Type, right: ts.Type): boolean {
+  if (ctx.targetProfile.semanticProviders !== "native-first" || !ctx.nativeStrings || ctx.anyStrTypeIdx < 0)
+    return false;
+  if (!left.isUnion() && !right.isUnion()) return false;
+  const canBeString = (type: ts.Type): boolean => {
+    const parts = type.isUnion() ? type.types : [type];
+    const primitives =
+      ts.TypeFlags.StringLike |
+      ts.TypeFlags.NumberLike |
+      ts.TypeFlags.BooleanLike |
+      ts.TypeFlags.Null |
+      ts.TypeFlags.Undefined |
+      ts.TypeFlags.Void;
+    return (
+      parts.some((part) => (part.flags & ts.TypeFlags.StringLike) !== 0) &&
+      parts.every((part) => (part.flags & primitives) !== 0)
+    );
+  };
+  return canBeString(left) && canBeString(right);
+}
+
 /**
  * Reduce the two externref operand temps in place. A no-op when the native
  * `__to_primitive` is unavailable (older minimal standalone builds), so the

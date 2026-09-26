@@ -389,6 +389,59 @@ the plain `dy` by the richer `dyBetter`, retaining the original assertion.
 The helper/dispatch code is shared by both paths; no parallel legacy-only
 implementation or upstream test relaxation was added.
 
+Content triage at `f6c6c0c7e3`: the first callback's returned list has **three**
+entries, rather than the expected two. A diagnostic copy retains every original
+assertion and adds guards; native remains 5/5. Identity checks additionally
+reject the first result element in callbacks two and three, although their
+original structural assertions pass; that is separate evidence, not yet an
+attributed root cause. `.tmp/diagnostic-content-probe.log` records both facts.
+A small generic array insertion/replacement control returns the correct result,
+so do not infer a general splice defect from the ordering difference alone.
+A parser-free source-module diagnostic fixture returns 2110 natively but traps
+in `compareMessageText` in Wasm; it is not yet a faithful reproducer of the
+original non-trapping mismatch. Next compare the original diagnostic equality
+and ordering results before changing insertion code.
+The direct diagnostic equality and ordering checks pass for both original and
+stored diagnostics. A subsequent original-source probe finds `binarySearch`
+returns **-1**, where native returns **-2**, before the richer diagnostic is
+added. This changes the next investigation to callback/search transport rather
+than equality or splice semantics. `.tmp/diagnostic-equality-probe.log` and
+`.tmp/diagnostic-search-probe.log` preserve these measurements; both diagnostic
+copies execute all five callbacks, pass natively, and keep all original
+assertions. Standalone generic insertion, message-equality, and simplified
+sorted-diagnostic controls pass, so they are controls, not reproducers.
+The callback-dispatch probe then shows the first stored `a` diagnostic compares
+as greater than the richer `y` diagnostic in both direct and dynamic calls;
+identity selection itself is correct. A faithful small reproduction of
+TypeScript's overloaded `compareComparableValues` returns +1 for `a` vs `y`
+in both compiler paths. Its implementation parameters are mixed primitive
+unions, which bypass the string/any/object relational gates and get a numeric
+hint. Candidate: admit primitive unions capable of holding strings on both
+sides into the existing native runtime-dispatched relational path, preserving
+the numeric fast path when both-string comparison cannot occur. No new
+comparison runtime is introduced. A 12-by-12 operand matrix for all four
+operators passes on both paths (**1,152 operator results**, zero imports).
+The focused suite has 25/26 passing tests; the remaining any-local numeric
+string case is being checked against an exact detached `f6c6c0c7e3` control.
+Original diagnostics and source typecheck are still running; don't credit
+upstream completion from the small matrix alone.
+Final original-source result: `diagnosticCollection.ts` now passes **5/5** in
+both native and standalone lanes, with original assertions unchanged, valid
+Wasm and **zero imports** (136,211 ms compile, 17,177,134 bytes), recorded in
+`.tmp/diagnostic-union-relational-fixed.log`. Source typecheck, scoped lint,
+LOC and function budgets pass. The focused relational suite is **25/26**:
+the sole `any` local numeric-string failure reproduces identically in the same
+Vitest configuration at exact pre-fix `f6c6c0c7e3` (**6/7** in that file), in
+`/private/tmp/ts2wasm-ts5-relational-control-f6c6`; evidence is
+`.tmp/primitive-union-control-f6c6.log`. Do not mark that pre-existing case fixed.
+The predicate reuses the established shared runtime comparison dispatch and
+does not introduce a separate IR/legacy runtime implementation; both compilation
+modes have the matrix coverage. The other five source files are being freshly
+revalidated in isolated invocations, serially, with logs under
+`.tmp/source-revalidation-<suite>.log`. Their prior passing results plus the
+new 5/5 account for 28 callbacks, but wait for revalidation before claiming a
+fully fresh six-file sample. Even that is not the complete pinned inventory.
+
 The user requested a main merge and continuation. The former temporary checkout
 was cleaned out, but branch `codex/1058-typescript-standalone` retained the signed
 handoff at `efd9aca79c5aba4bfd6670847be925a027ed219f`. Work now lives in
