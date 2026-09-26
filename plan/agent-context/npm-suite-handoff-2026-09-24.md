@@ -68,6 +68,22 @@ refresh — CI regenerates on every merge):
 | stylelint | compile-error |  |
 | lit | skipped | the pinned Lit callback probe currently covers the JS-host lane only |
 
+
+### Standalone wave 3 (2026-09-24/25, Opus 5.5)
+
+| package | PR | before → after | next blocker |
+|---|---|---|---|
+| react | #6087 + #6097 merged | host-import-error → **measured** (checksum 8/8, 0 imports) | none |
+| marked | #6095 merged | `Infinite loop on byte: 35` → checksum phase | unsupported dynamic RegExp pattern (see #6672 residuals) |
+| hono | #6120 | `Array.prototype.flat` refusal → host-import-error | 8 Web/Fetch globals: URL, Request, Response, Headers, addEventListener (unfiled) |
+| lodash | #6117 | closure stack-balance → next | (re-run lane after merge) |
+| moment | #6118 | `Object.prototype.toString` → result-mismatch | Date methods lost through a property read (#6678) |
+| lodash-es | #6113 | 4 host imports (timers/runtime-eval, #6675/#6676) → module-init | `Date.now` unimplemented in standalone (#6681) |
+| axios | #6114 | `__get_builtin` #1472 → compile-error | `redactConfig` liveBodies unbalanced #2182 (#6682) |
+
+Also filed but unfixed: standalone `Array.prototype.map` traps when the callback
+variable's type returns a union (closure `ref.cast` miss).
+
 ## Open PRs of this effort
 
 - #6060 fix(#6660) standalone lanes report their own compile error — CLEAN, auto-enqueue
