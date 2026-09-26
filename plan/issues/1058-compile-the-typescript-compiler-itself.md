@@ -348,6 +348,47 @@ upstream cache before failing to clone offline. The retry used bundled Git,
 restored the pinned checkout with network access, and verified its inventory.
 No project source or user work was removed.
 
+Remaining-diagnostic triage at `88aa732158`: all five parent/ancestor guards now
+pass. Wrapping only `collection.getDiagnostics()` in a diagnostic copy identifies
+that call as the failure in each of the first three callbacks (native 5/5,
+Wasm 2/5, valid zero-import module). `.tmp/diagnostic-stage-probe.log` records
+the result. A small captured collection reproduces a null dereference before
+entering the overloaded getter: callable-property planning uses the first
+overload's required string parameter even though the zero-argument overload
+allows omission. Padding emits `ref.null` followed by `ref.as_non_null`.
+The candidate widens such reference slots when another overload omits them,
+preserving the full wrapper arity and supplied-argument transport. The small
+standalone IR reproduction now returns the expected two diagnostics. Original
+upstream rerun and broader callable regressions are pending; don't credit the
+three upstream callbacks until their unchanged assertions pass.
+The first candidate left the original suite at 2/5 (135,057 ms, same binary
+size): the real `DiagnosticCollection` interface lists its zero-argument
+overload first, unlike the inferred local function type. An explicit interface
+with that ordering reproduces failure in both IR and non-IR standalone lanes.
+Callable-property planning now retains the widest overload argument list while
+allowing reference slots omitted by shorter overloads. Both overload orderings,
+omitted and supplied arguments pass on both paths; the focused regression set
+passes **13/13**. The original suite is being rerun again; this intermediate
+evidence does not supersede the measured 25/28 source sample.
+
+Final overload-order measurement: the unchanged original collection suite
+improves to **4/5**, native **5/5**, valid standalone module with **zero imports**
+(133,100 ms compile, 17,176,898 bytes). Only `keeps equivalent diagnostic with
+elaboration` fails, now at its original `deepEqual` assertion rather than a
+null-property exception. The six-file measured sample is **27/28**; this does
+not establish the complete 256-file goal. `compilerCore.ts` was rerun as an
+original-source control and remains **11/11**, zero imports (2,916 ms,
+878,360 bytes). Focused overload tests also pass **4/4** after strengthening
+the body to distinguish `undefined` explicitly, covering both overload orders
+and both compiler paths. Typecheck, lint and both size gates pass.
+Evidence: `.tmp/diagnostic-overload-order-fixed.log`,
+`.tmp/compilerCore-overload-control.log`, `.tmp/overload-order-regressions.log`,
+`.tmp/overload-order-strict-undefined.log`.
+Next inspect the first callback's actual diagnostic list and replacement of
+the plain `dy` by the richer `dyBetter`, retaining the original assertion.
+The helper/dispatch code is shared by both paths; no parallel legacy-only
+implementation or upstream test relaxation was added.
+
 The user requested a main merge and continuation. The former temporary checkout
 was cleaned out, but branch `codex/1058-typescript-standalone` retained the signed
 handoff at `efd9aca79c5aba4bfd6670847be925a027ed219f`. Work now lives in

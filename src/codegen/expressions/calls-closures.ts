@@ -1579,7 +1579,11 @@ export function compileCallablePropertyCall(
   }
 
   const sig = callSigs[0]!;
-  const sigParameters = runtimeSignatureParameters(sig);
+  // All overloads share one stored closure. Preserve its widest declared
+  // argument list even when the first overload is the zero-argument form.
+  const sigParameters = callSigs
+    .map(runtimeSignatureParameters)
+    .reduce((widest, parameters) => (parameters.length > widest.length ? parameters : widest));
   const sigParamCount = sigParameters.length;
   const sigRetType = ctx.checker.getReturnTypeOfSignature(sig);
   const resolvedSigRetWasm = isVoidType(sigRetType) ? null : resolveWasmType(ctx, sigRetType);
@@ -1590,7 +1594,13 @@ export function compileCallablePropertyCall(
   for (let i = 0; i < sigParamCount; i++) {
     const paramType = ctx.checker.getTypeOfSymbol(sigParameters[i]!);
     const declaration = sigParameters[i]!.valueDeclaration;
-    const type = widenJsDefaultGuessSymbolSlot(sigParameters[i], resolveWasmType(ctx, paramType));
+    let type = widenJsDefaultGuessSymbolSlot(sigParameters[i], resolveWasmType(ctx, paramType));
+    // An overload may omit a reference parameter required by the first
+    // signature. Its physical closure slot must accept the missing value;
+    // padding a non-null reference inserts an unconditional runtime trap.
+    if (type.kind === "ref" && callSigs.some((candidate) => runtimeSignatureParameters(candidate).length <= i)) {
+      type = { kind: "ref_null", typeIdx: type.typeIdx };
+    }
     sigParamWasmTypes.push(
       declaration && ts.isParameter(declaration) ? preserveOptionalDeclarationParameter(ctx, declaration, type) : type,
     );
