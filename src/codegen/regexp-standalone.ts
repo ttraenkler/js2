@@ -4482,11 +4482,14 @@ export function tryCompileStandaloneStringReplace(
     return undefined; // not a RegExp arg → generic string path
   }
 
-  // (#4224) A CALLABLE replacer re-emits the §22.2.6.11 walk at the call site,
-  // where the closure's `call_ref` is in scope (`regex-replace-fn.ts`). It
-  // declines for a runtime-only pattern or an unresolvable function value, which
-  // then reaches the refusal below unchanged. Standalone only: WASI has no
-  // native RegExp lowering here and must keep reporting the refusal.
+  // Prefer the shared protocol walk: it collects matches and updates lastIndex
+  // before invoking replacers, whose callbacks can observe or mutate that state.
+  const dynamic = tryCompileRuntimeReplacer(ctx, fctx, expr, method, reExpr, receiverOverride, propAccess.expression);
+  if (dynamic !== undefined) return dynamic;
+
+  // (#4224) Keep the static closure walk as a fallback for providers not served
+  // by the standalone protocol. It declines runtime-only patterns and values
+  // without a callable representation; WASI still reaches its existing refusal.
   const fnFlags = usesNativeRegExpProvider(ctx) ? staticRegExpFlags(ctx, reExpr) : null;
   if (fnFlags !== null && !(method === "replaceAll" && !fnFlags.includes("g"))) {
     const fnReplace = tryCompileStandaloneRegExpFunctionReplace(
@@ -4500,10 +4503,6 @@ export function tryCompileStandaloneStringReplace(
     );
     if (fnReplace !== undefined) return fnReplace;
   }
-
-  // (#6662) An un-provable replacer dispatches at RUNTIME instead of refusing.
-  const dynamic = tryCompileRuntimeReplacer(ctx, fctx, expr, method, reExpr, receiverOverride, propAccess.expression);
-  if (dynamic !== undefined) return dynamic;
 
   // Function replacers require closure dispatch plus capture-argument
   // marshalling, which the host-free RegExp carrier does not implement yet.

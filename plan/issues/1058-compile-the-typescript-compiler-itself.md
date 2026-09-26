@@ -477,6 +477,21 @@ callbacks: global replacement must finish collecting matches before invoking
 replacers, and callbacks can observe or mutate the regex state. Preserve the
 existing shared runtime/protocol semantics and validate original paths again.
 
+Candidate after `bf4199a646`: prefer the existing standalone dynamic replacement
+protocol before the static function-replacer shortcut. The shared protocol
+already collects all matches before calling replacers; no new runtime or
+legacy-only implementation is added. The isolated sequence now returns 7 and
+lastIndex controls return 0 in both compiler modes. New regression coverage
+checks callback-visible state, callback writes, no match, non-global preservation
+and throwing callbacks. All **51/51** focused replacement tests pass; source
+typecheck, scoped lint and LOC/function budgets pass. Original paths improves
+from **12/14 to 13/14**, including the unchanged case-normalization assertions;
+native remains 14/14. The binary is valid with zero imports (83,943 ms,
+7,660,215 bytes). Evidence: `.tmp/source-paths-protocol.log` and
+`.tmp/regexp-protocol-regressions.log`. The remaining `getPathRelativeTo` failure
+is unchanged. Next: resolve the generic identity callback representation and
+rerun the original suite; no claim that all TypeScript units pass.
+
 The user requested a main merge and continuation. The former temporary checkout
 was cleaned out, but branch `codex/1058-typescript-standalone` retained the signed
 handoff at `efd9aca79c5aba4bfd6670847be925a027ed219f`. Work now lives in

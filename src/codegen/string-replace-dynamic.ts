@@ -48,8 +48,8 @@
  * hands the replacer no `groups` object (a STATIC named-group pattern therefore
  * keeps its refusal, see `tryCompileRuntimeReplacer`).
  *
- * The arm is taken only where the existing lowering would have REFUSED, so
- * every call site that compiled before keeps its byte-identical code.
+ * RegExp function replacers also use this shared protocol before the static
+ * shortcut, so match collection and observable lastIndex state stay ordered.
  */
 import { ts } from "../ts-api.js";
 import type { Instr, ValType } from "../ir/types.js";
