@@ -29,6 +29,12 @@ it("records exact accessor arguments without widening ordinary or shadowed bindi
     "/repo/accessor-parameters.ts",
   );
   const ctx = createCodegenContext(createEmptyModule(), ast.checker);
+  // This producer must consume shared oracle evidence, not reopen the checker.
+  ctx.checker = new Proxy(ast.checker, {
+    get() {
+      throw new Error("Accessor parameter preparation bypassed the oracle");
+    },
+  });
   prepareAccessorParameterCarriers(ctx, [ast.sourceFile]);
   const results: [string, boolean][] = [];
   const visit = (node: ts.Node): void => {

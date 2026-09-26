@@ -36,9 +36,7 @@ export function prepareAccessorParameterCarriers(ctx: CodegenContext, sourceFile
   while (pending.length) {
     const node = pending.pop()!;
     if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
-      let symbol = ctx.checker.getSymbolAtLocation(node.expression);
-      if (symbol && symbol.flags & ts.SymbolFlags.Alias) symbol = ctx.checker.getAliasedSymbol(symbol);
-      const declaration = symbol?.valueDeclaration;
+      const declaration = ctx.oracle.aliasedValueDeclarationOf(node.expression);
       if (
         declaration &&
         ts.isFunctionDeclaration(declaration) &&
@@ -52,7 +50,7 @@ export function prepareAccessorParameterCarriers(ctx: CodegenContext, sourceFile
           if (!parameter || parameter.dotDotDotToken) break;
           if (
             ts.isIdentifier(parameter.name) &&
-            nativeTypeOfDeclaration(ctx.checker, parameter) === null &&
+            nativeTypeOfDeclaration(ctx.oracle, parameter) === null &&
             isAccessorArgument(ctx, argument)
           )
             parameters.add(parameter);

@@ -274,7 +274,8 @@ was cleaned out, but branch `codex/1058-typescript-standalone` retained the sign
 handoff at `efd9aca79c5aba4bfd6670847be925a027ed219f`. Work now lives in
 `/private/tmp/ts2wasm-ts5-1058-20260927`; the unrelated dirty Deno checkout is untouched.
 Fetched `loopdive/js2` main at `dc7eb2c1e382acc9f586d22c7bb372a9932bf8eb`.
-The merge initially conflicted in 25 files and is undergoing integration checks.
+The merge initially conflicted in 25 files and completed in signed commit
+`43e67c7f8f`, with formatting/lint and both size gates passing.
 Ported object layout/signature/physical-field semantics into main's new IR core,
 analysis and generic lowering owners; legacy entry modules remain compatibility
 exports, rather than restoring their old monolithic implementations.
@@ -290,6 +291,17 @@ A detached `efd9aca` control reproduces that cast failure (and two additional
 failures fixed by this integration), so it is not a new merge regression.
 Do not treat these targeted checks as the full TypeScript unit suite. Budget
 checks use the fetched main SHA explicitly because the local origin base is stale.
+
+Continuation: accessor parameter preparation now uses shared oracle declaration
+and native annotation queries, removing its three direct checker accesses. Its
+declaration/shadowing/native-carrier test rejects any direct checker use, and
+the execution test continues to require an IR-emitted body. The bytecode IR
+proof and accessor tests pass 25/25 after this change as well.
+The oracle ratchet against fetched main still fails: getTypeAtLocation +1 and
+ctxChecker +5, in generator, runtime enum and structural receiver source queries.
+Remaining publication work includes those queries, boundary inventory, and
+reconciliation with the remote PR head (observed
+`dc16de194f` on 2026-09-27). No force push is authorized or required.
 
 ## Wrap-up handoff — 2026-09-09
 
