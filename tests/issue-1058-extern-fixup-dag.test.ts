@@ -24,6 +24,20 @@ it("#1058 fixes extern conversions in a shared instruction DAG once", () => {
   expect(leaf).toEqual([{ op: "ref.null.extern" }]);
 });
 
+it("repairs deeply nested instruction bodies without using the JavaScript call stack", () => {
+  const leaf: Instr[] = [{ op: "ref.null.extern" }, { op: "extern.convert_any" }];
+  let body = leaf;
+  for (let depth = 0; depth < 20_000; depth++) body = [{ op: "block", blockType: { kind: "empty" }, body }];
+  const mod = {
+    types: [{ kind: "func", params: [], results: [] }],
+    imports: [],
+    globals: [],
+    functions: [{ name: "deep", typeIdx: 0, locals: [], body }],
+  } as unknown as WasmModule;
+  fixupExternConvertAny({ mod, errors: [] } as unknown as CodegenContext);
+  expect(leaf).toEqual([{ op: "ref.null.extern" }]);
+});
+
 it("#1058 fails closed on extern conversion cleanup for a body shared across local spaces", () => {
   const body: Instr[] = [{ op: "local.get", index: 0 }, { op: "extern.convert_any" }];
   const mod = {

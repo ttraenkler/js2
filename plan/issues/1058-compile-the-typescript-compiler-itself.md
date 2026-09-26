@@ -290,6 +290,25 @@ getTypeAtLocation still **+1** (generator and structural receiver queries).
 Inventory still fails for older unclassified branch modules; the new enum
 binding leaf is explicitly registered, without claiming architecture completion.
 
+Fresh remaining-source measurements: base64 **1/1** and parsePseudoBigInt
+**5/5** pass with zero imports; diagnosticCollection is **0/5** despite valid
+standalone compilation. A diagnostic copy preserves all original assertions
+and adds input checks: all five native callbacks pass; all five Wasm callbacks
+report `probe: parent null` after statement count, presence and kind checks pass.
+Logs: `.tmp/diagnostic-parent-probe.log`, `.tmp/standalone-*-current.log`.
+Comments fails compilation with stack overflow in `fixupExternConvertAny`.
+Its postorder instruction-array traversal is now iterative in the shared Wasm
+model, preserving DAG visitation and cross-function ownership refusals. A
+20,000-level regression passes. Original comments improves from compile failure
+to **3/3 standalone**, zero imports (83,029 ms, 7,566,274 bytes). Focused
+traversal/fixup controls pass **53/53**, including the unchanged canonical-walker
+migration receipt; the new postorder algorithm lives in a separate shared-model
+leaf. The six-file source sample is now **23/28**: factory 3, compilerCore 11,
+base64 1, comments 3, parsePseudoBigInt 5; diagnosticCollection remains 0/5.
+This is only six files of the 256-file pinned inventory, not goal completion.
+Next: diagnose why the full diagnostic graph loses the parsed statement parent,
+using `.tmp/diagnostic-parent-probe.mjs` and the committed source-parent workload.
+
 The user requested a main merge and continuation. The former temporary checkout
 was cleaned out, but branch `codex/1058-typescript-standalone` retained the signed
 handoff at `efd9aca79c5aba4bfd6670847be925a027ed219f`. Work now lives in

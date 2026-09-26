@@ -14,6 +14,7 @@ import type { CodegenContext, CodegenError } from "./context/types.js";
 import { absoluteFuncIndexCached } from "../emit/resolve-layout.js"; // (#1916 S3)
 // (#4077) The exact forward stack model now lives beside its second consumer.
 import { callTargetFuncType, locateCallArgProducers } from "./call-arg-producers.js";
+import { walkInstructionArraysPostOrder } from "../wasm/model/instruction-postorder.js";
 
 /** Every nested instruction array owned by one structured instruction. */
 function nestedBodies(instr: Instr): Instr[][] {
@@ -987,40 +988,7 @@ export function fixupExternConvertAny(ctx: CodegenContext): void {
     return def ? def.type : null;
   }
 
-  function fixupInstrs(
-    func: WasmFunction,
-    instrs: Instr[],
-    visited: WeakSet<Instr[]>,
-    contextBlocked: WeakSet<Instr[]>,
-    reportedBlocked: WeakSet<Instr[]>,
-  ): void {
-    if (contextBlocked.has(instrs)) {
-      recordContextBlockedFixup(ctx.mod, reportedBlocked, instrs, "extern.convert_any repair", ctx.errors);
-      return;
-    }
-    if (visited.has(instrs)) return;
-    visited.add(instrs);
-    // Recurse into nested blocks first
-    for (const instr of instrs) {
-      if ("body" in instr && Array.isArray((instr as any).body)) {
-        fixupInstrs(func, (instr as any).body, visited, contextBlocked, reportedBlocked);
-      }
-      if ("then" in instr && Array.isArray((instr as any).then)) {
-        fixupInstrs(func, (instr as any).then, visited, contextBlocked, reportedBlocked);
-      }
-      if ("else" in instr && Array.isArray((instr as any).else)) {
-        fixupInstrs(func, (instr as any).else, visited, contextBlocked, reportedBlocked);
-      }
-      if ("catches" in instr && Array.isArray((instr as any).catches)) {
-        for (const c of (instr as any).catches) {
-          if (Array.isArray(c.body)) fixupInstrs(func, c.body, visited, contextBlocked, reportedBlocked);
-        }
-      }
-      if ("catchAll" in instr && Array.isArray((instr as any).catchAll)) {
-        fixupInstrs(func, (instr as any).catchAll, visited, contextBlocked, reportedBlocked);
-      }
-    }
-
+  function fixupInstrs(func: WasmFunction, instrs: Instr[]): void {
     // Scan for extern.convert_any with non-anyref inputs
     for (let j = instrs.length - 1; j > 0; j--) {
       if (instrs[j]!.op !== "extern.convert_any") continue;
@@ -1236,7 +1204,16 @@ export function fixupExternConvertAny(ctx: CodegenContext): void {
   const reportedBlocked = new WeakSet<Instr[]>();
   for (const func of ctx.mod.functions) {
     if (func.body.length > 0) {
-      fixupInstrs(func, func.body, visited, contextBlocked, reportedBlocked);
+      walkInstructionArraysPostOrder(
+        func.body,
+        (body) => fixupInstrs(func, body),
+        visited,
+        (body) => {
+          if (!contextBlocked.has(body)) return true;
+          recordContextBlockedFixup(ctx.mod, reportedBlocked, body, "extern.convert_any repair", ctx.errors);
+          return false;
+        },
+      );
     }
   }
 }

@@ -1660,6 +1660,11 @@
       "layer": "wasm-model"
     },
     {
+      "path": "src/wasm/model/instruction-postorder.ts",
+      "state": "clean",
+      "layer": "wasm-model"
+    },
+    {
       "path": "src/runtime/wasmgc/values/string-number-grammar.ts",
       "state": "clean",
       "layer": "native-runtime"
