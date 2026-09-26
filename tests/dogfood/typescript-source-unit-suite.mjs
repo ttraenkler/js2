@@ -14,7 +14,15 @@ import {
 } from "./upstream-suite-runner.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const FILES = { factory: 3, diagnosticCollection: 5, compilerCore: 11, base64: 1, comments: 3, parsePseudoBigInt: 5 };
+const FILES = {
+  factory: 3,
+  diagnosticCollection: 5,
+  compilerCore: 11,
+  base64: 1,
+  comments: 3,
+  parsePseudoBigInt: 5,
+  paths: 14,
+};
 
 export const SOURCE_UNIT_DIAGNOSTIC_EXPORTS = String.raw`
 let __sourceUnitError = "";

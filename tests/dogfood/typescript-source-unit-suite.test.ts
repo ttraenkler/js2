@@ -34,6 +34,7 @@ it.each([
   ["base64", 1],
   ["comments", 3],
   ["parsePseudoBigInt", 5],
+  ["paths", 14],
 ] as const)("requires all original %s callbacks for full-source coverage", (name, count) => {
   const result = passingResult();
   result.file = `src/testRunner/unittests/${name}.ts`;

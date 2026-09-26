@@ -442,6 +442,41 @@ revalidated in isolated invocations, serially, with logs under
 new 5/5 account for 28 callbacks, but wait for revalidation before claiming a
 fully fresh six-file sample. Even that is not the complete pinned inventory.
 
+Coverage expansion after `09f0b662cd`: add the original `paths.ts` source unit
+to the full-source runner, with its **14** direct callback registrations as an
+explicit count floor. This exercises the compiler's path normalization,
+root/URL handling, relative paths and case handling without replacing their
+implementations or assertions. Native passes **14/14**; standalone compiles to
+valid Wasm with zero imports (81,420 ms, 7,659,194 bytes) and passes **12/14**.
+The failing callbacks are `getPathRelativeTo` (null-property exception at
+`path.ts:1016:31`) and `toFileNameLowerCase` (third assertion leaves `UserName`
+unchanged). Evidence: `.tmp/source-paths-first.log`.
+The runner's provenance/count tests must reject incomplete path results just
+as they do the existing sample. Broader harness-dependent suites remain in
+scope; this is an expansion step, not a replacement completion criterion.
+
+The serial revalidation at `09f0b662cd` completed successfully: factory **3/3**,
+compilerCore **11/11**, base64 **1/1**, comments **3/3**, parsePseudoBigInt **5/5**,
+all with zero imports. Together with diagnostics **5/5**, the freshly measured
+six-file sample is **28/28**. Adding paths makes the measured seven-file sample
+**40/42**, not completion of the 256-file inventory.
+
+Path-failure triage: `.tmp/path-primitives.mts` reproduces both mechanisms in
+zero-import standalone modules with IR enabled and disabled. Passing generic
+`identity<T>(x: T): T` to a `(string) => string` callback traps, even without the
+boolean/function union used by the original path API. Non-generic identity and
+inline-arrow controls return the expected 11. Separately, the original global
+regex case-normalizer passes on an isolated Unicode input but fails after the
+preceding two inputs: its three-result mask is 3 instead of native 7. A simpler
+`/[A-Z]+/g.test('Ab'); 'Ab'.replace(re, lower); return re.lastIndex` yields 1
+instead of native 0. The original pattern leaves lastIndex 7 after replacement.
+This is stateful regex replacement, not evidence of incorrect Unicode matching.
+Next: investigate the generic callable ABI and the static function-replacer
+walk in `src/codegen/regex-replace-fn.ts`. Do not merely reset lastIndex after
+callbacks: global replacement must finish collecting matches before invoking
+replacers, and callbacks can observe or mutate the regex state. Preserve the
+existing shared runtime/protocol semantics and validate original paths again.
+
 The user requested a main merge and continuation. The former temporary checkout
 was cleaned out, but branch `codex/1058-typescript-standalone` retained the signed
 handoff at `efd9aca79c5aba4bfd6670847be925a027ed219f`. Work now lives in
