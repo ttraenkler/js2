@@ -1,3 +1,4 @@
+import { parseTest262SemanticProviders } from "../scripts/test262-lane.mjs";
 /**
  * Test262 runner — compiles a filtered subset of the official ECMAScript
  * conformance suite through js2wasm and validates the results.
@@ -28,11 +29,13 @@ import {
   safeStringifyThrown as sharedSafeStringifyThrown,
   tryNativeExnRender as sharedTryNativeExnRender,
 } from "../scripts/lib/wasm-exn-render.mjs";
-import { isModuleGoal } from "../scripts/test262-module-goal.mjs";
+import { isModuleGoal, isScriptGoal } from "../scripts/test262-module-goal.mjs";
 // (#5353) ONE Temporal gate + ONE cache-dir rule, shared with the sharded lane.
 import {
   temporalCacheDir,
+  temporalProviderCompileOptions,
   test262NeedsTemporalGlobal as sharedTest262NeedsTemporalGlobal,
+  test262TemporalLaneEnabled,
 } from "../scripts/test262-temporal.mjs";
 import { hasSelfModuleImport } from "../scripts/test262-fixture-graph.mjs";
 // (#4162) ONE import-object finaliser, shared with scripts/test262-worker.mjs
@@ -50,7 +53,7 @@ import {
 } from "../scripts/test262-iterator-binding.mjs";
 import { restoreHostBuiltins } from "./test262-restore-builtins.js";
 import { assembleOriginalHarness, type OriginalHarnessVariant } from "./test262-original-harness.js";
-import { SANDBOX_GLOBAL_NAMES } from "../scripts/test262-sandbox-globals.mjs";
+import { SANDBOX_GLOBAL_NAMES, applySandboxGlobalFunctionAttributes } from "../scripts/test262-sandbox-globals.mjs";
 
 // #1310: per-shard global isolation for test262.
 //
@@ -111,6 +114,10 @@ function _buildFreshSandbox(consoleProxy?: Console, exposeDone = true): Record<s
       // Some globals may not be present in this vm realm — leave undefined.
     }
   }
+  // (#6492 r16) The copy loop assigns, which creates ENUMERABLE properties;
+  // §19.2's function-valued globals are non-enumerable and the corpus checks it
+  // (`S15.1.2.2_A9.5` &c.).
+  applySandboxGlobalFunctionAttributes(sandbox);
   // Script global value properties have immutable data descriptors. A plain
   // object sandbox otherwise lets strict writes create `undefined`/`Infinity`
   // and turns Test262's required TypeErrors into false negatives (#3367).
@@ -120,6 +127,21 @@ function _buildFreshSandbox(consoleProxy?: Console, exposeDone = true): Record<s
     Infinity: { value: Number.POSITIVE_INFINITY, writable: false, enumerable: false, configurable: false },
     NaN: { value: Number.NaN, writable: false, enumerable: false, configurable: false },
   });
+  // (#6492 r18) `Promise` is the ONE builtin the sandbox must NOT own a
+  // separate copy of. The runtime mints every promise in the HOST realm
+  // (`Promise_new_pending` / `Promise_resolve` / `_wrapThenable`), and moving
+  // that minting into the sandbox was measured at 536 -> 336 on
+  // `built-ins/Promise/` — §27.2.4.7's `nextPromise.constructor === C` fast
+  // path and every `Object.getPrototypeOf(p) === Promise.prototype` assertion
+  // need minting, the capability `C` and the value read to sit in ONE realm.
+  // Meanwhile the compiled `Promise` identifier resolves through the sandbox
+  // (`declared_global`), so a test's `Promise.resolve = fn` landed on a
+  // `Promise` nothing else in the pipeline ever looked at. Sharing the host
+  // intrinsic collapses that split at its source, in the fixture, instead of
+  // threading a realm through the product runtime. Cross-test pollution is
+  // already owned by `_STATIC_SNAPSHOTS` (#1220, which snapshots `Promise` +
+  // its statics for exactly these rows) and by the #1957 realm canary.
+  sandbox.Promise = Promise;
   if (consoleProxy) sandbox.console = consoleProxy;
   // Provide globalThis as the sandbox itself so `ctx.globalThis === ctx`.
   sandbox.globalThis = sandbox;
@@ -160,24 +182,6 @@ function declaresTopLevelDone(body: string): boolean {
 /** A fresh realm for literal-harness execution; never reused across variants. */
 export function createTestSandbox(consoleProxy?: Console, exposeDone = true): Record<string, any> {
   return _buildFreshSandbox(consoleProxy, exposeDone);
-}
-
-/**
- * Test262 property-descriptor rows are allowed to install a new intrinsic
- * property without specifying `configurable: true`. Such a property cannot be
- * removed by the in-process host snapshot, so the sloppy variant would poison
- * the strict rerun before it starts. Run those rows with one coherent fresh
- * VM realm for both the built-in globals and their constructed values.
- *
- * Keep this source classifier deliberately narrow: ordinary product/runtime
- * builds retain the host-realm design, and descriptor checks on user objects
- * do not need a separate intrinsic realm.
- */
-const HOST_INTRINSIC_DEFINE_RE =
-  /\b(?:Object|Reflect)\.(?:defineProperty|defineProperties)\s*\(\s*(?:Object|Array|String|Number|Boolean|Function|RegExp|Map|Set|WeakMap|WeakSet|Promise|Date|ArrayBuffer|DataView|Int8Array|Uint8Array|Uint8ClampedArray|Int16Array|Uint16Array|Int32Array|Uint32Array|Float32Array|Float64Array)(?:\.prototype)?\b/;
-
-function requiresCoherentBuiltinRealm(source: string): boolean {
-  return HOST_INTRINSIC_DEFINE_RE.test(source);
 }
 
 function _readSentinels(sandbox: Record<string, any>): unknown[] {
@@ -3719,7 +3723,7 @@ export function standaloneHostImportError(target: string | undefined, imports: r
 /** Default per-test timeout in milliseconds (prevents infinite-loop hangs) */
 const TEST_TIMEOUT_MS = 15000;
 
-export { isModuleGoal };
+export { isModuleGoal, isScriptGoal };
 
 export function buildNegativeCompileSource(source: string, meta: Test262Meta, category: string): string {
   const strippedSource = source.replace(/\/\*---[\s\S]*?---\*\//, "");
@@ -3774,6 +3778,7 @@ export async function handleNegativeTest(
       fileName: "test.ts",
       emitWat: false,
       ...(target ? { target } : {}),
+      semanticProviders: parseTest262SemanticProviders(process.env.TEST262_SEMANTIC_PROVIDERS),
     };
 
     let compileMs = 0;
@@ -4245,7 +4250,14 @@ function appendOriginalHarnessFailureContext(detail: string, source: string): st
 //     compile regression) must degrade to today's behaviour — the row reports
 //     its own failure — never take the whole lane down. The build is attempted
 //     once; the null is memoised with it.
-let temporalProviderPromise: Promise<TemporalProvider | null> | undefined;
+//  4. PER TARGET (#5383 S3). The host lane links the `--target gc` provider;
+//     standalone links the host-free one, and ONLY when a standalone-keyed
+//     pre-warm stamp says it exists (`test262TemporalLaneEnabled`). Before this
+//     slice the gate here read neither the lane nor the target, so a standalone
+//     row linked the HOST provider — a gc artifact in a standalone consumer.
+//     The map is keyed by target so a process that runs both lanes keeps them
+//     apart; each entry memoises its `null` exactly as the single slot did.
+const temporalProviderPromises = new Map<string, Promise<TemporalProvider | null>>();
 
 /**
  * Does this test need the real `Temporal` global?
@@ -4277,15 +4289,18 @@ export function test262NeedsTemporalGlobal(filePath: string, meta: Test262Meta):
  * lane must state whether the provider was a cache hit or a cold build — the
  * one line below is what makes that recoverable from a run log.
  */
-async function getTest262TemporalProvider(): Promise<TemporalProvider | null> {
-  if (temporalProviderPromise) return temporalProviderPromise;
-  temporalProviderPromise = (async () => {
+async function getTest262TemporalProvider(target?: "standalone"): Promise<TemporalProvider | null> {
+  const memoKey = target ?? "host";
+  const memoised = temporalProviderPromises.get(memoKey);
+  if (memoised) return memoised;
+  const promise = (async () => {
     const { setupTemporalPolyfill, linkPolyfillSource } = await import("./dogfood/setup-temporal-polyfill.mjs");
     const linked = linkPolyfillSource(setupTemporalPolyfill());
     const cacheDir = temporalCacheDir();
-    const provider = await buildTemporalProvider({ polyfillSource: linked.source, cacheDir });
+    const compileOptions = temporalProviderCompileOptions(target);
+    const provider = await buildTemporalProvider({ polyfillSource: linked.source, cacheDir, compileOptions });
     console.error(
-      `[test262] Temporal provider ${provider.namespace} (${provider.artifact.binary.length} B) ` +
+      `[test262] Temporal provider (${memoKey}) ${provider.namespace} (${provider.artifact.binary.length} B) ` +
         `built in ${provider.buildMs}ms cacheHit=${provider.cacheHit} from ${cacheDir}`,
     );
     return provider;
@@ -4295,7 +4310,8 @@ async function getTest262TemporalProvider(): Promise<TemporalProvider | null> {
     console.error(`[test262] Temporal provider unavailable, rows keep the ambient lane: ${String(error)}`);
     return null;
   });
-  return temporalProviderPromise;
+  temporalProviderPromises.set(memoKey, promise);
+  return promise;
 }
 
 async function runOriginalHarnessVariant(
@@ -4346,6 +4362,7 @@ async function runOriginalHarnessVariant(
         // opaque "wasm exception during module init" label. The exec path
         // below already calls the exported __module_init after setInstance.
         ...(target ? { target } : {}),
+        semanticProviders: parseTest262SemanticProviders(process.env.TEST262_SEMANTIC_PROVIDERS),
         ...(target === undefined || target === "standalone" ? { deferTopLevelInit: true } : {}),
         // (#4035) The harness INSPECTS the module from JS — it renders native
         // exception payloads via `__exn_render_*` (#2962) and drains the
@@ -4471,8 +4488,20 @@ async function runOriginalHarnessVariant(
         consoleProxy,
         meta.flags?.includes("async") === true || declaresTopLevelDone(originalSource),
       );
-      const coherentBuiltinRealm = requiresCoherentBuiltinRealm(originalSource);
-      if (coherentBuiltinRealm) markCoherentBuiltinRealm(sandbox);
+      // (#6495) EVERY row gets a coherent builtin realm, so the intrinsics the
+      // compiled module is handed (`__get_builtin`) are the ROW's, not the
+      // worker process's. Until 2026-09-17 this was gated on a source regex
+      // that only matched a literal `Object.defineProperty(Array.prototype, …)`
+      // in the test body — so a row whose intrinsic mutation happens inside the
+      // HARNESS (`verifyProperty` → `isConfigurable` → `delete obj[name]`) was
+      // unprotected, and `__delete_property` removed array iteration from the
+      // test process. Measured before flipping: zero honest-lane rows changed
+      // across 2,102 rows (the 114-row #6482 descriptor bucket, an 818-row
+      // for-in/own-property slice, and a 1,170-row realm-sensitive slice —
+      // Symbol, Reflect, instanceof, bind, Object.prototype.toString,
+      // getPrototypeOf/setPrototypeOf/create, isArray, concat, NativeErrors,
+      // Error, RegExp exec).
+      markCoherentBuiltinRealm(sandbox);
       const imports = buildImports(result.imports, { console: consoleProxy }, result.stringPool, {
         globalSandbox: sandbox,
       }) as any;
@@ -4623,7 +4652,13 @@ export async function runTest262File(
   // (#5248) Resolved BEFORE the primary variant so the strict rerun links the
   // identical artifact — two provider instances for one test would give the
   // rerun a different `Temporal` object identity than the sloppy run saw.
-  const temporal = test262NeedsTemporalGlobal(filePath, meta) ? await getTest262TemporalProvider() : null;
+  // The precompiled Temporal provider borrows host semantics; it cannot certify a native-first row.
+  const temporal =
+    parseTest262SemanticProviders(process.env.TEST262_SEMANTIC_PROVIDERS) === "auto" &&
+    test262TemporalLaneEnabled(target) &&
+    test262NeedsTemporalGlobal(filePath, meta)
+      ? await getTest262TemporalProvider(target)
+      : null;
   const primary = await runOriginalHarnessVariant(
     assembly.primary,
     source,
@@ -4828,6 +4863,7 @@ export async function runSyntheticTest262File(
       // which is exactly the 6-file `language/module-code/*` regression that
       // parked the stack PR #2835/#2839 in the merge queue.
       ...(target ? { target } : {}),
+      semanticProviders: parseTest262SemanticProviders(process.env.TEST262_SEMANTIC_PROVIDERS),
       ...(moduleGoal || (target !== undefined && target !== "standalone") ? {} : { deferTopLevelInit: true }),
       // #1251: align with the sharded runner — both `scripts/compiler-fork-worker.mjs`
       // (the production path that records the committed JSONL) and `tests/test262-vitest.test.ts`

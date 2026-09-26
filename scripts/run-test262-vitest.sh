@@ -38,9 +38,23 @@ if [ "$TEST262_TARGET" = "standalone" ]; then
   esac
 fi
 
+TEST262_SEMANTIC_PROVIDERS="${TEST262_SEMANTIC_PROVIDERS:-auto}"
+case "$TEST262_SEMANTIC_PROVIDERS" in
+  auto|native-first) ;;
+  *) echo "ERROR: TEST262_SEMANTIC_PROVIDERS must be auto or native-first"; exit 1 ;;
+esac
 RESULT_PREFIX="test262"
 if [ "$TEST262_TARGET" != "gc" ]; then
   RESULT_PREFIX="test262-${TEST262_TARGET}"
+fi
+if [ "$TEST262_SEMANTIC_PROVIDERS" != "auto" ]; then
+  RESULT_PREFIX="${RESULT_PREFIX}-${TEST262_SEMANTIC_PROVIDERS}"
+fi
+export TEST262_SEMANTIC_PROVIDERS
+# (#5385) The native-first lane measures the native semantic regime in the JS
+# environment (see CompileTargetProfile.nativeRegime); opt-in mirrors CI.
+if [ "$TEST262_SEMANTIC_PROVIDERS" = "native-first" ]; then
+  export JS2WASM_NATIVE_REGIME_JS="${JS2WASM_NATIVE_REGIME_JS:-1}"
 fi
 
 forwarded_args=()
@@ -215,7 +229,23 @@ if [ "${JS2WASM_TEST262_TEMPORAL:-1}" = "0" ]; then
   echo "Temporal provider: DISABLED (JS2WASM_TEST262_TEMPORAL=0)"
 else
   echo "Pre-warming Temporal provider into $JS2WASM_TEMPORAL_CACHE ..."
-  node scripts/prewarm-temporal-provider.mjs
+  if [ "$TEST262_TARGET" = "standalone" ]; then
+    # (#5383 S3) The standalone lane needs the HOST-FREE provider and its OWN
+    # stamp — the host stamp certifies a different binary. OPT-IN
+    # (JS2WASM_TEST262_TEMPORAL_STANDALONE=1), matching the workflow input, and
+    # for the same measured reason: linking multiplies an assembled row's
+    # compile time ~2.5-3.5x, which pushes large-harness rows past the 30 s fork
+    # kill. Soft when it does run — no stamp means the rows run unlinked, which
+    # is the pre-#5383 behaviour, so a local run is never blocked by it.
+    if [ "${JS2WASM_TEST262_TEMPORAL_STANDALONE:-0}" = "1" ]; then
+      node scripts/prewarm-temporal-provider.mjs --target standalone ||
+        echo "Temporal provider (standalone): UNAVAILABLE — those rows run unlinked"
+    else
+      echo "Temporal provider (standalone): OFF (set JS2WASM_TEST262_TEMPORAL_STANDALONE=1 to link)"
+    fi
+  else
+    node scripts/prewarm-temporal-provider.mjs --target host
+  fi
 fi
 
 # ── Prebuild the standalone runtime-eval provider (#2928 E6/E7) ──
@@ -237,7 +267,8 @@ fi
 # quickjs prebuild makes a missing/mis-keyed quickjs cache harder to diagnose
 # and wastes minutes, while the selector is deliberately forbidden from
 # falling back between engines.
-if [ "$TEST262_TARGET" = "standalone" ]; then
+# (#5385) The native-first JS-environment lane links the same provider.
+if [ "$TEST262_TARGET" = "standalone" ] || [ "$TEST262_SEMANTIC_PROVIDERS" = "native-first" ]; then
   echo "Eval engine selection: $EVAL_ENGINE"
   case "$EVAL_ENGINE" in
     quickjs)
@@ -268,7 +299,7 @@ if [ "$USE_WORKTREE" = "1" ]; then
 fi
 
 echo "Run ID: $RUN_TIMESTAMP"
-echo "Target: $TEST262_TARGET"
+echo "Target: $TEST262_TARGET; semantic providers: $TEST262_SEMANTIC_PROVIDERS"
 echo "Reporter: $TEST262_REPORTER"
 echo "Worktree at $(git -C "$WT_DIR" rev-parse --short HEAD)"
 echo "Running vitest (unified compile+execute in fork pool)..."

@@ -163,8 +163,14 @@ jobs:
           # Inventory mode enforces real activated closures while reporting
           # remaining migration debt; it does not certify IR-only completion.
           # Compare with the immutable first parent, not HEAD's new policy.
+          # The verdict reason goes to stderr (#6418) so a failing run names the
+          # offending files in the job log, not only in the uploaded artifact.
           node --max-old-space-size=2048 scripts/check-compiler-boundaries.mjs \
-            --mode inventory --base HEAD^1 > compiler-boundaries-report.json
+            --mode inventory --base HEAD^1 > compiler-boundaries-report.json \
+            || {
+              echo "::error::compiler-boundaries gate failed - reason above (full report in artifact compiler-boundaries-${{ github.run_id }}-${{ github.run_attempt }})"
+              exit 1
+            }
 
       - name: Preserve compiler boundary evidence (#3518)
         if: always() && steps.compiler_boundaries.outcome != 'skipped' && steps.compiler_boundaries.outcome != ''
@@ -762,6 +768,13 @@ jobs:
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      # The pinned suite's single fork peaks above vitest.config.ts's 512 MB
+      # default heap on main itself (OOM ~20 s in, before any assertion),
+      # which marks unrelated PRs unstable and keeps them out of the queue.
+      # 1 GB matches the single-fork peak noted below and the other CI
+      # vitest jobs (test262-sharded.yml, refresh-baseline.yml).
+      VITEST_FORK_MAX_OLD_SPACE_SIZE: "1024"
     steps:
       - uses: actions/checkout@v5
         with:

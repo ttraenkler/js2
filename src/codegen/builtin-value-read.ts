@@ -1746,6 +1746,8 @@ export function ensureStandaloneBuiltinStaticMethodClosure(
           ],
         },
       );
+    } else if (key === "Date.now") {
+      emitStandaloneDateNowValue(ctx, closureFctx);
     } else if (genericThrowBody && builtinName === "Math" && emitMathValueReadBody(ctx, closureFctx, propName)) {
       // (#4565; supersedes the #4491 wave-4 lane G arm, same defect) — the
       // upstream module mints the `Math_<fn>` kernel late itself, so it needs

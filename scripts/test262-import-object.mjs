@@ -169,6 +169,8 @@ function announceMissingLinkedProjectReset() {
   );
 }
 
+let inProcessLinkedRuntime;
+
 /**
  * Instantiate a compiled test262 module with the namespaces it needs.
  *
@@ -187,8 +189,10 @@ function announceMissingLinkedProjectReset() {
  *
  * @param {BufferSource} binary
  * @param {Record<string, unknown>} importObj
- * @param {{ target?: string, providerLabel?: string, linkedModules?: readonly unknown[],
- *          linkedRuntime?: { instantiateLinkedProviders: Function, wireCompiledInstance: Function } }} [options]
+ * @param {{ target?: string, semanticProviders?: string, providerLabel?: string, linkedModules?: readonly unknown[],
+ *          linkedRuntime?: { instantiateLinkedProviders: Function, wireCompiledInstance: Function },
+ *          linkedHost?: { deps?: Record<string, unknown>, options?: Record<string, unknown> },
+ *          runDeferredInit?: boolean }} [options]
  * @returns {Promise<WebAssembly.Instance>}
  */
 export async function instantiateTest262Module(binary, importObj, options = {}) {
@@ -217,9 +221,20 @@ export async function instantiateTest262Module(binary, importObj, options = {}) 
   // struct field with the reader's `ref.test`-miss default (0). The in-process
   // lanes pass nothing and get the `src/` graph they already compile against.
   const linkedModules = options.linkedModules ?? [];
+  // Retain only the runtime module identity, never a project's exports. An
+  // unlinked row following a linked row must retire the same decoder registry.
+  // Do not introduce a source import in bundle-only, never-linked workers.
+  const linkedRuntime =
+    options.linkedRuntime ??
+    (linkedModules.length > 0
+      ? (inProcessLinkedRuntime ??= await import("../src/linked-provider-runtime.js"))
+      : inProcessLinkedRuntime);
+  if (linkedRuntime) {
+    if (typeof linkedRuntime.resetLinkedProjectRegistry === "function") linkedRuntime.resetLinkedProjectRegistry();
+    else announceMissingLinkedProjectReset();
+  }
   if (linkedModules.length > 0) {
-    const { instantiateLinkedProviders, wireCompiledInstance, resetLinkedProjectRegistry } =
-      options.linkedRuntime ?? (await import("../src/linked-provider-runtime.js"));
+    const { instantiateLinkedProviders, wireCompiledInstance } = linkedRuntime;
     // (#5364) Retire the PREVIOUS row's linked project before this one
     // registers. Both test262 drivers run many rows in one process — the
     // sharded worker recycles a fork only on FATAL — and since #5353 every
@@ -231,8 +246,7 @@ export async function instantiateTest262Module(binary, importObj, options = {}) 
     // here rather than at each driver keeps the #4162 rule (one place turns a
     // binary into an instance) and guarantees the reset lands in the same
     // runtime copy as the registration above.
-    if (typeof resetLinkedProjectRegistry === "function") resetLinkedProjectRegistry();
-    else announceMissingLinkedProjectReset();
+    // Registry retirement above also covers a following unlinked invocation.
     // (#5364) The registry is only HALF of what a finished project leaves
     // behind. The compiled Temporal polyfill also claims two realm globals for
     // its internal-slot store, first-writer-wins, so every row after the first
@@ -244,12 +258,38 @@ export async function instantiateTest262Module(binary, importObj, options = {}) 
     resetTemporalRealmGlobals();
     const wasmModule = new WebAssembly.Module(binary);
     attachConditionalImportNamespaces(wasmModule, importObj, options);
-    instantiateLinkedProviders(linkedModules, importObj);
+    // (#6475) A provider's `env` is rebuilt, not inherited — so without the
+    // embedder's host context it resolves the AMBIENT realm's intrinsics and
+    // the real console, while the consumer's `importObj` was built against this
+    // row's sandbox + console proxy. Two `TypeError`s with the same name and
+    // different identity, and a `$DONE` marker printed where nobody is looking
+    // (#6476). `linkedHost` carries the same `{deps, options}` the lane passed
+    // to `buildImports` for the consumer; absent, behaviour is unchanged.
+    instantiateLinkedProviders(linkedModules, importObj, options.linkedHost);
     const instance = await WebAssembly.instantiate(wasmModule, importObj);
     wireCompiledInstance(importObj, instance, true);
+    // (#6477) A linked harness body is compiled with `deferTopLevelInit`
+    // (#2796), so its top-level code is an exported `__module_init` rather than
+    // a `start` section, and it must run AFTER `wireCompiledInstance` has
+    // registered this consumer in the #5225 decoder registry. Running it is
+    // the CALLER's job, opted in with `runDeferredInit: true`: the sharded
+    // worker already compiles every host-lane row with `deferTopLevelInit`
+    // (#3123) and invokes `__module_init` itself with its own throw
+    // classification, so an unconditional call here ran module init TWICE for
+    // every linked Temporal row (measured 2026-09-15: −401 test262 in the
+    // merge group, "wasm exception during module init"). Only the in-process
+    // lanes that never go through the worker (the linked-harness smoke and the
+    // #3451/#6475/#6476/#6477 suites) pass the flag.
+    if (options.runDeferredInit === true) {
+      const moduleInit = instance.exports?.__module_init;
+      if (typeof moduleInit === "function") moduleInit();
+    }
     return instance;
   }
-  if (options.target !== "standalone") {
+  // (#5385) native-first in the JS environment compiles with the same native
+  // semantic regime as standalone, so it carries the same conditional
+  // `js2wasm:runtime-eval` namespace — inspect the import list for it too.
+  if (options.target !== "standalone" && options.semanticProviders !== "native-first") {
     const { instance } = await WebAssembly.instantiate(binary, importObj);
     return instance;
   }
