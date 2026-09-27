@@ -280,12 +280,154 @@ completion of the 256-file goal. The nine earlier files' 1028/1028 result is
 historical and has not been rerun at this HEAD; do not present an aggregate
 1181/1181 as one current measurement.
 
-Live: full standalone checker, handle **13735**,
-`.tmp/checker-standalone-full.log`; original semantic-version units, handle
-**25190**, `.tmp/semver-original-o1.log` (native already **692/692**, Wasm not
-yet measured). Neither may be restarted merely because output is quiet.
+The full standalone checker, handle **13735**, is terminal with an out-of-frame
+local error (`.tmp/checker-standalone-full.log`). Original semantic-version
+baseline **25190** failed initialization; the uncommitted tuple-row candidate
+**72621** now registers all **692** callbacks and passes **368/692** in
+zero-import standalone Wasm. Its mutation/identity controls still fail, so it
+is NOT accepted. Neither completed build needs restarting without a change.
 The full checker must execute all three exact diagnostic oracles, not merely
 compile; self-hosting and the remaining original unit files stay OPEN.
+
+Latest upstream verification: `git ls-remote https://github.com/loopdive/js2.git
+refs/heads/main` still reports **f17af38a810e8ce8a3aa3b33c994a9a9965331ec**.
+Ancestry verification confirms that commit is already incorporated by signed
+merge **2dcdffaa33** on `codex/1058-typescript-standalone`; no second merge or
+stash was needed, and the unrelated original checkout was left untouched.
+
+### Tuple-row candidate follow-up — not ready to commit
+
+Original-source semver O1 candidate run **72621** completed: native
+**692/692**, Wasm **368/692**, valid **6,927,382-byte** standalone binary,
+**135,946 ms** compilation, **zero imports**. All 692 callbacks register;
+324 assertions fail. This is measured partial progress, not unit-file
+acceptance (`.tmp/semver-tuple-rows-o1.log`).
+
+Expanded two-module controls in `tests/issue-1058-generic-tuple-rows.test.ts`
+pass **10/16**, versus **4/16** on exact HEAD **12384dd522**, in standalone
+IR-off/on lanes using the same Vitest harness. Vite's baseline transform
+restores the three candidate production files without overwriting the worktree.
+Logs: `.tmp/generic-tuple-rows-controls.log` and
+`.tmp/generic-tuple-rows-baseline.log`. Failures remain ordinary failing tests,
+not skipped/expected-failure rows. Native oracles pass all rows. The candidate
+fixes mixed tuple reads, outer row identity, and readonly tuple reads; callback
+identity, indexed mutation, and callback-visible mutation still fail in both
+lanes. Baseline throws in the mutation cases; candidate silently returns zero,
+which is not an acceptable repair even though the upstream count increased.
+
+Further concrete evidence: `.tmp/tuple-control.wat` retains captured `row` as
+externref, but the callback wrapper's third parameter is `(ref null 2)`, the
+vector carrier. The shared HOF correctly supplies its original receiver as
+argument three; the callback boundary narrows that tuple to a vector. Tuple
+registration in `getOrRegisterTupleType` also explicitly marks its fields
+immutable. A read-only tuple brand arm alone therefore cannot establish the
+mutable Array contract. Next repair must preserve raw callback receiver
+identity and provide coherent tuple writes/readback, or decline this candidate;
+do not copy tuples into unrelated arrays or weaken the controls.
+
+Checker diagnostic localization: the first invalid `local.get 284` is at
+`body[90].then[6]`; the same instruction list also contains parent-frame locals
+412 and 424. The failure is not just one off-by-one slot. It occurs while
+`shouldRemoveDeclaration` calls enclosing `checkComputedPropertyName` inside
+`createNodeBuilder`; preserve this nested capture topology in a reduction.
+The full checker remains uncompiled and all three Wasm oracles unexecuted.
+
+### Callback receiver ABI follow-up — 2026-09-27
+
+An additional uncommitted candidate in shared frontend semantics now identifies
+the original-array parameter of native Array/ReadonlyArray callbacks. It uses
+resolved declaration provenance (all declarations must belong to the built-in
+library interface), not a method-name-only assumption. The existing closure
+signature planner retains that parameter as externref so both tuple and vector
+carriers cross unchanged. Reduce/reduceRight use position three; the other
+supported Array callbacks use position two. Custom methods, missing provenance,
+and non-callback arguments are excluded. No mutable compiler-context override
+or new checker query was added. The implementation is
+`src/frontend/ts/array-callback-parameter.ts`, consumed by `closures.ts`.
+
+Measured candidate: map callback identity now passes in both IR modes; reduce
+identity also passes. Expanded matrix is **14/20**, with six ordinary failing
+rows retained: tuple indexed mutation, tuple callback mutation, and a new
+vector callback-mutation control, each in both modes
+(`.tmp/generic-tuple-rows-callback-controls.log`). Tuple callback result is now
+**300 instead of 1311**, proving all three callbacks observe the original row
+but writes still disappear. Vector result **311 instead of 1311** proves
+mutation is visible through the helper's row and mapped result but not through
+the caller's original vector. Do not attribute that last failure to immutable
+tuple fields; inspect the container projection/alias write boundary next.
+The previous 4/16 exact-HEAD baseline predates these four additional rows and
+does not constitute a 20-row baseline. Four frontend classification tests and
+10 adjacent callback/collection tests pass. Typecheck passes before diagnostic
+instrumentation; fresh final typecheck is logged separately. Full original
+semver has NOT been rerun with this additional callback change.
+
+Full-checker diagnostic handle **21488** is now active:
+`.tmp/checker-missing-capture-trace.log`. It uses the same official standalone
+probe and all three required exact oracles, with
+`JS2WASM_TRACE_MISSING_CAPTURE=1`. Temporary instrumentation in
+`src/codegen/closures/capture-source-slot.ts` only logs unresolved out-of-frame
+capture names and frame information; it does not suppress or repair the
+failure. **Remove that temporary logging before committing.** This run differs
+from completed handle 13735 because it can identify the missing bindings, not
+merely report their numeric slots. Do not restart while the handle is live.
+
+Further vector evidence (`.tmp/vector-control.wat`): the outer container
+projection boxes the existing inner-vector reference with `extern.convert_any`;
+it does not clone that row. Thus the failed caller read is not yet attributable
+to copying the inner vector. A trial adding the existing `__any_from_extern`
+conversion to `unboxExternrefToVecElement` made **no difference** (still
+14/20, `.tmp/generic-tuple-rows-union-store.log`) and was removed immediately.
+Next distinguish physical store, dynamic overlay, and typed union comparison
+before choosing a repair. Do not ship that unproven inverse-conversion trial.
+Fresh typecheck, oracle ratchet and coercion gates pass against main
+`f17af38a81` (`.tmp/tuple-callback-final-typecheck.log`,
+`.tmp/tuple-callback-oracle-main.log`, `.tmp/tuple-callback-coercion-main.log`).
+
+### Mixed-vector write-back and dynamic read coherence — 2026-09-27
+
+The boundary probe `.tmp/vector-mutation-boundaries.mts` separates views of
+the SAME vector after the generic callback writes index 1. Before repair,
+typed reads report `'b'` (code 98), while dynamic reads report `'z'`. This
+is lost physical write-back, not string comparison or inner-vector copying.
+`carrierRefWriteBack` in `vec-overlay-carriers.ts` explicitly returned no
+instructions for the tagged-union (`kind: "any"`) carrier.
+
+Candidate uses the existing honest externref classifier to write that value
+back through the existing vector element setter. The overlay remains responsible
+for descriptor validation and refusal; only its successful physical store is
+completed. The shared helper is minted append-only at finalization, only for
+an already registered tagged-union carrier; no ad-hoc tag conversion is added.
+This alone made typed reads correct but exposed a second defect: dynamic reads
+returned the tag box itself (String converted it to `'z'`, but typeof and strict
+equality rejected it). `boxVecElementToExternref` merely looked up
+`__any_to_extern`; if no earlier expression registered it, the box fell through
+to raw `extern.convert_any`. It now ensures the existing projection helper and
+declines an unavailable conversion instead of exposing a box as the JS value.
+
+With both changes, the original vector callback mutation control returns the
+exact **1311** in both IR modes. The 20-row tuple matrix now passes **16/20**;
+the four remaining failures are the two tuple mutation cases in both modes.
+Log: `.tmp/tuple-overlay-roundtrip.log`. Initial dedicated union-vector checks
+pass **16/16**, including string/boolean/number/object/null/undefined stores,
+descriptor writes, and refused writes. Those checks have now been strengthened
+to test dynamic reads/typeof alongside typed reads; native oracles and zero-
+import validation remain mandatory. Current candidate/adjacent run is handle
+**24127**, `.tmp/union-vector-writeback-adjacent.log`; exact-HEAD three-file
+A/B baseline is handle **84086**, `.tmp/union-vector-writeback-baseline.log`.
+Do not count the earlier 16/16 as verification of the strengthened assertions.
+The ongoing full-checker trace started BEFORE these write-back/read changes;
+its result cannot validate them.
+
+Strengthened union-vector tests now pass **16/16**, versus **4/16** with the
+three changed storage/read files restored from exact HEAD **12384dd522** by
+the Vite baseline transform (same standalone IR-off/on harness). Combined
+adjacent run passes **32/32 executed tests**, with **three existing skipped
+tests** in `es5-standalone-vector-expando-descriptors.test.ts` providing no
+coverage. Logs above are terminal. Fresh typecheck, LOC/function budgets and
+coercion-site gate pass; no allowances were added. This validates the separate
+mixed-vector repair, not the still-failing tuple write candidate or full goal.
+Additional mixed-literal tag and JS-host controls pass **13/13**
+(`.tmp/union-writeback-carrier-controls.log`).
 
 ### Unfinished required-field checkpoint before upstream sync
 
@@ -1013,6 +1155,67 @@ active in `.tmp/semver-original-o1.log`; no Wasm coverage credited yet and the
 file has not been admitted to the durable accepted-file list. The scratch
 driver is `.tmp/next-source-unit.mjs`; its initial diagnostic exit code remains
 1 regardless of success, so inspect result rows and provenance, not that code.
+
+Semver O1 run **25190 is terminal**: valid zero-import **6,924,238-byte** binary,
+**174,962 ms** compilation, native **692/692**, but Wasm initialization throws
+`TypeError: Array method called on null or undefined` before registration
+completes. Its reported Wasm count is **0**, not a passing empty suite:
+acceptance is **0/692**. Tracing later confirms some earlier callbacks had
+registered before the exception; the fatal result does not expose that partial
+registration count.
+A diagnostic-only deferred-init capture is active in `.tmp/semver-capture.log`,
+artifact `.tmp/semver-raw-bbedc0f5bc.wasm`. Next locate the original call chain
+with `.tmp/source-unit-init-trace.mts`, then reduce it without weakening the
+original theory helper or callback assertions.
+
+Raw capture completed: **9,281,033 bytes**, **119,606 ms**, zero imports.
+Entry tracing reproduces the same startup TypeError inside original `theory`,
+after its first call from the semantic-version comparator table. The caller's
+WAT builds **610 tuple rows**, then projects the outer vector to a vector of
+inner vectors; each tuple fails the inner vector `ref.test` and is replaced
+with null. `theory` then throws on `entry.map(...)`. Evidence:
+`.tmp/semver-init-trace.log`, `.tmp/theory-full-caller.wat`,
+`.tmp/theory-full.wat`. This is concrete representation loss, not a missing
+test registration or Version constructor failure. A same-file reduction also
+fails but uses dynamic tuple-method lookup, so do not conflate that path with
+the original nested projection. A two-module projection reduction fails in
+both IR modes (`.tmp/theory-projection.log`, expected value 17). Any repair
+must retain array identity and mutation behavior, not merely copy tuples into
+fresh unrelated arrays to make this read-only test pass.
+
+Candidate investigation now separates three boundaries. In the shared type
+resolver, retain erased elements for `T extends Array/ReadonlyArray/tuple`
+constraints instead of narrowing each tuple to a vector. This preserves the
+row but exposes a second illegal cast: nested native join skips the unsafe
+closure-producing receiver probe yet assumes the checker's vector layout,
+where the dynamic map actually returns ObjVec. Route that already-skipped
+probe shape through the existing array-like join, still evaluating once.
+That produces 0 instead of 17 because dynamic HOF dispatch recognizes vec and
+ObjVec but not native tuples. Candidate adds tuple brands to its existing
+finalize-time predicate and reuses the original HOF implementation.
+
+No shared metadata is mutated. `tupleTypeMap`'s sole setter is tuple
+registration in `index.ts`; its values are the exact tuple carrier types.
+The existing dynamic indexed-reader finalizer already uses the same map to
+provide tuple length, Get and HasProperty. The new predicate is also filled
+at finalization and remains below user closed-method arms. Tests must verify
+callback receiver identity and visible mutation; candidate is NOT accepted.
+
+With all three boundaries repaired, the two-module reduction returns native
+**17** in both IR modes. Durable 12-row identity/mutation/readonly/vector
+controls are running in `.tmp/generic-tuple-rows-candidate.log` (**4651**),
+and original semver rerun in `.tmp/semver-tuple-rows-o1.log` (**72621**).
+No 692-callback coverage is yet credited to this candidate.
+
+Fresh full-checker run **13735 completed unsuccessfully**, not timed out:
+**1,480,800 ms**, **4,224.8 MiB** observed peak RSS, zero binary bytes and no
+Wasm invocations. It reproduces the old out-of-frame access, now with
+**3 parameters + 27 locals**: `SyntacticTypeNodeBuilderResolver_shouldRemoveDeclaration`
+references local **284**. There is one non-warning error (29 accompanying IR
+lowering warnings); the input/oracle wrapper is not the blocker. The method
+body is embedded in `.tmp/checker-standalone-full.log` for frame attribution.
+This measurement predates the current tuple-row candidate and does not
+certify any checker execution. Do not restart unchanged compilation.
 
 Earlier requested upstream sync completed: authoritative `loopdive/js2` main at
 `c603404b4f2258ed59377bd591a287523e4af99b` merged cleanly in signed commit

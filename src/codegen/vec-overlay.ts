@@ -1407,7 +1407,7 @@ export function fillVecOverlayHelpers(ctx: CodegenContext): void {
           }
           inner = arms;
         } else {
-          inner = carrierRefWriteBack(c, castVecAndIdx, wrote, elemSetIdx, anyStrTypeIdx);
+          inner = carrierRefWriteBack(ctx, c, castVecAndIdx, wrote, elemSetIdx, anyStrTypeIdx);
         }
         // The descriptor companion is authoritative for an unbacked sparse
         // tail. Keep the physical write-back helper on its dense domain: its

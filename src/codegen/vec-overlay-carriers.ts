@@ -4,6 +4,7 @@ import type { Instr, ValType } from "../ir/types.js";
 import type { CodegenContext } from "./context/types.js";
 import { getArrTypeIdxFromVec } from "./registry/types.js";
 import { HOLE_F64_BITS } from "./value-tags.js";
+import { ensureAnyFromExternHelper } from "./any-helpers.js";
 
 export interface OverlayCarrier {
   vecTypeIdx: number;
@@ -72,13 +73,26 @@ export function carrierDefaultInstrs(
 }
 
 export function carrierRefWriteBack(
+  ctx: CodegenContext,
   carrier: OverlayCarrier,
   castVecAndIdx: Instr[],
   wrote: Instr[],
   elemSetIdx: number,
   anyStrTypeIdx: number,
 ): Instr[] {
-  if (carrier.kind === "any") return [];
+  if (carrier.kind === "any") {
+    // A tagged union can represent every JS value. Write the same value to
+    // the dense backing so typed aliases cannot retain the old element.
+    const classify = ensureAnyFromExternHelper(ctx, { forceHonest: true });
+    if (classify === undefined) return [];
+    return [
+      ...castVecAndIdx,
+      { op: "local.get", index: 2 },
+      { op: "call", funcIdx: classify },
+      { op: "call", funcIdx: elemSetIdx },
+      ...wrote,
+    ];
+  }
   const typeIdx =
     carrier.kind === "anystr"
       ? anyStrTypeIdx
