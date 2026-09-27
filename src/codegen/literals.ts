@@ -5736,20 +5736,20 @@ export function compileArrayLiteral(
     // supertype; this fixes the subclass-first ordering.)
     let hasContextualRefCarrier = false;
     if (elemWasm.kind === "ref" || elemWasm.kind === "ref_null") {
-      const ctxType = ctx.checker.getContextualType(expr);
+      let ctxType = ctx.checker.getContextualType(expr);
+      // Optional array slots retain their concrete element layout. Otherwise
+      // a narrower anonymous item is later null-cast into the declared vec.
+      if (ctxType) ctxType = ctx.checker.getNonNullableType(ctxType);
       if (ctxType) {
         const ctxSym = (ctxType as ts.TypeReference).symbol ?? ctxType.symbol;
         if (ctxSym?.name === "Array" || ctxSym?.name === "ReadonlyArray") {
           const ctxElemType = ctx.checker.getTypeArguments(ctxType as ts.TypeReference)[0];
           if (ctxElemType) {
             const ctxElemWasm = resolveWasmType(ctx, ctxElemType);
-            if (
-              (ctxElemWasm.kind === "ref" || ctxElemWasm.kind === "ref_null") &&
-              ctxElemWasm.typeIdx !== elemWasm.typeIdx
-            ) {
-              elemWasm = ctxElemWasm;
+            if (ctxElemWasm.kind === "ref" || ctxElemWasm.kind === "ref_null") {
+              if (ctxElemWasm.typeIdx !== elemWasm.typeIdx) elemWasm = ctxElemWasm;
+              hasContextualRefCarrier = true;
             }
-            hasContextualRefCarrier = ctxElemWasm.kind === "ref" || ctxElemWasm.kind === "ref_null";
           }
         }
       }

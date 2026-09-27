@@ -269,6 +269,45 @@ oracle-ratchet-allow:
 
 ## Main synchronization and incremental-parser trace — 2026-09-27
 
+Full original-suite rerun at `b2ff16e061` is terminal: valid standalone O1,
+**26,195,509 bytes, zero imports, 608,287 ms**, native **153/153**, Wasm
+**0/153**. `.tmp/incremental-implicit-plan-o1.log`. The optional-field reduction
+improvements have not yet changed original-suite outcomes. The `149:38`
+location alone does not prove the remaining property is still `emitNode`.
+
+Next reductions on `b2ff16e061`: a required definite-assignment class field
+enumerates as null rather than undefined; a populated recursive diagnostic
+array yields a null item; and a function-constructor alias yields a null
+result. Each fails with IR disabled and enabled. The omitted-diagnostic-array
+control passes both modes (`.tmp/incremental-next-fields-guest.log`). These
+are measured reductions, not yet attribution of the current full-suite errors.
+Array stage controls show length 1 and one iteration, but both indexed and
+iterated item reads fail (`.tmp/incremental-array-stages.log`). The generated
+`make` body constructs anonymous struct 64, then converts its vector into
+Diagnostic struct 57 using a failing `ref.test` and substitutes null
+(`.tmp/incremental-array-make-wat.log`). The contextual reference-carrier query
+ignores the optional `Diagnostic[] | undefined` union. A scoped substitution
+experiment strips nullish context before that existing selection. It preserves
+the previously null array item in both modes, but a subsequent `.file ===
+undefined` comparison still fails: this is a second field-representation gap,
+not proof that the original diagnostic callback passes. Production source is
+unchanged during that experiment. The durable matrix then measured **2/10
+baseline, 10/10 candidate** (standalone, IR disabled/enabled), covering optional,
+explicit undefined/null unions, readonly arrays and a non-nullable control.
+The first draft supplied the nested optional field explicitly and passed on
+both sides; it was corrected to retain the omitted field that reproduces the
+layout mismatch. `.tmp/nullable-array-context-real-baseline.log`,
+`.tmp/nullable-array-context-real-candidate.log`.
+The production correction normalizes the contextual type at the existing
+array-carrier selection boundary in `literals.ts`; it does not add a parallel
+lowering or a new runtime conversion. Adjacent array checks have one failure
+on both baseline and candidate: #2021 — “array literal [new Subclass(), new
+Base()] traps 'dereferencing a null pointer' — element type taken from first
+element, contextual annotation ignored”, subclass-first ancestor-field method read.
+`.tmp/nullable-array-context-candidate.log` (42/43 before the corrected matrix).
+The production rerun likewise gives **42/43**, with that same baseline failure
+(`.tmp/nullable-array-context-production.log`).
+
 Follow-up sync: fetched `loopdive/js2` main at
 `05f3f5e8e5f94669ad9b9d5cf0f633455106d1a5` and merged without conflicts as
 `b5c8e93e40`. The pending reproductions/handoff were preserved first in
