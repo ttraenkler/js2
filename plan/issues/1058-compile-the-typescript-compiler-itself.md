@@ -291,8 +291,27 @@ report 47 rows: **43 ordinary passes and four expected scalar failures**
 The original 153-callback incremental suite was started at `bfcf63f5d4`, before
 the finalizer guard, with `DOGFOOD_OPTIMIZE=1` and the unchanged native-oracle
 driver. Its current log is `.tmp/incremental-required-field-bfcf63f5d4.log`;
-session 48933 was confirmed live during this update. Do not restart it merely
-because observation times out; its result is still pending.
+session 48933 subsequently finished with exit 1. Result: valid standalone O1,
+**26,177,801 bytes, zero imports, 614,263 ms**, native **153/153**, Wasm
+**0/153**. Exact failure histogram: 83 property-access errors at 149:38,
+one at 8564:12 (callback 52), and 69 destructuring-null/undefined errors
+(first at callback 69). The prior `b2ff16e061` run had 152 errors at 149:38
+and one at 8564:12. Changed errors are not passing tests or root-cause proof.
+
+Diagnostic capture at current `4e3b9c2fbf` is running separately (session
+52156, `.tmp/incremental-capture-4e3b9c2fbf.log`, requested artifact
+`.tmp/incremental-raw-4e3b9c2fbf.wasm`). Next bounded probes: callbacks 0 and
+69, with 52 as the diagnostic-array follow-up. An attempt to read the original
+optimizer's temporary input lost the cleanup race and exited ENOENT; it
+produced no trace or artifact and must not be treated as evidence. Do not
+restart the live diagnostic capture merely because observation times out.
+The finalizer fix typecheck exited zero (`.tmp/required-finalizer-types.log`).
+Added explicit and implicit derived-constructor controls shaped like
+`NodeObject`/`SourceFileObject`, including inherited symbol/original fields and
+own readonly-array/string fields. All **20/20** field-value rows pass
+(`.tmp/required-inherited-candidate.log`); simple inheritance alone therefore
+does not reproduce the remaining full-suite failure. This does not prove
+the original parser's more complex constructor/allocation paths correct.
 
 Requested upstream sync completed: authoritative `loopdive/js2` main at
 `c603404b4f2258ed59377bd591a287523e4af99b` merged cleanly in signed commit

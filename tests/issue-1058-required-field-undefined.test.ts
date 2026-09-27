@@ -5,6 +5,16 @@ import { compile } from "../src/index.js";
 
 const cases = [
   [
+    "derived parser-like fields preserve inherited and own undefined values",
+    `class Node {symbol!:{pos:number};original?:Node;constructor(public kind:number){this.original=undefined;}} class Source extends Node {lineMap!:readonly number[];version!:string;constructor(kind:number){super(kind);}} export function run(){const node:any=new Source(1);return (node.symbol===undefined?1:0)+(node.original===undefined?2:0)+(node.lineMap===undefined?4:0)+(node.version===undefined?8:0);}`,
+    15,
+  ],
+  [
+    "implicit derived constructor initializes inherited and own fields",
+    `class Node {symbol!:{pos:number};constructor(public kind:number){}} class Source extends Node {lineMap!:readonly number[];} export function run(){const node:any=new Source(1);return (node.symbol===undefined?1:0)+(node.lineMap===undefined?2:0)+node.kind;}`,
+    4,
+  ],
+  [
     "self-recursive field preserves undefined before linking and identity afterwards",
     `class Node { next!: Node; value: number; constructor(value:number){this.value=value;} link(next:Node){this.next=next;} } export function run(){const first=new Node(3);const second=new Node(4);const missing=(first as any).next===undefined;first.link(second);return (missing?10:0)+(first.next===second?20:0)+first.next.value;}`,
     34,
