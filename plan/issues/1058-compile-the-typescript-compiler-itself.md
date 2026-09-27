@@ -12825,6 +12825,48 @@ passes. Combined test evidence is `.tmp/semver-durable-and-surface.log`.
 
 ## Stewardship angle
 
+### Shared IR namespace execution planning (2026-09-27)
+
+The next prerequisite for real namespace objects is now shared rather than a
+second legacy scanner. `src/ir/runtime-namespace-plan.ts` owns the exact lexical
+groups used by declaration collection, callable emission, and initialization
+collection. Plans retain declaration identity, outer-to-inner dotted paths,
+parent groups, separate merged execution sites, last function implementations,
+and source-ordered runtime statements. Function declarations, enums, and runtime
+aliases stay represented at their original positions; overload signatures and
+type-only/ambient declarations do not create execution steps. Plans are frozen
+and choose no global slots, function handles, or physical object layout.
+
+The existing physical lowering consumes this plan and retains its current enum
+and alias limitations explicitly. This is preparatory integration, **not** a
+namespace-object fix or a claim of additional upstream callbacks passing.
+Namespace object creation and publication of exported members must next be tied
+to these exact execution sites, with object-backed mutable reads/writes and
+class early-read behavior preserved. Avoid getters that merely disguise stale
+snapshots as live mutable properties, and do not snapshot the whole namespace
+before its body runs.
+
+The durable original semver runner completed with the same **684/692** standalone
+and **692/692** native result, pin `c63de15a992d37f0d6cec03ac7631872838602cb`,
+zero imports, valid Wasm, 7,063,951 bytes, 162,039 ms. Its nonzero exit status is
+now the actual failed-callback verdict, not the scratch runner's forced status.
+Evidence: `.tmp/semver-durable-final-o1.log`. The long incremental-parser run
+started before this planning extraction and is not evidence for the extraction.
+It has now completed: native **153/153**, standalone **153/153**, valid zero-import
+Wasm, 23,762,521 bytes, 569,299 ms at O1, same pinned TypeScript commit.
+Evidence: `.tmp/incremental-esm-identity-final-o1.log`; tested source includes the
+ESM/enum work through `4a649e05e5`, before the namespace planning extraction.
+
+Extraction verification: **9/9** direct plan tests. Same standalone Vitest
+controls with current `declarations.ts` versus only that file from `7ccbcae959`
+produce **79/91** on both sides, with all twelve failure labels identical
+(eight existing namespace static-class cases and four unrelated-namespace export
+cases). Logs: `.tmp/runtime-namespace-ir-plan-baseline.log` and
+`.tmp/runtime-namespace-ir-plan-final.log`. Type checking and lint pass.
+Moved-code audit is preservation-only **6/6** full-source and **6/6** cut
+witnesses; the production graph remains **OPEN**, strict closure **FAIL**,
+and deletion is not certified. No new size allowances were added.
+
 ### ESM namespace identity continuation (2026-09-27)
 
 The initialization hypothesis above is now confirmed and fixed: the shared IR

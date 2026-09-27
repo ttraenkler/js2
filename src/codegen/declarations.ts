@@ -7,6 +7,7 @@
  */
 import { isTopLevelClassPrototypeWrite } from "./class-proto-toplevel-write.js";
 import { parameterObservesNullishSwitch } from "../frontend/ts/nullish-switch-parameter.js";
+import { runtimeModuleDeclarationGroups, type RuntimeModuleDeclarationGroup } from "../ir/runtime-namespace-plan.js";
 import { widenJsDefaultGuessSlot } from "./js-default-param-type-guess.js";
 import { collectScopeLocalDeclNames } from "./scope-local-decl-names.js";
 import { widenUndefinedDefaultParamSlot } from "./destructuring-params.js";
@@ -1979,12 +1980,6 @@ function registerBodylessFunctionDeclaration(
   return func;
 }
 
-interface RuntimeModuleDeclarationGroup {
-  readonly block: ts.ModuleBlock;
-  readonly functions: readonly ts.FunctionDeclaration[];
-  readonly parent: RuntimeModuleDeclarationGroup | undefined;
-}
-
 interface RuntimeModuleFunctionEntry {
   readonly declaration: ts.FunctionDeclaration;
   readonly unitId: IrUnitId;
@@ -2041,57 +2036,6 @@ function runtimeModuleGlobals(ctx: CodegenContext, block: ts.ModuleBlock): Map<s
 function exactRuntimeModuleGlobalIndex(ctx: CodegenContext, global: GlobalDef): number | undefined {
   const position = ctx.mod.globals.indexOf(global);
   return position < 0 ? undefined : ctx.numImportGlobals + position;
-}
-
-/**
- * Runtime namespace bodies are ordinary emitted JavaScript, unlike ambient
- * declarations and string-literal external modules. Keep their direct
- * statement lists grouped so collection and body emission share one exact
- * lexical namespace population.
- */
-function runtimeModuleDeclarationGroups(sourceFile: ts.SourceFile): readonly RuntimeModuleDeclarationGroup[] {
-  if (sourceFile.isDeclarationFile) return [];
-  const groups: RuntimeModuleDeclarationGroup[] = [];
-
-  const visit = (
-    declaration: ts.ModuleDeclaration,
-    ambientParent: boolean,
-    parent: RuntimeModuleDeclarationGroup | undefined,
-  ): void => {
-    const ambient = ambientParent || hasDeclareModifier(declaration);
-    if (ambient || !ts.isIdentifier(declaration.name) || (declaration.flags & ts.NodeFlags.GlobalAugmentation) !== 0) {
-      return;
-    }
-
-    const body = declaration.body;
-    if (body === undefined) return;
-    if (ts.isModuleDeclaration(body)) {
-      visit(body, ambient, parent);
-      return;
-    }
-    if (!ts.isModuleBlock(body)) return;
-
-    const lastImplementation = new Map<string, ts.FunctionDeclaration>();
-    for (const statement of body.statements) {
-      if (ts.isFunctionDeclaration(statement) && statement.name && statement.body && !hasDeclareModifier(statement)) {
-        lastImplementation.set(statement.name.text, statement);
-      }
-    }
-    const group: RuntimeModuleDeclarationGroup = {
-      block: body,
-      functions: [...lastImplementation.values()],
-      parent,
-    };
-    groups.push(group);
-    for (const statement of body.statements) {
-      if (ts.isModuleDeclaration(statement)) visit(statement, ambient, group);
-    }
-  };
-
-  for (const statement of sourceFile.statements) {
-    if (ts.isModuleDeclaration(statement)) visit(statement, false, undefined);
-  }
-  return groups;
 }
 
 function exactRuntimeModuleFunctionEntries(
@@ -3931,7 +3875,7 @@ export function collectDeclarations(ctx: CodegenContext, sourceFile: ts.SourceFi
     }
   }
 
-  const runtimeModuleBlocks = new Set(runtimeModuleGroups.map((group) => group.block));
+  const runtimeModuleBlocks = new Map(runtimeModuleGroups.map((group) => [group.block, group]));
   function registerRuntimeModuleVarHoists(group: RuntimeModuleDeclarationGroup): void {
     const visit = (node: ts.Node, root: boolean): void => {
       if (
@@ -3956,7 +3900,15 @@ export function collectDeclarations(ctx: CodegenContext, sourceFile: ts.SourceFi
     while (body && ts.isModuleDeclaration(body)) body = body.body;
     if (!body || !ts.isModuleBlock(body) || !runtimeModuleBlocks.has(body)) return;
 
-    for (const statement of body.statements) {
+    for (const statement of runtimeModuleBlocks.get(body)!.initializers) {
+      // Callable bodies are emitted separately; runtime enum objects inside
+      // namespaces are not yet supported by the physical lowering.
+      if (
+        ts.isFunctionDeclaration(statement) ||
+        ts.isEnumDeclaration(statement) ||
+        ts.isImportEqualsDeclaration(statement)
+      )
+        continue;
       if (ts.isModuleDeclaration(statement)) {
         collectRuntimeModuleInitializers(statement);
         continue;
@@ -3968,16 +3920,6 @@ export function collectDeclarations(ctx: CodegenContext, sourceFile: ts.SourceFi
           registerRuntimeModuleVariable(body, variable, isLetOrConst);
         }
         ctx.moduleInitStatements.push(statement);
-        continue;
-      }
-      if (
-        ts.isFunctionDeclaration(statement) ||
-        ts.isEnumDeclaration(statement) ||
-        ts.isInterfaceDeclaration(statement) ||
-        ts.isTypeAliasDeclaration(statement) ||
-        ts.isImportEqualsDeclaration(statement) ||
-        ts.isExportDeclaration(statement)
-      ) {
         continue;
       }
       if (hasDeclareModifier(statement)) continue;
