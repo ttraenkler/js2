@@ -95,6 +95,10 @@
  *    admits a shorthand method: its replacement must be read at runtime and
  *    can reference `this` even when the original method did not. Other closed
  *    literals remain on the established static path.
+ *  - **An erased interface `MethodSignature` retains method-call receiver
+ *    semantics.** Its declaration says nothing about whether the stored
+ *    ordinary function reads `this`; install the receiver and let the closure's
+ *    own convention preserve captured lexical `this` for arrows.
  *  - **Every declaration must qualify.** A symbol declared by two literals, one
  *    of them arrow-valued, is refused rather than half-bound.
  *
@@ -219,12 +223,16 @@ function isThisReadingFunctionDeclarationReference(
  * Does the member named by `nameNode` resolve — in every one of its
  * declarations — to either an object-literal property holding a `this`-reading
  * function expression or a class field holding a reference to a `this`-reading
- * function declaration? See the module header for why each clause is a refusal.
+ * function declaration, or an erased interface method signature? See the
+ * module header for why each clause is a refusal.
  */
 export function objectLiteralMethodNeedsReceiver(ctx: CodegenContext, nameNode: ts.Node): boolean {
   const decls = ctx.oracle.declarationsOf(nameNode);
   if (decls.length === 0) return false;
   for (const d of decls) {
+    // An erased interface method still creates a method-call Reference. The
+    // stored ordinary function consumes current-this through its trampoline.
+    if (ts.isMethodSignature(d)) continue;
     if (ts.isPropertyAssignment(d)) {
       if (
         !isThisReadingFunctionExpression(d.initializer) &&

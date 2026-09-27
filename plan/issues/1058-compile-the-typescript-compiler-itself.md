@@ -2129,6 +2129,59 @@ remains preservation-only, not strict closure. No tests have been stopped. Full
 scanner acceptance is still unmeasured on this candidate; last measured
 standalone callback count remains **0/984**.
 
+Receiver continuation after signed property checkpoint `ab37a4c1e2` (clean tree,
+embedded SSH signature verified): the shared callable-property receiver planner
+now admits erased interface `MethodSignature` declarations. The call already
+evaluates/captures the receiver once; this admission reuses its existing
+save/install/restore sequence after argument evaluation rather than creating a
+second dispatch algorithm. The named-function trampoline was already reading
+`__current_this`; the caller had not installed it for interface declarations.
+
+The first eight-case probe measured **2/8 → 6/8** with the receiver admission.
+Its two unresolved cases used a scalar-returning inherited `Cache.put` method
+and retain `env::Cache_put` (both a concrete and generic Cache declaration), a
+separate dispatch/import defect. Preserve that finding; do not claim every
+interface-on-Map method works. Permanent regression now uses TypeScript's
+actual MultiMap-shaped registration path, whose array return is ignored, plus
+ordinary declaration-valued interface methods, receiver/argument evaluation
+order, caller-this argument reads/normal restoration, and a captured lexical
+arrow. These **10/10** pass on IR on/off; with existing object-literal receiver
+and collection own-property tests the candidate scores **48/48** across three
+files (`.tmp/interface-method-receiver-final-candidate.log`).
+
+The original MultiMap diagnostic is now **4/8**:
+`.tmp/multimap-receiver-candidate.log`. The two actual registration cases pass
+(previously failed); two typed `typeof` presence checks also pass but remain
+weak evidence. Four cases that consume the generic returned array still trap;
+do not confuse ignored-return startup success with correct callable array-return
+adaptation. Existing receiver helper documentation retains its exceptional-
+unwind restore limitation; this continuation has not repaired that global issue.
+
+Full source scanner O1 is live as **session `49543`**, log
+`.tmp/source-scanner-method-receiver-o1.log`, launched after final formatting.
+The normal compiler target/import guards and **984 callback denominator** are
+unchanged. Do not restart or stop this run. No production changes after launch
+are planned while it establishes the next execution frontier.
+
+Final receiver-candidate verification (`13898`) completed exit 0: **48/48**,
+typecheck, all five selected gates; lint/format clean, no allowance growth.
+Reachability again means preservation-only PASS, strict closure FAIL/OPEN.
+The eight previously accepted original source suites are also rechecking on
+the frozen candidate as **session `16922`** (compilerCore, factory,
+diagnosticCollection, base64, comments, parsePseudoBigInt, paths, asserts), logs
+`.tmp/source-<suite>-method-receiver.log`. This loop stops on first failure;
+do not infer all 44 callbacks have passed until every report is present.
+
+Next generic-array-return lead, without changing the running compiler:
+`expressions/calls-closures.ts:emitRootFuncrefDispatch` asks
+`callablePropertyRefBridge` for a return conversion. That bridge only handles
+equal types and concrete-ref/externref crossings, not distinct vector carriers.
+An unmatched reference return falls to `drop` plus `defaultValueInstrs`, losing
+the real return value. Inspect the exact matched funcref arm in
+`.tmp/multimap-constant.wat` before implementing; use the existing IR/native
+vector projection authority and preserve identity rather than adding another
+copy loop or asserting the two vector layouts are the same.
+
 The environment diagnostic has two distinct outcomes: with explicit ambient
 declarations in the input, `optimize: true` still retains process.cwd (**0/2**);
 without those declarations, the optimized reduction passes **2/2**. The actual
