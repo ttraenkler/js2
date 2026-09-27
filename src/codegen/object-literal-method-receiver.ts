@@ -107,6 +107,7 @@
  * receiver could be anything — on its existing lowering.
  */
 import { ts } from "../ts-api.js";
+import { objectMethodEnvironmentOwner } from "../ir/object-method-environment.js";
 import { objectMethodHasResolvedWrite } from "../frontend/ts/object-method-writes.js";
 import type { Instr, ValType } from "../ir/types.js";
 import type { CodegenContext, FunctionContext } from "./context/types.js";
@@ -173,6 +174,7 @@ function methodBodyReferencesSuper(body: ts.Node): boolean {
  * `__anon_*_method` stub (it has no current-this install).
  */
 function shorthandMethodNeedsReceiver(ctx: CodegenContext, declaration: ts.MethodDeclaration): boolean {
+  if (objectMethodEnvironmentOwner(declaration)) return true;
   if (!declaration.body || !ts.isObjectLiteralExpression(declaration.parent)) return false;
   return (
     objectMethodHasResolvedWrite(declaration, ctx.callableSourceFiles ?? [declaration.getSourceFile()], ctx.oracle) ||

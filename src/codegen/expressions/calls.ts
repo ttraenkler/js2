@@ -9555,7 +9555,7 @@ function compileCallExpression(
 
         const className = resolveReceiverClassName(ctx, objType);
 
-        if (className && (ctx.classSet.has(className) || ctx.funcMap.has(`${className}_${methodName}`))) {
+        if (className && ctx.classSet.has(className)) {
           const fullName = `${className}_${methodName}`;
           const funcIdx = ctx.funcMap.get(fullName);
           if (funcIdx !== undefined && expr.arguments.length > 0) {

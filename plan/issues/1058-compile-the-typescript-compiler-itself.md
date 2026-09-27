@@ -12869,6 +12869,43 @@ and deletion is not certified. No new size allowances were added.
 
 ### Qualified static-method mutation continuation (2026-09-28)
 
+**Per-object method environments, production candidate:** the shared
+IR helper `objectMethodEnvironmentOwner` now identifies the exact executable
+function owning an object-literal allocation. Structured methods owned by an
+activation use the existing closure compiler, retaining their field layout,
+metadata and conversion-method registration. Their old global-promoting body
+is not emitted. Direct calls use the stored callable with the call-time
+receiver; reflective `.call/.apply` no longer select struct methods merely
+from a name-keyed static body handle. Module-level literals and class methods
+retain their existing paths. This is a shared ownership decision feeding the
+existing backend, not a claim that the full checker body is IR-emitted.
+
+Added `tests/issue-1058-object-method-environments.test.ts`: 30 native-oracle
+standalone executions in both IR settings, plus exact ownership identity;
+final focused result **31/31**, including borrowed `.call` and `.apply`.
+Initial production checks: **60/61** across the earlier 28 reduced rows and
+four adjacent files; the only failure is the previously measured host import
+surface expectation. Expanded tracked suite A/B (before adding the two apply
+rows): **110/136 → 124/136**, exact pre-change `ee6633355a` source via
+`.tmp/checker-method-production-baseline.config.mts`. Failure-row comparison
+finds fourteen fixes and **zero new failing rows**; all twelve remaining
+failures occur on baseline too. Evidence:
+`.tmp/checker-method-production-first.log`,
+`.tmp/checker-method-production-expanded.log`,
+`.tmp/checker-method-production-expanded-base.log`,
+`.tmp/checker-method-production-final-focused.log`. Typecheck, lint and size gates
+pass after moving the reflective-call explanation out of the oversized
+function; no allowances added. Oracle/coercion gates pass. Preservation audit
+passes **6/6** full-source and **6/6** cut witnesses only; graph remains
+**OPEN**, strict closure **FAIL**, deletion not certified.
+
+Full checker retry is live as **63849** in
+`.tmp/checker-method-environment-full.log`, official standalone probe with
+consumer-driven barrels, 8192 MB heap and all three unchanged zero-argument
+oracles **67858 / 0 / 133394**. Original semver O1 retry is live as **15763**,
+`.tmp/semver-method-environment-o1.log`. These builds are pending, not success
+evidence; do not restart them merely for quiet output.
+
 **Per-object closure experiment (post-merge, `1f90af4c6a`):** a diagnostic
 Vite pre-transform now proves the existing struct layout can retain captures
 per activation. No tracked compiler source was changed. The experiment stores

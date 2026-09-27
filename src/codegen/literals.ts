@@ -9,6 +9,8 @@
  */
 
 import ts from "typescript";
+import { objectMethodEnvironmentOwner } from "../ir/object-method-environment.js";
+import { emitObjectMethodEnvironment } from "./object-method-environment.js";
 import { singleNonNullishContext } from "../checker/non-nullish-context.js";
 import { objectLiteralHasIndexedSpread } from "./indexed-object-spread.js";
 import { hoistFunctionDeclarations } from "./statements/nested-declarations.js";
@@ -3966,6 +3968,10 @@ export function compileObjectLiteralForStruct(
         : undefined;
     const shorthandProp = lastMatch && ts.isShorthandPropertyAssignment(lastMatch) ? lastMatch : undefined;
     const methodProp = lastMatch && ts.isMethodDeclaration(lastMatch) ? lastMatch : undefined;
+    if (methodProp && objectMethodEnvironmentOwner(methodProp)) {
+      emitObjectMethodEnvironment(ctx, fctx, methodProp, typeName, field.name, field.type);
+      continue;
+    }
     if (methodProp) {
       const methodFullName = `${typeName}_${field.name}`;
       // (#1557) Prefer the per-literal funcIdx if we detected a sig mismatch
@@ -4393,6 +4399,7 @@ export function compileObjectLiteralForStruct(
     ) {
       const methodName = resolveAccessorPropName(ctx, prop.name);
       if (methodName === undefined) continue;
+      if (objectMethodEnvironmentOwner(prop)) continue;
       const fullName = `${typeName}_${methodName}`;
       ctx.classMethodSet.add(fullName);
 
