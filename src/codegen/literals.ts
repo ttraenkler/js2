@@ -9,6 +9,7 @@
  */
 
 import ts from "typescript";
+import { singleNonNullishContext } from "../checker/non-nullish-context.js";
 import { objectLiteralHasIndexedSpread } from "./indexed-object-spread.js";
 import { hoistFunctionDeclarations } from "./statements/nested-declarations.js";
 import { isStringType, isVoidType, unwrapPromiseType } from "../checker/type-mapper.js";
@@ -1977,17 +1978,13 @@ export function objectLiteralSpreadTakesHostPath(ctx: CodegenContext, expr: ts.O
   if (expr.properties.length === 0) return false;
   if (!expr.properties.some((p) => ts.isSpreadAssignment(p))) return false;
   if (objectLiteralHasIndexedSpread(ctx, expr)) return true;
-  let spreadCtxType = ctx.checker.getContextualType(expr);
+  const spreadCtxType = singleNonNullishContext(ctx.checker.getContextualType(expr));
   // (#4616) An OPTIONAL slot's contextual type is `T | undefined` (jest's
   // `options = { …defaults, ...options }` param reassignment): the union's
   // `getProperties()` is empty, which mis-read a perfectly concrete shape as
   // "non-specific" and routed the literal to the host path — whose result
   // then null-casted back into the struct-typed slot. Strip nullish
   // constituents; a single object part left over is the concrete context.
-  if (spreadCtxType?.isUnion()) {
-    const parts = spreadCtxType.types.filter((p) => (p.flags & (ts.TypeFlags.Undefined | ts.TypeFlags.Null)) === 0);
-    if (parts.length === 1) spreadCtxType = parts[0];
-  }
   const nonSpecificContext =
     !spreadCtxType ||
     (spreadCtxType.flags & ts.TypeFlags.Any) !== 0 ||
@@ -2514,7 +2511,7 @@ export function compileObjectLiteral(
     // builder declined — fall through to the struct paths below.
   }
 
-  const contextType = ctx.checker.getContextualType(expr);
+  const contextType = singleNonNullishContext(ctx.checker.getContextualType(expr));
   if (!contextType) {
     // #1606: `getTypeAtLocation` can crash inside TypeScript's `checkObjectLiteral`
     // for object literals parsed from a foreign SourceFile (e.g. statically inlined

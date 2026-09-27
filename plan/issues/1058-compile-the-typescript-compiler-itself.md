@@ -693,14 +693,89 @@ object-table callback and constrained factory flag failures remain OPEN.
 Source typecheck and LOC/function/coercion/oracle gates pass; reachability remains
 preservation-only PASS, strict closure FAIL/OPEN. No new allowances.
 
-New original-suite O1 run **58719** writes
-`.tmp/incremental-generic-comparer-o1.log`. Diagnostic capture **40357** writes
-`.tmp/incremental-capture-generic-comparer.log` and
-`.tmp/incremental-raw-generic-comparer.wasm`. Both use `aec14ef7ca` plus this
-four-line generic argument repair. Do not restart live handles or attribute
-their eventual results to later source edits. All 256 upstream source-unit
-files and self-hosting remain in scope; these focused results do not establish
-their completion.
+Original-suite O1 run **58719** is terminal: native **153/153**, standalone
+**90/153**, valid **24,313,652-byte** binary, **667,459 ms**, **zero imports**.
+`.tmp/incremental-generic-comparer-o1.log` records all 63 remaining assertion
+mismatches in comment-directive scenarios, beginning at callback 69; no illegal
+casts remain in this run. Original `verifyCommentDirectives` compares
+`incrementalNewTree.commentDirectives` with `newTree.commentDirectives` at
+upstream incrementalParser.ts:877. Sample errors are undefined versus object
+and object versus object, not proof that they share one root cause.
+
+Diagnostic capture **40357** is terminal: **38,846,418 bytes**, **444,438 ms**,
+seven diagnostic imports (`.tmp/incremental-capture-generic-comparer.log`,
+`.tmp/incremental-raw-generic-comparer.wasm`). Callback 0 and 52 both return 1
+without reset patches; callback 69 reproduces the first assertion mismatch.
+Logs: `.tmp/incremental-generic-comparer-trace-0.log`,
+`.tmp/incremental-generic-comparer-trace-52.log`,
+`.tmp/incremental-generic-comparer-trace-69.log`.
+Both full builds use exactly the production repair committed in `5bc11fda58`,
+not the later optional-nested-object candidate below. All 256 upstream
+source-unit files and self-hosting remain in scope; 90/153 is not completion.
+
+### Optional nested object construction follow-up
+
+The finalized generic-comparer regression run is **146/148** across ten files
+(`.tmp/generic-comparer-final-regression.log`); both failure rows also occur
+on baseline. The visitor-table failure is not missing callback dispatch:
+both callbacks execute once and one element is collected. Its node is lost
+at a typed storage boundary. Removing the table/callbacks still reproduces;
+declaring the nested child separately or making its parent property required
+repairs it. This reproduces in GC-host and zero-import standalone, IR-off/on.
+
+At exact `5bc11fda58`, the reduced optional recursive interface literal uses
+the inferred one-field struct for `{ value: 7 }` inside `tail?: N`, rather
+than the contextual `N` layout. Direct `root.tail!.value` returns 7; assigning
+it to `N` or pushing into `N[]` returns NaN; passing to `(node: N)` traps.
+The emitted conversion tests the `N` runtime layout and substitutes null for
+the smaller layout. Evidence: `.tmp/optional-nested-node.log` and its emitted
+WAT files; `.tmp/generic-visitor-expanded.log` and
+`.tmp/generic-visitor-properties.log` separate callbacks from construction.
+
+Candidate: share the existing spread-literal single-non-nullish contextual
+type selection with ordinary object construction. The pure checker helper
+does not change multi-shape unions, add checker queries, or mutate compiler
+registries; existing allocation machinery owns registration/emission in both
+compiler modes. Validation is in progress; do not attribute this later source
+edit to the already-running generic-comparer full builds.
+
+Initial candidate regression values: **26/32** new cases versus **10/32** on
+exact `5bc11fda58` (only `literals.ts` restored by a Vite pre-transform).
+All nine existing multi-file callback tests now pass, including the original
+visitor table. Logs: `.tmp/optional-nested-candidate.log`,
+`.tmp/optional-nested-baseline.log`. Six raw semantic failures remain:
+four missing-own-property
+checks return 21 instead of 11, and two GC-host distinct-union controls return
+NaN instead of 7 (also wrong on baseline). A direct own-keys control is being
+added to test whether allocating the contextual layout introduces an own-key
+visibility regression even though the old typed alias already failed. That
+additional A/B gives **0/4 on both baseline and candidate**, both returning 2
+instead of 1 (`.tmp/optional-nested-ownkeys-candidate.log` and `-baseline.log`).
+Thus the property-presence defect is also independently pre-existing.
+The finalized test retains desired native values for all **36** cases, with
+**10 explicitly expected failures** (eight own-key observations and two GC-host
+union cases). These are not accepted semantic behavior or goal completion;
+their markers must be removed when the underlying behavior is fixed. The
+initial raw-failure logs remain evidence independent of those markers.
+Final focused run: **35 ordinary passes + 10 expected failures** across the
+36-case carrier file and nine existing callback tests
+(`.tmp/optional-nested-final.log`); the reporter's 45 green rows must not be
+reported as 45 semantically passing programs.
+
+Seven adjacent files give **45/49** (`.tmp/optional-nested-adjacent.log`). All
+four failure rows reproduce on exact baseline in the three affected files
+(**5/9**, `.tmp/optional-nested-adjacent-baseline.log`): generic factory flags,
+shadowed undefined in a nested optional parameter, and two nullish-spread cases.
+Typecheck and LOC/function/coercion/oracle gates pass without new allowances;
+reachability remains preservation-only PASS, strict closure FAIL/OPEN.
+The optional construction experiment is separate from the proven comparer
+repair. Next full-suite failure investigation is the actual upstream
+`getNewCommentDirectives` body, initially isolated in
+`.tmp/comment-directive-merge.mts` with native value controls.
+The actual extracted merge body passes deletion, all-deleted and new-only
+reductions in both IR modes; insertion traps in both (**6/8**,
+`.tmp/comment-directive-merge.log`). This does not yet reproduce the full
+suite's undefined-vs-object deletion mismatch; do not equate the stopping points.
 
 Earlier requested upstream sync completed: authoritative `loopdive/js2` main at
 `c603404b4f2258ed59377bd591a287523e4af99b` merged cleanly in signed commit
