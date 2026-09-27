@@ -1,8 +1,10 @@
 // Copyright (c) 2026 Loopdive GmbH. Licensed under Apache-2.0 WITH LLVM-exception.
 import { ts } from "../ts-api.js";
 import type { TypeOracle } from "../checker/oracle.js";
-import { checkerEnumDeclaration } from "../checker/enum-binding.js";
-type EnumEvidence = ts.TypeChecker | Pick<TypeOracle, "enumDeclarationOf" | "enumConstantValueOf">;
+import { checkerEnumDeclaration, checkerNamespaceEnumDeclarations } from "../checker/enum-binding.js";
+type EnumEvidence =
+  | ts.TypeChecker
+  | Pick<TypeOracle, "enumDeclarationOf" | "enumConstantValueOf" | "namespaceEnumDeclarationsOf">;
 
 /** Resolve only binding identities, never an object/getter merely typed as an enum. */
 export function enumObjectDeclaration(
@@ -23,6 +25,19 @@ export function runtimeEnumObjectDeclarations(
   const pending: ts.Node[] = [...sources];
   while (pending.length) {
     const node = pending.pop()!;
+    const namespace =
+      ts.isImportDeclaration(node) && !node.importClause?.isTypeOnly
+        ? node.importClause?.namedBindings
+        : ts.isExportDeclaration(node) && !node.isTypeOnly
+          ? node.exportClause
+          : undefined;
+    if (namespace && (ts.isNamespaceImport(namespace) || ts.isNamespaceExport(namespace))) {
+      const declarations =
+        "namespaceEnumDeclarationsOf" in checker
+          ? checker.namespaceEnumDeclarationsOf(namespace)
+          : checkerNamespaceEnumDeclarations(namespace, checker);
+      for (const declaration of declarations ?? []) result.add(declaration);
+    }
     if (ts.isTypeNode(node) || ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) continue;
     if (ts.isIdentifier(node) || ts.isPropertyAccessExpression(node)) {
       const declaration = enumObjectDeclaration(node, checker);

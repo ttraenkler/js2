@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Loopdive GmbH. Licensed under Apache-2.0 WITH LLVM-exception.
 import { expect, it } from "vitest";
-import { analyzeSource } from "../src/checker/index.js";
+import { analyzeMultiSource, analyzeSource } from "../src/checker/index.js";
 import { TsCheckerOracle } from "../src/checker/oracle.js";
 import { runtimeEnumObjectDeclarations } from "../src/ir/enum-object-reference.js";
 
@@ -37,4 +37,34 @@ it("resolves a namespace projection to the exact enum declaration", () => {
     const value = (Left as any).Kind;`);
   expect(declarations).toHaveLength(1);
   expect(declarations[0].members[0].name.getText()).toBe("A");
+});
+
+it.each([
+  "export * from './provider.js';",
+  "export { Kind as Renamed } from './provider.js';",
+  "export * as nested from './provider.js';",
+])("demands only observable enum exports through %s", (barrel) => {
+  const ast = analyzeMultiSource(
+    {
+      "./provider.ts": "enum Hidden { A } export enum Kind { B=2 }",
+      "./barrel.ts": barrel,
+      "./entry.ts": "import * as ns from './barrel.js'; export const object=ns;",
+    },
+    "./entry.ts",
+  );
+  const oracle = new TsCheckerOracle(ast.checker);
+  const declarations = [...runtimeEnumObjectDeclarations(ast.sourceFiles, oracle)];
+  expect(declarations).toEqual([...runtimeEnumObjectDeclarations(ast.sourceFiles, ast.checker)]);
+  expect(declarations.map((declaration) => declaration.name.text)).toEqual(["Kind"]);
+});
+
+it("does not demand enum runtime storage for a type-only namespace import", () => {
+  const ast = analyzeMultiSource(
+    {
+      "./provider.ts": "export enum Kind { A }",
+      "./entry.ts": "import type * as ns from './provider.js'; let value:ns.Kind;",
+    },
+    "./entry.ts",
+  );
+  expect([...runtimeEnumObjectDeclarations(ast.sourceFiles, new TsCheckerOracle(ast.checker))]).toEqual([]);
 });

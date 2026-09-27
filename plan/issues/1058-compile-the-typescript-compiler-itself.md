@@ -786,6 +786,72 @@ format/lint, LOC/function budgets, coercion and oracle gates pass, with no new
 allowance. Dead-export preservation witnesses pass, but its strict modeled
 graph remains **OPEN/FAIL**; do not call that strict closure.
 
+### Remaining semver static class access investigation
+
+Current HEAD **edc1f023e0** is signed and the prior goal turn made verified
+progress (semver 594→684/692). The accidental broad run **86140** was confirmed
+live again; no kill permission received and no restart/termination performed.
+
+Reduced namespace/static-class matrix is **4/12 PASS**
+(`.tmp/semver-callback-static-expanded.log`): ordinary class static calls and
+namespaced construction pass in both IR settings; namespaced static calls fail
+even without a callback, including a static method returning a scalar. Thus a
+callback capture is not necessary for this reduced failure. ESM namespace
+attribution to the original TypeScript barrel remains to be verified; TypeScript
+runtime namespaces and ESM namespace objects are distinct paths.
+
+Existing property access projects exact namespace function and variable exports
+without materializing the entire namespace. Class exports lack that projection;
+static call lowering evaluates its class receiver even for a direct known call.
+Investigate exact class-object identity at this shared value-read boundary,
+retaining ordinary receiver side effects, namespace/class rebinding semantics,
+and same-named class separation. Do not replace the class read with a bare-name
+call shortcut or remove receiver evaluation globally.
+
+The ESM reduction confirms an unrelated exported enum is enough to trigger the
+failure: **4/8 PASS**, with all four class-only cases passing and all four
+class-plus-enum cases failing, direct and barrel imports, both IR settings
+(`.tmp/semver-esm-static-baseline.log`). The namespace object's export planner
+declines the entire surface when an export has no supported representation.
+This causes the static call's otherwise-unused receiver evaluation to throw.
+
+**REJECTED class projection candidate:** adding exact class-declaration
+projection to `tryEmitRuntimeNamespaceVariableValue` made ESM controls **8/8**,
+runtime-namespace controls **12/12**, and the original semver **692/692** with
+zero imports (**6,914,530 bytes**, **155,156 ms**, O1), log
+`.tmp/semver-namespace-class-o1.log`. It is NOT retained and NOT acceptance:
+negative controls found namespace-before-initialization reads returning 1 rather
+than throwing, and later namespace/class-method replacement being ignored.
+The source change was removed completely; current accepted semver remains
+**684/692** on **edc1f023e0**.
+
+One-file baseline attribution (`property-access.ts` from **edc1f023e0**, same
+standalone/native-oracle Vitest harness) proves the early-read regression:
+baseline throws and passes both IR modes; candidate silently returns 1 and
+fails both. Replacement cases were loud failures on baseline and became quiet
+wrong values with the candidate. Ordinary getter/call receiver side effects
+pass before and after. Logs: `.tmp/namespace-class-negative-baseline.log` and
+`.tmp/namespace-class-negative-candidate.log`. Do not re-add the shortcut even
+though it makes the semver file green.
+
+Durable controls now extend `issue-1058-namespace-classes.test.ts` with static
+reads, method replacement and early reads; `issue-1058-module-namespace-factory.test.ts`
+retains the class-plus-enum/direct/barrel matrix. Known failures remain active,
+not skipped. The next implementation must represent observable namespace/class
+values with initialization and mutation semantics, or extend complete namespace
+materialization. Existing `runtime-enum-object.ts` already provides declaration-
+owned live enum storage and source-position initialization using the shared IR
+enum plan; reuse that ownership instead of eagerly snapshotting enum values.
+Its current census omits enum exports demanded only by namespace materialization.
+Runtime namespace class bindings likewise lack ordinary live binding cells;
+their canonical lazy class singleton is not proof of initialization or immutability.
+
+The checked-in expanded suites are terminal **51/63 PASS** on the restored
+compiler (`.tmp/namespace-evidence-durable.log`): twelve active failures are
+eight runtime-namespace static-read/replacement cases and four ESM enum-neighbor
+cases. All four early-read controls pass. Formatting and lint pass. No compiler
+source differs from **edc1f023e0**; only these tests and this issue are changed.
+
 ### Unfinished required-field checkpoint before upstream sync
 
 Follow-up: native-oracle recursive-field controls show an actual wrong value,
@@ -12682,6 +12748,21 @@ Fifth in the real-world stress-test set:
 **Depends on** #1042 (async/await), #1044 (Node builtins as host imports), #1046 (separate ES-module compilation).
 **Soft dependencies:** template literal interpolation, large-switch codegen, recursive type inference.
 **Unlocks:** ultimate self-hosting milestone, concrete stewardship-pitch deliverable ("js2wasm compiles tsc").
+
+## Upstream synchronization checkpoint (2026-09-27)
+
+Before merging upstream `359c2d63b6753e0c540b8761d13647b00e24a9a4`, preserve
+the unfinished namespace-enum work: checker-backed enum demand feeds the shared
+IR enum plan, namespace exports use live enum getters, and inferred `typeof Enum`
+returns retain the runtime object rather than copying a closed member shape.
+This is a WIP checkpoint, not acceptance: focused enum controls pass **28/29**;
+the opaque namespace initialization/identity test still throws with IR disabled.
+The original TypeScript semver suite remains **684/692** in standalone mode
+(native **692/692**, valid Wasm, zero imports, 7,063,962 bytes, 143,028 ms).
+The same eight namespace static-class cases fail. Logs are worktree-local
+`.tmp/namespace-enum-carrier-controls.log` and `.tmp/semver-namespace-enum-o1.log`.
+Recheck after the merge; do not revive the rejected eager class-object shortcut
+or describe the older parser measurement as validation of this checkpoint.
 
 ## Stewardship angle
 

@@ -1,6 +1,40 @@
 // Copyright (c) 2026 Loopdive GmbH. Licensed under Apache-2.0 WITH LLVM-exception.
 import { ts } from "../ts-api.js";
 
+const namespaceEnumCache = new WeakMap<ts.TypeChecker, WeakMap<ts.Symbol, readonly ts.EnumDeclaration[]>>();
+
+/** Enum values observable through an exact ESM namespace, including barrels. */
+export function checkerNamespaceEnumDeclarations(
+  namespace: ts.NamespaceImport | ts.NamespaceExport,
+  checker: ts.TypeChecker,
+): readonly ts.EnumDeclaration[] | undefined {
+  const resolve = (symbol: ts.Symbol | undefined): ts.Symbol | undefined =>
+    symbol && symbol.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(symbol) : symbol;
+  const root = resolve(checker.getSymbolAtLocation(namespace.name));
+  if (!root?.declarations?.some(ts.isSourceFile)) return undefined;
+  let cache = namespaceEnumCache.get(checker);
+  if (!cache) namespaceEnumCache.set(checker, (cache = new WeakMap()));
+  const cached = cache.get(root);
+  if (cached) return cached;
+  const declarations = new Set<ts.EnumDeclaration>();
+  const visited = new Set<ts.Symbol>();
+  const visit = (module: ts.Symbol): void => {
+    if (visited.has(module)) return;
+    visited.add(module);
+    for (const member of checker.getExportsOfModule(module)) {
+      const target = resolve(member);
+      if (!target) continue;
+      const declaration = target.valueDeclaration;
+      if (declaration && ts.isEnumDeclaration(declaration)) declarations.add(declaration);
+      else if (target.declarations?.some(ts.isSourceFile)) visit(target);
+    }
+  };
+  visit(root);
+  const result = Object.freeze([...declarations]);
+  cache.set(root, result);
+  return result;
+}
+
 function unwrap(expression: ts.Expression): ts.Expression {
   while (
     ts.isParenthesizedExpression(expression) ||

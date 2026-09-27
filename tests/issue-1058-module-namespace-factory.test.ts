@@ -2,6 +2,28 @@
 import { expect, it } from "vitest";
 import { compileMulti } from "../src/index.js";
 
+for (const experimentalIR of [false, true]) {
+  for (const barrel of [false, true]) {
+    for (const exportedEnum of [false, true]) {
+      it(`reads a class factory beside enum exports IR=${experimentalIR} barrel=${barrel} enum=${exportedEnum}`, async () => {
+        const result = await compileMulti(
+          {
+            "./provider.ts": `export class Range {constructor(public value:string){} static tryParse(text:string){return new Range(text);}} ${exportedEnum ? "export enum Kind { One, Two }" : ""}`,
+            "./barrel.ts": "export * from './provider.js';",
+            "./entry.ts": `import * as ns from './${barrel ? "barrel" : "provider"}.js';function make(value:string){return ()=>ns.Range.tryParse(value).value.length;}export function run(){return make('abc')();}`,
+          },
+          "./entry.ts",
+          { target: "standalone", experimentalIR },
+        );
+        expect(result.success, JSON.stringify(result.errors)).toBe(true);
+        const module = new WebAssembly.Module(result.binary);
+        expect(WebAssembly.Module.imports(module)).toEqual([]);
+        expect((new WebAssembly.Instance(module).exports.run as () => number)()).toBe(3);
+      });
+    }
+  }
+}
+
 it.each([false, true])("reads an exported factory beside mutable exports (barrel=%s)", async (barrel) => {
   const result = await compileMulti(
     {

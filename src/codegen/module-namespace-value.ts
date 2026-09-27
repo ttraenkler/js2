@@ -17,6 +17,7 @@ import { addStringConstantGlobal } from "./registry/imports.js";
 import { addFuncType } from "./registry/types.js";
 import { withRuntimeModuleCallableBindings } from "./runtime-module-callable-metadata.js";
 import { coerceType } from "./shared.js";
+import { emitRuntimeEnumObjectRead, hasRuntimeEnumObject } from "./runtime-enum-object.js";
 
 /** §10.4.6.2 module namespace own `Symbol.toStringTag` metadata. */
 const MODULE_NAMESPACE_TO_STRING_TAG = "Module";
@@ -154,6 +155,12 @@ interface NamespaceClassExport {
   readonly className: string;
 }
 
+interface NamespaceEnumExport {
+  readonly kind: "enum";
+  readonly key: string;
+  readonly declaration: ts.EnumDeclaration;
+}
+
 type NamespaceExport =
   | NamespaceFunctionExport
   | NamespaceGlobalExport
@@ -161,6 +168,7 @@ type NamespaceExport =
   | NamespaceLiveExport
   | NamespaceNestedExport
   | NamespaceClassExport
+  | NamespaceEnumExport
   | NamespaceDefaultExport;
 
 /** `{ moduleName, propertyName }` when `specifier` names a Node builtin. */
@@ -407,6 +415,10 @@ function moduleSymbolNamespaceExports(
       continue;
     }
     if (declarationNode !== undefined) {
+      if (ts.isEnumDeclaration(declarationNode) && hasRuntimeEnumObject(ctx, declarationNode)) {
+        exports.push({ kind: "enum", key: exportedSymbol.getName(), declaration: declarationNode });
+        continue;
+      }
       // `export const` is immutable after module init, so a snapshot of the
       // exporting module's global is a correct namespace property. Without this
       // arm a single `export const` in the module declined the WHOLE namespace
@@ -855,13 +867,13 @@ function ensureNestedNamespaceGetters(
  * initialize on null, then read it back — so the namespace slot and a direct
  * `C` reference in the exporting module answer the SAME constructor object.
  */
-function ensureClassObjectGetters(
+function ensureNamespaceValueGetters(
   ctx: CodegenContext,
   exports: readonly NamespaceExport[],
 ): Map<string, string> | undefined {
   const getters = new Map<string, string>();
   for (const entry of exports) {
-    if (entry.kind !== "class") continue;
+    if (entry.kind !== "class" && entry.kind !== "enum") continue;
     const name = `__module_namespace_class_${ctx.mod.functions.length}`;
     const fctx: FunctionContext = {
       name,
@@ -879,7 +891,10 @@ function ensureClassObjectGetters(
     // Tracked for the duration of the build: `emitLazyClassObjectGet` adds
     // imported globals, and the shift repair only reaches bodies it can see.
     ctx.liveBodies.add(fctx.body);
-    const built = emitLazyClassObjectGet(ctx, fctx, entry.className);
+    const built =
+      entry.kind === "class"
+        ? emitLazyClassObjectGet(ctx, fctx, entry.className)
+        : emitRuntimeEnumObjectRead(ctx, fctx, entry.declaration.name) !== undefined;
     ctx.liveBodies.delete(fctx.body);
     if (!built) return undefined;
     const typeIdx = addFuncType(ctx, [], [{ kind: "externref" }]);
@@ -917,7 +932,7 @@ function ensureNamespaceObjectGetter(
 
   const nestedGetters = ensureNestedNamespaceGetters(ctx, fctx, exports);
   if (nestedGetters === undefined) return undefined;
-  const classGetters = ensureClassObjectGetters(ctx, exports);
+  const classGetters = ensureNamespaceValueGetters(ctx, exports);
   if (classGetters === undefined) return undefined;
 
   const helpers = reserveNamespaceObjectHelpers(ctx, fctx, exports, moduleNamespaceTag);
@@ -1013,7 +1028,7 @@ function reserveNamespaceObjectHelpers(
   // (#6651 N1) The live-binding arm installs accessors, not `__extern_set`
   // values. Reserve its helper in the SAME batch as everything else — one
   // `flushLateImportShifts` runs below and every index is read after it.
-  if (exports.some((entry) => entry.kind === "live")) {
+  if (exports.some((entry) => entry.kind === "live" || entry.kind === "enum")) {
     ensureLateImport(
       ctx,
       "__defineProperty_accessor",
@@ -1043,7 +1058,7 @@ function reserveNamespaceObjectHelpers(
   if (finalNewObjectIdx === undefined || finalSetIdx === undefined) {
     return undefined;
   }
-  const hasLiveExport = exports.some((entry) => entry.kind === "live");
+  const hasLiveExport = exports.some((entry) => entry.kind === "live" || entry.kind === "enum");
   const finalDefineAccessorIdx = hasLiveExport ? ctx.funcMap.get("__defineProperty_accessor") : undefined;
   if (hasLiveExport && finalDefineAccessorIdx === undefined) return undefined;
   const finalBoxSymbolIdx = moduleNamespaceTag ? ctx.funcMap.get("__box_symbol") : undefined;
@@ -1145,12 +1160,16 @@ function buildNamespaceObjectGetterBody(ctx: CodegenContext, plan: NamespaceObje
   const defaultReads: DefaultGlobalRead[] = [];
   for (const entry of exports) {
     let valueType: ValType | null;
-    if (entry.kind === "live") {
+    if (entry.kind === "live" || entry.kind === "enum") {
       // Stack: [obj, key, getter, null, flags] — no setter, so the namespace's
       // §10.4.6.9 `[[Set]]` refusal and §10.4.6.10 `[[Delete]]` refusal fall out
       // of the descriptor itself.
       const getterFuncIdx =
-        finalDefineAccessorIdx === undefined ? undefined : mintLiveBindingGetter(ctx, entry, globalReads);
+        finalDefineAccessorIdx === undefined
+          ? undefined
+          : entry.kind === "enum"
+            ? ctx.funcMap.get(classGetters.get(entry.key) ?? "")
+            : mintLiveBindingGetter(ctx, entry, globalReads);
       if (getterFuncIdx === undefined || finalDefineAccessorIdx === undefined) {
         popBody(getterFctx, savedBody);
         return undefined;

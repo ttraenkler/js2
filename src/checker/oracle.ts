@@ -29,7 +29,7 @@ import { ts } from "../ts-api.js";
 import { symbolShadowsBuiltinGlobal } from "./builtin-shadow.js"; // (#5096) intrinsic-shadow claim gate
 import { higherOrderSignatureTypeFact } from "./higher-order-signature-fact.js";
 import { resolveCheckerSignaturePosition } from "./signature-position.js";
-import { checkerEnumDeclaration } from "./enum-binding.js";
+import { checkerEnumDeclaration, checkerNamespaceEnumDeclarations } from "./enum-binding.js";
 
 /** JS runtime tag classification (aligned with the #2104 JsTag module). */
 export type JsTag = "number" | "string" | "boolean" | "bigint" | "symbol" | "undefined" | "object" | "function";
@@ -180,6 +180,10 @@ export interface TypeOracle {
   aliasedValueDeclarationOf(id: ts.Node): ts.Declaration | undefined;
   /** Exact enum namespace binding; unknown does not authorize materialization. */
   enumDeclarationOf(expression: ts.Expression): ts.EnumDeclaration | undefined;
+  /** Exact enum exports demanded by an ESM namespace; undefined means unresolved. */
+  namespaceEnumDeclarationsOf(
+    namespace: ts.NamespaceImport | ts.NamespaceExport,
+  ): readonly ts.EnumDeclaration[] | undefined;
   /** Checker-foldable enum member/read value, without exposing checker types. */
   enumConstantValueOf(
     node: ts.EnumMember | ts.PropertyAccessExpression | ts.ElementAccessExpression,
@@ -529,6 +533,16 @@ export class TsCheckerOracle implements TypeOracle {
   enumDeclarationOf(expression: ts.Expression): ts.EnumDeclaration | undefined {
     try {
       return checkerEnumDeclaration(expression, this.checker);
+    } catch {
+      return undefined;
+    }
+  }
+
+  namespaceEnumDeclarationsOf(
+    namespace: ts.NamespaceImport | ts.NamespaceExport,
+  ): readonly ts.EnumDeclaration[] | undefined {
+    try {
+      return checkerNamespaceEnumDeclarations(namespace, this.checker);
     } catch {
       return undefined;
     }

@@ -152,6 +152,13 @@ export class InHouseOracle implements TypeOracle {
     return undefined;
   }
 
+  namespaceEnumDeclarationsOf(
+    _namespace: ts.NamespaceImport | ts.NamespaceExport,
+  ): readonly ts.EnumDeclaration[] | undefined {
+    // The in-house binder does not yet resolve cross-module export surfaces.
+    return undefined;
+  }
+
   enumConstantValueOf(
     _node: ts.EnumMember | ts.PropertyAccessExpression | ts.ElementAccessExpression,
   ): string | number | undefined {

@@ -12675,6 +12675,9 @@ export function resolveWasmType(ctx: CodegenContext, tsType: ts.Type, _depth = 0
   // Check aliasSymbol first — TypeScript preserves the alias name on the type.
   const nativeType = resolveNativeTypeAnnotation(tsType);
   if (nativeType) return nativeType;
+  // `typeof Enum` is the live runtime object, not a closed copy of its members.
+  if (tsType.flags & ts.TypeFlags.Object && (tsType.symbol?.flags ?? 0) & ts.SymbolFlags.Enum)
+    return { kind: "externref" };
 
   // A homomorphic `-readonly` mapped alias is a compile-time mutability view of
   // its argument, not a second runtime object. Canonicalize before any object /

@@ -7,6 +7,9 @@ import { indexIrClassShapesByIdentity } from "../src/ir/class-shape-identity.js"
 import { createIrClassId, createIrSourceId } from "../src/ir/identity.js";
 import type { IrClassShape } from "../src/ir/nodes.js";
 const cases = {
+  namespaceStaticRead: `namespace N {export class C {static read(){return 5;}}} export function run(){return N.C.read();}`,
+  namespaceStaticReplacement: `namespace N {export class C {static read(){return 1;}}} export function run(){N.C.read=()=>5;return N.C.read();}`,
+  namespaceEarlyRead: `function early(){try{return N.C.read();}catch{return 5;}} const result=early(); namespace N {export class C {static read(){return 1;}}} export function run(){return result;}`,
   snapshot: `interface S {getLength():number;} namespace N {class C implements S {constructor(private text:string){} getLength():number{return this.text.length;}} export function make(text:string):S{return new C(text);}} export function run():number{return N.make('hello').getLength();}`,
   exportedSnapshot: `interface S {getLength():number;} export namespace N {class C implements S {constructor(private text:string){} getLength():number{return this.text.length;}} export function make(text:string):S{return new C(text);}} export function run():number{return N.make('hello').getLength();}`,
   siblings: `namespace A {class C {value=2;} export function read():number{return new C().value;}} namespace B {class C {value=3;} export function read():number{return new C().value;}} export function run():number{return A.read()+B.read();}`,
