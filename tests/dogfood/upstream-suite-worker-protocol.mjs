@@ -2,6 +2,13 @@ import { attributeRejections } from "./upstream-unhandled-rejections.mjs";
 
 export const WORKER_COMPILE_COMPLETE_PREFIX = "__JS2WASM_COMPILE_COMPLETE__:";
 
+/** Optional production optimizer level; unchanged by default, never a custom pass pipeline. */
+export function configuredUpstreamOptimization(value = process.env.DOGFOOD_OPTIMIZE) {
+  if (value === undefined || value === "0") return false;
+  if (/^[1-4]$/.test(value)) return Number(value);
+  throw new Error("DOGFOOD_OPTIMIZE expects 0, 1, 2, 3, or 4");
+}
+
 export function signalWorkerCompileComplete(durationMs, stream = process.stderr) {
   stream.write(`${WORKER_COMPILE_COMPLETE_PREFIX}${Math.max(0, Math.round(durationMs))}\n`);
 }

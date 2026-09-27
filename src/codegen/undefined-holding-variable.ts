@@ -18,6 +18,7 @@
 // false exactly as before.
 
 import { ts } from "../ts-api.js";
+import { iifeMayReturnAssertedUndefined } from "../ir/analysis/asserted-iife-result.js";
 import type { CodegenContext } from "./context/types.js";
 
 const undefinedHoldingCache = new WeakMap<ts.VariableDeclaration, boolean>();
@@ -79,6 +80,12 @@ export function readsUndefinedHoldingVariable(ctx: CodegenContext, expr: ts.Expr
   if (!ts.isIdentifier(expr)) return false;
   const declaration = ctx.oracle.variableDeclarationOf(expr);
   if (declaration === undefined) return false;
+  if (
+    declaration.initializer &&
+    !ctx.oracle.nullabilityOf(declaration.type ?? declaration).nullable &&
+    iifeMayReturnAssertedUndefined(declaration.initializer, ctx.oracle)
+  )
+    return true;
   let holds = undefinedHoldingCache.get(declaration);
   if (holds === undefined) {
     holds = computeUndefinedHolding(declaration);

@@ -6,6 +6,7 @@ import { buildCompiledImports, wrapExports } from "../../src/runtime.ts";
 import { getWebHostConstructors } from "../../src/runtime/web-host-constructors.ts";
 import {
   configuredUpstreamTestTimeoutMs,
+  configuredUpstreamOptimization,
   emitWorkerResult,
   readStandaloneGuestError,
   runSequentialUpstreamTests,
@@ -47,6 +48,7 @@ function compileProvenance(requestedTarget, actualTarget, moduleImports, linkedM
     moduleImportCount === null || linkedModuleImportCount === null ? null : moduleImportCount + linkedModuleImportCount;
   return {
     requestedTarget,
+    requestedOptimization: process.env.DOGFOOD_OPTIMIZE ?? "0",
     actualTarget,
     targetMatches: actualTarget === requestedTarget,
     moduleImports,
@@ -218,8 +220,10 @@ async function main() {
   const rejections = createUnhandledRejectionSink({ label: "dogfood wasm worker" });
   const started = performance.now();
   let requestedTarget;
+  let optimize;
   try {
     requestedTarget = resolveDogfoodTarget(process.env.DOGFOOD_TARGET);
+    optimize = configuredUpstreamOptimization();
     if (
       requestedTarget === "standalone" &&
       (process.env.DOGFOOD_PLATFORM !== undefined ||
@@ -264,6 +268,7 @@ async function main() {
   let result;
   try {
     const projectOptions = {
+      optimize,
       allowJs: true,
       skipSemanticDiagnostics: true,
       target: requestedTarget,
@@ -303,6 +308,7 @@ async function main() {
     result =
       mode === "source"
         ? await compile(readFileSync(generatedPath, "utf8"), {
+            optimize,
             fileName: generatedPath,
             skipSemanticDiagnostics: true,
             experimentalIR: process.env.DOGFOOD_REACT_DOM_LEGACY !== "1",

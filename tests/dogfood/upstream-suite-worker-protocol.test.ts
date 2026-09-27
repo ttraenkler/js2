@@ -5,11 +5,19 @@ import {
   readWorkerCompileDuration,
   runSequentialUpstreamTests,
   stripWorkerProtocol,
+  configuredUpstreamOptimization,
 } from "./upstream-suite-worker-protocol.mjs";
 // @ts-expect-error — .mjs dogfood helper has no declaration file
 import { createUnhandledRejectionSink } from "./upstream-unhandled-rejections.mjs";
 
 describe("upstream suite worker protocol", () => {
+  it("accepts only explicit production optimization levels", () => {
+    expect(configuredUpstreamOptimization("0")).toBe(false);
+    for (const level of ["1", "2", "3", "4"]) expect(configuredUpstreamOptimization(level)).toBe(Number(level));
+    for (const invalid of ["", "true", "5", "-1", "1.5", "custom"]) {
+      expect(() => configuredUpstreamOptimization(invalid)).toThrow("DOGFOOD_OPTIMIZE");
+    }
+  });
   it("separates the compile-complete marker from worker diagnostics", () => {
     const stderr = "before\n__JS2WASM_COMPILE_COMPLETE__:1234\nafter\n";
     expect(readWorkerCompileDuration(stderr)).toBe(1234);

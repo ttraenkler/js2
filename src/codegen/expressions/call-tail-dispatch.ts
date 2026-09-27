@@ -10,6 +10,7 @@
 // tail is a single `return compileTailDispatch(...)`. Moved verbatim: the
 // emitted Wasm is byte-identical.
 import { forEachChild, ts } from "../../ts-api.js";
+import { iifeMayReturnAssertedUndefined } from "../../ir/analysis/asserted-iife-result.js";
 import { widenJsDefaultGuessSymbolSlot } from "../js-default-param-type-guess.js";
 import { profilePhase } from "../../compile-profile.js";
 import { planAsyncClosureActivation } from "../async-activation.js";
@@ -447,6 +448,8 @@ export function compileTailDispatch(
             }
 
             if (iifeWasmRetType) {
+              if (iifeWasmRetType.kind === "ref" && iifeMayReturnAssertedUndefined(expr, ctx.oracle))
+                iifeWasmRetType = { ...iifeWasmRetType, kind: "ref_null" };
               // Returning IIFE: allocate a result local, compile body into a block,
               // and replace `return` with `local.set + br` to exit the block
               const retLocal = allocLocal(fctx, `__iife_ret_${fctx.locals.length}`, iifeWasmRetType);

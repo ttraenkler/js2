@@ -1807,6 +1807,109 @@ cause in that measured graph; no production boundary-plan change was made.
 The reduced type-only Function false positive is still a separate finding,
 not evidence that changing it would remove these seven Node imports.
 
+Merge finalized as signed `a95249cd80`; fetched main ancestry and embedded SSH
+signature verified. Six-file source loop `70275` is terminal: all six files
+passed their **30/30** callbacks with zero imports. It spans the merge, so this
+is not one-checkpoint evidence: diagnosticCollection/base64/comments and the
+already-loaded parsePseudoBigInt run are pre-merge; paths/asserts finished
+after source integration. Prior compilerCore/factory results are not a fresh
+post-merge eight-file claim. Full scanner post-merge recheck is now live in
+session `73290`, log `.tmp/source-scanner-main688-run.log`, capturing its binary
+at `.tmp/source-scanner-main688.wasm` via
+`.tmp/preserve-scanner-main688-binary.mjs`. No result yet; do not restart it.
+An initial launch exited before running because Node disallows the exception
+flag in NODE_OPTIONS; the live launch supplies that flag on the CLI and only
+the binary-preservation preload through NODE_OPTIONS. The accidental older
+full-suite process remains separate; it has not been stopped.
+
+Post-merge scanner recheck `73290` completed: native **984/984**, valid Wasm
+**54,841,590 bytes / 319,499 ms**, unchanged seven Node imports, **0 standalone
+callbacks**. A targeted Binaryen diagnostic on the frozen pre-merge includes
+artifact completed (`65409`): `--precompute-propagate --optimize-instructions
+--dae-optimizing --remove-unused-module-elements`, all features except custom
+descriptors, names retained. Output `.tmp/source-scanner-targeted-opt.wasm`
+validates at **33,900,766 bytes with zero imports**. This is diagnostic
+post-processing, not yet a supported compiler/harness optimization route.
+The canonical runtime-type fingerprint guard applies only to explicit linked
+runtime boundaries (`canonicalRuntimeTypes`); the ordinary unlinked standalone
+runner does not request that boundary. Do not disable the guard for linked code.
+
+Executing that import-free artifact with `{}` and the existing sequential
+callback protocol fails in `__module_init_chunk_9`, before registering/executing
+callbacks: null dereference at function 8016 / offset `0x19d4c6a`. Diagnostic
+WAT isolates an unconditional `ref.as_non_null` on the still-undefined local
+returned by the sys initializer, after its guarded Node setup. Upstream
+`src/compiler/sys.ts` says `return sys!;` from an IIFE: the assertion is erased
+by TypeScript, so it must not itself throw. Regression reduction being tested
+in `tests/issue-1058-iife-asserted-undefined.test.ts`; no production fix yet.
+Logs `.tmp/optimized-scanner-callbacks.log`, `.tmp/scanner-opt-init9-wat.log`.
+The minimal committed-scope regression file currently remains uncommitted and
+red **0/2** on IR enabled/disabled (`.tmp/iife-asserted-undefined-before.log`):
+`const system: System = (() => { let candidate: System | undefined;
+return candidate!; })()` traps at module init. A trial making every inline
+reference return slot nullable removed the trap but changed the failure to
+`system === undefined` returning false (**0/2**, adjacent controls **47/47**,
+`.tmp/iife-nullable-after.log`). That candidate was withdrawn completely:
+`call-tail-dispatch.ts` has no working diff. Do not ship only the trap removal
+or weaken the assertion. The return carrier AND the null-vs-undefined identity
+must agree across the IIFE and its consuming variable. Relevant owners are
+`compileTailDispatch`'s inline return slot/`fctx.returnType`,
+`undefined-holding-variable.ts`, and IR `tryLowerUndefinedCompare`; put any
+new semantic fact in shared IR/oracle analysis instead of duplicating scans.
+Production level-1 optimizer diagnostic on the post-merge artifact is live in
+`26342`, `.tmp/scanner-main688-o1.log`; do not restart it. The reduced Node guard
+with ambient process but undeclared require still retains cwd under optimize
+true (**0/2**, `.tmp/node-require-terminal-guard2.log`).
+
+Inventory correction: the first resolver probe used default barrels. Repeating
+with the actual consumer-driven-barrel option yields **179** source files and
+still **zero runtime-eval boundary sites** and no implicit process/require
+bindings (`.tmp/resolved-runtime-eval-consumer-plan.log`). Keep the earlier
+253-file observation attributed to its default resolver setting.
+
+Asserted-IIFE continuation candidate: new shared IR analysis
+`src/ir/analysis/asserted-iife-result.ts` detects own synchronous IIFE returns
+whose erased non-null assertion can carry undefined (excluding null/unknown
+ambiguity, nested function returns, async functions, and generators). The inline
+return slot is nullable only for this fact; the consuming variable's strict
+nullish comparison consults the same fact. No duplicate AST scan in codegen.
+Original reduction **0/2 → 2/2**; expanded execution cases **4/4** preserve absent
+undefined versus null and present object identity. Six analysis controls also
+pass. Adjacent IIFE controls **47/47**; combined regression/protocol/source-suite
+contracts **26/26** (`.tmp/iife-asserted-fact-controls.log`,
+`.tmp/iife-asserted-and-worker.log`). This does not establish arbitrary
+assertion/boxing behavior; it addresses the measured native-reference return
+slot and strict-comparison boundary.
+
+The production level-1 diagnostic `26342` completed on pre-fix merged main:
+**30,009,564 bytes, 468,744 ms, zero imports**, valid
+(`.tmp/scanner-main688-o1.log`). The ordinary upstream worker now accepts
+`DOGFOOD_OPTIMIZE=0..4` (default 0), passes it to both compiler entry routes,
+and records requested optimization in provenance. Invalid values are rejected.
+This uses the normal optimizer and runtime-rec-group guard, not the diagnostic
+custom passes. Full source scanner with this candidate and production O1 is
+live in session `85299`, `.tmp/source-scanner-iife-o1.log`, with the existing
+zero-import gate and 984-callback denominator unchanged. Source compilerCore
+recheck is **11/11**, zero imports, 1,573,166 bytes / 3,498 ms; factory continues
+in session `61365` (`.tmp/source-<suite>-iife.log`). Do not restart live jobs.
+An initial typecheck found only a helper expression-variable annotation error;
+the type-only correction is in, recheck `35282` pending. Four size/coercion/oracle
+gates passed; reachability reported source mutation during its child run
+because of that annotation edit, so its result must be rerun on frozen source.
+
+Final focused verification: **74/74 across six files**, final typecheck exit 0,
+format/lint and all five selected gates exit 0; reachability is preservation-only
+PASS, not strict closure certification. No allowance changes. A final safety
+guard excludes consuming variable annotations that admit null; its explicit
+analysis control passes. This guard was added after scanner `85299` and the
+source controls had loaded the earlier candidate, so those live/source results
+must not be presented as an exact final-checkpoint verification. CompilerCore
+and factory completed **14/14** with zero imports; compilerCore additionally
+passed **11/11** through the production O1 worker route, 1,096,104 bytes /
+7,539 ms, `requestedOptimization: "1"`. Source logs retain their exact options.
+Keep scanner `85299` running to learn its next execution frontier, then rerun
+on the final source before claiming scanner acceptance.
+
 The environment diagnostic has two distinct outcomes: with explicit ambient
 declarations in the input, `optimize: true` still retains process.cwd (**0/2**);
 without those declarations, the optimized reduction passes **2/2**. The actual
