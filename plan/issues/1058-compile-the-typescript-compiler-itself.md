@@ -306,6 +306,45 @@ optimizer's temporary input lost the cleanup race and exited ENOENT; it
 produced no trace or artifact and must not be treated as evidence. Do not
 restart the live diagnostic capture merely because observation times out.
 The finalizer fix typecheck exited zero (`.tmp/required-finalizer-types.log`).
+The capture subsequently completed successfully: 41,909,013 bytes in
+366,415 ms, seven diagnostic-only imports. Bounded probes 0, 69, and 52 all
+finished (sessions 89891, 50801, 18249; no loop-reset patch applied).
+Callback 0 now reports null **`commentDirectives`**, not `symbol`, at the
+original `isNodeOrArray` invariant. Callback 69 reaches
+`getNewCommentDirectives` before the null/undefined destructuring error;
+callback 52 reaches `attachFileToDiagnostic` before its 8564:12 failure.
+Logs: `.tmp/incremental-4e3b9c2fbf-trace-0.log`,
+`.tmp/incremental-4e3b9c2fbf-trace-69.log`, and
+`.tmp/incremental-4e3b9c2fbf-trace-52.log`. These diagnostic builds do not
+satisfy standalone acceptance. Next reduction isolates optional scanner-array
+returns and captured array elements across the getter/append boundary.
+
+The initial eight scanner/getter/append controls pass. Adding interface-typed
+object receivers reproduces the failure: baseline 10/14, with object-field
+assignment losing undefined in both modes and a separate class-to-interface
+receiver trap in both modes. A field-only carrier change is insufficient:
+emitted `scanner` stores its uninitialized captured array in a typed nullable
+vec and the getter returns that null before assigning the field. Candidate
+shared IR carrier selection therefore also preserves undefined at nullable
+reference type-resolution boundaries. Expanded controls are 16/18, with only
+the two class-to-interface traps remaining. Adjacent matrix is 53/54 (four
+expected scalar failures included), with a GC optional-Map-size failure still
+awaiting exact baseline attribution. This candidate is not yet validated for
+the original parser or broad conformance.
+
+Exact `ea0b45516e` substitution confirms the expanded scanner matrix improves
+**12/18 → 16/18**; both class-to-interface traps remain on both trees. The GC
+optional-Map-size failure also reproduces unchanged. Logs:
+`.tmp/scanner-carrier-exact-baseline.log`,
+`.tmp/scanner-carrier-control-matrix.log`, `.tmp/scanner-carrier-adjacent.log`.
+Constructor ownership remains **62/73**, with the same 11 failure identities
+(`.tmp/scanner-carrier-ownership.log`). Typecheck and lint pass; no budget
+allowances were added. Preserve the two class-to-interface tests as explicit
+failing regressions, not hidden expected-failure credit. Original parser
+acceptance must be rerun after this candidate; no pass-count claim yet.
+LOC/function budgets, coercion vocabulary, and oracle ratchets pass against
+`c603404b4f` without new allowances. Reachability preservation passes, but the
+strict modeled closure remains **FAIL/OPEN**, not a closed-IR result.
 Added explicit and implicit derived-constructor controls shaped like
 `NodeObject`/`SourceFileObject`, including inherited symbol/original fields and
 own readonly-array/string fields. All **20/20** field-value rows pass

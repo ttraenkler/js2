@@ -2,6 +2,7 @@
 import { ts, forEachChild } from "../ts-api.js";
 import { requiresRuntimeModuleIdentity } from "../ir/runtime-module-identity.js";
 import { collectClassInstanceFieldDeclarations } from "../ir/class-instance-initializers.js";
+import { preserveUndefinedReferenceCarrier } from "../ir/undefined-reference-carrier.js";
 import { fillLiveArrayIterator } from "./live-array-iterator.js";
 import { inferredClosureSignature, inferredReturnedClosureSignature } from "../ir/inferred-closure-signature.js";
 import { irInferredClosureCarriers } from "./ir-inferred-closure-carriers.js";
@@ -13183,7 +13184,10 @@ export function resolveWasmType(ctx: CodegenContext, tsType: ts.Type, _depth = 0
       (t) => !(t.flags & ts.TypeFlags.Null) && !(t.flags & ts.TypeFlags.Undefined) && !(t.flags & ts.TypeFlags.Void),
     );
     if (nonNullish.length === 1 && tsType.types.length === 2) {
-      const inner = resolveWasmType(ctx, nonNullish[0]!, _depth + 1, _visited);
+      const inner = preserveUndefinedReferenceCarrier(
+        tsType,
+        resolveWasmType(ctx, nonNullish[0]!, _depth + 1, _visited),
+      );
       if (inner.kind === "ref") return { kind: "ref_null", typeIdx: inner.typeIdx };
       return inner;
     }
@@ -13569,6 +13573,7 @@ export function ensureStructForType(ctx: CodegenContext, tsType: ts.Type): void 
     const propType = ctx.checker.getTypeOfSymbol(prop);
     ensureStructForType(ctx, propType);
     let wasmType = symbolBrand(propType, resolveWasmType(ctx, propType));
+    wasmType = preserveUndefinedReferenceCarrier(propType, wasmType, (prop.flags & ts.SymbolFlags.Optional) !== 0);
     const nullishScalarSeed =
       wasmType.kind === "i32" &&
       (propType.flags & (ts.TypeFlags.Null | ts.TypeFlags.Undefined | ts.TypeFlags.Void)) !== 0;

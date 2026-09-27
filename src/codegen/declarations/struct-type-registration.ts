@@ -6,6 +6,7 @@
  */
 import { getNullablePrimitiveInfo, isBigIntType, mapTsTypeToWasm } from "../../checker/type-mapper.js";
 import { ts } from "../../ts-api.js";
+import { preserveUndefinedReferenceCarrier } from "../../ir/undefined-reference-carrier.js";
 import { fieldsHashKey, resolveWasmType } from "../index.js";
 import { registerStructType } from "../registry/types.js";
 import type { FieldDef, StructTypeDef } from "../../ir/types.js";
@@ -397,7 +398,11 @@ export function collectInterface(ctx: CodegenContext, decl: ts.InterfaceDeclarat
   for (const prop of properties) {
     if (inheritedNames.has(prop.name)) continue;
     const memberType = ctx.checker.getTypeOfSymbol(prop);
-    const wasmType = mapDeclaredFieldType(ctx, memberType);
+    const wasmType = preserveUndefinedReferenceCarrier(
+      memberType,
+      mapDeclaredFieldType(ctx, memberType),
+      (prop.flags & ts.SymbolFlags.Optional) !== 0,
+    );
     fields.push({
       name: prop.name,
       type: wasmType,
@@ -727,7 +732,12 @@ function resolveFieldsFromProperties(
 
     const property = propertiesByName.get(field.name);
     if (!property) continue;
-    const resolved = resolveWasmType(ctx, ctx.checker.getTypeOfSymbol(property));
+    const type = ctx.checker.getTypeOfSymbol(property);
+    const resolved = preserveUndefinedReferenceCarrier(
+      type,
+      resolveWasmType(ctx, type),
+      (property.flags & ts.SymbolFlags.Optional) !== 0,
+    );
     if (resolved.kind === "ref" || resolved.kind === "ref_null" || (mayBeHostBigInt && resolved.kind === "externref")) {
       field.type = resolved;
       changed = true;
