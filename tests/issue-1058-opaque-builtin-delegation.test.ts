@@ -7,6 +7,7 @@ const cases = [
   ["array", "[1, 2]", "12"],
   ["string", '"a😀"', "a😀"],
   ["set", "new Set([1, 2])", "12"],
+  ["map", "new Map([[1, 2], [3, 4]])", "1,23,4"],
 ] as const;
 
 function source(subject: string, expected: string): string {

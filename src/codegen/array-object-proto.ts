@@ -1,7 +1,7 @@
 import { emitNativeGeneratorProtocolMethodBody } from "./generators-native-protocol.js";
 import { ensureLiveArrayIterator } from "./live-array-iterator.js";
 import { emitIteratorFamilyNextBody } from "./iterator-proto-next.js"; // (#6484 S2)
-import { ITER_FAMILY_ARRAY, ITER_FAMILY_MAP, ITER_FAMILY_SET } from "./iterator-native.js"; // (#6484 S1)
+import { ITER_FAMILY_ARRAY, ITER_FAMILY_MAP, ITER_FAMILY_SET, ITER_FAMILY_STRING } from "./iterator-native.js"; // (#6484 S1)
 // Copyright (c) 2026 Loopdive GmbH. Licensed under Apache-2.0 WITH LLVM-exception.
 /**
  * (#2193 / #43 harvest) Native `$NativeProto` glue for `Array.prototype` and
@@ -63,7 +63,6 @@ import { DENO_PRIMORDIAL_GLOBAL_NAMES } from "./deno-platform.js";
 import {
   ensureAnyToStringHelper,
   ensureNativeStringHelpers,
-  ensureStrToCharVecHelper,
   flatStringType,
   nativeStringLiteralInstrs,
   stringConstantExternrefInstrs,
@@ -1620,9 +1619,10 @@ function emitStringSearchBooleanMemberBody(ctx: CodegenContext, fctx: FunctionCo
  * (#5152) Native body for the reflective `String.prototype[Symbol.iterator]`
  * closure (§22.1.3.32). Arity 0, like the trim family, so it never reads an arg
  * slot: `? RequireObjectCoercible(this)` → `S = ? ToString(this)` → the
- * code-point vec of `S`, boxed to the uniform externref closure result.
+ * native string iterator of `S`, with its ordinary next/prototype protocol.
  */
 function emitStringIteratorMemberBody(ctx: CodegenContext, fctx: FunctionContext): ValType | null {
+  ensureNativeIteratorRuntime(ctx);
   ensureNativeStringHelpers(ctx);
   ensureStringRocUndefinedNative(ctx, fctx);
   const anyToStrIdx = ensureAnyToStringHelper(ctx);
@@ -1630,9 +1630,8 @@ function emitStringIteratorMemberBody(ctx: CodegenContext, fctx: FunctionContext
   if (flattenIdx === undefined) return emitProtoMemberBodyRefusal(ctx, fctx, "String", "@@1");
   emitStringRequireObjectCoercible(ctx, fctx, "[Symbol.iterator]");
   emitStringProtoToStringFlat(ctx, fctx, 1, anyToStrIdx, flattenIdx);
-  const { funcIdx: charVecIdx } = ensureStrToCharVecHelper(ctx);
-  fctx.body.push({ op: "call", funcIdx: charVecIdx });
   fctx.body.push({ op: "extern.convert_any" });
+  fctx.body.push({ op: "call", funcIdx: ctx.funcMap.get("__iterator")! });
   return { kind: "externref" };
 }
 
@@ -2660,6 +2659,9 @@ function makeGlue(
     // members + all Object members still degrade to a catchable TypeError.
     emitMemberBody: (c, fctx, member) =>
       (name === "Generator" ? emitNativeGeneratorProtocolMethodBody(c, fctx, member) : null) ??
+      (name === "String" && member === "next"
+        ? emitIteratorFamilyNextBody(c, fctx, ITER_FAMILY_STRING, "%StringIteratorPrototype%.next")
+        : null) ??
       // (#5269 D-2) The `Error.prototype.stack` accessor pair. First in the
       // ladder because its member names are synthetic — no other arm can claim
       // them — and the setter needs the brand to identify its home object.

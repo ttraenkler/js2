@@ -1057,9 +1057,132 @@ dispatch, and the cross-bucket reflection/iterator cases
 (`.tmp/sync-merged-upstream.log`). All five configured ratchet commands pass
 against the new fetched main SHA (`.tmp/sync-merged-{loc,func,coercion,oracle,exports}.log`).
 These are integration checks, not the full TypeScript upstream unit suite.
-No original-source scanner or complete original-unit batch has been rerun on
-this merged tree yet. The recorded resume-binding and implicit-delegation
-frontiers remain the next implementation work after the merge is committed.
+Merge committed and SSH-signature/ancestry verified as `58fce98114`; fetched
+main `2a58b9fe9f` is now an ancestor. Final source typecheck passes. Fresh
+original `compilerCore.ts` passes **11/11 native and 11/11 validated zero-import
+standalone callbacks** on that merged commit
+(`.tmp/source-compilerCore-main-2a58.log`, session `87622`, terminal exit zero;
+compile 2912 ms, binary 967689 bytes). The scanner and complete original-unit
+batch have not been rerun on this merged tree. The recorded resume-binding and
+implicit-delegation frontiers remain the next implementation work.
+
+#### Post-merge implicit builtin delegation continuation
+
+On `58fce98114` plus the current iterator candidate, implicit `yield*` now
+requests ordinary builtin prototype members. String iteration returns a real
+iterator record and uses the shared native string step implementation. Map/Set
+dispatch defers to an actually seeded ordinary `@@iterator` property instead of
+resurrecting the synthetic legacy closure after replacement or deletion. The
+decision reads the seeded-symbol registry, not an approximate demand flag.
+The dispatch guard is extracted without increasing function-size allowances.
+
+Measured before that behavior-preserving extraction: **143/143 tests in 11
+files**, including the original TypeScript `flatMapIterator`, opaque Array,
+String, Map and Set delegation, prototype replacement/deletion under both IR
+modes, and nearby iterator/generator protocol tests. Source typecheck and lint
+passed. Evidence: `.tmp/implicit-builtin-final-regression.log` and
+`.tmp/implicit-builtin-{tsc,lint}.log`. This is not the complete upstream suite.
+After the guard extraction, the same **143/143 tests in 11 files** pass again
+(`.tmp/implicit-final-extraction-tests.log`, terminal exit zero), source
+typecheck and lint pass (`.tmp/implicit-final-extraction-{tsc,lint}.log`),
+and the function-size gate passes without a new allowance
+(`.tmp/implicit-extraction-func.log`).
+
+The fresh original `regExpScannerRecovery.ts` run finished with **984/984 native
+callbacks passing**, but compilation failed after **304032 ms**, emitted zero
+bytes, and therefore executed **no standalone callbacks**. Evidence:
+`.tmp/source-scanner-implicit-iterators.log`, session `25551`, terminal exit 1.
+The two remaining errors are full physical ABI changes after nested-function
+reservation: `withContext/addArrayBindingPatterns` changes an array parameter
+from nullable type 2 to 11167; `inferTypeFromReferences/getFunctionFromCalls`
+changes its final array parameter from nullable type 2 to 11251. These numeric
+indices are from this run, not stable identities. Investigate lazy array element
+layout publication before reservation; retain the loud ABI guard. Host-import
+warnings also remain, so fixing these two errors is not evidence of standalone
+readiness. The previously recorded generator resume-binding regression remains
+unresolved separately.
+
+#### Array-element signature registration candidate
+
+The scanner ABI failure now has a reduced witness in
+`tests/issue-1058-nested-array-parameter-abi.test.ts`: a nested function takes
+`Item[]` before a direct `Item` parameter, where `Item` is a local interface.
+Before the fix, both IR modes reproduce the exact numeric-vector-to-struct-vector
+reservation mismatch (`.tmp/nested-array-abi-before2.log`, **0/2 passing**).
+`ensureStructForType` skipped array carriers without registering their element
+structure. The later direct parameter registered it after the array signature
+had already been published. The shared registration owner now prepares array
+elements with its existing per-compilation cycle guard. No ABI assertion is
+weakened, and both compilation paths use this preparation.
+
+The expanded Array/ReadonlyArray/derived-array matrix passes **6/6** in
+standalone with validated zero-import modules and checked return values
+(`.tmp/nested-array-abi-matrix.log`). Existing reservation tests pass **7/7**.
+The nearby array/identity/recursive-structure batch passes **24/27**; all three
+failures reproduce on clean merged commit `58fce98114` in the same harness:
+two generic node-array factory illegal casts and the GC-lane shared metadata
+failure. Control: `/private/tmp/ts2wasm-ts5-array-control-58fc`,
+`.tmp/array-registration-control.log`, **11/14**. Candidate:
+`.tmp/nested-array-registration-regressions.log`. These remain unresolved,
+not credited as passing. Typecheck, lint (two existing warnings), and all five
+configured source gates pass; the reachability contract is preservation-only,
+not strict graph closure (`.tmp/array-registration-*.log`). The 143 iterator and
+generator regression tests also pass after this change
+(`.tmp/array-registration-iterator-regressions.log`).
+
+The fresh full scanner compile finished (session `24411`, exit 1): **both
+reservation errors are gone**, compilation succeeds in **328844 ms** and emits
+**54800535 bytes**, but Wasm validation fails before any standalone callback.
+The new concrete frontier is `SourceFileObject_new`, function 2597:
+`struct.new[28] expected type (ref null 657), found local.get of type i32`.
+Native callbacks still pass **984/984**. This is compile-frontier progress,
+not a standalone test pass. Evidence: `.tmp/source-scanner-array-registration.log`.
+Fresh original `compilerCore` passes **11/11 native and standalone** with zero
+imports (3355 ms, 1573325 bytes); original `factory` passes **3/3** in both lanes
+with zero imports (111897 ms, 14199584 bytes). Evidence:
+`.tmp/source-{compilerCore,factory}-array-registration.log`. The seven-file
+source batch finished (session `74296`, exit 0). Together with compilerCore,
+all eight source files pass **44/44 native and 44/44 standalone callbacks**;
+each module validates with zero imports. This measurement predates the
+constructor-default fix below. Logs: `.tmp/source-<suite>-array-registration.log`.
+The diagnostic-only source compile finished as session `42141`, exit 0, using
+`.tmp/inspect-sourcefile-constructor.mjs` with the same runner options plus
+`emitWatOnlyFunctions` for `SourceFileObject_new`/`SourceFileObject_init`.
+`.tmp/sourcefile-constructor-wat.log` identifies the mismatched field and its
+producer. No compiler ABI assertion or validation was disabled.
+
+#### Constructor-default counting repair
+
+The emitted `SourceFileObject_new` contains the complete default operands,
+followed by five duplicate trailing defaults. `fixupStructNewArgCounts` stops
+its backwards count at the `f64.reinterpret_i64` used for optional numeric
+`id`'s undefined sentinel. It counts only the suffix, appends five defaults,
+then stack coercion spills/reloads the shifted values. Field 28,
+`libReferenceDirectives`, consequently receives an i32 instead of its vector.
+The class layout itself has the expected 57 fields.
+
+The count now lives in the shared, AST-free Wasm model and treats
+`i64.const; f64.reinterpret_i64` as one default expression. The codegen pass
+consumes that helper; no allowance increase or validation suppression is used.
+`tests/issue-1058-struct-default-count.test.ts` includes an executable Wasm
+fixture and an idempotence check. Clean `58fce98114` turns its complete
+seven-instruction constructor into nine instructions and invalid Wasm
+(`/private/tmp/ts2wasm-ts5-array-control-58fc/.tmp/constructor-default-control.mjs`).
+The candidate retains seven instructions, validates with zero imports, and
+returns 7. Together with model, constructor, and existing shared-body checks,
+**8/8 tests pass** (`.tmp/constructor-default-after.log`). The small source
+constructor smoke already passed before this fix; it is nearby coverage, not
+credited as a regression flip. An earlier variant exposed a separate existing
+optional self-reference/undefined comparison failure and was not used as
+evidence for this default-count defect.
+
+A fresh original scanner run is live as session `47314`, log
+`.tmp/source-scanner-constructor-defaults.log`. Keep production source frozen
+until it finishes; do not claim scanner standalone readiness from the reduced
+fixture. All five configured source gates and typecheck/lint passed (sessions
+`78179` and `21824`, terminal exit 0; `.tmp/constructor-default-*.log`). Lint
+reports existing warnings, not errors. The class/optional-field regression
+batch is running as `53914`, `.tmp/constructor-default-regressions.log`.
 
 The user requested a main merge and continuation. The former temporary checkout
 was cleaned out, but branch `codex/1058-typescript-standalone` retained the signed

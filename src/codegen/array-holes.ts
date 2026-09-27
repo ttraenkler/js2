@@ -1129,6 +1129,7 @@ function isProtoNamedWrite(node: ts.Node): boolean {
  * disables the HOF hole visit-skip or the typed element lanes.
  */
 function isProtoMemberValueUse(node: ts.Node): boolean {
+  if (ts.isYieldExpression(node) && node.asteriskToken) return true; // implicit GetMethod(@@iterator)
   if (ts.isCallExpression(node)) {
     const callee = node.expression;
     if (

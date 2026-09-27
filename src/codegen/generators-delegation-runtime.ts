@@ -7,6 +7,13 @@ import { addFuncType, getOrRegisterVecType, getArrTypeIdxFromVec } from "./regis
 import { ensureObjectRuntime, reserveApplyClosure } from "./object-runtime.js";
 import { ensureNativeIteratorRuntime, externIsObjectInstrs } from "./iterator-native.js";
 import { ensureIterRecPrototypeHelper } from "./iterator-proto-next.js";
+import {
+  ensureArrayNativeProtoGlue,
+  ensureStringNativeProtoGlue,
+  ensureMapNativeProtoGlue,
+  ensureSetNativeProtoGlue,
+} from "./array-object-proto.js";
+import { ensureNativeProtoCompanionSeeder } from "./native-proto.js";
 import { carrierIsAny } from "./generators-native.js";
 import { stringConstantExternrefInstrs } from "./native-strings.js";
 import { canonicalUndefinedExternInstrs } from "./any-helpers.js";
@@ -92,6 +99,17 @@ export function ensureNativeDelegatedResultHelpers(ctx: CodegenContext): void {
   ensureNativeIteratorRuntime(ctx);
   if (ctx.standalone || ctx.wasi) ensureIterRecPrototypeHelper(ctx);
   ensureObjectRuntime(ctx);
+  if (ctx.standalone) {
+    for (const ensure of [
+      ensureArrayNativeProtoGlue,
+      ensureStringNativeProtoGlue,
+      ensureMapNativeProtoGlue,
+      ensureSetNativeProtoGlue,
+    ]) {
+      const brand = ensure(ctx);
+      if (brand !== undefined) ensureNativeProtoCompanionSeeder(ctx, brand);
+    }
+  }
   reserveApplyClosure(ctx);
   for (const name of ["__typeof_object", "__typeof_function"]) {
     ensureLateImport(ctx, name, [ER], [I32]);

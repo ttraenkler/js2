@@ -13329,6 +13329,19 @@ function widenObjectLiteralFieldType(
   return wasmType;
 }
 
+function ensureArrayElementStruct(ctx: CodegenContext, tsType: ts.Type): boolean {
+  const element = inheritedArrayElementType(ctx.checker, tsType);
+  if (!element) return false;
+  // A signature publishes the element carrier too. Leaving a local interface
+  // unregistered lets T[] reserve a numeric vec before a later T slot registers
+  // its struct. The shared registration cycle guard also covers recursive arrays.
+  if (!ctx.ensureStructPending.has(tsType)) {
+    ctx.ensureStructPending.add(tsType);
+    ensureStructForType(ctx, element);
+  }
+  return true;
+}
+
 /**
  * Ensure a ts.Type that's an object type is registered as a struct.
  * For named types already in structMap, this is a no-op.
@@ -13375,7 +13388,7 @@ export function ensureStructForType(ctx: CodegenContext, tsType: ts.Type): void 
   // Augmented array interfaces such as `NodeArray<T>` share the vec carrier
   // selected by resolveWasmType. Do not eagerly register their inherited
   // Array surface as a separate closed struct.
-  if (inheritedArrayElementType(ctx.checker, tsType)) return;
+  if (ensureArrayElementStruct(ctx, tsType)) return;
   if (isExternalDeclaredClass(tsType, ctx.checker)) return;
   // (#2937) Never register a struct for the evolved checker type of a poisoned
   // `$Object`-hash-consumer `{}` var — it must stay externref/host-MOP end to

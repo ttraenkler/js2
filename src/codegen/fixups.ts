@@ -15,6 +15,7 @@ import { absoluteFuncIndexCached } from "../emit/resolve-layout.js"; // (#1916 S
 // (#4077) The exact forward stack model now lives beside its second consumer.
 import { callTargetFuncType, locateCallArgProducers } from "./call-arg-producers.js";
 import { walkInstructionArraysPostOrder } from "../wasm/model/instruction-postorder.js";
+import { countTrailingStructDefaults } from "../wasm/model/struct-default-count.js";
 
 /** Every nested instruction array owned by one structured instruction. */
 function nestedBodies(instr: Instr): Instr[][] {
@@ -711,30 +712,7 @@ export function fixupStructNewArgCounts(ctx: CodegenContext): void {
       // Count backwards from struct.new to find how many default-value
       // instructions were pushed. We look for a contiguous run of
       // const/ref.null/ref.as_non_null ops.
-      let pushedCount = 0;
-      let j = i - 1;
-      while (j >= 0) {
-        const prev = instrs[j]!;
-        const op = prev.op;
-        if (
-          op === "f64.const" ||
-          op === "i32.const" ||
-          op === "i64.const" ||
-          op === "ref.null" ||
-          op === "ref.null.extern" ||
-          op === "ref.null.eq" ||
-          op === "ref.as_non_null"
-        ) {
-          // ref.as_non_null doesn't push a new value, it converts the top.
-          // Don't count it as a separate pushed value.
-          if (op !== "ref.as_non_null") {
-            pushedCount++;
-          }
-          j--;
-        } else {
-          break;
-        }
-      }
+      const pushedCount = countTrailingStructDefaults(instrs, i);
 
       if (pushedCount < expectedFieldCount && pushedCount > 0) {
         // Only fix if we found SOME defaults (confirming this is a constructor

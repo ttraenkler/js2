@@ -43,6 +43,8 @@ import { ensureCurrentThisGlobal } from "./statements/nested-declarations.js";
 import { definedFuncAt, mintDefinedFunc, pushDefinedFunc } from "./func-space.js"; // (#1916 S2/S3) positional-read chokepoint + stable-regime minting
 import { nativeStringLiteralInstrs } from "./native-string-literals.js"; // (#4629) dyn-dispatch fill key compares
 import { getWellKnownSymbolId } from "./literals.js"; // (#4629) @@iterator id
+import { BUILTIN_BRAND_TABLE } from "./builtin-brands.js";
+import { seededNativeProtoSymbolMembersByBrand } from "./native-proto.js";
 import { ensureSymbolCarrier, usesNativeSymbolProvider } from "./symbol-native.js"; // (#5267 A-2) symbol keys box as symbols, not ids
 import { ensureNativeIteratorRuntime, ITER_FAMILY_MAP, ITER_FAMILY_SET } from "./iterator-native.js"; // (#5267 B-2) live collection iterator records; (#6484 S1) family tags
 import { getClosureFuncSelfTypeIdx, getOrCreateFuncRefWrapperTypes } from "./closures/funcref-wrapper-types.js"; // (#4629) iterator closure singleton
@@ -2763,6 +2765,29 @@ function rehashIfNeededInstrs(ctx: CodegenContext, M_BUCKETS: number, M_LIVECOUN
 // first value caused); 8 is left spare for iterator-native's next arm.
 export const ITER_KIND_MAPSET = 9;
 
+/** Seeded ordinary prototypes, including overrides/deletion, own @@iterator. */
+function mapSetIteratorShortcutGuard(ctx: CodegenContext, iteratorId: number, castMap: () => Instr[]): Instr[] {
+  const seededSymbols = seededNativeProtoSymbolMembersByBrand(ctx);
+  const exclusions = (["Map", "Set"] as const)
+    .filter((name) => seededSymbols.get(BUILTIN_BRAND_TABLE[name])?.includes(iteratorId))
+    .flatMap((name): Instr[] => [
+      ...castMap(),
+      { op: "struct.get", typeIdx: ctx.mapTypeIdx, fieldIdx: MAP_LAYOUT.M_KIND },
+      { op: "i32.const", value: name === "Map" ? COLLECTION_KIND.MAP : COLLECTION_KIND.SET },
+      { op: "i32.ne" },
+      { op: "i32.and" },
+    ]);
+  return [
+    { op: "local.get", index: 1 },
+    { op: "any.convert_extern" },
+    { op: "ref.cast", typeIdx: ctx.symbolTypeIdx },
+    { op: "struct.get", typeIdx: ctx.symbolTypeIdx, fieldIdx: 0 },
+    { op: "i32.const", value: iteratorId },
+    { op: "i32.eq" },
+    ...exclusions,
+  ];
+}
+
 export function fillMapSetDynDispatchArms(ctx: CodegenContext): void {
   if (ctx.mapTypeIdx < 0) return;
   const mapSizeIdx = ctx.mapHelpers.get("__map_size");
@@ -2986,12 +3011,7 @@ export function fillMapSetDynDispatchArms(ctx: CodegenContext): void {
             op: "if",
             blockType: { kind: "empty" },
             then: [
-              { op: "local.get", index: 1 },
-              { op: "any.convert_extern" },
-              { op: "ref.cast", typeIdx: ctx.symbolTypeIdx },
-              { op: "struct.get", typeIdx: ctx.symbolTypeIdx, fieldIdx: 0 }, // id
-              { op: "i32.const", value: wkIterId },
-              { op: "i32.eq" },
+              ...mapSetIteratorShortcutGuard(ctx, wkIterId, castMap),
               {
                 op: "if",
                 blockType: { kind: "empty" },
