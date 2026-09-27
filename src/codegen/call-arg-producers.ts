@@ -285,12 +285,17 @@ export function locateOperandProducers(instrs: Instr[], mod: WasmModule): Map<nu
   const out = new Map<number, number[]>();
   for (let i = 0; i < instrs.length; i++) {
     const instr = instrs[i]!;
-    const eff = instrPopsPushes(instr, mod);
+    // A direct tail call consumes known arguments but never falls through.
+    // Record its operands before stopping, rather than sending this call to
+    // a backward repair that can mistake closure fields for call arguments.
+    const tailCall = instr.op === "return_call" ? callTargetFuncType(instr, mod) : null;
+    const eff = tailCall ? { pops: tailCall.params.length, pushes: 0 } : instrPopsPushes(instr, mod);
     if (!eff) break;
     if (eff.pops > producers.length) break; // underflow — cannot model
     if (eff.pops > 0) out.set(i, producers.slice(producers.length - eff.pops));
     producers.length -= eff.pops;
     for (let p = 0; p < eff.pushes; p++) producers.push(i);
+    if (tailCall) break;
   }
   return out;
 }

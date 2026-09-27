@@ -1468,6 +1468,76 @@ Type-checking, lint, formatting and all five source gates pass without allowance
 growth (`.tmp/closure-array-return-{typecheck,lint,loc,func,coercion,oracle,exports}.log`).
 Dead-export verification remains preservation-only, not strict closure proof.
 
+Signed concise-return checkpoint: `e37238aaec`. Fresh source compilerCore and
+factory controls completed successfully (**11/11 + 3/3**, zero imports; factory
+**14,199,590 bytes / 116,774 ms**, `.tmp/source-factory-closure-return.log`).
+The indirect `Track` reproducer is now attributed more narrowly: the generated
+`execute(track)` dispatch tests six function signatures, none matching the
+actual closure's `(root, externref) -> vec_externref` signature (type 68 in the
+reduced binary). Its declared result is `Change[]` (vector type 50). The
+terminal branch throws `TypeError` before invoking the callback, confirmed by
+an in-Wasm catch returning **-2** (`.tmp/indirect-closure-return-wat.log`, script
+`.tmp/inspect-indirect-closure-return.mjs`). Direct invocation passes. This is
+an omitted callable-dispatch candidate/return bridge, not evidence that array
+conversion corrupts the callback's captured state. Keep the scanner candidate
+frozen until session `89089` completes before selecting the next implementation.
+
+Scanner session `89089` completed with native **984/984**, **54,836,001 bytes**
+in **320,602 ms**, still invalid and with no standalone callbacks executed.
+It advances beyond `trackChanges` to function 6242 `__closure_1228`
+(`getAllCodeActions`, addMissingAsync line 62): closure construction field 2
+requires externref but receives `ref null 1517` (CodeFixAllContext), offset
+**28,547,149**. `.tmp/scanner-closure-1228-validation.log` isolates the bad bag
+operand in the closure passed to a `return_call codeFixAll`.
+The exact call-argument model advertises `return_call` support, but its stack
+effect function rejects that terminator, so it never records its arguments.
+The unsafe legacy backward fallback then walks inside the boxed closure
+argument and retags its unrelated bag null. Next implementation will make the
+shared forward producer model record terminal direct-call operands exactly.
+The remaining six original compiler-suite checks started on `e37238aaec`
+in session `60679`, `.tmp/source-<suite>-closure-return.log`; the subsequent
+tail-call edit overlapped this loop, so do not combine it into a frozen 44/44
+checkpoint result.
+
+The tail-call model regression demonstrates both missing attribution and
+corruption of an unrelated closure bag (**0/2** before,
+`.tmp/tail-call-arg-producers-before2.log`). The shared forward model now records
+the known direct tail-call parameters and stops after that terminal instruction.
+The initial four-file batch passes **19/19**
+(`.tmp/tail-call-arg-producers-after.log`); the expanded owner tests pass **4/4**
+(`.tmp/tail-call-arg-producers-after2.log`), including stop-at-terminator and
+positive actual-null repair controls. Full scanner verification and source
+gates are running: scanner session `39100`
+(`.tmp/source-scanner-tail-args.log`, `.tmp/source-scanner-tail-args.wasm`),
+type-check session `22738`, five-gate chain session `22214`
+(`.tmp/tail-call-arg-producers-{typecheck,gates}.log`). Formatting/lint already
+pass (`.tmp/tail-call-arg-producers-style.log`). No real-source success is
+claimed yet; the tail-call candidate is not committed until verification finishes.
+The five-gate chain and initial type-check completed with exit 0; preservation-only
+dead-export verification remains the limit. Expanded owner tests now pass
+**5/5**, including an emitted, zero-import Wasm module that executes the tail
+call and observes the original null bag (`.tmp/tail-call-arg-producers-runtime.log`).
+Formatting and lint pass after that test addition. The broader six-file
+tail-call/stack/coercion batch is session `96439`
+(`.tmp/tail-call-arg-producers-broad.log`); final test-inclusive type-check is
+session `86623` (`.tmp/tail-call-arg-producers-typecheck2.log`).
+That final type-check passed. The broader batch is **34/36**; both failures
+reproduce on clean `58fce98114`: the tail-call guard's stale IR allocation
+provenance rejection (**6/7**, `.tmp/tail-call-2554-control.log`) and the stack
+test's missing host `__get_caught_exception` import (**14/15** including the
+passing call-argument suite, `.tmp/tail-call-arg-producers-control.log`).
+These are baseline failures, not new successes. Control logs live in the array
+control checkout. No production changes were made while scanner `39100` runs.
+
+Scanner `39100` is now terminal (exit 1): native **984/984**,
+**54,835,934 bytes / 326,033 ms**, still invalid. The closure bag corruption is
+gone; validation advances to function 7269 `invokeCallbacks`, offset
+**29,722,240**: a call needs three stack arguments but only two are available.
+No standalone callbacks execute; zero-import closure is not established.
+Keep `.tmp/source-scanner-tail-args.log` and `.tmp/source-scanner-tail-args.wasm`
+as this candidate's authoritative full-source result. The shared tail-call
+repair is ready for a checkpoint; next work is the missing call operand.
+
 The user requested a main merge and continuation. The former temporary checkout
 was cleaned out, but branch `codex/1058-typescript-standalone` retained the signed
 handoff at `efd9aca79c5aba4bfd6670847be925a027ed219f`. Work now lives in
