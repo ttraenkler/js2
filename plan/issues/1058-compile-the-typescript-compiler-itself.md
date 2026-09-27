@@ -888,8 +888,54 @@ PASS; strict modeled closure remains FAIL/OPEN. No new allowance was added.
 
 The next requested upstream sync fetched authoritative main at
 `f17af38a810e8ce8a3aa3b33c994a9a9965331ec`: one new baseline-refresh commit.
-Checkpoint this repair before merging; the live original-suite runs above
-remain pre-merge measurements.
+Repair checkpoint `d737e40205` preceded clean signed merge `2dcdffaa33`.
+Post-merge guarded-receiver and erased-spread controls pass **26/26**
+(`.tmp/guarded-receiver-post-main.log`). The original-suite runs above remain
+pre-merge measurements; upstream changed baselines, not compiler sources.
+Raw capture completed: **37,257,961 bytes**, **471,286 ms**, seven diagnostic
+imports. Original callback **69 now returns 1** with no reset patches
+(`.tmp/incremental-guarded-receiver-trace-69.log`), versus its earlier assertion
+failure. This is diagnostic evidence, not a zero-import full-suite result.
+Callback **73 also returns 1**, with no reset patches
+(`.tmp/incremental-guarded-receiver-trace-73.log`).
+
+Full original incremental-parser O1 run **5466 completed successfully**:
+**153/153 native and 153/153 standalone Wasm**, **zero total imports**, valid
+**23,656,173-byte** binary, **610,873 ms** compilation. This is up from
+90/153 at `db38cfd0f7`, using the original assertions and all registered
+callbacks (`.tmp/incremental-guarded-receiver-o1.log`). The measured compiler
+is the guarded-receiver checkpoint, before the overloaded-append candidate.
+The durable source-unit runner still needs to admit this complete suite;
+the 256-file goal and self-hosting are NOT complete.
+
+### Overloaded append receiver follow-up
+
+The extracted real comment-directive merge body with all three upstream
+`append` overloads still passes only **4/10** standalone IR-off/on cases on
+`2dcdffaa33`; six trap inside `append`. This is not attributed to the full
+parser suite. Its `to` parameter is externref, but the method probe narrows it
+to an incompatible checker-selected vector before plain `push`. Candidate
+preserves erased-storage evidence specifically for native push and reuses the
+existing runtime-layout spread builder for ordinary argument lists too.
+No new vector layout, runtime helper or iteration implementation is added.
+Extracted-body verification is now **10/10** versus baseline **4/10**;
+baseline `.tmp/comment-directive-overloaded-recovery.log`, candidate
+`.tmp/comment-directive-overloaded-erased-push.log`. Durable standalone
+native-oracle matrix is **14/14** versus **8/14** with exact `2dcdffaa33`
+array-methods restored by a Vite pre-transform. Repaired rows are optional
+directive lists, generic multiple-argument pushes and zero-argument pushes,
+each IR-off/on. Numeric/string alias and undefined-value controls remain
+passing. Three-file check passes **46/46**; final seven-file adjacent check
+passes **63/63** with no expected-failure markers in that set.
+Logs: `.tmp/overloaded-append-{baseline,final,adjacent}.log`. No claim that
+this slice owns pure IR emission: IR-on may use the shared method fallback.
+The nearby ref-kind probe no longer tests an optional `typeIdx` via `any`;
+both typed ref variants require that field. LOC/function gates and typecheck
+pass without new allowances. The original 153-callback suite is being rerun
+against this candidate in `.tmp/incremental-overloaded-append-o1.log`, handle
+**8238**. Do not restart while live. Next integration step after retaining
+153/153: admit `incrementalParser` to the durable source-unit runner with
+original Utils imports/assertions, then move to additional original files.
 
 Earlier requested upstream sync completed: authoritative `loopdive/js2` main at
 `c603404b4f2258ed59377bd591a287523e4af99b` merged cleanly in signed commit

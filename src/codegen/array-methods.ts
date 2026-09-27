@@ -2163,6 +2163,11 @@ export function compileArrayMethodCall(
         }
       }
     }
+    // A narrowed generic push receiver still carries its runtime vector layout.
+    // Do not let the probe's checker-directed cast erase that storage evidence.
+    if (methodName === "push" && actualType?.kind === "externref" && noJsHost(ctx)) {
+      receiverIsExternref = true;
+    }
     // Slow path: probe-compile the receiver to determine its actual type.
     // Compiles the expression, captures the result type, then rolls back.
     if (!actualType || actualType.kind === "externref" || actualType.kind === "f64" || actualType.kind === "i32") {
@@ -2170,11 +2175,7 @@ export function compileArrayMethodCall(
       // receiver below, so discard the body plus any locals / late imports /
       // errors this probe leaks.
       const probeResult = probeCompiledType(ctx, fctx, () => compileExpression(ctx, fctx, receiverExpr));
-      if (
-        probeResult &&
-        (probeResult.kind === "ref" || probeResult.kind === "ref_null") &&
-        (probeResult as any).typeIdx !== undefined
-      ) {
+      if (probeResult && (probeResult.kind === "ref" || probeResult.kind === "ref_null")) {
         actualType = probeResult;
       } else if (probeResult && probeResult.kind === "externref") {
         // Capture externref-shaped receivers too — `Object.keys(any).join(...)` and
@@ -4422,10 +4423,11 @@ function tryCompileArrayPushDynamicSpread(
   arrTypeIdx: number,
   elemType: ValType,
 ): ValType | undefined {
-  if ((receiverIsExternref && !noJsHost(ctx)) || !hasSpreadArgument(callExpr.arguments)) return undefined;
+  if (receiverIsExternref && !noJsHost(ctx)) return undefined;
   if (receiverIsExternref && canBuildSpreadArgList(ctx, fctx, { kind: "externref" })) {
     return compileErasedArrayPushSpread(ctx, fctx, propAccess, callExpr);
   }
+  if (!hasSpreadArgument(callExpr.arguments)) return undefined;
   if (callExpr.arguments.length === 1 && ts.isSpreadElement(callExpr.arguments[0]!)) {
     const spreadExpression = callExpr.arguments[0]!.expression;
     // (#5361) Tuple literals and opaque native iterables use the shared
