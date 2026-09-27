@@ -71,20 +71,78 @@ export function irClassInstanceFieldName(name: ts.PropertyName): string | undefi
   return undefined;
 }
 
-/** Fields initialize before parameter-property assignments in ES2022 output.
- * Implicit writes are currently admitted for optional fields only: required
- * reference-field projection still relies on its existing precise layout.
- */
+/** Prove a bounded constructor prefix cannot observe the initial undefined. */
+function constructorOverwritesBeforeObservation(declaration: ts.ClassLikeDeclaration): ReadonlySet<string> {
+  const overwritten = new Set<string>();
+  const ownFields = new Set<string>();
+  for (const member of declaration.members) {
+    if (!ts.isPropertyDeclaration(member) || hasStaticModifier(member)) continue;
+    // Any initializer can observe another field before the constructor body.
+    if (member.initializer) return overwritten;
+    if (
+      member.modifiers?.some(
+        ({ kind }) => kind === ts.SyntaxKind.DeclareKeyword || kind === ts.SyntaxKind.AbstractKeyword,
+      )
+    )
+      continue;
+    const name = irClassInstanceFieldName(member.name);
+    if (name !== undefined) ownFields.add(name);
+  }
+  const ctor = declaration.members.find(
+    (member): member is ts.ConstructorDeclaration => ts.isConstructorDeclaration(member) && !!member.body,
+  );
+  if (!ctor?.body) return overwritten;
+  const parameters = new Set(
+    ctor.parameters.filter((p) => ts.isIdentifier(p.name)).map((p) => (p.name as ts.Identifier).text),
+  );
+  const derived = declaration.heritageClauses?.some(({ token }) => token === ts.SyntaxKind.ExtendsKeyword);
+  for (const [index, statement] of ctor.body.statements.entries()) {
+    if (!ts.isExpressionStatement(statement)) break;
+    const expression = statement.expression;
+    // Own fields initialize after this boundary, never before parent work.
+    if (
+      index === 0 &&
+      derived &&
+      ts.isCallExpression(expression) &&
+      expression.expression.kind === ts.SyntaxKind.SuperKeyword
+    )
+      continue;
+    if (
+      !ts.isBinaryExpression(expression) ||
+      expression.operatorToken.kind !== ts.SyntaxKind.EqualsToken ||
+      !ts.isPropertyAccessExpression(expression.left) ||
+      expression.left.expression.kind !== ts.SyntaxKind.ThisKeyword
+    )
+      break;
+    const name = irClassInstanceFieldName(expression.left.name);
+    if (name === undefined || !ownFields.has(name)) break;
+    const value = expression.right;
+    if (
+      !(ts.isIdentifier(value) && parameters.has(value.text)) &&
+      !ts.isNumericLiteral(value) &&
+      !ts.isStringLiteral(value) &&
+      value.kind !== ts.SyntaxKind.TrueKeyword &&
+      value.kind !== ts.SyntaxKind.FalseKeyword &&
+      value.kind !== ts.SyntaxKind.NullKeyword
+    )
+      break;
+    overwritten.add(name);
+  }
+  return overwritten;
+}
+
+/** Fields initialize before parameter-property assignments in ES2022 output. */
 export function collectClassInstanceInitializerSources(
   declaration: ts.ClassDeclaration | ts.ClassExpression,
 ): readonly ClassInstanceInitializerSource[] {
   const result: ClassInstanceInitializerSource[] = [];
+  const overwritten = constructorOverwritesBeforeObservation(declaration);
   for (let sourceOrdinal = 0; sourceOrdinal < declaration.members.length; sourceOrdinal++) {
     const member = declaration.members[sourceOrdinal]!;
     if (
       !ts.isPropertyDeclaration(member) ||
       hasStaticModifier(member) ||
-      (!member.initializer && !member.questionToken) ||
+      (!member.initializer && overwritten.has(irClassInstanceFieldName(member.name) ?? "")) ||
       member.modifiers?.some(
         ({ kind }) => kind === ts.SyntaxKind.DeclareKeyword || kind === ts.SyntaxKind.AbstractKeyword,
       )

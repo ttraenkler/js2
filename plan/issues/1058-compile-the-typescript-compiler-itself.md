@@ -269,6 +269,47 @@ oracle-ratchet-allow:
 
 ## Main synchronization and incremental-parser trace — 2026-09-27
 
+### Unfinished required-field checkpoint before upstream sync
+
+The required-field candidate is **not ready to merge**. The native-oracle
+regression file passes 12/12 with the candidate versus 0/12 with the two
+production modules substituted from `8eb72dd5cc`. The six-file candidate run
+finishes at 78/89, with 11 failures: five previously recorded constructor
+failures plus six additional IR-ownership failures (base-before-derived work,
+mutually recursive layouts, and self-recursive layouts, in both lanes).
+Logs: `.tmp/required-field-candidate.log` and
+`.tmp/required-field-baseline.log`. Both runs are terminal, not still running.
+Preserve this checkpoint for the requested upstream merge, then resolve the
+extra IR regressions before publishing this candidate as a fix. Original
+incremental-parser acceptance has not been rerun with this candidate.
+
+Fresh bounded tracing of the `8eb72dd5cc` raw diagnostic build identifies
+**`symbol`**, not `emitNode`, as the next null child (`isNodeOrArray`, callback
+0). Artifact **41,909,421 bytes**, compile **370,312 ms**, seven throwing
+diagnostic-only Node imports; initialization reaches 153 callbacks and the
+traced callback reaches the original invariant. This is not standalone
+acceptance. `.tmp/incremental-current-null-key.log`.
+The original `NodeObject` declares `symbol!: Symbol` without assigning it in
+the constructor. Next implementation: include required implicit field writes
+in the shared IR plan, while preserving precise storage for fields whose
+undefined initialization is provably overwritten before any observation.
+Use only a side-effect-free constructor prefix of own-field assignments from
+plain parameters/literals, reject elision if any instance initializer exists,
+and account for the first derived `super()` boundary. Arbitrary later writes
+are not such proof. Keep the constructor ownership controls unchanged.
+
+IR follow-up inspection at `8eb72dd5cc`: `buildIrClassShapes` records source
+field types through `tsTypeToClassPositionIr`, which does not represent
+optional unions. Its fallback `valTypeToIrField` accepts only f64/i32,
+despite an older comment mentioning reference types. Widened externref fields
+therefore reject the complete class projection before constructor lowering.
+Do not merely admit every externref as `dynamic`: the dynamic backend carrier
+depends on `ctx.fast` (`resolveIrDynamicCarrierType`), so parity with an
+externref struct slot must be proved. General required-field initialization
+needs a compatible field representation and read/write conversions, not a
+weakened ownership or ABI guard. This is an implementation constraint, not
+attribution of the pending fresh parser trace.
+
 Full original-suite rerun at `b2ff16e061` is terminal: valid standalone O1,
 **26,195,509 bytes, zero imports, 608,287 ms**, native **153/153**, Wasm
 **0/153**. `.tmp/incremental-implicit-plan-o1.log`. The optional-field reduction

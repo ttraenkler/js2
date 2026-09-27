@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Loopdive GmbH. Licensed under Apache-2.0 WITH LLVM-exception.
 import { ts } from "../ts-api.js";
-import { irClassInstanceFieldName } from "./class-instance-initializers.js";
+import { collectClassInstanceInitializerSources, irClassInstanceFieldName } from "./class-instance-initializers.js";
 
 /** Source-owned storage evidence: these fields must retain a distinct undefined. */
 export function collectUndefinedWrittenInstanceFields(
@@ -8,6 +8,10 @@ export function collectUndefinedWrittenInstanceFields(
   isUndefinedValue: (expression: ts.Expression) => boolean,
 ): ReadonlySet<string> {
   const fields = new Set<string>();
+  for (const source of collectClassInstanceInitializerSources(declaration)) {
+    const name = irClassInstanceFieldName(source.name);
+    if (!source.expression && name !== undefined) fields.add(name);
+  }
   const bare = (expression: ts.Expression): ts.Expression => {
     let node = expression;
     while (
@@ -57,8 +61,7 @@ export function collectUndefinedWrittenInstanceFields(
       )
     ) {
       const name = irClassInstanceFieldName(member.name);
-      if (name !== undefined && (member.initializer ? clears(member.initializer) : !!member.questionToken))
-        fields.add(name);
+      if (name !== undefined && member.initializer && clears(member.initializer)) fields.add(name);
       if (member.initializer) visit(member.initializer);
     } else if (
       (ts.isConstructorDeclaration(member) ||
