@@ -483,6 +483,88 @@ and yields no runtime evidence. The scratch tracer now targets the native
 It must distinguish an absent enumeration key from an own-property rejection
 before attribution.
 
+The native-own-property trace completed (`.tmp/incremental-e82d-parent-native-own-0.log`):
+only 22 base/optional names reach `hasOwnProperty`; `statements` is absent,
+so the full failure is missing enumeration, not rejection of that key.
+The derived-field reproduction confirms the ordering defect: **0/12 before,
+12/12 after** testing physical descendants before ancestors across `for-in`,
+`Object.keys`, and `Object.getOwnPropertyNames`, with two hierarchy depths
+and both IR modes. Combined with array identity, **22/22 pass**
+(`.tmp/derived-enumeration-baseline.log`, `.tmp/derived-enumeration-candidate.log`).
+Candidate ordering lives in shared IR `struct-dispatch-order.ts`, using the
+actual Wasm supertype graph rather than source registration order. It rejects
+invalid/cyclic hierarchy records and preserves same-heap shape/stamp ordering.
+The existing collector is extracted from the oversized runtime module without
+changing field membership, presence guards, or builtin filtering. Both existing
+reflection consumers use the same ordered entries; no parallel legacy body.
+Original-suite acceptance and broader reflection regressions remain pending.
+
+Reflection matrix is **59/60**, with the one `computedWriteCtorField`
+failure (expected 11, got 1) reproducing unchanged on exact `fadf85262fb`.
+Additional layout/cold-tail/closed-struct controls pass **19/19**. Logs:
+`.tmp/derived-enumeration-reflection.log`,
+`.tmp/derived-enumeration-adjacent-baseline.log`,
+`.tmp/derived-enumeration-layout-controls.log`. Typecheck, lint, LOC/function,
+coercion and oracle gates pass with no new allowances. Reachability is still
+preservation-only PASS / strict closure FAIL/OPEN.
+The optimized original suite runs in session 28132, log
+`.tmp/incremental-derived-enumeration-o1.log`; the raw diagnostic capture runs
+in session 70809, log `.tmp/incremental-capture-derived-enumeration.log`,
+artifact `.tmp/incremental-raw-derived-enumeration.wasm`. Both started with
+`fadf85262fb` plus the complete enumeration-order candidate; later edits only
+relocated a comment or recorded evidence. Do not restart a live handle.
+
+Both builds are now terminal. Raw capture: **38,824,332 bytes**, **519,552 ms**,
+seven diagnostic-only imports. All three bounded callbacks finished: 0 and 69
+now fail the invariant on null **`_declarationBrand`** (149:38), while 52 still
+fails at 8564:12. Logs `.tmp/incremental-derived-enumeration-trace-0.log`,
+`.tmp/incremental-derived-enumeration-trace-69.log`, and
+`.tmp/incremental-derived-enumeration-trace-52.log`.
+The original optimized suite compiled valid standalone **24,303,975 bytes**,
+**750,949 ms**, **zero imports**, native **153/153**, Wasm **0/153**:
+152 failures at 149:38, one at 8564:12. Error movement is not a passing test.
+
+The enumeration candidate is **unfinished**: it exposes physical `declare`
+brand slots that are type-only, not runtime own properties. New tests require
+that a declare-only field be absent initially but appear after an explicit
+write; the expanded matrix is **12/14**, both declare-field rows failing
+(`.tmp/derived-enumeration-declare-fields.log`). A static blacklist of declared
+names would be insufficient because later writes must create the property.
+Investigate shared field-presence state across initialization, typed/IR writes,
+dynamic writes and reflective reads; do not merely skip the TypeScript brand.
+
+The other failure has an independent reduction: assigning a rest vector,
+pushing one item, or looping over rest items all preserve the diagnostic;
+`relatedInformation.push(...related)` and a local-alias spread instead store
+**null** (native 7, Wasm -3). Source:
+`.tmp/diagnostic-related-push.mts`; baseline log:
+`.tmp/diagnostic-related-mutation-isolation.log`.
+The old spread router excludes standalone/WASI and externref-shaped receivers,
+then the fallback treats the spread vector as a single element. Removing only
+the target exclusion fixes the local-alias case, not the property receiver.
+Current uncommitted experiment admits native-only receivers through the
+existing spread router; evaluate `.tmp/diagnostic-related-mutation-native-candidate.log`
+before accepting it. No new spread lowering body or upstream workaround.
+
+The final spread routing candidate passes **18/18** new native-oracle tests
+versus **8/18** on exact `fadf85262fb`'s `array-methods.ts`, plus **8/8**
+existing spread tests. Native-only opaque sources (e.g. generators) must use
+the existing iterator-aware argument builder, not the indexed host bridge;
+the intermediate widened router failed both generator rows until this was
+corrected. Typed native vec sources retain the existing fast path, and host
+externref receivers retain their existing guard. Logs:
+`.tmp/diagnostic-push-spread-baseline-tests.log`,
+`.tmp/diagnostic-push-spread-iterator-candidate-tests.log`.
+This spread fix is separable from the unfinished enumeration candidate and
+does not establish a pass for the original callback 52 until rerun in the
+full graph. Preserve the declare-field failures as ordinary failing tests.
+The same **26/26** spread tests pass with the unfinished enumeration change
+substituted away (`.tmp/diagnostic-push-without-enumeration-candidate.log`),
+so the spread repair can be checkpointed independently. Current combined
+typecheck and lint pass (`.tmp/derived-and-push-types.log`,
+`.tmp/derived-and-push-lint.log`). The declaration-presence work remains
+uncommitted and must not be described as ready to merge.
+
 Requested upstream sync completed: authoritative `loopdive/js2` main at
 `c603404b4f2258ed59377bd591a287523e4af99b` merged cleanly in signed commit
 `c6d4582ccf`. The unfinished candidate was preserved first in `55261207d1`.

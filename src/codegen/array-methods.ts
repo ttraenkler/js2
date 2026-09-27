@@ -4422,18 +4422,16 @@ function tryCompileArrayPushDynamicSpread(
   arrTypeIdx: number,
   elemType: ValType,
 ): ValType | undefined {
-  if (receiverIsExternref || ctx.standalone || ctx.wasi || !hasSpreadArgument(callExpr.arguments)) {
-    return undefined;
-  }
+  if ((receiverIsExternref && !noJsHost(ctx)) || !hasSpreadArgument(callExpr.arguments)) return undefined;
   if (callExpr.arguments.length === 1 && ts.isSpreadElement(callExpr.arguments[0]!)) {
     const spreadExpression = callExpr.arguments[0]!.expression;
-    // (#5361) An inline array literal (`...["x", "y"]`) is a TUPLE struct, not
-    // a vec: the native arm cannot resolve it, and the host arm's externref
-    // mirror reports the right length but reads every element as null (two
-    // empty slots appended). Route only that shape to the shared builder and
-    // leave the two measured single-spread arms otherwise untouched.
+    // (#5361) Tuple literals and opaque native iterables use the shared
+    // argument builder. A generator has no indexed length to copy; the
+    // length/index bridge is host-only. Typed vecs retain the single-spread
+    // fast path below.
     const sourceWasmType = inferExpressionWasmType(ctx, fctx, spreadExpression);
-    if (!isTupleStructType(ctx, sourceWasmType)) {
+    const indexedSource = !noJsHost(ctx) || resolveArrayInfoFromWasmType(ctx, sourceWasmType);
+    if (indexedSource && !isTupleStructType(ctx, sourceWasmType)) {
       return compileArrayPushDynamicSpread(ctx, fctx, propAccess, spreadExpression, vecTypeIdx, arrTypeIdx, elemType);
     }
   }
