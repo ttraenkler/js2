@@ -557,7 +557,7 @@ export function test(): number {
     expect(exports.test()).toBe(7);
   });
 
-  it("declines an unsafe undefined-to-nullable-reference generic callback bridge", async () => {
+  it("preserves undefined through an optional-reference generic callback bridge", async () => {
     const result = await compileMulti(
       {
         "./types.ts": `
@@ -594,10 +594,6 @@ export function test(): number {
     (imports as { __setInstance?: (value: WebAssembly.Instance) => void }).__setInstance?.(instance);
     const exports = wrapExports(instance, { signatures: result.exportSignatures }) as unknown as { test(): number };
 
-    // No source-certified arm is emitted for `(Node | undefined) => ...`:
-    // host `undefined` is not Wasm null, so `ref.cast_null` would trap. The
-    // existing dynamic-dispatch miss remains a catchable TypeError instead.
-    expect(() => exports.test()).toThrow(/Cannot access property on null or undefined/);
-    expect(() => exports.test()).not.toThrow(/illegal cast/);
+    expect(exports.test()).toBe(42);
   });
 });

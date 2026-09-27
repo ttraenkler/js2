@@ -652,16 +652,55 @@ Do not treat these ownership failures as accepted or repaired by this slice.
 
 Typecheck, changed-file lint/format, LOC/function, coercion and oracle gates
 pass without new allowances. Reachability remains preservation-only PASS,
-strict closure FAIL/OPEN. Full original-suite acceptance is still pending:
-session **37047**, `.tmp/incremental-declare-presence-o1.log`, compiles/runs the
-original 153 callbacks with O1 and zero-import acceptance; diagnostic-only
-capture session **43464**, `.tmp/incremental-capture-declare-presence.log`,
-writes `.tmp/incremental-raw-declare-presence.wasm`. Both were started from
-`12bfa72f46` plus this complete presence candidate and the previously committed
-spread repair; later changes only strengthen tests or record evidence.
-Do not restart a live handle. The seven-import diagnostic capture is not
-standalone acceptance. All 256 upstream source-unit files and self-hosting
-remain in scope; these focused results do not establish their completion.
+strict closure FAIL/OPEN. Original-suite run **37047** is now terminal:
+`.tmp/incremental-declare-presence-o1.log` records valid O1 standalone Wasm,
+**24,314,217 bytes**, **673,104 ms**, **zero imports**, native **153/153**,
+Wasm **0/153** (all illegal casts). This is the presence repair committed as
+`aec14ef7ca`, not the later generic comparer candidate. Diagnostic capture
+**43464** is also terminal: `.tmp/incremental-raw-declare-presence.wasm`,
+**38,846,942 bytes**, **479,950 ms**, seven diagnostic imports; log
+`.tmp/incremental-capture-declare-presence.log`. It is not standalone acceptance.
+Unmodified callback 0 and 52 traces pass the previous declaration-invariant
+and spread stops and reach `compareTrees → reusedElements → filter → contains`;
+both stop in `__call_fn_method_2` with an illegal cast. Trace logs are
+`.tmp/incremental-declare-presence-trace-0.log` and
+`.tmp/incremental-declare-presence-trace-52.log`.
+
+### Shared generic comparer argument carrier
+
+The actual raw binary specializes `contains<T>`'s value parameter to f64 and
+`equateValues<T>`'s arguments to string references (`__str_equals`), based on
+the first local calls. The same shared functions later receive AST nodes in
+`reusedElements`. Preserve direct, unconstrained function type parameters as
+externref in the existing shared declaration ABI planner, before first-call
+specialization can replace them. Constrained parameters are unchanged. Both
+compiler paths consume this planner; no parallel legacy-only lowering is added.
+
+`tests/issue-1058-generic-comparer-carrier.test.ts` compares native ES2022 values
+and zero-import standalone values in IR-off/on modes: **16/16**, versus **8/16**
+with only `declarations.ts` restored from exact `aec14ef7ca` via a Vite transform.
+The cases exercise numeric and object identity, default and explicit callbacks,
+filter/contains nesting, and earlier string/numeric calls followed by objects.
+Logs: `.tmp/generic-comparer-candidate.log`, `.tmp/generic-comparer-baseline.log`.
+
+Nine adjacent files initially give **129/132**. All three failing rows reproduce
+against exact `aec14ef7ca` in the two affected files (**7/10** on baseline).
+The optional-reference callback test expected an obsolete bail; checking its
+actual value instead gives the correct **42** on both candidate and baseline
+(`.tmp/generic-comparer-undefined-value.log` and its `-baseline.log` counterpart).
+That assertion is corrected, not counted as a production repair. The generic
+object-table callback and constrained factory flag failures remain OPEN.
+Source typecheck and LOC/function/coercion/oracle gates pass; reachability remains
+preservation-only PASS, strict closure FAIL/OPEN. No new allowances.
+
+New original-suite O1 run **58719** writes
+`.tmp/incremental-generic-comparer-o1.log`. Diagnostic capture **40357** writes
+`.tmp/incremental-capture-generic-comparer.log` and
+`.tmp/incremental-raw-generic-comparer.wasm`. Both use `aec14ef7ca` plus this
+four-line generic argument repair. Do not restart live handles or attribute
+their eventual results to later source edits. All 256 upstream source-unit
+files and self-hosting remain in scope; these focused results do not establish
+their completion.
 
 Earlier requested upstream sync completed: authoritative `loopdive/js2` main at
 `c603404b4f2258ed59377bd591a287523e4af99b` merged cleanly in signed commit

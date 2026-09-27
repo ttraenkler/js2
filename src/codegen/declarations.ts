@@ -1713,6 +1713,10 @@ function resolveGenericDeclarationCallSiteTypes(
   const identityReturnParamIndex = directIdentityReturnParamIndex(stmt);
   const params = resolved.params.map((wasmType, index) => {
     const param = stmt.parameters[index];
+    // One shared generic body must accept every instantiation of an
+    // unconstrained T, including when the function escapes as a callback.
+    const typeParameter = param && directFunctionTypeParameter(param, stmt);
+    if (typeParameter && !typeParameter.constraint) return { kind: "externref" } as const;
     // A shared constrained T -> T body must accept every subtype, not the
     // nominal subtype observed at its first call. Native structs can retain
     // the declared constraint carrier without the host lane's open-object ABI.
