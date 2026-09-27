@@ -42,6 +42,7 @@ it.each([
   ["asserts", 2],
   ["regExpScannerRecovery", 984],
   ["incrementalParser", 153],
+  ["semver", 692],
 ] as const)("requires all original %s callbacks for full-source coverage", (name, count) => {
   const result = passingResult();
   result.file = `src/testRunner/unittests/${name}.ts`;
@@ -78,6 +79,21 @@ it("redirects incremental parser imports without replacing original tree checks"
   expect(() => redirectSourceUnitImports("incrementalParser", body, "/suite", "/generated/unit.ts")).toThrow(
     "Upstream namespace import changed",
   );
+});
+
+it("preserves semver theory callbacks and original assertions while redirecting imports", () => {
+  const body =
+    "\r\nUtils.theory(data, test);\r\nassert.strictEqual(ts.VersionRange.tryParse(input)!.test(version), expected);";
+  const imports = 'import * as ts from "../_namespaces/ts.js";\r\nimport * as Utils from "../_namespaces/Utils.js";';
+  const result = redirectSourceUnitImports("semver", imports + body, "/suite", "/generated/unit.ts");
+  expect(result.needsServices).toBe(false);
+  expect(result.transformed).toBe(
+    'import * as ts from "./../suite/src/compiler/_namespaces/ts.js";\r\nimport * as Utils from "./../suite/src/testRunner/_namespaces/Utils.js";' +
+      body,
+  );
+  expect(() =>
+    redirectSourceUnitImports("semver", imports.replace("Utils.js", "Other.js") + body, "/suite", "/generated/unit.ts"),
+  ).toThrow("Upstream Utils import changed");
 });
 
 it("rejects empty, partial, failed and unknown-file results", () => {

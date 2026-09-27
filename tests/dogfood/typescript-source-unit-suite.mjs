@@ -27,6 +27,7 @@ const FILES = {
   asserts: 2,
   regExpScannerRecovery: 984,
   incrementalParser: 153,
+  semver: 692,
 };
 
 export const SOURCE_UNIT_DIAGNOSTIC_EXPORTS = String.raw`
@@ -55,7 +56,7 @@ export function redirectSourceUnitImports(name, original, root, generatedPath) {
   // Parser suites also use language-service source files and snapshots.
   // All original declarations and assertions remain unchanged.
   let transformed = original.replace(importPattern, `import * as ts from ${JSON.stringify(`./${namespace}`)};`);
-  if (name === "incrementalParser") {
+  if (name === "incrementalParser" || name === "semver") {
     const utilsPattern = /^import \* as Utils from "\.\.\/_namespaces\/Utils\.js";/m;
     if (!utilsPattern.test(transformed)) throw new Error("Upstream Utils import changed");
     const utils = relative(dirname(generatedPath), join(root, "src/testRunner/_namespaces/Utils.js"));
@@ -82,8 +83,10 @@ export async function runSourceUnitFile(name) {
   const testBody = TYPESCRIPT_STANDALONE_TEST_EXPORTS.replace("runStandaloneUpstreamTest", "runSourceUnitTestBody");
   // Preserve the measured compiler-only bootstrap; service tests also call
   // assert itself, in addition to its methods and the upstream augmentation.
-  let assertionBootstrap = needsServices ? TYPESCRIPT_SOURCE_ASSERT : "const assert = __qunitAssert;";
-  if (name === "incrementalParser") assertionBootstrap += "\nglobalThis.assert = assert;";
+  let assertionBootstrap =
+    needsServices || name === "semver" ? TYPESCRIPT_SOURCE_ASSERT : "const assert = __qunitAssert;";
+  if (name === "incrementalParser" || name === "semver") assertionBootstrap += "\nglobalThis.assert = assert;";
+  if (name === "semver") assertionBootstrap += "\nglobalThis.it = it; globalThis.describe = describe;";
   const source = `${UPSTREAM_TEST_SHIM}\n${assertionBootstrap}\n${augmentation}\n${transformed}\n${UPSTREAM_TEST_EXPORTS}\n${testBody}\n${SOURCE_UNIT_DIAGNOSTIC_EXPORTS}`;
   // Upstream's cyclic namespace graph relies on bundled initialization and
   // const-enum folding. Use the same source for the native reference, bundled

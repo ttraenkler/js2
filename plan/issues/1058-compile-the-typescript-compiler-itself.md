@@ -12788,6 +12788,41 @@ lint pass. Evidence: `.tmp/namespace-enum-postmerge-final.log`,
 was performed after the merge. Full checker/self-hosting and strict IR closure
 remain open.
 
+## Semver namespace surface and durable runner (2026-09-27)
+
+Final semver on `4a649e05e5` still passes **684/692**, native **692/692**,
+valid standalone Wasm with zero imports, 7,063,962 bytes and 137,155 ms.
+All eight failures remain the same null namespace receiver at the original
+`VersionRange.tryParse` call (`.tmp/semver-esm-final-o1.log`). The ESM identity
+fix is real, but did not resolve this separate surface problem.
+
+`tests/issue-1058-namespace-class-surface.test.ts` preserves a ten-case reduction:
+an exported class alone, beside an enum, or beside an ordinary object works in
+both IR modes; adding an exported runtime TypeScript namespace containing either
+a function or a variable fails in both modes (**6/10**). The failing calls never
+use that extra namespace. `moduleSymbolNamespaceExports` declines the complete
+ESM object when the extra export is a `ModuleDeclaration`. This isolates the
+surface dependency without reviving the rejected eager class shortcut.
+
+Next implementation must preserve runtime namespace source-order initialization,
+class binding identity, and subsequent property writes. Use shared IR identity
+and declaration-owned bindings; do not bypass receiver evaluation or eagerly
+initialize a class on an early read. The existing namespace early-read/static
+replacement controls remain required negative controls.
+
+The checked-in source-unit runner now includes original semver with the measured
+**692** callback floor. It redirects only the original compiler and Utils imports,
+retains theory expansion and assertions, provides the same assertion/test globals
+as the measured scratch harness, and uses the existing zero-import/result gate.
+Unlike the scratch runner's unconditional exit 1, its exit code is derived from
+all original native and Wasm callbacks actually passing. No passing claim is made.
+The durable semver run and a fresh full incremental-parser run were started as
+`.tmp/semver-durable-final-o1.log` and `.tmp/incremental-esm-identity-final-o1.log`;
+their results must be checked before claiming acceptance of the new harness or
+reusing the old parser measurement. Runner controls pass **16/16**, the surface
+regression remains **6/10** (four genuine failures, no skips), and type checking
+passes. Combined test evidence is `.tmp/semver-durable-and-surface.log`.
+
 ## Stewardship angle
 
 ### ESM namespace identity continuation (2026-09-27)
