@@ -342,6 +342,86 @@ poll that handle to completion. No scanner improvement is claimed yet.
 Final-tree typecheck also completed successfully (`20297`,
 `.tmp/namespace-tracking-typecheck-final.log`).
 
+Continuation at signed `603e65dcb9`: original paths suite passes **14/14**,
+zero imports (`.tmp/namespace-tracking-source-paths.log`). The full scanner
+handle `78623` was re-polled and remains live; keep that run, not a replacement.
+While its compiler source stays frozen, the MultiMap reduction still measures
+**4/8** (`.tmp/main7443-multimap-return.log`): attached-method presence and
+registration followed by `Map.get` pass in both lanes; consuming the array
+returned directly by the attached method fails in both lanes. All eight native
+oracles return 42. Fresh binary inspection confirms the method trampoline
+constructs a generic vector, but the caller's differently typed vector result
+has dispatch arms that discard the value and substitute null. Fresh isolated
+WAT is in `.tmp/main7443-multimap-trampoline-wat.log` and
+`.tmp/main7443-multimap-run-wat.log`; do not reuse older full-WAT type numbers.
+Any fix must reuse shared vector materialization/identity support and reserve
+it before function-index freeze, not introduce another array-copy algorithm
+or late imports in the callable dispatcher.
+
+Full scanner session `78623` finished exit 1 on production tree `603e65dcb9`:
+native **984/984**, valid optimized standalone Wasm **30,240,946 bytes**, zero
+imports, compilation **785,885 ms**, callbacks **0/984**. Log:
+`.tmp/main7443-namespace-source-scanner-o1.log`. The optimized source-map text
+still describes pre-optimization indices and is not a trustworthy location.
+
+Preserved pre-optimization module `.tmp/source-scanner-namespace603e-raw.wasm`
+has SHA-256 `0906bc224ba9ffc6818db60ce95b5bca646db840abca944e69c4fc3ffd837f0a`.
+Diagnostic `88403` also registered and executed all 984 callbacks, **0/984**,
+with seven throwing Node imports that were never invoked. This is diagnostic
+evidence, NOT standalone acceptance. Unlike the previous `fromString` trap,
+the first raw failures are now `createBaseIdentifier` and
+`createRegularExpressionLiteral`. The former receives null from
+`createBaseIdentifierNode`; isolated WAT shows a dynamic constructor result
+guard-cast to a closed Node carrier and defaulted to null on mismatch. Files:
+`.tmp/scanner-namespace603e-factory-wat.log` and
+`.tmp/scanner-namespace603e-basefactory-wat.log`.
+
+Do not infer the cause solely from that cast: reduced native-equivalent
+service allocators pass **32/32** across IR, dynamic/cached construction,
+generic inheritance and a same-named function constructor; a separate linked
+module version passes **2/2**. Logs `.tmp/service-node-factory-shadow-baseline.log`
+and `.tmp/service-node-linked-baseline.log`. Next isolate full-source Node
+carrier selection and class-implementer collection timing, including recursive
+Node fields. No compiler change for this new failure has been made yet.
+
+The linked reduction still passes **2/2** after adding a recursive optional
+parent, but adding `getKind(): number` to Node and its class implementer makes
+it fail **0/2**, with both native references still passing. Logs:
+`.tmp/service-node-linked-recursive.log` and
+`.tmp/service-node-linked-method.log`. This isolates the method-bearing
+interface boundary, not generic construction alone. Implementation experiment:
+derive implemented-interface names from the stable source population before
+layout allocation, through a shared IR-owned syntax index. The current helper
+caches answers over the incrementally populated class-declaration map, so an
+early false answer can persist while later classes require dynamic carriers.
+Keep ambient declarations excluded and test class/interface name controls.
+
+Frozen source batch `85170` completed exit 0: diagnosticCollection **5/5**,
+base64 **1/1**, comments **3/3**, parsePseudoBigInt **5/5**, asserts **2/2**;
+all zero imports, at `603e65dcb9`. Logs
+`.tmp/namespace-tracking-source-<suite>.log`. No full source runs remain live.
+
+Source-heritage candidate fixes the method-bearing linked reduction **0/2 →
+2/2** (`.tmp/service-node-linked-source-heritage.log`). New shared IR-owned
+`class-interface-heritage.ts` indexes runtime class implementations from the
+fixed source population before layout collection. The existing carrier helper
+uses that index instead of memoizing the growing class registry; contexts
+without a source population retain an uncached registry check. Ambient classes,
+declaration files, ambient/string/global namespaces stay excluded. Existing
+nominal-class guards and name-matching semantics are unchanged.
+
+Permanent `tests/issue-1058-service-node-interface-carrier.test.ts` covers the
+linked native/Wasm case in both lanes, pre-registration evidence, nested/class
+expression/namespace cases, ambient exclusions and an initially empty registry.
+Initial focused/adjacent checks measured **99/100**: the sole failure is the
+existing Greeter-only IR field-read case in the interface-dispatch suite, which
+also fails on exact `603e65dcb9` production sources (candidate helper reverted,
+tracked source diff verified empty, then restored). Failure sections match
+exactly; `.tmp/service-node-heritage-dispatch-baseline.log` is **9/10**.
+Typecheck and five gates pass, as do lint/format; no allowance increases and
+strict reachability closure remains OPEN. Full scanner acceptance still needs
+remeasuring on this new candidate, not inference from the reduction.
+
 ## Resumed main integration — 2026-09-27
 
 Continuation verification: pinned original `factory.ts` passes **3/3** source

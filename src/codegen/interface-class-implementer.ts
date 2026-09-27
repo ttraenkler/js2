@@ -31,12 +31,11 @@
  * guess, decides which implementer answers a given call.
  */
 import { ts } from "../ts-api.js";
+import { collectClassImplementedInterfaceNames } from "../ir/class-interface-heritage.js";
 import type { CodegenContext } from "./context/types.js";
 
-/** Per-ctx memo — the class declaration set is stable once collection
- * finishes, so the answer for a given interface name never changes within
- * one compile. */
-const interfaceClassImplementerMemo = new WeakMap<CodegenContext, Map<string, boolean>>();
+/** Source population is fixed before collection; the layout registry is not. */
+const sourceImplementers = new WeakMap<CodegenContext, ReadonlySet<string>>();
 
 /**
  * True when some KNOWN class declares `implements <interfaceName>` (matched
@@ -49,13 +48,14 @@ const interfaceClassImplementerMemo = new WeakMap<CodegenContext, Map<string, bo
  * instead of a struct it would not otherwise have gotten) — never less safe.
  */
 export function interfaceHasClassImplementer(ctx: CodegenContext, interfaceName: string): boolean {
-  let memo = interfaceClassImplementerMemo.get(ctx);
-  if (!memo) {
-    memo = new Map();
-    interfaceClassImplementerMemo.set(ctx, memo);
+  if (ctx.callableSourceFiles?.length) {
+    let names = sourceImplementers.get(ctx);
+    if (!names) {
+      names = collectClassImplementedInterfaceNames(ctx.callableSourceFiles);
+      sourceImplementers.set(ctx, names);
+    }
+    return names.has(interfaceName);
   }
-  const cached = memo.get(interfaceName);
-  if (cached !== undefined) return cached;
   let found = false;
   for (const decl of ctx.classDeclarationMap.values()) {
     for (const clause of decl.heritageClauses ?? []) {
@@ -70,6 +70,5 @@ export function interfaceHasClassImplementer(ctx: CodegenContext, interfaceName:
     }
     if (found) break;
   }
-  memo.set(interfaceName, found);
   return found;
 }
