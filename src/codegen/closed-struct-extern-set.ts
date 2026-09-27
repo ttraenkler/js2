@@ -54,6 +54,8 @@
  */
 import { inheritedSetAnyDirty } from "./inherited-set-gate.js"; // (#4602) per-key #4504 gate
 import type { FieldDef, Instr, ValType, WasmFunction } from "../ir/types.js";
+import { existingOwnFieldWrite } from "../ir/existing-own-field-write.js";
+import { CARRIER_BAG_HAS, CARRIER_BAG_OF } from "./carrier-bag-visibility.js";
 import type { CodegenContext } from "./context/types.js";
 import { isSyntheticStructName } from "./emit-helpers.js";
 import { coldFieldWriteArm, coldTailAllocatorName, findColdStructsForField } from "./fnctor-cold-tail.js";
@@ -147,6 +149,54 @@ function untombstoneInstrs(
   ];
 }
 
+function setResultAndReturn(globalIdx: number | undefined, result: 1 | 2): Instr[] {
+  return [
+    ...(globalIdx === undefined
+      ? []
+      : ([
+          { op: "i32.const", value: result },
+          { op: "global.set", index: globalIdx },
+        ] satisfies Instr[])),
+    { op: "return" },
+  ];
+}
+
+function closedExistingOwnFieldWrite(
+  ctx: CodegenContext,
+  bagLocal: number,
+  decisionLocal: number,
+  handled: () => Instr[],
+  refused: () => Instr[],
+): Instr[] {
+  const has = ctx.funcMap.get(CARRIER_BAG_HAS);
+  const bagOf = ctx.funcMap.get(CARRIER_BAG_OF);
+  const decide = ctx.funcMap.get("__extern_set_decide");
+  const setOwn = ctx.funcMap.get("__extern_set_own");
+  if (has === undefined || bagOf === undefined || decide === undefined || setOwn === undefined) return [];
+  return existingOwnFieldWrite({
+    receiver: () => [{ op: "local.get", index: 0 }],
+    key: () => [{ op: "local.get", index: 1 }],
+    value: () => [{ op: "local.get", index: 2 }],
+    bagLocal,
+    decisionLocal,
+    has,
+    bagOf,
+    decide,
+    setOwn,
+    handledDecision: SET_DECISION_HANDLED,
+    refusedDecision: SET_DECISION_REFUSED,
+    handled,
+    refused,
+  });
+}
+
+function guardedRefStore(fieldType: ValType, buildStore: () => Instr[]): Instr[] {
+  const brandTest = refBrandTestInstrs(fieldType, 2);
+  return brandTest === null
+    ? buildStore()
+    : [...brandTest, { op: "if", blockType: { kind: "empty" }, then: buildStore() }];
+}
+
 /**
  * Finalize `__extern_set` with closed-struct write arms. Standalone only;
  * funcMap-read-only (cold allocators were minted by
@@ -173,6 +223,10 @@ export function fillClosedStructExternSetArms(ctx: CodegenContext): void {
   const deletedIdx = ctx.funcMap.get(INSTANCE_FIELD_DELETED);
   const objectTypes = ctx.objectRuntimeTypes;
   const objFindIdx = ctx.funcMap.get("__obj_find");
+  const bagHasIdx = ctx.funcMap.get(CARRIER_BAG_HAS);
+  const bagOfIdx = ctx.funcMap.get(CARRIER_BAG_OF);
+  const ownWriteAvailable =
+    bagHasIdx !== undefined && bagOfIdx !== undefined && setDecideIdx !== undefined && setOwnIdx !== undefined;
 
   const byField = new Map<string, SetEntry[]>();
   const coldByField = new Map<string, ReturnType<typeof findColdStructsForField>>();
@@ -260,7 +314,7 @@ export function fillClosedStructExternSetArms(ctx: CodegenContext): void {
     // the lookup-only carrier bag passed to the shared decision.
     { name: "__xs_bag", type: { kind: "externref" } },
   );
-  if (presenceDecisionAvailable) {
+  if (presenceDecisionAvailable || ownWriteAvailable) {
     fn.locals.push(
       { name: "__xs_decision", type: { kind: "i32" } },
       { name: "__xs_bag_entry", type: { kind: "ref_null", typeIdx: objectTypes!.propEntryTypeIdx } },
@@ -271,24 +325,8 @@ export function fillClosedStructExternSetArms(ctx: CodegenContext): void {
   // finalize-prepended path.  Otherwise Reflect.set sees its reset sentinel
   // after a real mutation, and strict assignment can drift from the same
   // completed [[Set]] outcome.
-  const successAndReturn = (): Instr[] => [
-    ...(setResultGlobalIdx === undefined
-      ? []
-      : ([
-          { op: "i32.const", value: 1 },
-          { op: "global.set", index: setResultGlobalIdx },
-        ] satisfies Instr[])),
-    { op: "return" },
-  ];
-  const refusalAndReturn = (): Instr[] => [
-    ...(setResultGlobalIdx === undefined
-      ? []
-      : ([
-          { op: "i32.const", value: 2 },
-          { op: "global.set", index: setResultGlobalIdx },
-        ] satisfies Instr[])),
-    { op: "return" },
-  ];
+  const successAndReturn = (): Instr[] => setResultAndReturn(setResultGlobalIdx, 1);
+  const refusalAndReturn = (): Instr[] => setResultAndReturn(setResultGlobalIdx, 2);
 
   const buildReceiverArms = (fieldName: string): Instr[] => {
     const arms: Instr[] = [];
@@ -302,6 +340,7 @@ export function fillClosedStructExternSetArms(ctx: CodegenContext): void {
       // before every value-coercion fill.
       const buildStore = (): Instr[] => {
         const store: Instr[] = [
+          ...closedExistingOwnFieldWrite(ctx, BAG, DECISION, successAndReturn, refusalAndReturn),
           { op: "local.get", index: RECV_ANY },
           { op: "ref.cast", typeIdx: entry.typeIdx },
           { op: "local.get", index: 2 }, // value (externref)
@@ -324,12 +363,7 @@ export function fillClosedStructExternSetArms(ctx: CodegenContext): void {
       // value falls through (ends in the pre-existing silent-drop, exactly
       // today's behaviour for it — representation-polymorphic JS fields are
       // the member-set dispatcher's fallback case too).
-      const buildGuardedStore = (): Instr[] => {
-        const brandTest = refBrandTestInstrs(entry.fieldType, 2);
-        return brandTest === null
-          ? buildStore()
-          : [...brandTest, { op: "if", blockType: { kind: "empty" }, then: buildStore() }];
-      };
+      const buildGuardedStore = (): Instr[] => guardedRefStore(entry.fieldType, buildStore);
       /**
        * Resolve a physically absent field. `ignoreBagOwn` is used only after
        * a class-field tombstone: the marker is a live bag entry, but logically

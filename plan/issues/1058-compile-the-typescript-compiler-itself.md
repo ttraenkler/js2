@@ -267,6 +267,28 @@ oracle-ratchet-allow:
 ---
 # #1058 — Compile the TypeScript compiler to Wasm (self-hosting stress test)
 
+## Own-field write checkpoint before upstream sync — 2026-09-27
+
+Candidate reconciliation lives in `src/ir/existing-own-field-write.ts` and is
+shared by named member writes and closed-struct dynamic writes. It consults
+the existing descriptor decision before mirroring a compatible value into the
+physical slot. No generic-getter bypass or new runtime imports are introduced.
+
+Pre-sync measurements against `58210511af`: the linked pragma reduction goes
+from **4/8 to 8/8**; the broader own-write/descriptor scratch matrix goes from
+**4/24 to 16/24**. The remaining eight readonly/accessor failures occur on both
+baseline and candidate and still need attribution. The computed scratch key
+is constant, so it is not proof of the dynamic-key path. Evidence:
+`.tmp/pragma-map-own-write-candidate.log`,
+`.tmp/own-write-descriptors-baseline.log`, and
+`.tmp/own-write-descriptors-candidate.log`.
+
+This is a work-in-progress checkpoint, not acceptance. Next: merge fetched
+upstream main `dbba95acb11b525b03b5739469d0c4f132fb0474`, promote durable
+regressions with genuinely dynamic keys, resolve descriptor controls, and
+rerun original source scanner/factory suites. The previous scanner result
+remains **0/984**; no full scanner result exists for this candidate.
+
 ## Pragma failure isolated to undefined-to-map write coherence — 2026-09-27
 
 Further diagnostic instrumentation at `bdeb3ce09d` disproves the hypothesis

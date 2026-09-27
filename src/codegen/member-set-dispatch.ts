@@ -36,6 +36,9 @@
  * hazard is mode-independent (acorn dogfoods in gc/host mode).
  */
 import type { Instr, ValType } from "../ir/types.js";
+import { existingOwnFieldWrite } from "../ir/existing-own-field-write.js";
+import { CARRIER_BAG_HAS, CARRIER_BAG_OF } from "./carrier-bag-visibility.js";
+import { SET_DECISION_HANDLED, SET_DECISION_REFUSED } from "./proto-index-store.js";
 import type { CodegenContext, FunctionContext } from "./context/types.js";
 import { stringConstantExternrefInstrs } from "./native-strings.js";
 import { findAlternateStructsForField } from "./property-access.js";
@@ -478,11 +481,41 @@ export function fillMemberSetDispatch(ctx: CodegenContext): void {
             { name: "__cold", type: { kind: "anyref" } }, // (#3927) tail/resid scratch, local 3
           ]
         : [{ name: "__any", type: { kind: "anyref" } }];
+    const bagHas = ctx.standalone ? ctx.funcMap.get(CARRIER_BAG_HAS) : undefined;
+    const bagOf = ctx.funcMap.get(CARRIER_BAG_OF);
+    const decide = ctx.funcMap.get("__extern_set_decide");
+    const setOwn = ctx.funcMap.get("__extern_set_own");
+    const bagWrite: Instr[] = [];
+    if (bagHas !== undefined && bagOf !== undefined && decide !== undefined && setOwn !== undefined) {
+      const bagLocal = 2 + dispFn.locals.length;
+      dispFn.locals.push(
+        { name: "__own_bag", type: { kind: "externref" } },
+        { name: "__own_decision", type: { kind: "i32" } },
+      );
+      bagWrite.push(
+        ...existingOwnFieldWrite({
+          receiver: () => [{ op: "local.get", index: 0 }],
+          key: () => stringConstantExternrefInstrs(ctx, propName),
+          value: () => [{ op: "local.get", index: 1 }],
+          bagLocal,
+          decisionLocal: bagLocal + 1,
+          has: bagHas,
+          bagOf,
+          decide,
+          setOwn,
+          handledDecision: SET_DECISION_HANDLED,
+          refusedDecision: SET_DECISION_REFUSED,
+          handled: () => [{ op: "return" }],
+          refused: () => [...buildFallback(), { op: "return" }],
+        }),
+      );
+    }
     dispFn.body = [
       { op: "local.get", index: 0 }, // recv (externref)
       { op: "any.convert_extern" },
       { op: "local.set", index: 2 }, // __any
       ...argumentsLengthSetArm(ctx, propName),
+      ...bagWrite,
       ...buildSetDispatch(0),
     ];
   }
