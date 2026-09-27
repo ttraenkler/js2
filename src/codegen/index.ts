@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Loopdive GmbH. Licensed under Apache-2.0 WITH LLVM-exception.
 import { ts, forEachChild } from "../ts-api.js";
+import { collectClassInstanceFieldDeclarations } from "../ir/class-instance-initializers.js";
 import { fillLiveArrayIterator } from "./live-array-iterator.js";
 import { inferredClosureSignature, inferredReturnedClosureSignature } from "../ir/inferred-closure-signature.js";
 import { irInferredClosureCarriers } from "./ir-inferred-closure-carriers.js";
@@ -1818,10 +1819,8 @@ function buildIrClassShapes(
     for (const decl of chain) {
       // Property declarations (`#name: string;`, `x: number;`) — legacy reads the
       // field type off the member node itself; mirror that source exactly.
-      for (const member of decl.members) {
-        if (ts.isPropertyDeclaration(member) && member.name && !hasStaticModifier(member)) {
-          recordField(member.name, member);
-        }
+      for (const member of collectClassInstanceFieldDeclarations(decl)) {
+        recordField(member.name, member);
       }
       // Constructor-body `this.x = …` field introductions — legacy reads the
       // field type off the property-access LHS node; mirror that source.

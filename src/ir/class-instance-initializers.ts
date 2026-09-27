@@ -2,12 +2,48 @@
 
 import { ts } from "../ts-api.js";
 
-/** Source-ordered field work owned by one class constructor `_init`. */
-export interface IrClassInstanceInitializer {
-  readonly declaration: ts.PropertyDeclaration;
+/** Source work before backend-specific property-name resolution. */
+interface ClassInstanceInitializerSource {
+  readonly declaration: ts.PropertyDeclaration | ts.ParameterDeclaration;
+  readonly name: ts.PropertyName;
   readonly expression: ts.Expression;
-  readonly fieldName: string;
   readonly sourceOrdinal: number;
+}
+
+/** Source-ordered field work owned by one class constructor `_init`. */
+export interface IrClassInstanceInitializer extends ClassInstanceInitializerSource {
+  readonly fieldName: string;
+}
+
+/** Parameter properties belong only to the implementing constructor. */
+export function collectIrClassParameterProperties(
+  declaration: ts.ClassDeclaration | ts.ClassExpression,
+): readonly (ts.ParameterDeclaration & { name: ts.Identifier })[] {
+  const implementation = declaration.members.find(
+    (member): member is ts.ConstructorDeclaration =>
+      ts.isConstructorDeclaration(member) && !hasStaticModifier(member) && member.body !== undefined,
+  );
+  return Array.from(implementation?.parameters ?? []).filter(
+    (parameter): parameter is ts.ParameterDeclaration & { name: ts.Identifier } =>
+      ts.isIdentifier(parameter.name) &&
+      parameter.modifiers?.some(
+        ({ kind }) =>
+          kind === ts.SyntaxKind.PublicKeyword ||
+          kind === ts.SyntaxKind.PrivateKeyword ||
+          kind === ts.SyntaxKind.ProtectedKeyword ||
+          kind === ts.SyntaxKind.ReadonlyKeyword,
+      ) === true,
+  );
+}
+
+/** The instance declarations consumed by layout and IR type projection. */
+export function collectClassInstanceFieldDeclarations(declaration: ts.ClassDeclaration | ts.ClassExpression) {
+  return [
+    ...declaration.members.filter(
+      (member): member is ts.PropertyDeclaration => ts.isPropertyDeclaration(member) && !hasStaticModifier(member),
+    ),
+    ...collectIrClassParameterProperties(declaration),
+  ];
 }
 
 function hasStaticModifier(node: ts.Node): boolean {
@@ -34,17 +70,37 @@ export function irClassInstanceFieldName(name: ts.PropertyName): string | undefi
   return undefined;
 }
 
+/** Fields initialize before parameter-property assignments in ES2022 output. */
+export function collectClassInstanceInitializerSources(
+  declaration: ts.ClassDeclaration | ts.ClassExpression,
+): readonly ClassInstanceInitializerSource[] {
+  const result: ClassInstanceInitializerSource[] = [];
+  for (let sourceOrdinal = 0; sourceOrdinal < declaration.members.length; sourceOrdinal++) {
+    const member = declaration.members[sourceOrdinal]!;
+    if (!ts.isPropertyDeclaration(member) || hasStaticModifier(member) || !member.initializer) continue;
+    result.push({ declaration: member, name: member.name, expression: member.initializer, sourceOrdinal });
+  }
+  // ES2022 fields initialize before the constructor's parameter-property writes.
+  for (const parameter of collectIrClassParameterProperties(declaration)) {
+    result.push({
+      declaration: parameter,
+      name: parameter.name,
+      expression: parameter.name,
+      sourceOrdinal: declaration.members.length + result.length,
+    });
+  }
+  return result;
+}
+
 /** Build an exact source-order plan, or refuse the complete class atomically. */
 export function collectIrClassInstanceInitializers(
   declaration: ts.ClassDeclaration | ts.ClassExpression,
 ): readonly IrClassInstanceInitializer[] | undefined {
   const result: IrClassInstanceInitializer[] = [];
-  for (let sourceOrdinal = 0; sourceOrdinal < declaration.members.length; sourceOrdinal++) {
-    const member = declaration.members[sourceOrdinal]!;
-    if (!ts.isPropertyDeclaration(member) || hasStaticModifier(member) || !member.initializer) continue;
-    const fieldName = irClassInstanceFieldName(member.name);
+  for (const source of collectClassInstanceInitializerSources(declaration)) {
+    const fieldName = irClassInstanceFieldName(source.name);
     if (fieldName === undefined) return undefined;
-    result.push({ declaration: member, expression: member.initializer, fieldName, sourceOrdinal });
+    result.push({ ...source, fieldName });
   }
   return result;
 }

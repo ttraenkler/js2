@@ -1961,22 +1961,9 @@ function whyNotIrClaimable(
   // covers `this.field = expr;`, `this.method(...)`, and bare calls. This
   // mirrors how try/catch/finally bodies are checked (see `isPhase1TryStatement`).
   if (ts.isConstructorDeclaration(fn)) {
-    // #3000-C / #3522: parameter properties remain direct because they imply
-    // a field write not represented by a PropertyDeclaration initializer.
-    // Ordinary instance fields are now collected as one exact source-order
-    // constructor plan below; a dynamic name or unsupported initializer
-    // rejects the complete constructor before any body is emitted.
+    // Ordinary fields and parameter-property writes share one constructor plan.
+    // A dynamic name or unsupported initializer rejects the complete body.
     if (!constructorHasIrSafeReceiverSemantics(fn)) return "body-shape-rejected";
-    for (const p of fn.parameters) {
-      const isParamProperty = p.modifiers?.some(
-        (m) =>
-          m.kind === ts.SyntaxKind.PublicKeyword ||
-          m.kind === ts.SyntaxKind.PrivateKeyword ||
-          m.kind === ts.SyntaxKind.ProtectedKeyword ||
-          m.kind === ts.SyntaxKind.ReadonlyKeyword,
-      );
-      if (isParamProperty) return "body-shape-rejected";
-    }
     const parent = fn.parent;
     if (
       parent &&

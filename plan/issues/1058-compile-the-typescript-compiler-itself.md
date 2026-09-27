@@ -2266,6 +2266,55 @@ class collisions, initialization order, or parameter properties.
    namespace function failure and generic array-return finding; do not claim
    the complete TypeScript goal from the prerequisite tests.
 
+Parameter-property candidate — 2026-09-27:
+
+- Implemented the shared source inventory and initializer plan in
+  `src/ir/class-instance-initializers.ts`. Only the actual non-static,
+  body-bearing constructor contributes public/private/protected/readonly
+  parameter properties; overload signatures and ordinary parameters do not.
+  The plan appends exact parameter identifier writes after ordinary field
+  initializers. Both existing IR lowering and direct constructor emission
+  consume the same source ordering. Dynamic-name IR refusal remains atomic.
+- Class layout and IR field projection now consume the same instance-field
+  declaration inventory. Registry-coupled field type resolution reuses their
+  existing query sites; the native-annotation lookup uses the oracle. No new
+  direct checker query site or separate field-storage algorithm was added.
+- Numeric parameter-property slots start with the existing undefined sentinel,
+  not zero: an ordinary field initializer that snapshots `this.value` must
+  observe undefined before the parameter-property write. Defaults and derived
+  `super()` timing remain in the existing constructor control flow.
+- Initial six-shape, IR-on/off native-oracle matrix: **0/12** on exact signed
+  `25ca284a57`, then **12/12** with the candidate. The baseline was measured by
+  temporarily removing all four candidate production diffs, verifying a clean
+  `src` diff, running the same test, then restoring those exact diffs. Logs:
+  `.tmp/parameter-property-baseline.log` and
+  `.tmp/parameter-property-shape-candidate.log`.
+- Permanent `tests/issue-1058-constructor-parameter-properties.test.ts` adds
+  **20 tests**: nine execution shapes in both lanes plus source-plan identity,
+  overload/static exclusion, ordering and atomic-refusal checks. Seven IR-on
+  shapes require actual `C_new` emission; default-argument and `any`-field
+  shapes retain existing IR class-shape refusals and prove runtime fallback
+  semantics only. Do not report those two as new IR coverage.
+- After extracting the common field inventory (the first candidate exceeded
+  `buildIrClassShapes` by one line), focused/adjacent tests pass **49/49**, log
+  `.tmp/parameter-property-shared-source49.log`, session `10318` exit 0. This
+  includes string-field class projection, inheritance, overload ownership and
+  nested implicit constructors. No allowance increase.
+- Final typecheck/five-gate chain `76592` completed exit 0, logs
+  `.tmp/parameter-property-<gate>-final.log`; lint/format clean. Reachability is
+  preservation-only PASS, strict modeled closure FAIL/OPEN, not a deletion
+  certificate. No allowances increased. A further **111/111** adjacent field
+  tests pass (`63858`, `.tmp/parameter-property-field-adjacent.log`), bringing
+  the final candidate's focused/adjacent total to **160/160** across ten files.
+- Factory original-source smoke run `90801` passes **3/3**, valid zero-import
+  standalone Wasm, 14,287,142 bytes, 114,677 ms;
+  `.tmp/source-factory-parameter-properties.log`. It started before the final
+  common-inventory extraction, so this is not a final-tree source-suite claim.
+
+Namespace collection is still unchanged from the signed merge. No scanner
+callback gain is claimed from this prerequisite fix; its last full result
+remains **0/984**, and namespace class identity/registration is the next step.
+
 The environment diagnostic has two distinct outcomes: with explicit ambient
 declarations in the input, `optimize: true` still retains process.cwd (**0/2**);
 without those declarations, the optimized reduction passes **2/2**. The actual

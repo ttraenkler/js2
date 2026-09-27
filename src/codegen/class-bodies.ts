@@ -5,6 +5,10 @@
  * Extracted from codegen/index.ts (#1013).
  */
 import { ts } from "../ts-api.js";
+import {
+  collectClassInstanceInitializerSources,
+  collectClassInstanceFieldDeclarations,
+} from "../ir/class-instance-initializers.js";
 import { widenJsDefaultGuessSlot } from "./js-default-param-type-guess.js";
 import {
   findConstructorImplementation,
@@ -1317,8 +1321,9 @@ export function collectClassDeclaration(
 
   // Also collect fields from property declarations (class Point { x: number; y: number; })
   // Skip static properties — they become module globals, not struct fields
-  for (const member of decl.members) {
-    if (ts.isPropertyDeclaration(member) && member.name) {
+  for (const member of collectClassInstanceFieldDeclarations(decl)) {
+    if ((ts.isPropertyDeclaration(member) || ts.isParameter(member)) && member.name) {
+      if (ts.isParameter(member) && !ts.isIdentifier(member.name)) continue;
       const fieldName = resolveClassMemberName(ctx, member.name);
       if (fieldName === undefined) continue; // dynamic computed name — skip
       if (hasStaticModifier(member)) continue; // handled below
@@ -1330,7 +1335,7 @@ export function collectClassDeclaration(
         // narrowing locals without the fields they flow into measurably
         // pessimises (see the issue's round-34 table), so the field, the
         // params and the locals must move together.
-        const nativeFieldType = nativeTypeOfDeclaration(ctx.checker, member);
+        const nativeFieldType = nativeTypeOfDeclaration(ctx.oracle, member);
         let fieldType = nativeFieldType ?? resolveWasmType(ctx, fieldTsType);
         if (
           nativeFieldType === null &&
@@ -1346,7 +1351,7 @@ export function collectClassDeclaration(
           name: fieldName,
           type: fieldType,
           mutable: true,
-          ...(member.questionToken && !member.initializer && fieldType.kind === "f64"
+          ...((ts.isParameter(member) || (member.questionToken && !member.initializer)) && fieldType.kind === "f64"
             ? { undefinedDefault: true as const }
             : {}),
         });
@@ -2933,16 +2938,14 @@ function compileClassBodiesInner(
       // to be installed via host setters, which is out of scope.
       if (isExternrefBacked || ownFieldInitializersEmitted) return;
       ownFieldInitializersEmitted = true;
-      for (const member of decl.members) {
-        if (ts.isPropertyDeclaration(member) && member.name && member.initializer && !hasStaticModifier(member)) {
-          const fieldName = resolveClassMemberName(ctx, member.name);
-          if (fieldName === undefined) continue; // dynamic computed name — skip
-          const fieldIdx = fields.findIndex((f) => f.name === fieldName);
-          if (fieldIdx !== -1) {
-            fctx.body.push({ op: "local.get", index: selfLocal });
-            compileExpression(ctx, fctx, member.initializer, fields[fieldIdx]!.type);
-            fctx.body.push({ op: "struct.set", typeIdx: structTypeIdx, fieldIdx });
-          }
+      for (const initializer of collectClassInstanceInitializerSources(decl)) {
+        const fieldName = resolveClassMemberName(ctx, initializer.name);
+        if (fieldName === undefined) continue;
+        const fieldIdx = fields.findIndex((field) => field.name === fieldName);
+        if (fieldIdx !== -1) {
+          fctx.body.push({ op: "local.get", index: selfLocal });
+          compileExpression(ctx, fctx, initializer.expression, fields[fieldIdx]!.type);
+          fctx.body.push({ op: "struct.set", typeIdx: structTypeIdx, fieldIdx });
         }
       }
     };
