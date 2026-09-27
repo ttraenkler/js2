@@ -2,6 +2,7 @@
 import { expect, it } from "vitest";
 import { ts } from "../src/ts-api.js";
 import { collectUndefinedWrittenInstanceFields } from "../src/ir/class-field-undefined-storage.js";
+import { collectIrClassInstanceInitializers } from "../src/ir/class-instance-initializers.js";
 
 function fields(source: string, provesUndefined = true): string[] {
   const file = ts.createSourceFile("input.ts", source, ts.ScriptTarget.Latest, true);
@@ -54,4 +55,29 @@ it("requires supplied semantic evidence except for void and keeps private identi
       false,
     ),
   ).toEqual(["__priv_private", "known"]);
+});
+
+// #1058 follow-up: this needs an IR operation anchored to the declaration,
+// not a fabricated TypeScript expression that breaks exact source ownership.
+it.fails("plans implicit undefined in source order but excludes type-only and static declarations", () => {
+  const file = ts.createSourceFile(
+    "input.ts",
+    `abstract class C {
+    first?: object;
+    declare erased: object;
+    abstract abstractField: object;
+    static shared?: object;
+    second = {value: 1};
+    constructor(public parameter: object) {}
+  }`,
+    ts.ScriptTarget.Latest,
+    true,
+  );
+  const declaration = file.statements.find(ts.isClassDeclaration)!;
+  const initializers = collectIrClassInstanceInitializers(declaration)!;
+  expect(initializers.map((row) => row.fieldName)).toEqual(["first", "second", "parameter"]);
+  expect(ts.isVoidExpression(initializers[0]!.expression)).toBe(true);
+  expect(ts.isObjectLiteralExpression(initializers[1]!.expression)).toBe(true);
+  expect(ts.isIdentifier(initializers[2]!.expression)).toBe(true);
+  expect(fields(file.text)).toEqual(["first"]);
 });

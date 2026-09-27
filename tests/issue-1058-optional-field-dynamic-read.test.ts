@@ -4,14 +4,17 @@ import ts from "typescript";
 import { compile } from "../src/index.js";
 
 for (const experimentalIR of [false, true]) {
-  for (const initial of ["undefined", "null", "{ pos: 7 }"]) {
+  for (const initial of ["undefined", "uninitialized", "null", "{ pos: 7 }"]) {
     for (const read of ["node[key]", "Object.getOwnPropertyDescriptor(node, key)!.value"]) {
-      it(`reads optional class reference ${initial} using ${read} IR=${experimentalIR}`, async () => {
+      // #1058: implicit field initialization is still absent from the IR plan.
+      // Keep this measured gap explicit; it is not a semantic pass.
+      const test = initial === "uninitialized" ? it.fails : it;
+      test(`reads optional class reference ${initial} using ${read} IR=${experimentalIR}`, async () => {
         const source = `
           interface EmitNode { pos: number; }
           class NodeObject {
             emitNode?: EmitNode ${initial === "null" ? "| null" : ""};
-            constructor() { this.emitNode = ${initial}; }
+            constructor() { ${initial === "uninitialized" ? "" : `this.emitNode = ${initial};`} }
           }
           function observe(node: any, key: string): number {
             const value = ${read};
@@ -29,7 +32,7 @@ for (const experimentalIR of [false, true]) {
             },
           }).outputText,
         )(native);
-        const expected = initial === "undefined" ? 1 : initial === "null" ? 2 : 7;
+        const expected = initial === "undefined" || initial === "uninitialized" ? 1 : initial === "null" ? 2 : 7;
         expect(native.run!()).toBe(expected);
         const result = await compile(source, { target: "standalone", experimentalIR });
         expect(result.success, JSON.stringify(result.errors)).toBe(true);

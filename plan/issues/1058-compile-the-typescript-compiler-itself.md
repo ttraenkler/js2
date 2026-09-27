@@ -269,6 +269,43 @@ oracle-ratchet-allow:
 
 ## Main synchronization and incremental-parser trace — 2026-09-27
 
+At `acb870289f`, original-suite session **64524** completed: O1 standalone
+compiles and validates **26,194,816 bytes**, **zero imports**, **599,745 ms**;
+all **153 callbacks execute, 0/153 pass**, with the same `149:38` / `8564:12`
+error locations (`.tmp/incremental-field-storage-o1.log`). Thus the explicit
+field fix's reduced wins are not yet full-suite wins.
+
+Next measured gap: a declared reference field with **no initializer** also
+reads null instead of undefined. Four new native-oracle rows fail on the
+committed compiler: dynamic/descriptor reads, IR off/on. An implicit-field
+experiment made all **18/18** runtime reduction rows pass, but was **withdrawn**:
+fabricated `void 0` AST nodes violate exact IR source ownership. Giving them
+parent pointers only reduced the constructor failures to **36/73**, versus
+**5/73** on the unchanged `acb870289f` baseline (31 new failures). Production
+files were restored exactly; no regression is shipped. Evidence:
+`.tmp/implicit-field-baseline.log`, `.tmp/implicit-field-candidate.log`,
+`.tmp/implicit-field-parented-tests.log`,
+`.tmp/implicit-field-constructor-baseline.log`.
+The rejected experiment is preserved in `.tmp/implicit-field-synthetic-attempt.patch`.
+Four runtime rows and one source-order-plan row remain explicit expected
+failures, **not semantic passes**.
+
+Implementation handoff: represent implicit initialization as an explicit IR
+plan alternative anchored to the existing property declaration, not a synthetic
+expression. Update `collectClassInstanceInitializerSources`, constructor
+selection, imported-call dependency roots, and `lowerConstructorFieldInitializers`
+to distinguish implicit undefined from executable source expressions. Preserve
+source order, parameter-property order, type-only/static exclusions and numeric
+storage semantics; re-run the exact 73-test constructor baseline before shipping.
+
+The one different original callback, index **52**, “Removing block around
+function declarations”, fails while attaching diagnostic related information.
+Bounded raw tracing reaches `attachFileToDiagnostic`; source `utilities.ts:8564`
+is `isDiagnosticWithDetachedLocation` reading `diagnostic.file` inside the
+related-information traversal. `.tmp/incremental-callback-52.log`.
+This is diagnostic evidence, not a standalone acceptance result; preserve the
+original invariant instead of adding null guards to the upstream tests.
+
 Follow-up after `0299ff2656`: bounded raw instrumentation identifies the next
 bad property as **`emitNode`**, read as null before original `isNodeOrArray`.
 `.tmp/incremental-null-key.log`. A native-oracle class reduction proves
@@ -302,9 +339,8 @@ compiles and validates **26,196,119 bytes**, **zero imports**, in **597,199 ms**
 initializes and executes **153 callbacks**, but **0/153 pass**. Error locations
 are `149:38` and `8564:12`; it no longer hangs at callback 31.
 `.tmp/incremental-loop-reset-o1-tsx.log`. This is not a measurement of the later
-field-storage change. The corrected field-storage candidate's original O1 run
-is now live as session **64524**, `.tmp/incremental-field-storage-o1.log`;
-resume that handle rather than restarting it on an observation timeout.
+field-storage change. Its corrected O1 run, session **64524**, subsequently
+completed; see the `acb870289f` measurement above.
 
 Follow-up candidate after `d5565d3da7`: the existing variable initializer now
 resets bare lexical nullable-reference locals on every declaration execution,
