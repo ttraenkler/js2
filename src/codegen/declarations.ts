@@ -101,6 +101,11 @@ import { mappedFormalNeedsExternref } from "./mapped-arguments-formal-widening.j
 import { markIdentityPreservingStructuralParam } from "./identity-preserving-structural-param.js";
 import { parameterNeedsAccessorCarrier, prepareAccessorParameterCarriers } from "./accessor-parameter-carrier.js";
 import { hasRuntimeEnumObject, prepareRuntimeEnumObjects } from "./runtime-enum-object.js";
+import {
+  prepareReadonlyModuleClassBindings,
+  readonlyModuleClassDeclarations,
+  emitReadonlyModuleClassInitialized,
+} from "./readonly-module-class-binding.js";
 import { genericCallbackResultDeclaration } from "./generic-callback-result.js";
 import { genericStructFactorySourceResultAbi } from "./generic-struct-factory.js";
 import { emitThrowJsError, noJsHost } from "./js-errors.js";
@@ -517,6 +522,7 @@ export function prepareIdentityPreservingStructuralParams(
 ): void {
   prepareAccessorParameterCarriers(ctx, sourceFiles);
   prepareRuntimeEnumObjects(ctx, sourceFiles);
+  prepareReadonlyModuleClassBindings(ctx, sourceFiles);
   const candidates = new Map<ts.FunctionDeclaration, Set<number>>();
   const directFunctionDeclaration = (identifier: ts.Identifier): ts.FunctionDeclaration | undefined => {
     const oracleDeclaration = ctx.oracle.valueDeclarationOf(identifier);
@@ -4739,6 +4745,7 @@ type ModuleStaticInitEntry = CodegenContext["staticInitExprs"][number];
 
 /** One complete source-order unit of synchronous module evaluation. */
 type OrderedModuleInitEntry =
+  | { readonly kind: "class-ready"; readonly node: ts.ClassDeclaration }
   | { readonly kind: "static"; readonly node: ts.Node; readonly entry: ModuleStaticInitEntry }
   | { readonly kind: "statement"; readonly node: ts.Statement; readonly statement: ts.Statement };
 
@@ -5877,7 +5884,8 @@ export function compileDeclarations(
   // closure in __module_init even when the program has no other init statements,
   // so a read before the reassignment still yields the function.
   const hasLiveFuncSeeds = (ctx.liveFuncBindingGlobals?.size ?? 0) > 0;
-  const hasModuleInits = ctx.moduleInitStatements.length > 0 || hasLiveFuncSeeds;
+  const hasModuleInits =
+    ctx.moduleInitStatements.length > 0 || hasLiveFuncSeeds || readonlyModuleClassDeclarations(ctx).length > 0;
   const hasStaticInits = ctx.staticInitExprs.length > 0;
   const hasAsyncGraphInit =
     ctx.standalone === true &&
@@ -5990,6 +5998,7 @@ export function compileDeclarations(
    */
   function orderedModuleInitEntries(): OrderedModuleInitEntry[] {
     const orderedInitEntries: OrderedModuleInitEntry[] = [];
+    for (const node of readonlyModuleClassDeclarations(ctx)) orderedInitEntries.push({ kind: "class-ready", node });
     for (const entry of ctx.staticInitExprs) {
       if (!isGraphTimelineStaticEntry(entry)) continue;
       const node = moduleStaticInitNode(entry);
@@ -6003,9 +6012,12 @@ export function compileDeclarations(
         moduleInitSourceOrdinal(ctx, left.node.getSourceFile()) -
         moduleInitSourceOrdinal(ctx, right.node.getSourceFile());
       if (sourceDelta !== 0) return sourceDelta;
-      const positionDelta = left.node.pos - right.node.pos;
+      const positionDelta =
+        (left.kind === "class-ready" ? left.node.end : left.node.pos) -
+        (right.kind === "class-ready" ? right.node.end : right.node.pos);
       if (positionDelta !== 0) return positionDelta;
       if (left.kind === right.kind) return 0;
+      if (left.kind === "class-ready" || right.kind === "class-ready") return left.kind === "class-ready" ? -1 : 1;
       return left.kind === "statement" ? -1 : 1;
     });
     return orderedInitEntries;
@@ -6033,6 +6045,10 @@ export function compileDeclarations(
 
   /** Compile one complete top-level entry without changing its source order. */
   function compileOrderedModuleInitEntry(fctx: FunctionContext, initEntry: OrderedModuleInitEntry): void {
+    if (initEntry.kind === "class-ready") {
+      emitReadonlyModuleClassInitialized(ctx, fctx, initEntry.node);
+      return;
+    }
     if (initEntry.kind === "static") {
       emitModuleStaticInitialization(ctx, fctx, initEntry.entry);
       return;

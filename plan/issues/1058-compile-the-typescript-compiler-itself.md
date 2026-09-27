@@ -12869,6 +12869,54 @@ and deletion is not certified. No new size allowances were added.
 
 ### Qualified static-method mutation continuation (2026-09-28)
 
+**Original semver milestone:** native **692/692**, standalone **692/692**,
+valid zero-import Wasm, 7,066,645 bytes, 142,187 ms at O1, pinned TypeScript
+`c63de15a992d37f0d6cec03ac7631872838602cb`; durable runner exit **0**.
+Evidence: `.tmp/semver-readonly-class-o1.log`. This includes the constructor
+descriptor fix below and the initialized class-binding read, before the final
+fail-closed hardening for unresolved write targets and `with` in its planner.
+
+Exact ESM namespace reads of a proven never-reassigned source class can now
+read its binding without constructing unrelated namespace exports. Unlike the
+rejected eager namespace shortcut, a shared IR declaration plan rejects binding
+writes (including destructuring, updates and loop targets), eval, `with`, and
+unresolved matching write targets. A declaration-owned runtime initialization
+flag is published at the END of class evaluation, after static initializers
+and before a following statement even when their AST positions tie. Reads check
+that flag with a real ReferenceError before materializing the existing class
+singleton. No eager class/prototype creation was added to module initialization.
+Mutable TS namespace properties are excluded: this optimization does not
+pretend that they are immutable ESM bindings. General mutable class bindings
+and actual runtime TS namespace objects remain open.
+
+Standalone A/B, both IR settings, replacing exactly `declarations.ts` and
+`property-access.ts` with their `323b5f77e6` versions: **34/46 → 46/46**.
+The eight new initialization controls check forward reads, deferred function
+reads, reads during static initialization and reads immediately after class
+evaluation. The final hardened candidate passes **65/65** across five files,
+including ten direct shared-IR plan controls, the namespace execution plan,
+all ten namespace/class surface cases and all 28 live static-method controls.
+Evidence: `.tmp/readonly-class-baseline.log`,
+`.tmp/readonly-class-initialization.log`, `.tmp/readonly-class-final-focused.log`.
+Type checking, lint and LOC/function budgets pass without new allowances.
+
+Adjacent source-order/chunking/prepared-init A/B is **33/34** on both sides;
+the identical remaining host-only chunk-prefix assertion is not a new failure
+(`.tmp/readonly-class-adjacent.log`, `.tmp/readonly-class-adjacent-baseline.log`).
+The rejected-shortcut negative matrix stays **6/12** on both sides, with the
+same six loud failures for mutable TS namespace classes and all early-read and
+ordinary receiver/getter controls passing (`.tmp/readonly-class-negative.log`,
+`.tmp/readonly-class-negative-baseline.log`). No conversion of those failures
+to quiet wrong values is accepted. Oracle/coercion ratchets pass. Preservation
+audit passes **6/6** full and **6/6** cut witnesses only; production graph remains
+**OPEN**, strict closure **FAIL**, deletion not certified.
+
+A fresh original incremental-parser run on the hardened candidate is active
+(`.tmp/incremental-readonly-class-o1.log`, session 79645); do not restart it
+merely because the compiler is quiet. Its previous **153/153** predates these
+changes. Semver success is not proof of full checker compilation, all TypeScript
+unit tests, strict IR closure or self-hosting; those requirements remain open.
+
 Follow-up: the inline `Object.defineProperty` accessor path registered a
 constructor's descriptor as an instance-type accessor in `classAccessorSet`,
 while qualified static calls read the identity-keyed runtime bag. Constructor

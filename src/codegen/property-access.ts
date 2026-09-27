@@ -61,6 +61,7 @@ import {
   getOrCreateFuncRefWrapperTypes,
 } from "./closures.js";
 import { withRuntimeModuleCallableBindings } from "./runtime-module-callable-metadata.js";
+import { emitReadonlyModuleClassRead } from "./readonly-module-class-binding.js";
 import {
   BUILTIN_STATIC_METHOD_ARITY,
   ensureBuiltinFnMetaType,
@@ -3890,6 +3891,9 @@ function tryEmitRuntimeNamespaceVariableValue(
   const declaration = receiver.sourceModule
     ? ctx.oracle.aliasedValueDeclarationOf(expr.name)
     : ctx.oracle.valueDeclarationOf(expr.name);
+  if (receiver.sourceModule && declaration !== undefined && ts.isClassDeclaration(declaration)) {
+    return emitReadonlyModuleClassRead(ctx, fctx, declaration);
+  }
   if (declaration === undefined || !ts.isVariableDeclaration(declaration)) return undefined;
 
   if (receiver.sourceModule) {
