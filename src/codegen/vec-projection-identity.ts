@@ -7,6 +7,17 @@ import { mintDefinedFunc, pushDefinedFunc } from "./func-space.js";
 export const VEC_PROJECTION_ROOT = "__vec_projection_root";
 export const VEC_PROJECTION_ALIAS = "__vec_projection_alias";
 
+/** Compare physical array views by their shared JavaScript identity. */
+export function vecProjectionEqualityOperands(ctx: CodegenContext): Instr[] {
+  ensureVecProjectionIdentity(ctx);
+  const root = ctx.funcMap.get(VEC_PROJECTION_ROOT)!;
+  return [0, 1].flatMap((index): Instr[] => [
+    { op: "local.get", index },
+    { op: "call", funcIdx: root },
+    { op: "local.set", index },
+  ]);
+}
+
 /** Fresh physical projections retain the source's ordinary-property identity. */
 export function ensureVecProjectionIdentity(ctx: CodegenContext): number {
   const existing = ctx.funcMap.get(VEC_PROJECTION_ALIAS);

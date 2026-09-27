@@ -403,6 +403,86 @@ own readonly-array/string fields. All **20/20** field-value rows pass
 does not reproduce the remaining full-suite failure. This does not prove
 the original parser's more complex constructor/allocation paths correct.
 
+Follow-up after `6013592a494`: standalone parent/child identity reductions
+reproduce **6/12 failures** (IR off/on). Optional plain-object node, class
+array, and derived-class array cases fail; plain arrays, class nodes, and
+arrays with properties pass. An isolation matrix with IR enabled shows all
+six receivers enumerate the expected child property, while direct property
+comparison and removal of the own-property check retain the same three
+failures. This narrows the next investigation to value/identity at the read
+or call boundary, not absent enumeration keys. Logs:
+`.tmp/parent-child-identity.log` and
+`.tmp/parent-child-identity-isolation.log`. No production fix claimed yet.
+The original optimized zero-import suite is running against `6013592a494`
+in session 51976 (`.tmp/incremental-forof-shared-tdz-o1.log`); poll that
+handle, do not restart on an observation timeout.
+
+The array reductions identify a missing consumer of the existing projection
+identity map: standalone `__extern_strict_eq` compared physical vec views,
+while property sidecars already used their canonical root. Candidate shared
+helper normalizes both equality operands through that existing root helper;
+non-array values retain their original references. New native-oracle tests
+are **6/10 on exact 6013592a494 → 10/10 with the candidate**, including
+distinct-array and NaN/null/undefined/primitive controls, in both IR modes.
+Adjacent nullable/NodeArray matrix yields **13/14 overall**, with a GC
+shared-metadata failure awaiting baseline verification. Logs:
+`.tmp/array-identity-baseline-tests.log`,
+`.tmp/array-identity-candidate-tests.log`.
+
+This does **not** close the original parser failure: applying the same
+normalization diagnostically to the captured full artifact still throws
+`Could not find child in parent` for callback 0
+(`.tmp/incremental-e82d-canonical-eq-0.log`). The remaining plain-object
+reduction is not merely a distinct reference: the callback receives **null**
+while the parent's dynamic property still holds the live child (native mask
+48, Wasm 34 in `.tmp/parent-child-value-shape.log`). Next trace checks whether
+the full parser sees the same null child. The first diagnostic equality-patch
+attempt omitted Binaryen feature flags and failed instrumentation validation;
+only `.tmp/parent-child-canonical-eq-valid.log` is usable evidence.
+The full artifact's first `findChildName` receives **non-null parent and
+child**, so the plain-object null reduction is not that observed stopping
+point (`.tmp/incremental-e82d-child-null-0.log`). Do not conflate them.
+The GC shared-metadata failure reproduces on exact `6013592a494`
+(`.tmp/array-identity-adjacent-baseline.log`). Equality helper extraction into
+`extern-strict-eq.ts` retains the old exported API, avoids increasing the
+oversized `any-helpers.ts` budget, and keeps both IR modes on one helper.
+
+The full original incremental suite on `6013592a494` finished, session 51976
+exit 1: valid optimized standalone **24,303,961 bytes**, **653,610 ms**,
+**zero imports**, native **153/153**, Wasm **0/153**. Errors are now
+`Could not find child in parent` and the 8564:12 diagnostic failure. Log:
+`.tmp/incremental-forof-shared-tdz-o1.log`. This verifies compilation recovery,
+not unit-test acceptance; the newer array identity candidate was not loaded
+by that already-running compiler and is not credited with these results.
+
+Final equality body extraction leaves registration (including the existing
+coercion-engine helper lookup) in `any-helpers.ts`; only instruction building
+moves. This avoids both a circular registration import and a false new-site
+charge from moving a sanctioned coercion lookup. No allowance was added.
+Fresh typecheck passes; four-file identity/BigInt/NaN/fast-equality controls
+pass **37/37** (`.tmp/array-identity-body-tests.log`). LOC, function,
+coercion, oracle, and preservation-only reachability gates pass; strict graph
+closure remains **FAIL/OPEN**.
+
+More precise full-graph tracing identifies the first parent as kind 308,
+positions 0–109; the child is an array of length 1 with the same positions.
+The parent-property trace reads no `statements` property before failing
+(`.tmp/incremental-e82d-parent-properties-0.log`). A new reduction now matches
+that distinction: a derived class with `children!: N[]`, initialized after
+construction, passes direct identity but **fails enumeration**, whereas an
+inline `children = []` initializer passes (`.tmp/parent-child-required-field.log`).
+Inspect `collectClosedStructEnumerationEntries`: its first-match arms currently
+follow struct insertion order without ordering subtype before supertype. A
+base `ref.test` can capture a derived instance and omit the derived fields;
+this is the next hypothesis to verify, not yet a production fix. The first
+`hasProperty` instrumentation assumed an externref key and failed validation;
+the typed-key retry also failed during Binaryen instrumentation (session
+91482 terminal exit 1, `.tmp/incremental-e82d-parent-has-property-valid-0.log`)
+and yields no runtime evidence. The scratch tracer now targets the native
+`__hasOwnProperty` helper with an explicit externref-signature guard instead.
+It must distinguish an absent enumeration key from an own-property rejection
+before attribution.
+
 Requested upstream sync completed: authoritative `loopdive/js2` main at
 `c603404b4f2258ed59377bd591a287523e4af99b` merged cleanly in signed commit
 `c6d4582ccf`. The unfinished candidate was preserved first in `55261207d1`.
