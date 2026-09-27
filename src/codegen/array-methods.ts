@@ -111,6 +111,7 @@ import { staticIntegerRange } from "../ir/analysis/static-numeric-range.js";
 import { tryEmitStaticI32Expression } from "./i32-static-range-expr.js";
 import { countedPushIndexOfUnroll, emitArrayIndexOfScan } from "./array-indexof-scan.js";
 import { compileArrayConcatExternHost, compileArrayMethodExtern } from "./array-method-host.js";
+import { compileArrayLikePrototypeSearch } from "./array-prototype-borrow.js";
 import { isHostTypedArrayCarrierExpression } from "./expressions/typed-array-host-carrier.js";
 // (#4446) The §23.1.3.1 host-free concat loop for dynamic operands.
 import { compileArrayConcatNativeSpec } from "./array-concat-spec.js";
@@ -2408,14 +2409,13 @@ export function compileArrayMethodCall(
       break;
     }
     case "includes":
-      // A callback capture is deliberately kept as externref even when the
-      // checker narrows it to `string[]`.  The host may hand that capture back
-      // as a proxy/raw externref whose concrete WasmGC vec type is not the
-      // statically inferred one; the native vec loop would then ref.cast and
-      // trap.  Route that dynamic receiver through the existing host method
-      // bridge, which materializes/dispatches the array without a typed cast.
+      // A narrowed externref need not have the checker's concrete vec layout.
+      // Use the shared array-like search in host-free targets; the host bridge
+      // retains native JS Array/Proxy behavior in the host lane.
       result = receiverIsExternref
-        ? compileArrayMethodExtern(ctx, fctx, methodAccess, callExpr, "includes")
+        ? noJsHost(ctx)
+          ? compileArrayLikePrototypeSearch(ctx, fctx, callExpr.arguments, "includes", methodAccess.expression)
+          : compileArrayMethodExtern(ctx, fctx, methodAccess, callExpr, "includes")
         : compileArrayIncludes(ctx, fctx, methodAccess, callExpr, vecTypeIdx, arrTypeIdx, elemType);
       break;
     case "reverse":

@@ -422,7 +422,7 @@ export function compileArrayLikePrototypeCall(
   // #1360 — Search methods: indexOf/lastIndexOf/includes don't take a callback.
   // Branch into the dedicated search compiler before the callback-validity check.
   if (ARRAY_LIKE_SEARCH_METHODS.has(methodName)) {
-    return compileArrayLikePrototypeSearch(ctx, fctx, callExpr, methodName, receiverArg);
+    return compileArrayLikePrototypeSearch(ctx, fctx, callExpr.arguments.slice(1), methodName, receiverArg);
   }
 
   // (#4556) A provably non-callable callback is a decidable TypeError — see
@@ -835,18 +835,15 @@ export function compileArrayLikePrototypeCall(
  *   that produces the spec-correct start index for every Inf/NaN/finite case.
  *   Verified by `tests/issue-1360.test.ts`.
  */
-function compileArrayLikePrototypeSearch(
+export function compileArrayLikePrototypeSearch(
   ctx: CodegenContext,
   fctx: FunctionContext,
-  callExpr: ts.CallExpression,
+  methodArgs: readonly ts.Expression[],
   methodName: string,
   receiverArg: ts.Expression,
-): ValType | null | typeof VOID_RESULT | undefined {
-  // `compileArrayLikePrototypeCall` is dispatched from
-  // `Array.prototype.METHOD.call(receiver, ...methodArgs)`, where
-  // callExpr.arguments[0] is `receiver` (passed to us as `receiverArg`) and
-  // [1+] are the method arguments. Search methods need at least one method
-  // argument: the search value — except under standalone/wasi (#3317), where
+): ValType | undefined {
+  // Borrowed and direct calls supply their receiver separately. Search methods
+  // need a search value — except under standalone/wasi (#3317), where
   // the no-search-arg form (`Array.prototype.indexOf.call(obj)` /
   // `[].includes.call(obj)`) must STILL run the observable length coercion
   // (§23.1.3.15/.17/.20 step 2 reads and ToLengths `obj.length` — a throwing
@@ -854,7 +851,7 @@ function compileArrayLikePrototypeSearch(
   // and includes/return-abrupt-tonumber-length). The search element is simply
   // `undefined` then. Host/gc keeps the legacy bail (its host bridge handles
   // the form natively).
-  if (callExpr.arguments.length < 2 && !(ctx.standalone || ctx.wasi)) return undefined;
+  if (methodArgs.length < 1 && !(ctx.standalone || ctx.wasi)) return undefined;
 
   // #1360 PR #274 follow-up: bail to the legacy `__proto_method_call` host
   // bridge when the search argument is statically null or undefined.
@@ -865,8 +862,9 @@ function compileArrayLikePrototypeSearch(
   // The host bridge invokes native `Array.prototype.lastIndexOf` which
   // honours HasProperty correctly. Until __extern_has_idx grows a
   // "field-defined-with-null" path (#1382), bail.
-  if (callExpr.arguments.length >= 2) {
-    const searchArg = callExpr.arguments[1]!;
+  // Native includes uses Get rather than HasProperty and has native SameValueZero.
+  if (methodArgs.length >= 1 && !(noJsHost(ctx) && methodName === "includes")) {
+    const searchArg = methodArgs[0]!;
     const searchIsNullish =
       searchArg.kind === ts.SyntaxKind.NullKeyword ||
       searchArg.kind === ts.SyntaxKind.UndefinedKeyword ||
@@ -943,10 +941,9 @@ function compileArrayLikePrototypeSearch(
   // __box_number, which would turn `true` into the number 1 — and `1 === true`
   // is false in JS. Likewise null/undefined need to round-trip as themselves.
   const searchTmp = allocLocal(fctx, `__alis_search_${fctx.locals.length}`, { kind: "externref" });
-  // `compileArrayLikePrototypeCall` shape: args[0] is the receiver (already
-  // bound to receiverArg), args[1] is the search value, args[2] is fromIndex.
+  // args[0] is the search value; args[1] is fromIndex.
   // (#3317) The standalone no-search-arg form searches for `undefined`.
-  const searchExpr = callExpr.arguments[1];
+  const searchExpr = methodArgs[0];
   if (searchExpr === undefined) {
     emitUndefined(ctx, fctx);
     fctx.body.push({ op: "local.set", index: searchTmp });
@@ -998,8 +995,8 @@ function compileArrayLikePrototypeSearch(
   // Backward (lastIndexOf): default len-1; if negative, k = len+n (may stay
   // <0 → exits to -1); else clamp to len-1. NaN → 0. +Infinity → len-1.
   // -Infinity → len + -Infinity = -Infinity → exits.
-  if (callExpr.arguments.length >= 3) {
-    const argType = compileExpression(ctx, fctx, callExpr.arguments[2]!, { kind: "f64" });
+  if (methodArgs.length >= 2) {
+    const argType = compileExpression(ctx, fctx, methodArgs[1]!, { kind: "f64" });
     if (argType && argType.kind !== "f64") {
       coerceType(ctx, fctx, argType, { kind: "f64" });
     }

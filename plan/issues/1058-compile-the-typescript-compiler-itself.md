@@ -1669,12 +1669,15 @@ attribution for the typed-undefined equality defect.
 
 Frozen Set.add scanner run: session `78300`,
 `.tmp/source-scanner-set-add.log`, preserved binary
-`.tmp/source-scanner-set-add.wasm`. Fresh compilerCore/factory controls run in
+`.tmp/source-scanner-set-add.wasm`. Completed at signed checkpoint
+`3e95bf6008`: native **984/984**, **54,837,517 bytes / 529,082 ms**, valid
+WebAssembly. Set_add is removed; **nine** host imports remain (the prior
+list minus Set_add), and the import gate still prevents all standalone
+scanner callbacks from executing. Fresh compilerCore/factory controls run in
 session `57773`, `.tmp/source-<suite>-set-add.log`. The controls completed:
 compilerCore **11/11**, **1,573,325 bytes / 3,375 ms**; factory **3/3**,
 **14,199,590 bytes / 110,216 ms**. Both match native counts with zero imports.
-Do not modify production while the scanner is running. Type-check session
-`31698` passed; all five source gates completed successfully without allowance
+Type-check session `31698` passed; all five source gates completed successfully without allowance
 growth (`.tmp/optional-set-add-gates.log`), including preservation-only (not
 strict closure certification) for the legacy reachability gate.
 
@@ -1695,6 +1698,60 @@ attributable as a focused regression result. Asked permission to stop only
 that accidental run, not the intended source runs. The ignored config is
 corrected to replace the include list, and the focused rerun explicitly
 filters to its one file.
+
+Continuation: direct Binaryen call-graph extraction from the frozen Set.add
+binary completed (`.tmp/scanner-import-callgraph.dot`). Both host-array imports
+are called by `checkForUsedDeclarations` and `__closure_4712`. These are the
+narrowed `.includes` calls in extractSymbol.ts and fixUnusedIdentifier.ts;
+the `includes` arm alone routes an externref receiver through the host array
+argument builder even on standalone. A candidate using native ObjVec argument
+builders removed the imports but returned false for present members (**0/2**,
+`.tmp/extern-array-includes-after.log`); it was withdrawn, and
+`array-method-host.ts` is unchanged from the signed checkpoint.
+
+The working candidate routes only host-free externref `includes` through the
+existing `compileArrayLikePrototypeSearch` core. That core now receives method
+arguments separately from the receiver, so borrowed `.call` and direct method
+calls share the same search loop and SameValueZero implementation. Native
+includes permits explicit null/undefined search values (unlike the historical
+host HasProperty-based nullish bailout). Host dispatch and typed-vec includes
+are unchanged. Source-shaped identity tests fail the import gate **0/2** before
+the fix and execute **2/2** after it. The expanded tests also cover NaN, null,
+undefined, offsets, empty arrays, and one-time receiver/argument evaluation in
+both IR modes. Five files pass **53/53** (`.tmp/extern-array-includes-regressions.log`).
+The final test-only simplification removes an unrelated instanceof guard from
+the empty-array check; the final new tests and borrowed-call controls pass
+**80/81, one existing skipped test** in session `32671`,
+`.tmp/extern-array-includes-borrowed.log`. The skip is the existing array-like
+filter thisArg case in issue-2036.test.ts, not an includes exclusion.
+
+Frozen production scanner run: session `5493`,
+`.tmp/source-scanner-includes.log`, preserved binary
+`.tmp/source-scanner-includes.wasm`. Type-check `87086` found the search
+helper's historical return annotation incorrectly included VOID_RESULT;
+inspection confirms it returns only a ValType or undefined. Narrowed that
+type-only annotation while the source runs were live; emitted implementation
+is unchanged. Type-check rerun `.tmp/extern-array-includes-typecheck2.log`
+(session `83277`) and five-gate rerun `.tmp/extern-array-includes-gates2.log`
+(session `22702`) passed;
+five-gate batch `80644` passed without allowance growth
+(`.tmp/extern-array-includes-{typecheck,gates}.log`, reachability preservation
+only). Fresh compilerCore/factory controls completed in session `38613`,
+`.tmp/source-<suite>-includes.log`: compilerCore **11/11**, **1,573,325 bytes /
+10,025 ms**; factory **3/3**, **14,199,590 bytes / 268,164 ms**. Both native and
+standalone counts agree, and both modules have zero imports. This is 14/14
+source callbacks, not evidence of scanner execution. Keep production unchanged while measuring
+this candidate. The accidental full-suite run `65915` is concurrent, so these
+wall-clock timings are not controlled performance comparisons.
+
+The environment diagnostic has two distinct outcomes: with explicit ambient
+declarations in the input, `optimize: true` still retains process.cwd (**0/2**);
+without those declarations, the optimized reduction passes **2/2**. The actual
+scanner's function 230 `isNodeLikeSystem` reads the dynamic native realm global
+for process and ends with a constant-false require test (isolated WAT in
+`.tmp/scanner-node-environment-wat.log`). It is not sound to replace its global
+reads with a blanket false. New-IR selection currently rejects the reduction's
+environment and Node helper bodies (`.tmp/node-environment-outcomes.log`).
 
 The user requested a main merge and continuation. The former temporary checkout
 was cleaned out, but branch `codex/1058-typescript-standalone` retained the signed
