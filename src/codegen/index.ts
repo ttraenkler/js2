@@ -12708,9 +12708,12 @@ export function resolveWasmType(ctx: CodegenContext, tsType: ts.Type, _depth = 0
     return { kind: "ref", typeIdx: ctx.anyStrTypeIdx };
   }
 
-  // Check tuple types BEFORE Array — tuples have the Object flag and Array symbol
-  // but should be compiled to structs, not arrays
+  // Check tuple types before Array. Standalone uses ordinary mutable arrays;
+  // other targets retain the packed tuple representation for now.
   if (isTupleType(tsType)) {
+    // A source tuple is a mutable JavaScript Array, including through an
+    // erased alias. Use the existing resizable native array carrier.
+    if (ctx.standalone) return { kind: "ref_null", typeIdx: getOrRegisterVecType(ctx, "externref") };
     const elemTypes = getTupleElementTypes(ctx, tsType);
     const tupleIdx = getOrRegisterTupleType(ctx, elemTypes);
     return { kind: "ref", typeIdx: tupleIdx };
@@ -12775,7 +12778,16 @@ export function resolveWasmType(ctx: CodegenContext, tsType: ts.Type, _depth = 0
         elemTsType && (elemTsType.flags & ts.TypeFlags.TypeParameter) !== 0
           ? ctx.checker.getBaseConstraintOfType(elemTsType)
           : undefined;
-      const runtimeElemTsType = elemConstraint && elemConstraint !== elemTsType ? elemConstraint : elemTsType;
+      // An array constraint also accepts tuple carriers; narrowing those to a
+      // vector would replace valid rows with null. Keep these elements erased.
+      const constraintSymbol = elemConstraint?.getSymbol();
+      const arrayConstraint =
+        elemConstraint &&
+        (isTupleType(elemConstraint) ||
+          (!symbolShadowsBuiltinGlobal(constraintSymbol) &&
+            ["Array", "ReadonlyArray"].includes(constraintSymbol?.name ?? "")));
+      const runtimeElemTsType =
+        elemConstraint && elemConstraint !== elemTsType && !arrayConstraint ? elemConstraint : elemTsType;
       let elemWasm: ValType = runtimeElemTsType
         ? resolveWasmType(ctx, runtimeElemTsType, _depth + 1, _visited)
         : { kind: "externref" };

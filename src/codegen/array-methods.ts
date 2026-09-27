@@ -2102,9 +2102,8 @@ export function compileArrayMethodCall(
   // compile that receiver exactly once. The ordinary actual-type probe below
   // recompiles `map`/`filter`/… and closure registration is not transactional;
   // probing and then emitting the receiver can therefore leave the committed
-  // call wired to a stale/null closure. The resolved TS result type already
-  // describes the array produced by these methods, including `map`'s result
-  // element type, so use it directly for this narrow nested-call shape.
+  // call wired to a stale/null closure. Use the array-like join for this shape:
+  // a dynamic map may return an ObjVec rather than the checker's typed vector.
   const skipReceiverProbeForNativeJoin =
     ctx.nativeStrings &&
     (methodName === "join" || methodName === "toString" || methodName === "toLocaleString") &&
@@ -2116,7 +2115,7 @@ export function compileArrayMethodCall(
   // `__object_keys` host import). The `case "join":` dispatch below routes
   // through `compileArrayJoinExtern` whenever this is set so the WasmGC-
   // native loop doesn't try to extract a vec struct from a JS array.
-  let receiverIsExternref = false;
+  let receiverIsExternref = skipReceiverProbeForNativeJoin;
   // (#3054 B1 Option A) When the receiver is a `$__ta_view` (shared-backing TA
   // over a buffer), it can't be `ref.cast` to the native element-typed vec the
   // method operates on. We materialize the view into a native vec and rebind the

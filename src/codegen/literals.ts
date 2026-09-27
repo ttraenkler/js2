@@ -5426,6 +5426,23 @@ function arrayLiteralEscapesToOpaqueConsumer(ctx: CodegenContext, expr: ts.Array
   return false;
 }
 
+/** Array elements forced onto the open-object path cannot use a closed slot. */
+function arrayHasHostPathObjectElement(ctx: CodegenContext, expr: ts.ArrayLiteralExpression): boolean {
+  return expr.elements.some((element) => {
+    if (ts.isOmittedExpression(element)) return false;
+    let value: ts.Expression = ts.isSpreadElement(element) ? element.expression : element;
+    // The element is usually the BINDING, not the literal (`var w = {…}; [w]`),
+    // so resolve an identifier to its initializer first — the same resolution
+    // R2-1 needed for the JSON flatness test.
+    if (ts.isIdentifier(value)) {
+      const init = ctx.oracle.variableInitializerOf(value);
+      if (init === undefined) return false;
+      value = init;
+    }
+    return ts.isObjectLiteralExpression(value) && objectLiteralForcesHostPath(ctx, value);
+  });
+}
+
 export function compileArrayLiteral(
   ctx: CodegenContext,
   fctx: FunctionContext,
@@ -5464,19 +5481,7 @@ export function compileArrayLiteral(
   // This is the array-element LOCKSTEP CALLER of `objectLiteralForcesHostPath`;
   // `statements/variables.ts`, `declarations.ts` and
   // `statements/nested-declarations.ts` are the same pattern for a binding.
-  const hasHostPathObjectLiteralElement = expr.elements.some((element) => {
-    if (ts.isOmittedExpression(element)) return false;
-    let value: ts.Expression = ts.isSpreadElement(element) ? element.expression : element;
-    // The element is usually the BINDING, not the literal (`var w = {…}; [w]`),
-    // so resolve an identifier to its initializer first — the same resolution
-    // R2-1 needed for the JSON flatness test.
-    if (ts.isIdentifier(value)) {
-      const init = ctx.oracle.variableInitializerOf(value);
-      if (init === undefined) return false;
-      value = init;
-    }
-    return ts.isObjectLiteralExpression(value) && objectLiteralForcesHostPath(ctx, value);
-  });
+  const hasHostPathObjectLiteralElement = arrayHasHostPathObjectElement(ctx, expr);
   let assignmentValue: ts.Expression = expr;
   while (
     ts.isParenthesizedExpression(assignmentValue.parent) ||
@@ -5497,7 +5502,10 @@ export function compileArrayLiteral(
   // Skip if _arrayLiteralForceVec is set (e.g. destructuring default where the target
   // is a vec type, but TS contextual type resolution sees a tuple pattern).
   const ctxTupleType = ctx.checker.getContextualType(expr) ?? ctx.checker.getTypeAtLocation(expr);
+  const nativeTupleArray = ctx.standalone && ctxTupleType && isTupleType(ctxTupleType);
+  if (nativeTupleArray) forcedElementType = { kind: "externref" };
   if (
+    !nativeTupleArray &&
     ctxTupleType &&
     isTupleType(ctxTupleType) &&
     !(ctx as any)._arrayLiteralForceVec &&

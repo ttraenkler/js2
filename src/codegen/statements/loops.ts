@@ -2156,10 +2156,8 @@ function compileForOfArray(
   emitF64HoleToUndef(ctx, fctx, elemType); // (#4491 T11) f64 twin
   // Coerce from the READ value's type (packed i8/i16 arrive on the stack as the
   // widened i32, #2934) to the local's declared type.
-  const elemLocalType = getLocalType(fctx, elemLocal);
-  if (elemLocalType && !valTypesMatch(readElemType, elemLocalType)) {
-    coerceType(ctx, fctx, readElemType, elemLocalType);
-  }
+  // emitCoercedLocalSet owns this conversion; pre-coercing here boxes a
+  // union value twice while still reporting the original read type.
   emitCoercedLocalSet(ctx, fctx, elemLocal, readElemType);
   if (!ts.isVariableDeclarationList(stmt.initializer)) {
     emitForOfAssignmentTarget(ctx, fctx, stmt.initializer, elemLocal, readElemType);

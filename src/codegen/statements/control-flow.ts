@@ -48,6 +48,8 @@ import {
   isHostTypedArrayCarrierName,
 } from "../expressions/typed-array-host-carrier.js";
 import { buildThrowJsErrorInstrs } from "../js-errors.js";
+import { bindingIsSingleAssignment } from "../single-assignment-binding.js";
+import { detectImmutableTypeofNarrowing } from "../../frontend/ts/typeof-narrowing.js";
 
 /**
  * (#2061) Compute the extra nesting depth between a finally-inline site and the
@@ -868,46 +870,6 @@ function detectAliasedNullNarrowing(fctx: FunctionContext, expr: ts.Expression):
 }
 
 /**
- * Detect `typeof x === "string"` / `typeof x === "number"` patterns in if conditions.
- * Returns the variable name, the type literal, and which branch is narrowed.
- */
-function detectTypeofNarrowing(
-  expr: ts.Expression,
-): { varName: string; typeLiteral: string; narrowedBranch: "then" | "else" } | null {
-  if (!ts.isBinaryExpression(expr)) return null;
-  const op = expr.operatorToken.kind;
-  const isEq = op === ts.SyntaxKind.EqualsEqualsEqualsToken || op === ts.SyntaxKind.EqualsEqualsToken;
-  const isNeq = op === ts.SyntaxKind.ExclamationEqualsEqualsToken || op === ts.SyntaxKind.ExclamationEqualsToken;
-  if (!isEq && !isNeq) return null;
-
-  let typeofExpr: ts.TypeOfExpression | null = null;
-  let stringLiteral: string | null = null;
-
-  if (ts.isTypeOfExpression(expr.left) && ts.isStringLiteral(expr.right)) {
-    typeofExpr = expr.left;
-    stringLiteral = expr.right.text;
-  } else if (ts.isTypeOfExpression(expr.right) && ts.isStringLiteral(expr.left)) {
-    typeofExpr = expr.right;
-    stringLiteral = expr.left.text;
-  }
-
-  if (!typeofExpr || !stringLiteral) return null;
-
-  // Only narrow for simple identifier operands
-  const operand = typeofExpr.expression;
-  if (!ts.isIdentifier(operand)) return null;
-
-  // Only narrow for "string" and "number" for now
-  if (stringLiteral !== "string" && stringLiteral !== "number") return null;
-
-  return {
-    varName: operand.text,
-    typeLiteral: stringLiteral,
-    narrowedBranch: isEq ? "then" : "else",
-  };
-}
-
-/**
  * Apply typeof narrowing for a branch: allocate a new local of the narrowed type,
  * emit unboxing from the AnyValue local, and remap localMap.
  * Returns the original local index so we can restore it later.
@@ -986,7 +948,7 @@ export function compileIfStatement(ctx: CodegenContext, fctx: FunctionContext, s
   const narrowing = directNarrowing ?? aliasNarrowing;
 
   // Detect typeof narrowing pattern (typeof x === "string" / "number")
-  const typeofNarrowing = detectTypeofNarrowing(stmt.expression);
+  const typeofNarrowing = detectImmutableTypeofNarrowing(stmt.expression, (id) => bindingIsSingleAssignment(ctx, id));
 
   // Compile condition
   const condType = compileExpression(ctx, fctx, stmt.expression);

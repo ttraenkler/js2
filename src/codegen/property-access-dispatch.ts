@@ -2825,7 +2825,8 @@ function emitStandaloneTupleLength(
   expr: ts.PropertyAccessExpression,
   objType: ts.Type,
 ): PADispatchResult {
-  if (!(ctx.standalone || ctx.wasi) || !isTupleType(objType)) return PA_FALLTHROUGH;
+  // Standalone source tuples use resizable vectors; their length is live.
+  if (!ctx.wasi || ctx.standalone || !isTupleType(objType)) return PA_FALLTHROUGH;
 
   const tupleTarget = ((objType as ts.TypeReference).target ?? objType) as ts.TupleType;
   const tupleArity = tupleTarget.fixedLength;

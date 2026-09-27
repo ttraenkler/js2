@@ -5,7 +5,8 @@ import type { ValType } from "../../ir/types.js";
 import type { CodegenContext, FunctionContext } from "../context/types.js";
 import { allocLocal, getLocalType } from "../context/locals.js";
 import { localGlobalIdx } from "../registry/imports.js";
-import { coerceType, compileExpression, valTypesMatch } from "../shared.js";
+import { coerceType, compileExpression, isAnyValue, valTypesMatch } from "../shared.js";
+import { ensureAnyFromExternHelper } from "../any-helpers.js";
 import { emitTdzCheckAtGlobal } from "../statements/tdz.js";
 import { emitThrowTypeError, isConstIdentifierAssignmentTarget } from "./helpers.js";
 import {
@@ -211,7 +212,16 @@ export function emitResolvedIdentifierWriteFromStack(
         ? ctx.mod.globals[localGlobalIdx(ctx, currentModuleGlobalIdx)]?.type
         : undefined;
   if (currentLocalIdx === undefined && currentModuleGlobalIdx === undefined) return false;
-  if (targetType && !valTypesMatch(valueType, targetType)) coerceType(ctx, fctx, valueType, targetType);
+  if (targetType && !valTypesMatch(valueType, targetType)) {
+    // A value read from a dynamic array can be any primitive, not only a
+    // string. Preserve its runtime tag when writing a typed union binding.
+    const classify =
+      valueType.kind === "externref" && isAnyValue(targetType, ctx)
+        ? ensureAnyFromExternHelper(ctx, { forceHonest: true })
+        : undefined;
+    if (classify !== undefined) fctx.body.push({ op: "call", funcIdx: classify });
+    else coerceType(ctx, fctx, valueType, targetType);
+  }
   if (currentLocalIdx !== undefined) {
     fctx.body.push({ op: "local.set", index: currentLocalIdx });
     return true;

@@ -429,6 +429,289 @@ mixed-vector repair, not the still-failing tuple write candidate or full goal.
 Additional mixed-literal tag and JS-host controls pass **13/13**
 (`.tmp/union-writeback-carrier-controls.log`).
 
+### Source tuples use the native array carrier — candidate 2026-09-27
+
+Signed checkpoint **f2f3e2b2a1** retains the mixed-vector repair above. The
+remaining tuple problem is the representation itself: immutable fixed fields
+cannot satisfy mutation, growth, or actual optional-tuple length. The new
+candidate lowers standalone SOURCE tuple types and literals to the existing
+resizable externref-element vector. Both IR modes consume this same physical
+type/literal boundary; no second array runtime or legacy-only tuple setter is
+introduced. Other targets retain their previous packed tuple representation.
+Internal tuple constructors are not claimed migrated by this source-type change.
+
+After this change the initial **20/20** two-module controls pass, including all
+mutation/identity cases. Six further cases per lane exposed a stale `.length`
+constant fold: tuple growth really stored the new element, but a source tuple's
+length was still emitted as its annotated arity. Standalone now declines that
+packed-tuple-only shortcut and reads the vector's live length. Expanded matrix
+passes **32/32**, zero imports, both IR modes, native oracle for every row
+(`.tmp/source-tuple-live-length.log`). It covers growth (including empty tuples),
+readonly compile-time views, absent optional elements, tuple spreads, and an
+ordinary-object Array.isArray negative control. Typecheck passes.
+
+The earlier `fnctor-array-prototype.ts` tuple-brand HOF workaround has been
+removed: source tuples now use the existing vec brand and need no new packed-
+tuple admission arm. The earlier generic-element erasure, join carrier fix,
+and callback receiver ABI candidate remain under test.
+
+Adjacent tuple/rest/nested/destructuring measurements are in
+`.tmp/source-tuples-native-array.log` and `.tmp/source-tuple-expanded.log`.
+The JS-host exhausted-tuple test fails identically (31 vs 63) with the two
+source-type/literal files restored from **f2f3e2b2a1**, so it is pre-existing.
+That exact two-file baseline passes **8/32** new matrix rows, versus current
+**32/32**; other candidate files remain present in that isolated A/B.
+Six old host fixture failures (five configuration errors in issue 648 and one
+missing string_constants import in issue 582) are being checked against the
+same baseline in `.tmp/source-tuple-host-baseline.log`; do not dismiss them
+without that result. A fresh full original-source semver O1 run is active in
+`.tmp/semver-native-tuples-o1.log`; no new full-suite result credited yet.
+
+Host A/B is terminal: the six additional failures reproduce with exactly the
+same configuration/import errors (`.tmp/source-tuple-host-baseline.log`).
+Do not count these fixture failures as passes or silently delete their tests.
+The fresh original semver run is handle **49427**; the checked-in 153-callback
+incremental-parser runner is also active, handle **96333**, logging to
+`.tmp/incremental-native-tuples-o1.log`. Both began with the complete native
+tuple/live-length/callback candidate and the committed mixed-vector repair.
+
+The function-size gate caught three lines of growth in `compileArrayLiteral`.
+Instead of adding an allowance, extracted its existing open-object element
+classification into `arrayHasHostPathObjectElement`, preserving the exact
+predicate and oracle calls. This coherent helper extraction was made after the
+full builds started; fresh reduced tests and function gates are in
+`.tmp/native-tuple-refactor-controls.log` and
+`.tmp/native-tuple-functions-final.log`. Prior typecheck, LOC, oracle and
+coercion checks passed; rerun gates for the final candidate before committing.
+
+### Terminal diagnostic results after upstream sync verification
+
+Upstream `loopdive/js2` main remains **f17af38a810e8ce8a3aa3b33c994a9a9965331ec**,
+verified by `ls-remote` and local ancestor check; HEAD already contains it.
+The extracted-helper controls pass **40/40** and the function-size gate passes.
+
+Semver handle **49427** is terminal: native **692/692**, standalone **368/692**,
+all 692 callbacks registered, **324 assertion failures**. Compilation validates,
+zero imports, **6,912,190 bytes**, **171,033 ms**, O1
+(`.tmp/semver-native-tuples-o1.log`). This preserves the previous result rather
+than improving it; source tuple mutation correctness is established by the
+reduced matrix, not by a new semver acceptance claim. First failures include
+numeric constructor assertions (`0 !== 1`) and comparison (`0 !== -1`).
+Incremental-parser handle **96333** remains active; do not restart it.
+
+Full-checker trace **21488** is terminal after **1,505,128 ms**, no timeout,
+peak **4145.6 MiB**. Same invalid local 284 in
+`SyntacticTypeNodeBuilderResolver_shouldRemoveDeclaration`; no Wasm binary or
+invocations. Unlike the earlier streaming inspection, the final log DOES
+contain missing-capture rows: `error` (284), `isArrayOrTupleType` (412),
+`isTupleType` (424), `hasInferenceCandidates` (482), `isSyntacticDefault` (294),
+`grammarErrorOnNode` (535), and others, all with no lifted capture names in
+this method frame. Investigate transitive nested-function capture sourcing
+across `createTypeChecker` / `createNodeBuilder` / object method, not a local
+count off-by-one. Temporary logging removed after collecting the trace.
+This full build began before the tuple and mixed-vector fixes; it is not a
+validation of the current candidate. Log: `.tmp/checker-missing-capture-trace.log`.
+
+Incremental-parser **96333** is now terminal, **FAILED validation** on the
+combined current candidate: compile output **36,586,418 bytes** in **447,349 ms**,
+but `__module_init_chunk_31` has `struct.new[1] expected type (ref null 1),
+found local.get of type f64` (function 14175, offset 31493779). No Wasm callback
+executed; the previous accepted 153/153 result is historical, not current.
+Do not commit/accept the tuple migration on the 32 reduced controls alone.
+The full current-vs-last-accepted attribution remains open: both the committed
+mixed-vector repair and the uncommitted tuple/callback changes occurred since
+the accepted parser run. Final candidate typecheck, LOC, function-size,
+coercion and oracle gates pass (`.tmp/tuple-final-*.log`), which does not
+override the full-workload validation failure.
+
+Diagnostic build **35364** is active, preserving the exact checked-in runner's
+generated entry and O1/source-map/deferred-init settings, plus selective WAT
+for `__module_init_chunk_31`. Artifacts and command are in
+`.tmp/incremental-tuple-validation.mts` / `.log` / `.wasm` / `.wat`; no execution
+acceptance is claimed from this capture-only instrument.
+
+Semver reduction now isolates a second independent defect: **8/16** controls
+pass, and all eight failing controls are constructor text/union-parameter
+reassignment shapes, in both IR modes (`.tmp/semver-ctor-reduction-expanded.log`).
+Regex parsing alone, a generic checked parsed result, numeric constructor
+arguments and ordinary union-local assignment pass. Even replacing parsing
+with `if (typeof major === 'string') { major=1; minor=2; patch=3; }` gives
+**23 rather than native 123**. The WAT shows assignment updating the temporary
+`__typeof_major` slot, followed after the branch by `this.major` reading the
+unchanged original AnyValue parameter. `applyTypeofNarrowing` in
+`src/codegen/statements/control-flow.ts` remaps the local for the branch and
+restores the original mapping without preserving writes. This identifies a
+concrete write-loss mechanism, not a regex or generic-return defect. Do not
+claim all 324 semver failures share it without rerunning the original file.
+Scratch reproducer/config/WAT: `.tmp/semver-ctor-reduction.test.ts`,
+`.tmp/semver-reduction.config.mts`, `.tmp/semver-constructor.wat`.
+
+Candidate repair reuses the existing declaration-aware single-assignment
+analysis before copying a typeof-narrowed binding. Writable or unresolved
+bindings retain their original storage rather than a discarded branch-local
+copy. The cached write scan also now visits the left side of destructuring
+defaults (`[value = 7] = ...`); its existing readers were enumerated before
+this correction. No context map or new checker query is introduced. Added
+zero-import/native-oracle branch-write controls in both IR modes; validation
+pending. This is shared lowering, not a new parallel legacy-only mechanism.
+
+The constructor reduction now passes **16/16** (baseline **8/16**),
+`.tmp/semver-ctor-write-fix.log`. Expanded branch-write controls pass **18/22**
+vs **8/22** with only `control-flow.ts` and `single-assignment-binding.ts`
+restored to **f2f3e2b2a1**. Four remaining failures are array destructuring and
+for-of writes to the union parameter; both also failed on baseline (the loop's
+wrong result changes from 0 to NaN). Do not call this matrix fully passing.
+Existing typeof parameter/narrowing suites pass **10/10**. Logs:
+`.tmp/typeof-write-controls.log`, `.tmp/typeof-write-baseline.log`.
+Original semver O1 recheck is active as **38985**, log
+`.tmp/semver-typeof-write-o1.log` (started after the entries repair below).
+
+The parser capture **35364** is terminal, reproducing the exact invalid module
+in **403,614 ms**. Binaryen refuses optimization and the returned 36,586,418-byte
+artifact is **UNOPTIMIZED**, despite O1 being requested. Selective WAT identifies
+`Object.entries` construction: a numeric property value is placed directly in
+the canonical tuple vector's data field. `compileObjectKeysOrValues` assumed
+every resolved entry reference was a packed tuple. Candidate now consults the
+existing vector layout and constructs a two-element backing array before its
+length/data wrapper, using shared coercion for keys and values. No new carrier
+or runtime helper. Typecheck passes.
+
+Named-object entries controls pass **8/8** (numeric/string values, mutable
+growing pairs, Map initialization, both IR modes),
+`.tmp/named-entries-controls.log`. Separate inline-literal forms fail **8/8**
+before and after this entries repair: an unregistered literal struct is sent
+to the dynamic-object runtime enumeration path and produces no entries.
+The adjacent host comparator failure (`aAbB` vs `bBaA`) also reproduces with
+`object-ops.ts` restored to **f2f3e2b2a1**. Logs:
+`.tmp/tuple-entries-controls.log`, `.tmp/entries-baseline.log`. These failures
+are retained, not skipped or counted as passes. Named-object entries A/B
+is active, log `.tmp/named-entries-baseline.log`.
+Fresh original incremental-parser O1 recheck (including both repairs) is
+active, logging to `.tmp/incremental-entries-typeof-o1.log`.
+
+Original semver **38985** is terminal: native **692/692**, standalone
+**594/692**, up from **368/692**, with **98 remaining failures**. All callbacks
+register; binary validates, zero imports, **6,912,017 bytes**, **150,519 ms**,
+O1 requested (`.tmp/semver-typeof-write-o1.log`). This is a measured original
+suite improvement, not acceptance of the complete file. Remaining failures
+begin with minor/patch wildcard range parsing and range.test null-property
+errors. Named-object entries A/B is terminal: **0/8** with `object-ops.ts`
+restored from **f2f3e2b2a1**, versus candidate **8/8**, reproducing the full
+parser's exact `struct.new` invalid-value shape in the reduced controls.
+Incremental-parser handle **1356** is active; do not restart it.
+
+Incremental-parser **1356** is now terminal **PASS**: original/native
+**153/153**, standalone **153/153**, valid binary, zero imports,
+**23,486,086 bytes**, **525,971 ms**, O1. The entries repair restores the
+accepted parser workload with the native tuple migration still enabled.
+Log: `.tmp/incremental-entries-typeof-o1.log`.
+The LOC gate initially rejected six lines in the control-flow driver. Moved
+the typeof-condition recognizer into `src/frontend/ts/typeof-narrowing.ts`
+with the immutable-binding proof supplied by the existing cached analysis;
+no new allowance. Final typecheck, LOC/function budgets, coercion and oracle
+gates pass (`.tmp/entries-typeof-*.log`). Full builds preceded that mechanical
+frontend extraction; recheck focused controls on the final source before
+committing. The failing inline-literal entries and union array/loop-write
+controls remain open and uncommitted.
+
+Array-destructuring write follow-up: `.tmp/type-write-carrier.wat` proves
+`[value]=[7]` stores 7 correctly in an externref vector, then the resolved
+identifier write converts that externref to AnyValue with the legacy tag-5
+wrapper. `Number(value)` subsequently reads the unused zero numeric payload.
+Candidate uses the existing honest runtime classifier specifically at the
+resolved identifier write boundary when its source is externref and its target
+is AnyValue; the globally load-bearing default in `boxToAny` is NOT changed.
+This is additional to the full-suite measurements above and needs revalidation.
+Focused controls active in `.tmp/typeof-write-classifier-controls.log`.
+
+Classifier follow-up is terminal: new branch matrix **20/22**, existing
+narrowing controls **10/10**, leaving only the two for-of cases. Formatting,
+lint and diff checks pass. Inspection of `compileForOfArray` finds two
+consecutive coercions: an explicit `coerceType(readElemType, elemLocalType)`
+followed by `emitCoercedLocalSet(..., readElemType)`, which performs the same
+coercion again. Removed the redundant first conversion; testing in
+`.tmp/typeof-write-loop-controls.log`. No globally shared boxing policy changed.
+
+The branch-write matrix now passes **22/22**, plus **10/10** adjacent typeof
+controls, on the extracted frontend recognizer and both write repairs
+(`.tmp/typeof-write-loop-controls.log`). Thus all **32/32** in that run pass;
+the inline-object entries cases remain a separate open failure.
+Additional loop/destructuring and mixed-vector controls are running as
+**60651**, `.tmp/typeof-write-loop-adjacent.log`; final source gates as
+**95600**, `.tmp/branch-writes-final-*.log`. Original semver revalidation after
+the two additional write repairs is running as **89639**,
+`.tmp/semver-branch-write-final-o1.log`. Do not restart these handles before
+their terminal state is confirmed. The earlier 594/692 and 153/153 full-suite
+measurements precede these last two repairs; do not relabel them as fresh HEAD
+validation. All current follow-up source remains uncommitted.
+
+Adjacent **60651** is terminal **32/32 PASS**, giving **64/64** executed
+focused+adjacent checks across the two final runs. Gates **95600** are terminal
+PASS (typecheck, LOC, function-size, coercion and oracle); no new allowance.
+Final original incremental-parser recheck is now active as **45176**, log
+`.tmp/incremental-branch-write-final-o1.log`, alongside semver **89639**.
+These are the only new full-suite runs to poll for the current write repairs.
+
+Next semver reduction uses the original four regex declaration lines, not
+replacement patterns. **16/18** cases pass (`.tmp/semver-range-reduction.log`):
+wildcard regex captures, absent operator `=== undefined`, plain parameter
+comparison, explicit operator, whitespace split and range split loops all
+pass in both IR modes. Only `switch(operator:string) { case undefined: ... }`
+misses (returns 0 rather than 1). The switch boxes a nullable AnyString local
+to externref; its ABI null means an unmatched/undefined string, but bare
+`extern.convert_any` turns it into JS null before strict case comparison.
+Plan: preserve the existing local carrier's undefined meaning at the switch
+operand boundary, without changing general externref boxing or conflating
+explicitly nullable string types with undefined.
+
+REJECTED candidate: a switch-local native-string null→undefined conversion
+made the original **18/18** reduced cases pass (`.tmp/semver-switch-boundary.log`),
+but the expanded **22**-case matrix caught **2 regressions**, one per IR mode:
+passing `null as any` to the string-annotated parameter must still match
+`case null`, and instead matched `case undefined`. Explicitly declared
+`string | null` controls passed, proving the failure is lost runtime value
+identity behind the annotation, not merely a missing nullability guard.
+The candidate helper and its call sites were removed; do NOT re-add it.
+Log: `.tmp/semver-switch-null-controls.log`. Correct follow-up requires
+preserving distinct null/undefined at the parameter/producer carrier boundary
+before information is lost, with the negative controls retained. Do not
+accept a higher semver count purchased by a new null/undefined confusion.
+
+Final semver recheck **89639** is terminal: **594/692** standalone vs native
+**692/692**, same as before the last two write fixes; valid zero-import
+**6,912,017-byte** binary in **148,631 ms**. Log:
+`.tmp/semver-branch-write-final-o1.log`. Incremental **45176** still live at
+last handle poll; no restart.
+
+### Checkpoint before the next requested upstream merge
+
+Incremental-parser handle **45176** is terminal **PASS**: native **153/153**,
+standalone **153/153**, valid **23,486,086-byte** binary, **zero imports**, O1,
+**531,902 ms** (`.tmp/incremental-branch-write-final-o1.log`). This includes
+the identifier-classifier and loop double-coercion repairs, but predates the
+last wrapped-write scan correction.
+
+The expanded wrapped-write controls are terminal **22/26**, not fully passing
+(`.tmp/typeof-wrapped-write-controls.log`): parenthesized increment produces
+0 instead of 3, and asserted increment is rejected, in both IR modes. The scan
+now conservatively recognizes these writes, but update lowering remains open.
+The eight inline-object entries failures also remain open. Preserve these
+failing controls in this work-in-progress checkpoint; it is not a merge-ready
+acceptance claim.
+
+The semver switch reduction passes **24/26** with the rejected switch-local
+conversion removed (`.tmp/semver-switch-carrier-baseline.log`). Only the plain
+string-annotated parameter loses the missing regex capture. Unknown and
+nullable-union parameter controls preserve it, including explicit null.
+Next investigate shared parameter representation selection, keeping null and
+undefined distinct before switch lowering; do not patch the switch comparison
+to reinterpret every null as undefined.
+
+The next requested sync fetched upstream main **c2601efa8948c46515c96cad15da92a93c71fbde**.
+Its three new commits change website/compatibility artifacts, not compiler
+source. Checkpoint the current candidate before merging; full TypeScript and
+self-hosting acceptance remain open.
+
 ### Unfinished required-field checkpoint before upstream sync
 
 Follow-up: native-oracle recursive-field controls show an actual wrong value,

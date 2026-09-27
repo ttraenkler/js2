@@ -68,8 +68,18 @@ function writingOccurrences(sourceFile: ts.SourceFile): Map<string, ts.Identifie
       record(target);
       return;
     }
-    if (ts.isParenthesizedExpression(target)) {
+    if (
+      ts.isParenthesizedExpression(target) ||
+      ts.isAsExpression(target) ||
+      ts.isTypeAssertionExpression(target) ||
+      ts.isNonNullExpression(target) ||
+      ts.isSatisfiesExpression(target)
+    ) {
       recordAssignmentTarget(target.expression);
+      return;
+    }
+    if (ts.isBinaryExpression(target) && target.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
+      recordAssignmentTarget(target.left);
       return;
     }
     if (ts.isBindingElement(target)) {
@@ -118,10 +128,9 @@ function writingOccurrences(sourceFile: ts.SourceFile): Map<string, ts.Identifie
     // `x++` / `--x`.
     if (
       (ts.isPostfixUnaryExpression(node) || ts.isPrefixUnaryExpression(node)) &&
-      ts.isIdentifier(node.operand) &&
       (node.operator === ts.SyntaxKind.PlusPlusToken || node.operator === ts.SyntaxKind.MinusMinusToken)
     ) {
-      record(node.operand);
+      recordAssignmentTarget(node.operand);
     }
     // A for-in/for-of loop variable is re-assigned on every iteration.
     if (ts.isForInStatement(node) || ts.isForOfStatement(node)) {

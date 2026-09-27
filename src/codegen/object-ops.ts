@@ -4788,52 +4788,36 @@ export function compileObjectKeysOrValues(
     // Get the tuple struct fields to know the value type
     const tupleTypeDef = ctx.mod.types[entryTupleTypeIdx];
     const tupleFields = tupleTypeDef && tupleTypeDef.kind === "struct" ? (tupleTypeDef as any).fields : undefined;
+    const entryVector = getVecInfo(ctx, entryTupleTypeIdx);
     // Field 0 is the key (string), field 1 is the value
-    const valueFieldType: ValType | undefined = tupleFields?.[1]?.type;
+    const valueFieldType: ValType | undefined = entryVector?.elemType ?? tupleFields?.[1]?.type;
 
     // Ensure union boxing imports are registered (needed for boxing primitives)
     addUnionImports(ctx);
 
     // For each enumerable field, create a tuple struct [key, value]
     for (const entry of enumUserFields) {
-      // Push key string (field 0 of tuple)
-      if (ctx.nativeStrings && ctx.nativeStrTypeIdx >= 0) {
-        compileNativeStringLiteral(ctx, fctx, entry.field.name);
-        // If tuple expects externref for the key, convert
-        if (tupleFields && tupleFields[0]?.type?.kind === "externref") {
-          fctx.body.push({ op: "extern.convert_any" });
-        }
-      } else {
-        // Late-register unregistered field names so nothing underflows the
-        // tuple/array construction below (#786).
-        compileStringLiteral(ctx, fctx, entry.field.name, expr);
-      }
+      const keyType = compileStringLiteral(ctx, fctx, entry.field.name, expr) ?? { kind: "externref" };
+      coerceType(ctx, fctx, keyType, entryVector?.elemType ?? tupleFields?.[0]?.type ?? { kind: "externref" });
 
       // Push value (field 1 of tuple)
       fctx.body.push({ op: "local.get", index: objLocal });
       fctx.body.push({ op: "struct.get", typeIdx: structTypeIdx, fieldIdx: entry.fieldIdx });
 
-      // Coerce the struct field value to match the tuple's value field type
-      const fieldKind = entry.field.type.kind;
-      const targetKind = valueFieldType?.kind ?? "externref";
+      coerceType(ctx, fctx, entry.field.type, valueFieldType ?? { kind: "externref" });
 
-      if (targetKind === "externref") {
-        // Box primitives to externref
-        if (fieldKind === "f64") {
-          const boxIdx = ctx.funcMap.get("__box_number");
-          if (boxIdx !== undefined) fctx.body.push({ op: "call", funcIdx: boxIdx });
-        } else if (fieldKind === "i32") {
-          fctx.body.push({ op: "f64.convert_i32_s" });
-          const boxIdx = ctx.funcMap.get("__box_number");
-          if (boxIdx !== undefined) fctx.body.push({ op: "call", funcIdx: boxIdx });
-        } else if (fieldKind === "ref" || fieldKind === "ref_null") {
-          fctx.body.push({ op: "extern.convert_any" });
-        }
+      // Source tuples are vectors in standalone mode. Their struct fields
+      // are length/data, not key/value: construct the backing pair first.
+      if (entryVector) {
+        fctx.body.push({ op: "array.new_fixed", typeIdx: entryVector.arrTypeIdx, length: 2 });
+        const data = allocTempLocal(fctx, { kind: "ref", typeIdx: entryVector.arrTypeIdx });
+        fctx.body.push(
+          { op: "local.set", index: data },
+          { op: "i32.const", value: 2 },
+          { op: "local.get", index: data },
+        );
+        releaseTempLocal(fctx, data);
       }
-      // If target is f64 and field is f64, no conversion needed
-      // If target is i32 and field is i32, no conversion needed
-
-      // Create tuple struct
       fctx.body.push({ op: "struct.new", typeIdx: entryTupleTypeIdx });
     }
 
