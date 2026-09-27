@@ -2219,6 +2219,53 @@ The TypeScript standalone goal remains open. Scanner startup is repaired, but
 its assertions are not passing; the generic callable array-return defect above
 also remains open. No tests were stopped or restarted mid-run.
 
+Namespace follow-up at signed merge `e8b1b85fa4`: the four-case reduction still
+fails **0/4** after merging (`.tmp/namespace-snapshot-postmerge.log`). A temporary
+candidate reused the existing class collection and body emission for each
+`runtimeModuleDeclarationGroups` block, with `withRuntimeModuleBindings` around
+body emission. This makes `fromString` actually call `StringScriptSnapshot_new`
+with IR enabled, but the original reduction still scores **0/4**: the emitted
+class struct has no `text` field and its `_init` body merely returns `self`.
+`constructor(private text: string) {}` is a second, independent unsupported
+shape, not evidence that namespace collection had no effect.
+
+Expanded diagnostic matrix (explicit field plus `this.text = text` versus
+parameter property, exported/unexported class, IR on/off) scores **2/8** with
+the temporary candidate. Only IR-on explicit-field cases pass. The IR-off
+namespace function still has an empty/default body, a separate namespace
+function-registration issue. Logs: `.tmp/namespace-snapshot-fields-candidate.log`;
+WAT: `.tmp/namespace-snapshot-<IR>-<exported>-<parameterProperty>.wat`.
+**The candidate was removed**: production remains exactly signed `e8b1b85fa4`.
+Do not land the two extra traversal loops alone; they do not address namespace
+class collisions, initialization order, or parameter properties.
+
+### Next implementation plan: constructor parameter properties through shared IR
+
+1. Establish top-level class controls independently of namespace registration.
+   Cover string/numeric properties, defaults, readonly/public/private/protected,
+   ordinary non-property parameters, derived `super()` ordering, and field
+   initializer/body observations. Native TypeScript 5.9.3 ES2022 output for
+   `class C { x=this.p; constructor(public p=42){} }` declares `p`, evaluates
+   `x`, then assigns `this.p=p` in the constructor; do not reorder that assignment
+   ahead of ordinary class field initializers.
+2. Extend the shared source plan in `src/ir/class-instance-initializers.ts`,
+   currently PropertyDeclaration-only, to represent parameter-property writes
+   with exact declaration identities. Both layout collection and constructor
+   lowering must consume this plan; reuse `lowerConstructorFieldInitializers`
+   and its existing class-field set operation, not a new constructor algorithm.
+   Preserve plan ordering, defaults, base/derived timing, and exact field types.
+3. Remove the explicit parameter-property refusal in `src/ir/select.ts` only
+   when preparation/layout and lowering provide that complete contract. Require
+   measured `irBodyEmitted` evidence, zero imports and value equality, not merely
+   a fallback-backed pass. The backend class layout currently collects only
+   constructor `this.x=` assignments and PropertyDeclarations; it must reserve
+   the same parameter-property slots before ABI/layout freeze. Use oracle-owned
+   declaration typing, no additional direct checker queries.
+4. Then return to exact namespace class identity/initialization registration and
+   re-run the unmodified upstream scanner. Retain the independent IR-off
+   namespace function failure and generic array-return finding; do not claim
+   the complete TypeScript goal from the prerequisite tests.
+
 The environment diagnostic has two distinct outcomes: with explicit ambient
 declarations in the input, `optimize: true` still retains process.cwd (**0/2**);
 without those declarations, the optimized reduction passes **2/2**. The actual
