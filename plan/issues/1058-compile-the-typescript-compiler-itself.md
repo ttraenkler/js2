@@ -1782,8 +1782,30 @@ binary with all seven Node imports. No optimized scanner or callback result
 was produced. In the six-file recheck, diagnosticCollection **5/5**, base64
 **1/1**, and comments **3/3** have completed with zero imports; parsePseudoBigInt
 is running, paths and asserts have not yet started. No test process was stopped.
-If the merge occurs before this sequential recheck ends, its later files must
+The merge began before this sequential recheck ended, so its later files must
 not be combined with pre-merge results as a single-checkpoint 44/44 claim.
+
+Main integration at `688eb4de4184a6f8db74ff1ed73ab9612289e99c` resolved two
+conflicts: keep main's equivalent terminal-call operand attribution in
+`call-arg-producers.ts`; retain both the projection identity imports and main's
+length-hole-fill import in `vec-overlay.ts`. No allowance increase. Typecheck,
+format/lint on both resolved files, LOC/function/coercion/oracle gates pass;
+reachability passes preservation-only (strict modeled closure remains open).
+Six focused files: **35/37** (`.tmp/main-688eb-integration.log`). The two failures
+are the standalone user-defined class/interface named Map controls in sibling
+projection tests: invalid Wasm and a module-initializer stack underflow,
+respectively. Both reproduce on exact pre-merge `2f3a7f6829` in isolated
+`/private/tmp/ts2wasm-ts5-pre688-control` with the same harness and exception
+flag (**9/11**, `.tmp/pre688-projection-control.log`); neither is a new merge
+regression. Do not claim the entire regression set passes.
+
+Continuation diagnostic: the real module resolver plus multi-source analyzer
+reports 253 scanner sources and **zero runtime-eval boundary sites**, agreeing
+with the earlier raw TypeScript program probe (`.tmp/resolved-runtime-eval-plan2.log`).
+This rules out the suspected type-only Function boundary false positive as the
+cause in that measured graph; no production boundary-plan change was made.
+The reduced type-only Function false positive is still a separate finding,
+not evidence that changing it would remove these seven Node imports.
 
 The environment diagnostic has two distinct outcomes: with explicit ambient
 declarations in the input, `optimize: true` still retains process.cwd (**0/2**);
