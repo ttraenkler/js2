@@ -5,6 +5,7 @@
  * Extracted from codegen/index.ts (#1013).
  */
 import { ts } from "../ts-api.js";
+import { collectUndefinedWrittenInstanceFields } from "../ir/class-field-undefined-storage.js";
 import {
   collectClassInstanceInitializerSources,
   collectClassInstanceFieldDeclarations,
@@ -870,82 +871,6 @@ function methodParamDefaultsNeedArguments(member: ts.FunctionLikeDeclarationBase
   );
 }
 
-const voidClearedInstanceFieldsCache = new WeakMap<ts.ClassLikeDeclaration, ReadonlySet<string>>();
-
-/**
- * Collect instance fields that are explicitly cleared with `void` in this
- * class's own lexical `this` scope.
- *
- * JavaScript packages commonly initialize a field with an array or class
- * instance and later use `field = void 0` as a state transition. The checker
- * keeps the initializer's narrow type in untyped JavaScript, but a native ref
- * slot cannot preserve the distinct `undefined` value: coercing it back to the
- * narrow carrier can materialize an empty object/array. Such fields need the
- * ordinary dynamic externref carrier. Arrow functions are included because
- * they inherit class `this`; nested ordinary functions and classes are not.
- */
-function collectVoidClearedInstanceFields(ctx: CodegenContext, decl: ts.ClassLikeDeclaration): ReadonlySet<string> {
-  const cached = voidClearedInstanceFieldsCache.get(decl);
-  if (cached !== undefined) return cached;
-  const fields = new Set<string>();
-
-  const bareExpression = (expression: ts.Expression): ts.Expression => {
-    let bare = expression;
-    while (
-      ts.isParenthesizedExpression(bare) ||
-      ts.isAsExpression(bare) ||
-      ts.isTypeAssertionExpression(bare) ||
-      ts.isSatisfiesExpression(bare) ||
-      ts.isNonNullExpression(bare)
-    ) {
-      bare = bare.expression;
-    }
-    return bare;
-  };
-
-  const visit = (node: ts.Node): void => {
-    if (
-      node !== decl &&
-      (ts.isFunctionDeclaration(node) ||
-        ts.isFunctionExpression(node) ||
-        ts.isMethodDeclaration(node) ||
-        ts.isConstructorDeclaration(node) ||
-        ts.isGetAccessorDeclaration(node) ||
-        ts.isSetAccessorDeclaration(node) ||
-        ts.isClassDeclaration(node) ||
-        ts.isClassExpression(node))
-    ) {
-      return;
-    }
-    if (
-      ts.isBinaryExpression(node) &&
-      node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
-      ts.isPropertyAccessExpression(node.left) &&
-      bareExpression(node.left.expression).kind === ts.SyntaxKind.ThisKeyword &&
-      ts.isVoidExpression(bareExpression(node.right))
-    ) {
-      const fieldName = resolveClassMemberName(ctx, node.left.name);
-      if (fieldName !== undefined) fields.add(fieldName);
-    }
-    ts.forEachChild(node, visit);
-  };
-
-  for (const member of decl.members) {
-    if (ts.isPropertyDeclaration(member) && member.initializer) visit(member.initializer);
-    else if (
-      (ts.isConstructorDeclaration(member) ||
-        ts.isMethodDeclaration(member) ||
-        ts.isGetAccessorDeclaration(member) ||
-        ts.isSetAccessorDeclaration(member)) &&
-      member.body
-    ) {
-      visit(member.body);
-    }
-  }
-  voidClearedInstanceFieldsCache.set(decl, fields);
-  return fields;
-}
-
 // (#1983) `classMemberFuncKey` lives in the leaf module `class-member-keys.ts`
 // (imported above) so consumer files can use it without an import cycle; it is
 // re-exported here for callers that already import from `class-bodies.js`.
@@ -1262,7 +1187,10 @@ export function collectClassDeclaration(
     const declaredName = resolveClassMemberName(ctx, member.name);
     if (declaredName !== undefined) declaredPropertyByName.set(declaredName, member);
   }
-  const voidClearedInstanceFields = collectVoidClearedInstanceFields(ctx, decl);
+  const voidClearedInstanceFields = collectUndefinedWrittenInstanceFields(
+    decl,
+    (expression) => ctx.oracle.typeFactOf(expression).kind === "undefined",
+  );
 
   if (ctor?.body) {
     for (const stmt of ctor.body.statements) {

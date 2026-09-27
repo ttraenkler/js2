@@ -269,6 +269,43 @@ oracle-ratchet-allow:
 
 ## Main synchronization and incremental-parser trace — 2026-09-27
 
+Follow-up after `0299ff2656`: bounded raw instrumentation identifies the next
+bad property as **`emitNode`**, read as null before original `isNodeOrArray`.
+`.tmp/incremental-null-key.log`. A native-oracle class reduction proves
+**8/12 baseline, 12/12 candidate** for dynamic/property-descriptor reads, IR
+off/on, undefined/null/live-object controls. Declaring the reference as
+nullable masks the failure; an optional reference without null loses the
+explicitly assigned undefined. `.tmp/optional-field-nonnull-baseline.log`,
+`.tmp/optional-field-candidate.log`.
+
+The candidate moves the existing void-cleared class-field storage analysis
+from `class-bodies.ts` into `src/ir/class-field-undefined-storage.ts`. It also
+accepts oracle-proven undefined assignments and explicit property initializers,
+so the shared physical class layout retains their values in dynamic storage.
+It preserves lexical-arrow ownership while excluding ordinary nested functions,
+classes, object methods and static members. It does not normalize every null
+field to undefined, weaken assertions, or add a second property-read lowering.
+The expanded runtime reduction measures **8/14 baseline, 14/14 candidate**,
+including repeated undefined/object/null transitions and object identity.
+The three IR-plan scope tests and eight existing field-union tests pass.
+Adjacent uninitialized-field tests remain **62/64 on both baseline and
+candidate**: two old tests expect the formerly broken callable parameter
+property result 0, but both versions correctly return native result 6.
+These are stale expectation failures, not newly introduced regressions.
+`.tmp/optional-field-expanded.log`, `.tmp/optional-field-expanded-baseline.log`.
+Typecheck passes; scoped lint passes with 14 existing warnings in
+`class-bodies.ts` (`.tmp/optional-field-typecheck.log`,
+`.tmp/optional-field-lint.log`).
+
+Original-suite run **90753** is terminal exit 1: the loop-reset candidate
+compiles and validates **26,196,119 bytes**, **zero imports**, in **597,199 ms**,
+initializes and executes **153 callbacks**, but **0/153 pass**. Error locations
+are `149:38` and `8564:12`; it no longer hangs at callback 31.
+`.tmp/incremental-loop-reset-o1-tsx.log`. This is not a measurement of the later
+field-storage change. The corrected field-storage candidate's original O1 run
+is now live as session **64524**, `.tmp/incremental-field-storage-o1.log`;
+resume that handle rather than restarting it on an observation timeout.
+
 Follow-up candidate after `d5565d3da7`: the existing variable initializer now
 resets bare lexical nullable-reference locals on every declaration execution,
 using the existing undefined producer and storage coercion. Bare `var`
@@ -302,9 +339,8 @@ The diagnostic reset's next guest error decodes to
 A first original-suite launch exited before compilation because its worker
 lacked the TypeScript loader (`.tmp/incremental-loop-reset-o1.log`, session
 54748 terminal exit 1). The corrected original 153-callback O1 run with the
-production reset candidate is in progress: session **90753**,
-`.tmp/incremental-loop-reset-o1-tsx.log`.
-Resume that run, rather than restarting on an observation timeout.
+production reset candidate completed as session **90753**;
+`.tmp/incremental-loop-reset-o1-tsx.log`, results above.
 
 Merged authoritative `loopdive/js2` main `349eab3bf5` into
 `codex/1058-typescript-standalone` as signed merge `52af6cfb3e`.
