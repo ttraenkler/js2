@@ -6,6 +6,16 @@ import { compile } from "../src/index.js";
 const declaration = `interface D {range:{pos:number;end:number};type:number;}`;
 const cases = [
   [
+    "for-of reads a readonly array through a narrowed optional result",
+    `interface Identifier {kind:number;} interface Identifiers {identifiers:readonly Identifier[];isCompleteFix:boolean;} function get(n:number):Identifiers|undefined {return n?{identifiers:[{kind:7}],isCompleteFix:true}:undefined;} export function run(){const identifiers=get(1);if(!identifiers)return 0;let n=0;for(const identifier of identifiers.identifiers)n+=identifier.kind;return n;}`,
+    7,
+  ],
+  [
+    "declared class implementer receives optional scanner array",
+    `interface N {kind:number;commentDirectives?:D[];} class Node implements N {kind=1;} function scanner(){let value:D[]|undefined;return {get:()=>value};} function make():N{return new Node();} export function run(){const n=make();n.commentDirectives=scanner().get();return (n as any).commentDirectives===undefined?1:0;}`,
+    1,
+  ],
+  [
     "reference union distinguishes undefined, null and a live array",
     `function choose(n:number):D[]|null|undefined {if(n===0)return undefined;if(n===1)return null;return [{range:{pos:1,end:3},type:7}];} function inspect(value:any){return value===undefined?1:value===null?2:value[0].type;} export function run(){return inspect(choose(0))*100+inspect(choose(1))*10+inspect(choose(2));}`,
     127,

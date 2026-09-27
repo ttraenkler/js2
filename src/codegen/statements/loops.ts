@@ -1816,8 +1816,7 @@ function compileForOfArrayTentative(
       // Confirmed vec struct — undo the tentative compilation and use the
       // full array path (which compiles the expression again with proper setup)
       rollbackSpeculative(ctx, fctx, snap);
-      compileForOfArray(ctx, fctx, stmt, iterableOverride);
-      return true;
+      return compileForOfArray(ctx, fctx, stmt, iterableOverride);
     }
   }
 
@@ -1883,6 +1882,21 @@ function restoreForOfHead(fctx: FunctionContext, saved: ForOfHeadSaved): void {
   if (saved.isConst) (fctx.constBindings ??= new Set()).add(saved.name);
 }
 
+/** HeadEvaluation uses the same TDZ environment for vec and iterator routes. */
+function installForOfHeadTdz(fctx: FunctionContext, stmt: ts.ForOfStatement): ForOfHeadSaved[] {
+  const savedHeads = saveForOfHeads(fctx, stmt);
+  for (const saved of savedHeads) {
+    const value = allocLocal(fctx, `__forof_hbind_${saved.name}_${fctx.locals.length}`, { kind: "externref" });
+    const flag = allocLocal(fctx, `__forof_hflag_${saved.name}_${fctx.locals.length}`, { kind: "i32" });
+    fctx.localMap.set(saved.name, value);
+    (fctx.tdzFlagLocals ??= new Map()).set(saved.name, flag);
+    fctx.boxedCaptures?.delete(saved.name);
+    fctx.boxedTdzFlags?.delete(saved.name);
+    fctx.constBindings?.delete(saved.name);
+  }
+  return savedHeads;
+}
+
 // (#2769) Does this for-of need the in-bounds undefined/hole sentinel preserved
 // through the OUTER array-literal construction? True ONLY when the subject is a
 // *direct array literal* AND the for-of binding pattern has an element default
@@ -1900,7 +1914,7 @@ function compileForOfArray(
   stmt: ts.ForOfStatement,
   iterableOverride?: ts.Expression,
   preVec?: { vecLocal: number; vecType: ValType },
-): void {
+): boolean {
   // Compile the iterable expression (vec struct ref). `iterableOverride` is the
   // inner receiver of a `.values()` call (#681) when present. When `preVec` is
   // supplied the caller already materialized the vec into a local (#2162 native
@@ -1910,20 +1924,9 @@ function compileForOfArray(
   const snap = snapshotSpeculative(ctx, fctx);
   // #4700/#4710 — HeadEvaluation evaluates the receiver with every name in a
   // lexical identifier or destructuring head uninitialized. Keep this limited
-  // to the direct synchronous vec path; iterator and materialized paths retain
-  // their separate environment machinery.
-  const receiverHeadSaved = !preVec && !iterableOverride ? saveForOfHeads(fctx, stmt) : [];
-  for (const saved of receiverHeadSaved) {
-    const headValueLocal = allocLocal(fctx, `__forof_hbind_${saved.name}_${fctx.locals.length}`, {
-      kind: "externref",
-    });
-    const headTdzLocal = allocLocal(fctx, `__forof_hflag_${saved.name}_${fctx.locals.length}`, { kind: "i32" });
-    fctx.localMap.set(saved.name, headValueLocal);
-    (fctx.tdzFlagLocals ??= new Map()).set(saved.name, headTdzLocal);
-    fctx.boxedCaptures?.delete(saved.name);
-    fctx.boxedTdzFlags?.delete(saved.name);
-    fctx.constBindings?.delete(saved.name);
-  }
+  // to direct receivers; the iterator route shares this head setup, while
+  // materialized paths already evaluated their receiver.
+  const receiverHeadSaved = !preVec && !iterableOverride ? installForOfHeadTdz(fctx, stmt) : [];
   // (#2769) Preserve in-bounds undefined/hole identity through the OUTER
   // array-literal construction for the spec'd for-of-dstr template family. The
   // flag is scoped tightly to the subject compile (set→compile→restore) so it
@@ -1938,8 +1941,8 @@ function compileForOfArray(
   if (!vecType || (vecType.kind !== "ref" && vecType.kind !== "ref_null")) {
     for (const saved of receiverHeadSaved) restoreForOfHead(fctx, saved);
     rollbackSpeculative(ctx, fctx, snap);
-    reportError(ctx, stmt, "for-of requires an array expression");
-    return;
+    if (preVec) reportError(ctx, stmt, "for-of requires an array expression");
+    return false;
   }
 
   // Expect a vec struct type {length: i32, data: (ref $__arr_T)}
@@ -1948,8 +1951,8 @@ function compileForOfArray(
   if (!vecDef || vecDef.kind !== "struct") {
     for (const saved of receiverHeadSaved) restoreForOfHead(fctx, saved);
     rollbackSpeculative(ctx, fctx, snap);
-    reportError(ctx, stmt, "for-of requires an array type");
-    return;
+    if (preVec) reportError(ctx, stmt, "for-of requires an array type");
+    return false;
   }
 
   const arrTypeIdx = getArrTypeIdxFromVec(ctx, vecTypeIdx);
@@ -1957,8 +1960,8 @@ function compileForOfArray(
   if (!arrDef || arrDef.kind !== "array") {
     for (const saved of receiverHeadSaved) restoreForOfHead(fctx, saved);
     rollbackSpeculative(ctx, fctx, snap);
-    reportError(ctx, stmt, "for-of requires an array type");
-    return;
+    if (preVec) reportError(ctx, stmt, "for-of requires an array type");
+    return false;
   }
   // HeadEvaluation step 4: the receiver TDZ environment ends before the
   // loop's per-iteration binding is installed. The emitted receiver reads
@@ -2247,9 +2250,9 @@ function compileForOfArray(
       });
     }
   }
-  // #4700 — lexical head bindings end with the loop and must not leak into
-  // later code in the surrounding function.
+  // #4700 — lexical head bindings must not leak into the surrounding function.
   for (const saved of savedLoopHeads) restoreForOfHead(fctx, saved);
+  return true;
 }
 
 /**
@@ -2986,10 +2989,10 @@ function findStructFieldsByTypeIdx(
  *     br loop
  */
 function compileForOfIterator(ctx: CodegenContext, fctx: FunctionContext, stmt: ts.ForOfStatement): void {
-  // Compile the iterable expression. (#1919) Unlike the tentative probes above,
-  // every path here KEEPS the compiled iterable on the stack — it is consumed by
-  // the chosen iteration loop — so there is no rollback and no snapshot to take.
+  // Unlike a probe, keep the receiver on the stack, but restore its head scope.
+  const receiverHeadSaved = installForOfHeadTdz(fctx, stmt);
   const iterableType = compileExpression(ctx, fctx, stmt.expression);
+  for (const saved of receiverHeadSaved) restoreForOfHead(fctx, saved);
   if (!iterableType) {
     reportError(ctx, stmt, "for-of: failed to compile iterable expression");
     return;

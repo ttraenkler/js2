@@ -345,6 +345,57 @@ acceptance must be rerun after this candidate; no pass-count claim yet.
 LOC/function budgets, coercion vocabulary, and oracle ratchets pass against
 `c603404b4f` without new allowances. Reachability preservation passes, but the
 strict modeled closure remains **FAIL/OPEN**, not a closed-IR result.
+
+An added explicit `class Node implements N` receiver follows TypeScript's
+real `NodeObject`/`SourceFileObject` interface boundary. Both modes fail on
+the `ea0b45516e` substitution and pass with `e82d957d28`; expanded matrix is
+now **12/20 → 18/20**, with only the two implicit structural class-to-interface
+traps remaining. `.tmp/scanner-implementer-baseline.log` and
+`.tmp/scanner-implementer-candidate.log`; formatting/lint pass. Current-commit
+diagnostic capture: session 90410, `.tmp/incremental-capture-e82d957d28.log`,
+target `.tmp/incremental-raw-e82d957d28.wasm`; still active at this update.
+That capture subsequently failed (session 90410 terminal exit 1), with one
+error-severity diagnostic: **for-of requires an array expression** at
+`src/services/codefixes/addMissingAwait.ts:183:5` in the pinned TypeScript
+source. The expression is `identifiers.identifiers` after narrowing an
+`Identifiers | undefined` result; the member is a readonly Identifier array.
+No current-commit raw artifact or parser trace was produced. This is a real
+compile regression requiring a consumer fix before the carrier change can be
+considered accepted. `compileForOfArrayTentative` probes an expression and
+recompiles after rollback/head setup, so a representation mismatch between
+those passes is a hypothesis to verify, not an established cause.
+The second-stage vec attempt now returns refusal after rollback instead of
+emitting an error, allowing the existing iterator route to consume the value.
+Pre-materialized vec contract violations still emit errors. Self-contained
+receiver-scope controls caught an important intermediate regression: the
+boolean-only fallback compiled `for (const values of values)` but returned
+the wrong result instead of throwing ReferenceError. Both routes now share
+the existing lexical-head TDZ setup. The final focused matrix is **30/32**:
+six new loop controls, four equivalence controls, and 20/22 scanner controls;
+only the two known implicit class-to-interface traps remain. Log:
+`.tmp/forof-head-shared-tdz.log`. Twelve fixture-backed loop rows could not
+run because their test262 source files are absent; they are unmeasured, not
+passes. Fresh typecheck exited zero
+(`.tmp/forof-shared-tdz-types-verified.log`); LOC/function gates pass with no
+new allowances.
+
+Diagnostic capture with `e82d957d28` plus the **boolean-only fallback**, before
+the shared TDZ correction, compiled successfully: **38,823,405 bytes**,
+**391,081 ms**, seven diagnostic-only imports. Artifact:
+`.tmp/incremental-raw-e82d-forof-candidate.wasm`; log:
+`.tmp/incremental-capture-e82d-forof-candidate.log`. This is not standalone
+acceptance and does not validate the final TDZ correction in the large graph.
+Callback 0 on that artifact reaches `findChildName` and throws
+**Could not find child in parent**, rather than the earlier null
+`commentDirectives` failure (`.tmp/incremental-e82d-forof-trace-0.log`). A
+changed stopping point is not a passing original test. Callback 69 now also
+reaches the same parent/child failure; callback 52 still fails at 8564:12
+after `attachFileToDiagnostic`, with iterator helpers immediately before the
+throw. Logs: `.tmp/incremental-e82d-forof-trace-69.log` and
+`.tmp/incremental-e82d-forof-trace-52.log`. Next: trace the parent/child
+identity mismatch and diagnostic iteration, then rerun the final candidate
+through the original zero-import suite without diagnostic substitutions.
+
 Added explicit and implicit derived-constructor controls shaped like
 `NodeObject`/`SourceFileObject`, including inherited symbol/original fields and
 own readonly-array/string fields. All **20/20** field-value rows pass
