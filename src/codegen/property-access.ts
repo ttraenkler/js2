@@ -33,6 +33,7 @@ import {
 } from "./proxy-receiver-generic-read.js"; // (#6651 F4)
 import type { PresenceSlot } from "./fnctor-presence-bits.js"; // (#3780) packed own-presence flags
 import { presenceSlotOf, presenceTestInstrs } from "./fnctor-presence-bits.js";
+import { absentFieldValueInstrs } from "./absent-field-value.js";
 import { classMemberFuncKey, resolveMethodOwnerClass } from "./class-member-keys.js"; // (#1983) collision-free class-member funcMap keys; (#2963) method-owner chain
 import { exactClassExpressionTypeName } from "./class-expression-identity.js";
 import { popBody, pushBody } from "./context/bodies.js";
@@ -88,7 +89,6 @@ import {
   emitIsNullishAnyAt,
   ensureAnyFromExternHelper,
   nullishExternTestInstrs,
-  undefinedExternInstrs,
   undefinedSingletonActive,
 } from "./any-helpers.js";
 import { receiverIsUndefinedIdentifier } from "./nullish-receiver-coercible.js"; // (#4519) the one decline that guard needs
@@ -1705,10 +1705,7 @@ export function emitNullGuardedStructGet(
       break;
     }
   }
-  const absentValueInstrs = (): Instr[] =>
-    resultType.kind === "externref"
-      ? (undefinedExternInstrs(ctx) ?? [{ op: "ref.null.extern" }])
-      : defaultValueInstrs(resultType);
+  const absentValueInstrs = (): Instr[] => absentFieldValueInstrs(ctx, resultType);
 
   // When propName is provided, the object may be a valid GC struct of a
   // DIFFERENT type (after emitGuardedRefCast returned ref.null for a type
@@ -2185,10 +2182,7 @@ export function emitExternrefToStructGet(
       break;
     }
   }
-  const absentValueInstrs = (): Instr[] =>
-    resultType.kind === "externref"
-      ? (undefinedExternInstrs(ctx) ?? [{ op: "ref.null.extern" }])
-      : defaultValueInstrs(resultType);
+  const absentValueInstrs = (): Instr[] => absentFieldValueInstrs(ctx, resultType);
 
   // Convert externref -> anyref for struct type testing
   fctx.body.push({ op: "any.convert_extern" });

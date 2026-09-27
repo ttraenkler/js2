@@ -6,7 +6,9 @@
  * decided by the compiler's shape/class stamps before reading a field.
  */
 import { ts } from "../ts-api.js";
-import type { FieldDef, ValType } from "../ir/types.js";
+import type { FieldDef, Instr, ValType } from "../ir/types.js";
+import { presenceSlotOf, presenceTestInstrs } from "./fnctor-presence-bits.js";
+import { absentFieldValueInstrs } from "./absent-field-value.js";
 import type { CodegenContext, FunctionContext } from "./context/types.js";
 import { ensureExternrefToNumberProvider } from "./coercion-engine.js";
 import { allocLocal } from "./context/locals.js";
@@ -115,14 +117,29 @@ function emitNominalExternrefClassFieldGet(
   const receiverLocal = allocLocal(fctx, `__nominal_recv_${fctx.locals.length}`, { kind: "anyref" });
   fctx.body.push({ op: "local.set", index: receiverLocal });
   emitPrivateBrandPredicate(ctx, fctx, receiverLocal, className, structTypeIdx);
+  const read: Instr[] = [
+    { op: "local.get", index: receiverLocal },
+    { op: "ref.cast", typeIdx: structTypeIdx },
+    { op: "struct.get", typeIdx: structTypeIdx, fieldIdx },
+  ];
+  const fields = ctx.structFields.get(className);
+  const presence = presenceSlotOf(fields, fields?.[fieldIdx]?.name ?? "");
   fctx.body.push({
     op: "if",
     blockType: { kind: "val", type: fieldType },
-    then: [
-      { op: "local.get", index: receiverLocal },
-      { op: "ref.cast", typeIdx: structTypeIdx },
-      { op: "struct.get", typeIdx: structTypeIdx, fieldIdx },
-    ],
+    then: presence
+      ? [
+          { op: "local.get", index: receiverLocal },
+          { op: "ref.cast", typeIdx: structTypeIdx },
+          ...presenceTestInstrs(structTypeIdx, presence),
+          {
+            op: "if",
+            blockType: { kind: "val", type: fieldType },
+            then: read,
+            else: absentFieldValueInstrs(ctx, fieldType),
+          },
+        ]
+      : read,
     else: typeErrorThrowInstrs(ctx, expr),
   });
   return fieldType;

@@ -4560,6 +4560,7 @@ export function compileObjectKeysOrValues(
   if (
     structName === "$Object" ||
     structName === "$Proxy" ||
+    (ctx.standalone && ctx.structFields.get(structName)?.some((field) => field.presenceTracked)) ||
     // (#5268 step 2) …and a value whose PROVENANCE is a Proxy. TypeScript types
     // `new Proxy(target, handler)` as the TARGET's type, so a proxy over an
     // object LITERAL arrives here carrying that literal's struct name and fell

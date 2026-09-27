@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Loopdive GmbH. Licensed under Apache-2.0 WITH LLVM-exception.
 import { objectConstructionValues } from "./object-construction-order.js";
 import { objectAccessLayout } from "./physical-object-field.js";
+import { emitClassFieldStore } from "./lower-class-field-store.js";
 //
 // IR → Wasm emission pass.
 //
@@ -2188,12 +2189,15 @@ export function lowerIrFunctionBody<S, Slot>(
         if (!cl) {
           throw new Error(`ir/lower: resolver cannot lower class ${recvT.shape.className} (${func.name})`);
         }
-        emitValue(instr.value, out);
-        emitValue(instr.newValue, out);
-        emitter.pushRaw(out, {
-          op: "struct.set",
-          typeIdx: cl.structTypeIdx,
-          fieldIdx: cl.fieldIdx(instr.fieldName),
+        emitClassFieldStore({
+          emitter,
+          out,
+          layout: cl,
+          instruction: instr,
+          receiverType: recvT,
+          paramsLength: func.params.length,
+          locals,
+          emitValue,
         });
         return;
       }

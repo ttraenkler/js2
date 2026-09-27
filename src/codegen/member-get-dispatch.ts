@@ -61,7 +61,7 @@ import {
 } from "./shared.js";
 import { coercionInstrs } from "./type-coercion.js";
 import { definedFuncAt, mintDefinedFunc, pushDefinedFunc } from "./func-space.js"; // (#1916 S2/S3) positional-read chokepoint + stable-regime minting
-import { canonicalUndefinedExternInstrs, undefinedExternInstrs } from "./any-helpers.js";
+import { canonicalUndefinedExternInstrs } from "./any-helpers.js";
 import { presenceTestInstrs } from "./fnctor-presence-bits.js"; // (#3780) packed own-presence flags
 import { coldFieldReadArm, findColdStructsForField } from "./fnctor-cold-tail.js"; // (#3927) hot/cold fnctor split
 import { inheritedSetAffectsKey } from "./inherited-set-gate.js"; // (#4602) per-key #4504 gate
@@ -639,7 +639,7 @@ export function fillMemberGetDispatch(ctx: CodegenContext): void {
     const presenceMiss = (): Instr[] =>
       ctx.standalone && inheritedSetAffectsKey(ctx, propName)
         ? (structuredClone(fallback) as Instr[])
-        : (undefinedExternInstrs(ctx) ?? [{ op: "ref.null.extern" }]);
+        : canonicalUndefinedExternInstrs(ctx);
 
     // (#3927) Cold-tail arms — the hop for a flow-grown field this fnctor moved
     // off the main struct. They come AFTER every inline struct candidate (a

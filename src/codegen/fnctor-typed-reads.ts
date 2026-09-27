@@ -81,7 +81,7 @@ import type { CodegenContext, FunctionContext } from "./context/types.js";
 import type { Instr, ValType } from "../ir/types.js";
 import { allocLocal } from "./context/locals.js";
 import { presenceSetInstrs, presenceSlotOf, presenceTestInstrs, type PresenceSlot } from "./fnctor-presence-bits.js";
-import { undefinedExternInstrs } from "./any-helpers.js";
+import { canonicalUndefinedExternInstrs } from "./any-helpers.js";
 // `shared.js` holds the late-bound engine delegates precisely so a feature
 // module can reach the expression/coercion engines without a cycle back through
 // property-access.ts / index.ts.
@@ -357,7 +357,7 @@ export function tryEmitFnctorTypedFieldGet(
         { op: "struct.get", typeIdx: f.structTypeIdx, fieldIdx: f.fieldIdx },
       ],
       // Absent ⇒ semantic `undefined`, never the slot's raw contents.
-      else: undefinedExternInstrs(ctx) ?? [{ op: "ref.null.extern" }],
+      else: canonicalUndefinedExternInstrs(ctx),
     });
   }
   fnctorTypedReadStats.gets++;

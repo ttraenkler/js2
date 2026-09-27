@@ -39,6 +39,7 @@ import { resolveClassHeritageAlias } from "./class-expression-identity.js";
 import { installAstFreeClassConstructorNewWrapper } from "./class-constructor-wrapper.js";
 import { classCallableFrameParameters } from "./class-callable-abi.js";
 import { commitClassStructLayout } from "./class-layout-registration.js";
+import { presenceSetInstrs, presenceSlotOf } from "./fnctor-presence-bits.js";
 import { mintDefinedFunc, pushProgramAbiClassCallable } from "./program-abi-class-callable-planning.js";
 import { setProgramAbiInheritedClassCallableAlias } from "./program-abi-class-callable-planning.js";
 import { absoluteFuncIndex } from "../emit/resolve-layout.js"; // (#1916 S3b) resolve handles for order-stable declaredFuncRefs sort
@@ -2849,6 +2850,8 @@ function compileClassBodiesInner(
                 fctx.body.push({ op: "local.get", index: selfLocal });
                 compileExpression(ctx, fctx, member.initializer, fields[fieldIdx]!.type);
                 fctx.body.push({ op: "struct.set", typeIdx: structTypeIdx, fieldIdx });
+                const presence = presenceSlotOf(fields, fieldName);
+                if (presence) fctx.body.push(...presenceSetInstrs(structTypeIdx, presence, selfLocal));
               }
             }
           }
@@ -2880,6 +2883,8 @@ function compileClassBodiesInner(
             coerceType(ctx, fctx, { kind: "externref" }, fields[fieldIdx]!.type);
           }
           fctx.body.push({ op: "struct.set", typeIdx: structTypeIdx, fieldIdx });
+          const presence = presenceSlotOf(fields, fieldName);
+          if (presence) fctx.body.push(...presenceSetInstrs(structTypeIdx, presence, selfLocal));
         }
       }
     };

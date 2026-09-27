@@ -565,7 +565,105 @@ typecheck and lint pass (`.tmp/derived-and-push-types.log`,
 `.tmp/derived-and-push-lint.log`). The declaration-presence work remains
 uncommitted and must not be described as ready to merge.
 
-Requested upstream sync completed: authoritative `loopdive/js2` main at
+### Follow-up upstream sync and declaration-presence investigation
+
+Authoritative `loopdive/js2` main advanced by eight commits to
+`bc73c88a67b017522c4e1d53a28a1d675bec3e5b`. The pending spread fix was saved
+separately in `10af848c16`; the unfinished enumeration candidate and its
+ordinary failing regressions were preserved in `2c7ed4a75a`. Signed merge
+`12bfa72f46` incorporates that main tip without conflicts. Neither checkpoint
+claims full upstream unit acceptance; the enumeration work is not merge-ready.
+
+Post-merge typecheck passes. The six-file focused matrix passes **47/49**:
+all 26 spread tests, all six incoming higher-order/reduce-as-value tests,
+all three dispatch-order tests and the 12 established enumeration tests pass.
+Only the two known declare-presence cases fail (expected 11, got 1).
+Logs: `.tmp/post-bc73-sync-types.log`, `.tmp/post-bc73-sync-tests.log`.
+
+Continuation expanded the enumeration matrix to **14/22**. All eight
+declare-presence variants fail identically: typed/dynamic writes of either
+9 or `undefined`, with IR off/on. Both added controls preserving an existing
+base field through a derived `declare` redeclaration pass. Thus presence must
+be independent of stored value and must not erase an inherited runtime field.
+Log: `.tmp/post-bc73-declare-presence-matrix.log`. These tests deliberately
+remain ordinary failures, not expected-failure markers.
+
+Next implementation boundary, grounded in the current source:
+
+- Class layout collection includes declaration-only slots, while shared IR
+  `collectClassInstanceInitializerSources` correctly omits their initialization.
+  Establish source-owned presence metadata before `commitClassStructLayout`
+  publishes the exact allocator object to the ABI sidecar.
+- Existing `FieldDef.presenceTracked`/`presenceBit` consumers cover reflective
+  enumeration, property reads, direct property assignment, member dispatch and
+  dynamic closed-struct writes. Their current writers are the function-constructor
+  layout builders, not class collection. Audit inherited packed-word ownership
+  and layout signatures before adding class writers.
+- `IrClassLowering` currently exposes field indices but no presence operation;
+  `class.get`/`class.set` in `lower-generic.ts` emit raw struct access. A class-only
+  layout flag is therefore insufficient: carry the contract through the exact
+  IR class resolver and shared lowering, including reads of absent fields.
+- Forward-field finalization shares parent `FieldDef` objects with descendants;
+  preserve those identities and the undefined carrier. Do not substitute a
+  name blacklist or a tombstone initializer without matching every write path.
+
+### Declaration-presence candidate after the sync
+
+The shared IR layout planner now assigns packed own-presence bits to new
+`declare`/`abstract` slots before publishing the class allocator layout. It
+preserves the inherited field objects, leaves existing runtime fields alone,
+and defaults absent numeric storage to the existing undefined sentinel.
+`IrClassLowering` exposes the exact presence slot; shared IR field stores set
+it after storing the value, saving the receiver once. The implementation is
+extracted into `lower-class-field-store.ts`, not added to the oversized driver.
+Direct constructor initialization uses the same packed-bit helper.
+
+Additional observations required repairs beyond the initial layout change:
+nominal class reads bypassed presence and read raw null; several presence-miss
+branches used a flag-gated null fallback instead of canonical undefined; and
+statically typed `Object.keys` expanded physical fields, including hidden
+presence words. Tracked receivers now use the existing runtime enumerator.
+An intermediate experiment writing canonical undefined into every absent
+externref allocation slot caused exceptions and did not repair reads; it was
+removed. Absence is represented by the bit and handled by the read path.
+
+Current focused values: **36/36** across enumeration and lifecycle tests,
+versus **22/36** on exact `12bfa72f46`. The lifecycle test additionally asserts
+that the numeric method-write body is emitted by IR with no legacy body.
+Removing only the IR store repair gives **12/14**, failing the constructor
+write and method write in IR mode; the candidate gives **14/14**. The fixture
+returns a number so the existing unrelated void-return selection refusal
+cannot make that assertion vacuous. Logs:
+`.tmp/class-presence-init-candidate.log`, `.tmp/class-presence-ir-owned.log`,
+`.tmp/class-presence-final-baseline.log`,
+`.tmp/class-presence-ir-store-removal.log`.
+
+The layout planner's word-boundary/idempotence and inherited-prefix controls
+pass **2/2**. Adjacent reflection, expando and undefined-storage suites pass
+**70/70**; the initial combined **83/84** run had only the now-corrected
+void-return fixture's IR-ownership assertion failure, not a value failure.
+The existing proven-receiver census remains **4/5** on both candidate and
+exact baseline (expected at least four inline observations, observed three).
+Existing class compile-once ownership gives **33/42**, with the nine failure
+rows recorded in `.tmp/class-presence-plan-ownership.log`; the exact baseline
+also gives **33/42** with the same nine rows
+(`.tmp/class-presence-ownership-baseline.log`, session 11514 terminal).
+Do not treat these ownership failures as accepted or repaired by this slice.
+
+Typecheck, changed-file lint/format, LOC/function, coercion and oracle gates
+pass without new allowances. Reachability remains preservation-only PASS,
+strict closure FAIL/OPEN. Full original-suite acceptance is still pending:
+session **37047**, `.tmp/incremental-declare-presence-o1.log`, compiles/runs the
+original 153 callbacks with O1 and zero-import acceptance; diagnostic-only
+capture session **43464**, `.tmp/incremental-capture-declare-presence.log`,
+writes `.tmp/incremental-raw-declare-presence.wasm`. Both were started from
+`12bfa72f46` plus this complete presence candidate and the previously committed
+spread repair; later changes only strengthen tests or record evidence.
+Do not restart a live handle. The seven-import diagnostic capture is not
+standalone acceptance. All 256 upstream source-unit files and self-hosting
+remain in scope; these focused results do not establish their completion.
+
+Earlier requested upstream sync completed: authoritative `loopdive/js2` main at
 `c603404b4f2258ed59377bd591a287523e4af99b` merged cleanly in signed commit
 `c6d4582ccf`. The unfinished candidate was preserved first in `55261207d1`.
 Post-merge eight-file run: 125 rows, 110 ordinary passes, four expected

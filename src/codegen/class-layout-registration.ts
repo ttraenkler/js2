@@ -3,6 +3,7 @@
 import { ts } from "../ts-api.js";
 import type { FieldDef, StructTypeDef } from "../ir/types.js";
 import type { CodegenContext } from "./context/types.js";
+import { appendClassFieldPresence } from "../ir/class-field-presence.js";
 
 /**
  * Install one completed class struct and expose that exact allocator object to
@@ -16,6 +17,8 @@ export function commitClassStructLayout(
   type: StructTypeDef,
   fields: FieldDef[],
 ): void {
+  const parent = type.superTypeIdx === undefined ? undefined : ctx.mod.types[type.superTypeIdx];
+  appendClassFieldPresence(declaration, fields, parent?.kind === "struct" ? parent.fields : []);
   ctx.mod.types[typeIndex] = type;
   ctx.structFields.set(displayName, fields);
   if (ctx.programAbiSession && !ctx.programAbiTypes) {

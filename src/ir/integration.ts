@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Loopdive GmbH. Licensed under Apache-2.0 WITH LLVM-exception.
 import { physicalObjectField } from "./physical-object-field.js";
+import { presenceSlotOf } from "../codegen/fnctor-presence-bits.js";
 import { sourceObjectFromAstResolver } from "../codegen/ir-source-object-field.js";
 import { irInferredClosureCarriers } from "../codegen/ir-inferred-closure-carriers.js";
 import { inferredClosureSignature, inferredReturnedClosureSignature } from "./inferred-closure-signature.js";
@@ -10310,6 +10311,7 @@ class ClassRegistry {
 
     const lowering: IrClassLowering = {
       structTypeIdx,
+      fieldPresence: (name) => presenceSlotOf(layoutFields, name),
       fieldIdx: (name: string): number => {
         const idx = fieldIdxByName.get(name);
         if (idx === undefined) {

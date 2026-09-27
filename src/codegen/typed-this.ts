@@ -81,7 +81,7 @@ import { analyzeReceiverFlow, receiverClassOf } from "./receiver-flow-analysis.j
 // receiver inline read tests presence exactly the way `emitNullGuardedStructGet`
 // does for the same closed structs.
 import { type PresenceSlot, presenceSlotOf, presenceTestInstrs } from "./fnctor-presence-bits.js";
-import { undefinedExternInstrs } from "./any-helpers.js";
+import { canonicalUndefinedExternInstrs } from "./any-helpers.js";
 // (#3685 step 1) decline census — inert unless JS2WASM_PROVEN_RECEIVER_STATS=1
 import { noteProvenReceiver, noteProvenReceiverPhase, provenReceiverStatsEnabled } from "./proven-receiver-stats.js";
 // (#4405 Phase 0) funnel census ABOVE the proven-receiver tail — inert unless
@@ -1592,7 +1592,7 @@ export function tryEmitProvenReceiverFieldGet(
           { op: "struct.get", typeIdx: structTypeIdx, fieldIdx },
         ],
         // Absent ⇒ semantic `undefined`, never the slot's raw contents.
-        else: undefinedExternInstrs(ctx) ?? [{ op: "ref.null.extern" }],
+        else: canonicalUndefinedExternInstrs(ctx),
       },
     ];
   }

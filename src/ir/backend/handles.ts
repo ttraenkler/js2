@@ -238,6 +238,8 @@ export interface IrVecLowering {
 export interface IrClassLowering {
   readonly structTypeIdx: number;
   fieldIdx(name: string): number;
+  /** Physical own-property flag from the exact committed class layout. */
+  fieldPresence?(name: string): { readonly wordFieldIdx: number; readonly mask: number } | undefined;
   readonly constructorFunc: IrFuncRef;
   memberFunc(kind: IrClassMemberKind, name: string, target?: IrFuncRef): IrFuncRef;
   /**
