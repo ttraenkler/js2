@@ -12869,6 +12869,51 @@ and deletion is not certified. No new size allowances were added.
 
 ### Qualified static-method mutation continuation (2026-09-28)
 
+**Original-unit coverage continuation:** added the pinned
+`debugDeprecation.ts` file to the durable runner with a required denominator
+of **6**. Only its compiler namespace and deprecated-compat import paths are
+redirected; all hooks, callbacks, warnings and throw assertions are retained.
+This exercises the mutable `Debug.loggingHost` namespace surface and wrapped
+calls instead of treating parser success as checker/runtime completeness.
+Runner preservation and missing-import rejection tests accompany the entry.
+Initial original-source run **37053** is terminal: valid zero-import Wasm,
+7,409,813 bytes, 176,976 ms, but **0/6** callbacks pass. All reported failures
+are property-on-null errors at the `afterEach` logging-host restoration
+(old generated line 836); teardown failures may mask body failures, so do not
+infer which bodies ran successfully. Native was **4/6**, with two failures
+solely because the shared matcher lacked Chai's `expect(fn).throws()` spelling.
+Evidence: `.tmp/debug-deprecation-method-environment-o1.log`.
+
+Added the throws spelling using the existing checked throw matcher, leaving
+the upstream assertion text unchanged. Native matcher controls reject missing
+throws, non-callables, wrong constructors and wrong messages. A standalone
+zero-import positive/negative control also passes; it uses the same
+`skipSemanticDiagnostics` option as the official untyped harness worker.
+Runner/verdict tests pass **37/37**, matcher-specific native test **1/1**
+(23 unrelated tests unselected). Evidence: `.tmp/deprecation-runner-final-v2-tests.log`,
+`.tmp/deprecation-throws-matcher.log`. Fresh native execution of all original
+callbacks is **6/6**, `.tmp/debug-deprecation-native.log`.
+Full original retry with the matcher fix **39113** is terminal, exit **1**:
+native **6/6**, standalone **0/6**, valid zero-import Wasm, **7,410,486 bytes**,
+**184,001 ms**. All six errors still point to logging-host restoration (now
+generated line 837). Evidence: `.tmp/debug-deprecation-throws-o1.log`.
+
+Reduced mutable namespace state matrix `.tmp/debug-namespace-state.test.ts`
+fails **8/8** with thrown Wasm exceptions: direct/barrel import, direct logging
+callback/namespace function call, both IR settings. Each compiles to valid
+zero-import Wasm but fails instead of returning **37**. This is separate from
+the newly fixed object-method capture ownership: imported `Debug.loggingHost`
+still needs a real, mutable runtime namespace object. Reuse the existing
+`runtimeModuleDeclarationGroups` source-order plan for allocation/publication;
+do not patch the original tests or substitute direct global writes that hide
+namespace identity. Evidence: `.tmp/debug-namespace-state.log`.
+
+Parser recheck on `702c2ef3a9` is live as **84911**, logging to
+`.tmp/incremental-method-environment-o1.log`. Full checker **63849** was
+repolled live and has advanced past `corePublic` into scanner compilation;
+do not restart either quiet build. The earlier semver result below is now
+terminal and successful.
+
 **Per-object method environments, production candidate:** the shared
 IR helper `objectMethodEnvironmentOwner` now identifies the exact executable
 function owning an object-literal allocation. Structured methods owned by an
@@ -12902,9 +12947,12 @@ passes **6/6** full-source and **6/6** cut witnesses only; graph remains
 Full checker retry is live as **63849** in
 `.tmp/checker-method-environment-full.log`, official standalone probe with
 consumer-driven barrels, 8192 MB heap and all three unchanged zero-argument
-oracles **67858 / 0 / 133394**. Original semver O1 retry is live as **15763**,
-`.tmp/semver-method-environment-o1.log`. These builds are pending, not success
-evidence; do not restart them merely for quiet output.
+oracles **67858 / 0 / 133394**. Do not restart it merely for quiet output.
+Original semver O1 retry **15763** is now terminal, exit **0**: native
+**692/692**, standalone **692/692**, valid zero-import Wasm, **7,071,295 bytes**,
+**175,569 ms**, pinned TypeScript `c63de15a992d37f0d6cec03ac7631872838602cb`.
+Evidence: `.tmp/semver-method-environment-o1.log`; compiler source is now
+committed as signed `702c2ef3a9`. Full checker remains pending.
 
 **Per-object closure experiment (post-merge, `1f90af4c6a`):** a diagnostic
 Vite pre-transform now proves the existing struct layout can retain captures

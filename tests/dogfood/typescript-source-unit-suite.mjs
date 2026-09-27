@@ -28,6 +28,7 @@ const FILES = {
   regExpScannerRecovery: 984,
   incrementalParser: 153,
   semver: 692,
+  debugDeprecation: 6,
 };
 
 export const SOURCE_UNIT_DIAGNOSTIC_EXPORTS = String.raw`
@@ -56,6 +57,15 @@ export function redirectSourceUnitImports(name, original, root, generatedPath) {
   // Parser suites also use language-service source files and snapshots.
   // All original declarations and assertions remain unchanged.
   let transformed = original.replace(importPattern, `import * as ts from ${JSON.stringify(`./${namespace}`)};`);
+  if (name === "debugDeprecation") {
+    const deprecationPattern = /^import \{ deprecate \} from "\.\.\/\.\.\/deprecatedCompat\/deprecate\.js";/m;
+    if (!deprecationPattern.test(transformed)) throw new Error("Upstream deprecation import changed");
+    const deprecation = relative(dirname(generatedPath), join(root, "src/deprecatedCompat/deprecate.js"));
+    transformed = transformed.replace(
+      deprecationPattern,
+      `import { deprecate } from ${JSON.stringify(`./${deprecation}`)};`,
+    );
+  }
   if (name === "incrementalParser" || name === "semver") {
     const utilsPattern = /^import \* as Utils from "\.\.\/_namespaces\/Utils\.js";/m;
     if (!utilsPattern.test(transformed)) throw new Error("Upstream Utils import changed");

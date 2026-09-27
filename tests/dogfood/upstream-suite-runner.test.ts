@@ -1,6 +1,7 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { runInNewContext } from "node:vm";
 import { describe, expect, it } from "vitest";
 
 // @ts-expect-error — .mjs dogfood runner has no declaration file
@@ -17,6 +18,31 @@ import {
 } from "./upstream-suite-runner.mjs";
 
 describe("upstream suite runner", () => {
+  it("enforces the throws matcher used by original TypeScript deprecation tests", () => {
+    const matcher = runInNewContext(`${UPSTREAM_TEST_SHIM}\n__upstreamExpect`);
+    expect(() =>
+      matcher(() => {
+        throw new TypeError("deprecated");
+      }).throws(),
+    ).not.toThrow();
+    expect(() =>
+      matcher(() => {
+        throw new TypeError("deprecated");
+      }).throws(TypeError),
+    ).not.toThrow();
+    expect(() => matcher(() => {}).throws()).toThrow("expected matching throw");
+    expect(() => matcher(1).throws()).toThrow("expected matching throw");
+    expect(() =>
+      matcher(() => {
+        throw new TypeError("deprecated");
+      }).throws(RangeError),
+    ).toThrow("expected matching throw");
+    expect(() =>
+      matcher(() => {
+        throw new Error("other");
+      }).throws("deprecated"),
+    ).toThrow("expected matching throw");
+  });
   it("provides a Node shim without a late-initialized global alias", () => {
     expect(UPSTREAM_TEST_SHIM).toContain("var global = globalThis;");
     expect(UPSTREAM_TEST_SHIM_NODE).not.toContain("var global = globalThis;");

@@ -2,6 +2,8 @@
 import { expect, it } from "vitest";
 import { compile } from "../../src/index.js";
 // @ts-expect-error — .mjs dogfood helpers have no declaration files
+import { UPSTREAM_TEST_SHIM } from "./upstream-suite-runner.mjs";
+// @ts-expect-error — .mjs dogfood helpers have no declaration files
 import {
   SOURCE_UNIT_DIAGNOSTIC_EXPORTS,
   sourceUnitFileSucceeded,
@@ -33,6 +35,24 @@ it("accepts a complete zero-import source unit result", () => {
   expect(sourceUnitFileSucceeded(passingResult())).toBe(true);
 });
 
+it("executes the deprecation throws matcher with a failing positive-control assertion in standalone Wasm", async () => {
+  const result = await compile(
+    `${UPSTREAM_TEST_SHIM}
+    export function run(): number {
+      expect(() => { throw new TypeError("deprecated"); }).throws();
+      let rejected = 0;
+      try { expect(() => {}).throws(); } catch { rejected++; }
+      try { expect(() => { throw new Error("other"); }).throws("deprecated"); } catch { rejected++; }
+      return rejected;
+    }`,
+    { target: "standalone", skipSemanticDiagnostics: true },
+  );
+  expect(result.success, JSON.stringify(result.errors)).toBe(true);
+  const module = new WebAssembly.Module(result.binary);
+  expect(WebAssembly.Module.imports(module)).toEqual([]);
+  expect((new WebAssembly.Instance(module).exports.run as () => number)()).toBe(2);
+}, 60_000);
+
 it.each([
   ["compilerCore", 11],
   ["base64", 1],
@@ -43,6 +63,7 @@ it.each([
   ["regExpScannerRecovery", 984],
   ["incrementalParser", 153],
   ["semver", 692],
+  ["debugDeprecation", 6],
 ] as const)("requires all original %s callbacks for full-source coverage", (name, count) => {
   const result = passingResult();
   result.file = `src/testRunner/unittests/${name}.ts`;
@@ -56,6 +77,27 @@ it.each([
   expect(sourceUnitFileSucceeded(result)).toBe(false);
   result.wasm.count = count - 1;
   expect(sourceUnitFileSucceeded(result)).toBe(false);
+});
+
+it("preserves deprecation callbacks, hooks and assertions while redirecting original dependencies", () => {
+  const imports =
+    'import { deprecate } from "../../deprecatedCompat/deprecate.js";\r\nimport * as ts from "../_namespaces/ts.js";';
+  const body =
+    '\r\nbeforeEach(() => { previous = ts.Debug.loggingHost; });\r\nafterEach(() => { ts.Debug.loggingHost = previous; });\r\nit("warning", () => { const fn = deprecate(ts.noop); fn(); assert.isTrue(logWritten); });';
+  const result = redirectSourceUnitImports("debugDeprecation", imports + body, "/suite", "/generated/unit.ts");
+  expect(result.needsServices).toBe(false);
+  expect(result.transformed).toBe(
+    'import { deprecate } from "./../suite/src/deprecatedCompat/deprecate.js";\r\nimport * as ts from "./../suite/src/compiler/_namespaces/ts.js";' +
+      body,
+  );
+  expect(() =>
+    redirectSourceUnitImports(
+      "debugDeprecation",
+      imports.replace("deprecate.js", "other.js") + body,
+      "/suite",
+      "/generated/unit.ts",
+    ),
+  ).toThrow("Upstream deprecation import changed");
 });
 
 it("redirects incremental parser imports without replacing original tree checks", () => {
