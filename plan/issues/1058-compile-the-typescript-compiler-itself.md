@@ -12908,11 +12908,50 @@ still needs a real, mutable runtime namespace object. Reuse the existing
 do not patch the original tests or substitute direct global writes that hide
 namespace identity. Evidence: `.tmp/debug-namespace-state.log`.
 
-Parser recheck on `702c2ef3a9` is live as **84911**, logging to
-`.tmp/incremental-method-environment-o1.log`. Full checker **63849** was
-repolled live and has advanced past `corePublic` into scanner compilation;
-do not restart either quiet build. The earlier semver result below is now
-terminal and successful.
+Parser recheck on `702c2ef3a9`, **84911**, is terminal, exit **0**: native
+**153/153**, standalone **153/153**, valid zero-import Wasm,
+**23,926,822 bytes**, **651,597 ms**, O1 at the same pinned TS commit.
+Evidence: `.tmp/incremental-method-environment-o1.log`. Full checker **63849**
+was repolled live, compiling `checker.ts`; do not restart it for quiet output.
+
+#### Runtime namespace implementation boundary
+
+The same eight reduced cases pass **8/8** when only the namespace provider is
+first lowered by TypeScript's standard ES2022/ESNext emitter; original
+namespace syntax fails **0/8**. The combined diagnostic is **8/16**, log
+`.tmp/debug-namespace-state-lowered.log`. This is an attribution control, NOT
+a replacement runner or credit for original TypeScript compilation. It proves
+the existing plain-object/closure backend can express the required behavior;
+namespace source lowering, rather than a new object runtime, is the next seam.
+
+Measured emitted semantics that the shared IR namespace plan must preserve:
+
+- Empty/type-only namespaces emit no runtime object. A namespace containing
+  an uninitialized exported variable does allocate its object but does NOT
+  publish an own property for that variable yet.
+- `export let a=1,b=a+1` publishes each property in declarator order; the second
+  initializer reads the object's current `a`, not a separate flattened cell.
+- An exported function retains its local declaration binding and is published
+  to the object at its source statement. Exported class publication follows
+  class evaluation. Do not blindly rewrite all exported declaration kinds as
+  property-backed variable bindings.
+- The object is reused by merged declarations, with ordinary writable data
+  properties. Live accessor descriptors over the current global cells would
+  change reflection semantics and are not the production fix.
+
+Implementation sites: extend `runtimeModuleDeclarationGroups` with explicit
+allocation/publication actions and exact exported-variable ownership. Feed
+those actions into `orderedModuleInitEntries` / `compileOrderedModuleInitEntry`
+instead of flattening namespace initializers alone. Source-identity reads in
+`property-access.ts::tryEmitRuntimeNamespaceVariableValue` currently bypass
+the object through `programAbiGlobals`; identifier storage and write-target
+resolution also project those cells (`identifier-module-storage.ts`,
+`module-binding-projection.ts`, `assignment.ts`). All exported-variable reads
+and writes must agree on the object property, including destructuring and
+updates, while non-exported locals and function/class lexical bindings retain
+their storage. The finite function projection in `module-namespace-value.ts`
+is not a general namespace object and must not create a second identity for
+the same namespace. This turn changes no compiler source in that subsystem.
 
 **Per-object method environments, production candidate:** the shared
 IR helper `objectMethodEnvironmentOwner` now identifies the exact executable
