@@ -12869,6 +12869,52 @@ and deletion is not certified. No new size allowances were added.
 
 ### Qualified static-method mutation continuation (2026-09-28)
 
+**Per-object closure experiment (post-merge, `1f90af4c6a`):** a diagnostic
+Vite pre-transform now proves the existing struct layout can retain captures
+per activation. No tracked compiler source was changed. The experiment stores
+`compileArrowAsClosure` results in structured method fields, skips their
+global-promoting static bodies, and selects stored-callable receiver dispatch.
+Initial grandparent matrix improves **12/16 → 16/16** in standalone mode,
+both IR settings. A second native-oracle matrix covers inferred receivers,
+own `this`, mutable captures, parameter defaults, borrowed methods and
+same-shape literals: baseline **2/12**, initial prototype **10/12**.
+
+Borrowed calls exposed another static bypass in `expressions/calls.ts` near
+`resolveReceiverClassName`: `.call/.apply` admits a struct merely because
+`funcMap` contains its method name. Restricting that diagnostic shortcut to
+actual classes lets the stored closure handle borrowed methods. Prototype v2
+passes **28/28** combined reduced tests, zero imports. Evidence:
+`.tmp/checker-method-closure-candidate-v2.log` versus
+`.tmp/upstream-aca46-focused.log` and
+`.tmp/checker-method-closure-controls-base.log`. This is a source-transform
+experiment against `1f90af4c6a`, not a committed compiler fix or full-checker
+measurement.
+
+Adjacent four-file A/B initially caught conversion regressions: baseline
+**31/33**, prototype **29/33**. Cause: the early closure-field branch bypassed
+existing `valueOfClosureTypes` registration. Copying that registration for
+`eqref` conversion fields produces prototype v3 **32/33**, retaining the same
+host-lane import-surface failure as baseline and fixing the baseline method
+extraction failure (`7` versus native `107`). Standalone prepared-IR ownership
+still passes. Evidence: `.tmp/checker-method-closure-adjacent-base.log`,
+`.tmp/checker-method-closure-adjacent-candidate.log`,
+`.tmp/checker-method-closure-adjacent-v3.log`. All these runs are terminal.
+V3's combined 28-row matrix has not yet been rerun after the conversion edit.
+
+Experiment source: `.tmp/checker-method-closure-candidate.config.mts`;
+repros: `.tmp/checker-method-capture.test.ts` and
+`.tmp/checker-method-closure-controls.test.ts`. Do not ship the diagnostic
+frame-name condition (`fctx.name !== "__module_init"`) or unconditional
+receiver widening. Next: turn the proven allocation/dispatch protocol into
+declaration-owned shared IR planning, leveraging existing object-method units
+in `ir/identity.ts`, `ir/from-ast.ts` and the prepared ownership tests rather
+than creating a competing name-keyed registry. Preserve method metadata,
+conversion registration, reflective calls and direct calls together.
+`valueOfClosureTypes` consumers are binary-ops, type-coercion and index;
+producers are literals and char-at-transfer, with context initialization.
+The existing IR ownership path already lowers selected methods as closures;
+the full checker still falls outside that selected population.
+
 Upstream sync: fetched `https://github.com/loopdive/js2.git` main at
 `aca46e64cd` and merged it without conflicts as signed commit `1dfdd8a571`.
 Verified upstream ancestry and clean worktree after the merge; no main push.
