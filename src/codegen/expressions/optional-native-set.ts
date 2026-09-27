@@ -3,7 +3,8 @@ import { ts } from "../../ts-api.js";
 import type { ValType } from "../../ir/types.js";
 import type { CodegenContext, FunctionContext } from "../context/types.js";
 import { addUnionImports } from "../index.js";
-import { compileCollectionElementArg, ensureMapHelpers } from "../map-runtime.js";
+import { compileCollectionElementArg, ensureMapHelpers, tryCompileNativeCollectionForEach } from "../map-runtime.js";
+import { canonicalUndefinedExternInstrs } from "../any-helpers.js";
 import { ensureSetHelpers } from "../set-runtime.js";
 import { compileExpression } from "../shared.js";
 
@@ -42,12 +43,27 @@ export function compileOptionalNativeCollectionLookup(
   const map = className === "Map" || className === "ReadonlyMap" || className === "WeakMap";
   const set = className === "Set" || className === "ReadonlySet" || className === "WeakSet";
   if (!map && !set) return false;
-  if (methodName !== "has" && methodName !== "delete" && !(map && methodName === "get")) return false;
+  const forEach = methodName === "forEach" && className !== "WeakMap" && className !== "WeakSet";
+  if (!forEach && methodName !== "has" && methodName !== "delete" && !(map && methodName === "get")) return false;
   const receiver = (expr.expression as ts.PropertyAccessExpression).expression;
   const declarations = ctx.oracle.typeDeclarationsOf(receiver);
   if (!declarations?.length || declarations.some((declaration) => !declaration.getSourceFile().isDeclarationFile))
     return false;
   if (expr.arguments.some(ts.isSpreadElement)) return false;
+  if (forEach) {
+    const result = tryCompileNativeCollectionForEach(
+      ctx,
+      fctx,
+      expr.expression as ts.PropertyAccessExpression,
+      expr,
+      set,
+      undefined,
+      { local: receiverLocal, type: receiverType },
+    );
+    if (result === undefined) return false;
+    fctx.body.push(...canonicalUndefinedExternInstrs(ctx));
+    return true;
+  }
   addUnionImports(ctx);
   ensureSetHelpers(ctx);
   const helper = ctx.mapHelpers.get(`__map_${methodName}`);

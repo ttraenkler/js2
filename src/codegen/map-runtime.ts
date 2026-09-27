@@ -1851,6 +1851,7 @@ export function tryCompileNativeCollectionForEach(
   // through the shared brand-check preamble (catchable TypeError on a
   // wrong-brand receiver) instead of the static trapping cast.
   reflective?: { recvExpr: ts.Expression; cbArg: ts.Expression | undefined; brand: ReceiverBrandSpec },
+  preparedReceiver?: { local: number; type: ValType },
 ): InnerResult | undefined {
   if (!ctx.nativeStrings) return undefined;
   if (propAccess.name.text !== "forEach") return undefined;
@@ -1893,8 +1894,10 @@ export function tryCompileNativeCollectionForEach(
     // brand check is already satisfied), then throw. The throw is terminal /
     // stack-polymorphic, so nothing is left on the value stack (VOID_RESULT).
     const recvExpr = reflective !== undefined ? reflective.recvExpr : propAccess.expression;
-    compileExpression(ctx, fctx, recvExpr);
-    fctx.body.push({ op: "drop" });
+    if (!preparedReceiver) {
+      compileExpression(ctx, fctx, recvExpr);
+      fctx.body.push({ op: "drop" });
+    }
     emitThrowTypeError(ctx, fctx, `${isSet ? "Set" : "Map"}.prototype.forEach callback is not a function`);
     return VOID_RESULT;
   }
@@ -1909,7 +1912,10 @@ export function tryCompileNativeCollectionForEach(
 
   // Receiver → ref $Map, stored in a temp. Reflective callers brand-check
   // (catchable TypeError); the direct path keeps the static cast/bail.
-  const recvType = compileExpression(ctx, fctx, reflective !== undefined ? reflective.recvExpr : propAccess.expression);
+  if (preparedReceiver) fctx.body.push({ op: "local.get", index: preparedReceiver.local });
+  const recvType =
+    preparedReceiver?.type ??
+    compileExpression(ctx, fctx, reflective !== undefined ? reflective.recvExpr : propAccess.expression);
   if (reflective !== undefined) {
     emitReceiverBrandCheck(ctx, fctx, recvType, reflective.brand);
   } else {

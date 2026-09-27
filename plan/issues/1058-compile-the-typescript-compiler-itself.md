@@ -1538,6 +1538,67 @@ Keep `.tmp/source-scanner-tail-args.log` and `.tmp/source-scanner-tail-args.wasm
 as this candidate's authoritative full-source result. The shared tail-call
 repair is ready for a checkpoint; next work is the missing call operand.
 
+Signed checkpoint: `969ef8964c`. Raw bytes at the failing offset identify
+`call 0`, the `Set_forEach` host import, not a user callback. Optional-chain
+lowering calls the declared external method with only the receiver and callback
+and omits its third `thisArg` slot. More importantly, standalone must route
+this operation through native collection iteration rather than merely padding
+the host import. The source is `cache.get(dirPath)?.links?.forEach(...)` in
+compiler/sys.ts. Binaryen cannot parse the stack-invalid isolated function;
+direct selected-function WAT capture is session `83620`
+(`.tmp/scanner-invokeCallbacks-wat.log`, 8 GiB diagnostic heap).
+Next task: preserve optional-chain short-circuiting/single receiver evaluation
+while reusing the existing native collection forEach implementation.
+
+The selected-function WAT capture completed successfully with the identical
+**54,835,934-byte** binary and confirms `Set_forEach` import 0 in
+`invokeCallbacks`. A small optional Set parameter did not import the host
+helper, but silently skipped the live call (**0/2**, returned 0 instead of 20);
+this is the same missing optional native dispatch with a different downstream
+fallback (`.tmp/optional-collection-foreach-direct-before.log`). The earlier
+nested Map/optional-property probe also returned 0; preserve it as
+`.tmp/optional-collection-nested-probe.test.ts`, not a successful control.
+
+Optional collection lowering now passes its already-evaluated receiver local
+to the existing native forEach owner. No second iteration algorithm was added.
+That owner skips receiver re-evaluation even on its non-callable-argument throw
+path. The expanded source tests pass **6/6**, covering Map and Set in both IR
+modes, receiver evaluation once, skipped arguments on a missing receiver,
+value/key/collection arguments, `thisArg`, and undefined return values, all with
+zero imports (`.tmp/optional-collection-foreach-matrix.log`). The initial
+adjacent batch is **12/13**: its GC optional-size failure reproduces on clean
+`58fce98114` (**3/4**, `.tmp/optional-map-size-control.log` in the control checkout).
+LOC/function gates pass without allowance changes. Full scanner and remaining
+gates are pending; do not claim its Set_forEach host leak removed until measured.
+
+Full scanner run is session `20318`, `.tmp/source-scanner-optional-foreach.log`
+and `.tmp/source-scanner-optional-foreach.wasm`. The seven-file collection batch
+passes **85/87** (`.tmp/optional-collection-foreach-regressions.log`); the two
+unexecuted rows require the absent Test262 file
+`built-ins/Set/prototype/forEach/callback-not-callable-symbol.js`, rather than
+failing compiler behavior. The direct Symbol-callback checks in that same test
+file passed. A baseline check of the fixture availability is session `96845`.
+The first lint run rejected a comma expression in the receiver-loading code;
+it was rewritten to a separate load followed by the same saved type (no
+semantic change). Lint now passes. Type-check session `68653` is still running;
+the other three gates passed, and refreshed size gates are session `72754`.
+
+The nested optional Map.get/Set case now passes **2/2** with the same native
+dispatch change and was promoted to
+`tests/issue-1058-optional-nested-foreach.test.ts`. Together the permanent
+optional-iteration tests pass **8/8** (`.tmp/optional-collection-foreach-final2.log`),
+all zero-import runtime assertions. Final type-check passed (session `86682`,
+`.tmp/optional-collection-foreach-typecheck2.log`); refreshed source gates passed
+(sessions `72754`/`6380`, `loc2`/`func2`/`gates2` logs). No allowance growth.
+Baseline Symbol-callback tests are also **2/4**, with the same two missing
+Test262 fixture errors (`.tmp/optional-foreach-5091-control.log`). Fresh
+compilerCore/factory source controls run in session `72747`,
+`.tmp/source-<suite>-optional-foreach.log`; scanner `20318` remains running.
+The fresh controls completed: compilerCore **11/11**, **1,573,325 bytes /
+3,322 ms**; factory **3/3**, **14,199,590 bytes / 109,328 ms**. Both native and
+standalone counts match and both standalone modules have zero imports. This
+is **14/14**, not proof of the pending scanner or full upstream unit suite.
+
 The user requested a main merge and continuation. The former temporary checkout
 was cleaned out, but branch `codex/1058-typescript-standalone` retained the signed
 handoff at `efd9aca79c5aba4bfd6670847be925a027ed219f`. Work now lives in
