@@ -231,7 +231,8 @@ import {
   residFieldValueInstrs,
   stampRangeTestInstrs,
 } from "./fnctor-layout-emit.js"; // (#3927) per-type layouts — reflective surfaces
-import { isInternalStructFieldName, orderNamesByInsertion } from "./struct-field-exports.js";
+import { isInternalStructFieldName } from "./struct-field-exports.js";
+import { collectClosedStructEnumerationEntries, type EnumShapeEntry } from "./closed-struct-enumeration-shapes.js";
 import {
   buildRuntimeEvalValueWrap,
   buildRuntimeEvalValueUnwrap,
@@ -9809,125 +9810,6 @@ export function fillClosedStructHasOwnArms(ctx: CodegenContext): void {
 }
 
 /**
- * Finalize `__getOwnPropertyNames` with closed-struct own-field enumeration.
- *
- * The eager object runtime only knows its open `$Object` map. Closed compiler
- * structs are discovered throughout codegen, so splice one complete-shape arm
- * at finalize time. Names use the same insertion-order authority as the host
- * field-name export; hidden compiler fields stay invisible, and conditional
- * source fields are pushed only when their per-instance presence bit is set.
- *
- * Direct and stored `Object.getOwnPropertyNames` calls both target this native
- * helper, keeping their `$ObjVec`/native-string carrier contract identical.
- *
- * (#4071) **`__object_keys` deliberately does NOT share these arms.** Extending
- * them to it was implemented and MEASURED, then reverted: the struct set here is
- * every non-synthetic entry of `ctx.structFields`, which includes BUILTIN
- * carriers, and their internal fields are not `$`/`__`-prefixed so the filter
- * above does not remove them. Sharing the arms therefore made
- * `Object.keys(new Date(0))` answer `["timestamp"]` and `Object.keys(/ab/)`
- * answer 7 internal RegExp fields — both correctly `[]` before, so it traded a
- * real gain on class instances for a NEW silent wrong answer on two very common
- * spellings. `Object.keys` is enumerable-only and builtin internals are not own
- * enumerable properties.
- *
- * (#3920) **That predicate now exists** — `isUserDeclaredStruct`
- * (`user-declared-structs.ts`) — and this pass applies it, so the leak the
- * paragraph above describes as "ALREADY LATENT here" is closed:
- * `Object.getOwnPropertyNames(/ab/)` answered **7** in standalone and now
- * answers 1; `…(new Date(0))` answered 1 and now answers 0. The arms ARE now
- * shared, via {@link fillClosedStructEnumerationArms}, with `__object_keys`
- * and `__object_keys_forin` — which is what makes `Object.keys` and `for…in`
- * over a dynamically-typed closed-struct receiver stop enumerating zero
- * properties. Keep the screen: sharing without it is what #4071 correctly
- * reverted.
- */
-type EnumOwnField = { name: string; presenceSlot?: PresenceSlot; cold?: ColdFieldLocation };
-type EnumShapeEntry = {
-  typeIdx: number;
-  fields: EnumOwnField[];
-  shapeFieldIdx?: number;
-  shapeId?: number;
-  /**
-   * (#3927 per-type layouts) Family stamp-range guard on a split BASE entry:
-   * `ref.test $base` also matches a canonical-twin family whose presence bits
-   * mean different names, so the arm must fall through for out-of-range
-   * stamps instead of enumerating the wrong name list.
-   */
-  shapeRange?: { shapeFieldIdx: number; stampLo: number; stampCount: number };
-};
-
-/**
- * (#3920) The ONE authority for "which names does a closed struct enumerate".
- *
- * Extracted so `Object.getOwnPropertyNames`, `Object.keys` and `for…in` cannot
- * drift apart. They previously could: only `__getOwnPropertyNames` had arms, so
- * the other two answered zero on every closed-struct receiver, and any fix that
- * hand-copied the derivation would have re-opened that gap on the next change.
- *
- * The name list comes from the struct's FIELD list; per-name liveness comes
- * from the base PRESENCE words (`presenceSlotOf` / `presenceTestInstrs`) and,
- * for #3927's split shapes, from the cold tail's presence. That division is
- * deliberate and is what keeps enumeration independent of where a value is
- * physically stored: presence words live in the base struct at fixed indices,
- * so a per-type layout split moves values without moving the answer. (Deriving
- * the NAMES from presence words is not possible — a presence word holds bits,
- * not names, and unconditionally-assigned fields have no presence bit at all.)
- */
-function collectClosedStructEnumerationEntries(ctx: CodegenContext): EnumShapeEntry[] {
-  const entries: EnumShapeEntry[] = [];
-  for (const [structName, fields] of ctx.structFields) {
-    if (isSyntheticStructName(structName)) continue;
-    // (#3920) Builtin carriers (`__Date.timestamp`, the 7 internal RegExp
-    // fields, …) are internal slots, not own properties. Without this screen
-    // the arms answer `Object.keys(new Date(0)) === ["timestamp"]` — the exact
-    // wrong answer that made #4071 revert sharing them.
-    if (!isUserDeclaredStruct(ctx, structName)) continue;
-    const typeIdx = ctx.structMap.get(structName);
-    if (typeIdx === undefined) continue;
-
-    const byName = new Map<string, EnumOwnField>();
-    for (const field of fields) {
-      if (field?.name === undefined || isInternalStructFieldName(ctx, structName, field.name)) continue;
-      const presenceSlot = presenceSlotOf(fields, field.name);
-      byName.set(field.name, {
-        name: field.name,
-        ...(presenceSlot ? { presenceSlot } : {}),
-      });
-    }
-    // (#3927) Split-out names still enumerate — `for…in` / `Object.keys` over an
-    // AST node must not shrink because a slot moved to the tail. Acorn's
-    // `copyNode` is the concrete consumer: `for (var p in node) newNode[p] = node[p]`.
-    for (const cold of coldOwnFieldsFor(ctx, structName)) {
-      const name = coldFieldNameAt(ctx, cold);
-      if (name !== undefined && !byName.has(name)) byName.set(name, { name, cold });
-    }
-    // (#3927 per-type layouts) The split moved the flow-grown union names off
-    // the base field list; their presence bits stayed in the BASE words, so
-    // enumeration answers from ONE range-guarded base arm for every layout of
-    // the family — layout-independent by construction (issue §6 constraint).
-    for (const layoutField of fnctorLayoutOwnFieldsFor(ctx, structName)) {
-      if (!byName.has(layoutField.name)) {
-        byName.set(layoutField.name, { name: layoutField.name, presenceSlot: layoutField.presenceSlot });
-      }
-    }
-    if (byName.size === 0) continue;
-
-    const orderedNames = orderNamesByInsertion(ctx, structName, [...byName.keys()]);
-    const shapeFieldIdx = fields.findIndex((field) => field?.name === "$shape");
-    const shapeId = ctx.shapeIdByStructName.get(structName);
-    const shapeRange = fnctorLayoutShapeRangeFor(ctx, structName);
-    entries.push({
-      typeIdx,
-      fields: orderedNames.map((name) => byName.get(name)!),
-      ...(shapeFieldIdx >= 0 && shapeId !== undefined ? { shapeFieldIdx, shapeId } : {}),
-      ...(shapeRange ? { shapeRange } : {}),
-    });
-  }
-  return entries;
-}
-
-/**
  * (#3920) The ONE emitter for closed-struct enumeration arms.
  *
  * Emits, per shape, a `ref.test`-guarded block that pushes that shape's live
@@ -10035,6 +9917,40 @@ function buildClosedStructEnumerationArms(
   return arms;
 }
 
+/**
+ * Finalize `__getOwnPropertyNames` with closed-struct own-field enumeration.
+ *
+ * The eager object runtime only knows its open `$Object` map. Closed compiler
+ * structs are discovered throughout codegen, so splice one complete-shape arm
+ * at finalize time. Names use the same insertion-order authority as the host
+ * field-name export; hidden compiler fields stay invisible, and conditional
+ * source fields are pushed only when their per-instance presence bit is set.
+ *
+ * Direct and stored `Object.getOwnPropertyNames` calls both target this native
+ * helper, keeping their `$ObjVec`/native-string carrier contract identical.
+ *
+ * (#4071) **`__object_keys` deliberately does NOT share these arms.** Extending
+ * them to it was implemented and MEASURED, then reverted: the struct set here is
+ * every non-synthetic entry of `ctx.structFields`, which includes BUILTIN
+ * carriers, and their internal fields are not `$`/`__`-prefixed so the filter
+ * above does not remove them. Sharing the arms therefore made
+ * `Object.keys(new Date(0))` answer `["timestamp"]` and `Object.keys(/ab/)`
+ * answer 7 internal RegExp fields — both correctly `[]` before, so it traded a
+ * real gain on class instances for a NEW silent wrong answer on two very common
+ * spellings. `Object.keys` is enumerable-only and builtin internals are not own
+ * enumerable properties.
+ *
+ * (#3920) **That predicate now exists** — `isUserDeclaredStruct`
+ * (`user-declared-structs.ts`) — and this pass applies it, so the leak the
+ * paragraph above describes as "ALREADY LATENT here" is closed:
+ * `Object.getOwnPropertyNames(/ab/)` answered **7** in standalone and now
+ * answers 1; `…(new Date(0))` answered 1 and now answers 0. The arms ARE now
+ * shared, via {@link fillClosedStructEnumerationArms}, with `__object_keys`
+ * and `__object_keys_forin` — which is what makes `Object.keys` and `for…in`
+ * over a dynamically-typed closed-struct receiver stop enumerating zero
+ * properties. Keep the screen: sharing without it is what #4071 correctly
+ * reverted.
+ */
 export function fillClosedStructOwnPropertyNamesArms(ctx: CodegenContext): void {
   if (!ctx.standalone) return;
   const targets = ["__getOwnPropertyNames"]
