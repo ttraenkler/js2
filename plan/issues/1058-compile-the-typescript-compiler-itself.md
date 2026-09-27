@@ -2182,6 +2182,43 @@ the real return value. Inspect the exact matched funcref arm in
 vector projection authority and preserve identity rather than adding another
 copy loop or asserting the two vector layouts are the same.
 
+Continuation — 2026-09-27, main `4418cd8510877c0fd5a3aab8a543934167e95c8c`:
+
+- Frozen signed receiver checkpoint `7423709086`: the eight source suites
+  completed **44/44 callbacks**, all valid zero-import standalone modules.
+  Session `16922` exited 0; individual source logs above contain the reports.
+- Full original scanner run `49543` completed exit 1: native **984/984**;
+  standalone compiled successfully to **29,815,452 bytes**, validated, and
+  retained **zero imports** (production O1, 788,113 ms). Startup now completes
+  and all **984 callbacks execute, 0/984 pass**. The first failures are Wasm
+  `unreachable`; do not interpret the stale optimized source-index annotation
+  as attribution without a matching optimized name/index map.
+- The preserved raw module (SHA256
+  `7c0f923bd1814aec927fae6aa4438b5574c4a4e4c8042ce5a5fa40981b6e9693`)
+  independently initializes and registers 984. Diagnostic execution with
+  exactly seven **throwing** Node-import implementations also scores 0/984;
+  the first stack points to `fromString`, function 2151. This diagnostic is
+  NOT standalone acceptance. `.tmp/scanner-fromString-wat.log` shows that
+  function returning `ref.as_non_null(ref.null)`, not constructing its
+  namespace-local `StringScriptSnapshot` class. Session `79893` exited 1.
+- Reduced native-oracle namespace/class tests reproduce **0/4** (exported and
+  unexported classes, IR on/off), `.tmp/namespace-snapshot-premerge.log`.
+  Their JS controls return 5; compiled execution traps. Class collection and
+  body emission currently recurse ordinary blocks/functions but omit runtime
+  ModuleBlocks, while namespace function registration already traverses them.
+  Next work must preserve exact declaration identity, namespace collisions,
+  initialization order and shared IR class-body ownership, not add a second
+  class compiler or weaken the standalone guard.
+- Fetched the requested main and merged after both original source jobs
+  finished. The sole conflict is adjacent imports in `call-identifier.ts`;
+  retain both the branch's source-call/capture helpers and main's new String
+  conversion helper. Integration checks run against the fetched main SHA;
+  no allowance growth and no dependency reinstall.
+
+The TypeScript standalone goal remains open. Scanner startup is repaired, but
+its assertions are not passing; the generic callable array-return defect above
+also remains open. No tests were stopped or restarted mid-run.
+
 The environment diagnostic has two distinct outcomes: with explicit ambient
 declarations in the input, `optimize: true` still retains process.cwd (**0/2**);
 without those declarations, the optimized reduction passes **2/2**. The actual
