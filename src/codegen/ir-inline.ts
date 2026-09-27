@@ -173,6 +173,7 @@
  * self-parse checksum MUST move off 422 when the mechanism is live.
  */
 import { absoluteFuncIndex } from "../emit/resolve-layout.js";
+import { inlineLocalResets } from "../wasm/model/inline-local-resets.js";
 import type { BlockType, FuncTypeDef, Instr, LocalDef, ValType, WasmFunction, WasmModule } from "../ir/types.js";
 import { tunedFlagEnabled, tunedFlagExplicit } from "../perf-flags.js";
 import { IR_NUMBER_TO_FIXED_FN } from "../ir/string-runtime.js";
@@ -1384,7 +1385,7 @@ export function inlineUserFunctions(ctx: CodegenContext): void {
       const source = specBody ?? calleeBody.map(cloneInstr);
       const relocated = relocate(stripCensusPrefix(source), base, 0);
 
-      const seq: Instr[] = [];
+      const seq: Instr[] = loopDepth > 0 ? inlineLocalResets(source, nParams, calleeView.locals, base) : []; // #6694
       for (let p = nParams - 1; p >= 0; p--) seq.push({ op: "local.set", index: base + p });
       if (counterGlobalIdx >= 0) {
         seq.push(

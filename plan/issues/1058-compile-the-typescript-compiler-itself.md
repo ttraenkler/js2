@@ -1040,6 +1040,27 @@ is a regression within the intervening candidate, not an upstream baseline
 failure. Preserve this explicit handoff; do not publish the checkpoint as a
 finished or fully passing TypeScript implementation.
 
+The local candidate was preserved in signed checkpoint `3c2aaad5a804` after
+all five configured ratchet commands passed. Integrating fetched main
+`2a58b9fe9f95dc17bd5d2ba44ecd564b9695356b` produced one content conflict,
+in the inliner. Preserve both mechanisms: this branch's iterative caller walk
+and main's per-call reset of defaultable locals at loop sites. The reset
+analysis/emission now lives in `src/wasm/model/inline-local-resets.ts`; its own
+walk is iterative too. The old driver does not receive a larger size allowance.
+
+Post-resolution focused tests pass **58/58** across seven files, including
+12,000-level reset analysis, main's repeated-call reset regressions, existing
+deep instruction walks, generator worklist delegation and live array iterators
+(`.tmp/sync-merged-final-focus.log`). Five additional upstream regression files
+pass **24/24**: dynamic slice/reentry, computed this-key methods, wide property
+dispatch, and the cross-bucket reflection/iterator cases
+(`.tmp/sync-merged-upstream.log`). All five configured ratchet commands pass
+against the new fetched main SHA (`.tmp/sync-merged-{loc,func,coercion,oracle,exports}.log`).
+These are integration checks, not the full TypeScript upstream unit suite.
+No original-source scanner or complete original-unit batch has been rerun on
+this merged tree yet. The recorded resume-binding and implicit-delegation
+frontiers remain the next implementation work after the merge is committed.
+
 The user requested a main merge and continuation. The former temporary checkout
 was cleaned out, but branch `codex/1058-typescript-standalone` retained the signed
 handoff at `efd9aca79c5aba4bfd6670847be925a027ed219f`. Work now lives in
