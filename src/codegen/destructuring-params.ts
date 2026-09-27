@@ -28,6 +28,7 @@ import { boxToAny, UNDEF_F64_BITS } from "./value-tags.js"; // (#3315)
 import { addImport, addStringConstantGlobal, ensureExnTag } from "./registry/imports.js";
 import { emitWasiErrorConstructor } from "./registry/error-types.js";
 import { usesNativeJsErrors } from "./js-errors.js";
+import { physicalObjectFields } from "../ir/physical-object-field.js";
 import { compileObjectLiteralAsExternref } from "./literals.js";
 // (#3178) done/value reads on native IteratorResult structs — late-bound via
 // shared.ts (a static member-get-dispatch.ts import here is an eval-time cycle).
@@ -1596,9 +1597,9 @@ export function destructureParamObject(
 
   const structTypeIdx = (paramType as { typeIdx: number }).typeIdx;
 
-  // Find struct name and fields
+  // Use the IR physical-layout authority, not a display-name alias (#1058).
   const structName = ctx.typeIdxToStructName.get(structTypeIdx);
-  const fields = structName ? ctx.structFields.get(structName) : undefined;
+  const fields = physicalObjectFields(ctx.mod.types, structTypeIdx);
   if (!fields) {
     // Cannot find struct info — register locals with defaults
     for (const element of pattern.elements) {

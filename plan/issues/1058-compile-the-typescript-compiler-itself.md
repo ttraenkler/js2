@@ -1256,6 +1256,48 @@ physical `ctx.mod.types[structTypeIdx]`. Prove the metadata drift and add a
 regression before replacing that reader; do not merely delete the emitted
 conversion from the binary.
 
+### Physical destructuring layout continuation (2026-09-27)
+
+Fetched `loopdive/js2` main again at
+`2a58b9fe9f95dc17bd5d2ba44ecd564b9695356b`; it is already an ancestor of
+`1b64a7d668`, so the requested merge reports already up to date. Work remains
+in the isolated TypeScript checkout; the unrelated original checkout is untouched.
+
+The initial two-lane source smoke test passes before any change and is **not**
+a regression reproducer. A targeted emission fixture with a physical externref
+field and a stale name-keyed ref field fails with the exact `extern.convert_any`
+validation error (`.tmp/destructure-physical-regression-before.log`: **1/3 fail**).
+After routing the destructuring read through the module-owned physical layout,
+the fixture validates with zero imports and preserves a supplied object's
+identity. Layout selection is shared with the new IR field owner via
+`physicalObjectFields`; no second legacy-only lookup algorithm or metadata-map
+mutation is introduced. The struct name remains only for open-class semantics.
+
+Focused candidate tests pass **61/61 across 7 files**, including symbolic IR
+field lowering, default/absent bindings, nested patterns, and both source lanes
+(`.tmp/destructure-physical-shared-ir.log`). An earlier wider batch is **54/57**:
+the three null-destructure host tests fail on missing `string_constants` imports;
+the same **3/3 failures** reproduce unchanged on clean `58fce98114` with the same
+Vitest configuration (`.tmp/destructure-null-control.log` in the retained array
+control checkout). These are not credited as candidate successes.
+
+A pre-fix full scanner rerun remains byte-identical at **54,828,548 bytes**, native
+**984/984**, invalid at `doChange` after **311,369 ms**
+(`.tmp/source-scanner-field-trace.log`). Temporary logging at the parameter-hint
+site did not produce metadata evidence and was removed. The reduced fixture
+proves the emission seam; original-source attribution still requires the
+post-fix full scanner run, started in session `58994` with report
+`.tmp/source-scanner-physical-fields.log` and unchanged-validation binary capture
+at `.tmp/source-scanner-physical-fields.wasm`. Do not claim standalone callbacks
+passed while this verification is pending.
+
+Candidate type-checking, lint, formatting, and all five source gates pass
+(`.tmp/destructure-physical-shared-{tsc,lint,loc,func,coercion,oracle,exports}.log`);
+no allowance was added. Dead-export verification uses the configured
+preservation-only contract, not a claim of strict closure. A fresh original
+`compilerCore` run passes **11/11 native and standalone callbacks**, zero imports,
+**1,573,325 bytes**, **3,539 ms** (`.tmp/source-compilerCore-physical-fields.log`).
+
 The user requested a main merge and continuation. The former temporary checkout
 was cleaned out, but branch `codex/1058-typescript-standalone` retained the signed
 handoff at `efd9aca79c5aba4bfd6670847be925a027ed219f`. Work now lives in

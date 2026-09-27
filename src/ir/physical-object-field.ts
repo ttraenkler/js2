@@ -2,7 +2,7 @@
 import type { IrObjectStructLowering } from "./backend/handles.js";
 import type { IrLowerResolver } from "./lower.js";
 import { irTypeEquals, irVal, type IrType, type IrInstr, type IrValueId } from "./nodes.js";
-import type { TypeDef, ValType } from "./types.js";
+import type { FieldDef, TypeDef, ValType } from "./types.js";
 
 export interface IrPhysicalObjectField {
   readonly fieldIdx: number;
@@ -56,14 +56,21 @@ export function objectAccessLayout(
 }
 
 /** Read the exact current allocation, never a shape-hash or display-name alias. */
+export function physicalObjectFields(types: readonly TypeDef[], typeIdx: number): FieldDef[] | undefined {
+  const type = types[typeIdx];
+  if (!Number.isSafeInteger(typeIdx) || typeIdx < 0 || type?.kind !== "struct") return undefined;
+  return type.fields;
+}
+
+/** Resolve a unique field within the exact physical allocation. */
 export function physicalObjectField(
   types: readonly TypeDef[],
   typeIdx: number,
   name: string,
 ): IrPhysicalObjectField | null {
-  const type = types[typeIdx];
-  if (!Number.isSafeInteger(typeIdx) || typeIdx < 0 || type?.kind !== "struct") return null;
-  const matches = type.fields.flatMap((field, index) => (field.name === name ? [{ field, index }] : []));
+  const fields = physicalObjectFields(types, typeIdx);
+  if (!fields) return null;
+  const matches = fields.flatMap((field, index) => (field.name === name ? [{ field, index }] : []));
   if (matches.length !== 1) return null;
   const { field, index } = matches[0]!;
   return { fieldIdx: index, type: field.type, mutable: field.mutable };
