@@ -22,6 +22,32 @@ import type { CodegenContext, FunctionContext } from "./context/types.js";
 import { buildSpreadArgList } from "./spread-arg-list.js";
 import { compileExpression } from "./shared.js";
 import { emitEnsureBackingCapacity, emitReceiverNullGuard } from "./array-methods.js";
+import { reserveVecMethodHelper } from "./vec-access-exports.js";
+import { buildCallSiteNullishReceiverGuard } from "./closed-method-dispatch.js";
+
+/** An erased receiver retains its actual vector layout, not its TS element view. */
+export function compileErasedArrayPushSpread(
+  ctx: CodegenContext,
+  fctx: FunctionContext,
+  propAccess: ts.PropertyAccessExpression,
+  callExpr: ts.CallExpression,
+): ValType | undefined {
+  reserveVecMethodHelper(ctx, "push");
+  reserveVecMethodHelper(ctx, "len");
+  const recv = allocLocal(fctx, `__push_sp_erased_${fctx.locals.length}`, { kind: "externref" });
+  compileExpression(ctx, fctx, propAccess.expression, { kind: "externref" });
+  fctx.body.push({ op: "local.set", index: recv });
+  fctx.body.push(...buildCallSiteNullishReceiverGuard(ctx, recv, "push"));
+  const built = buildSpreadArgList(ctx, fctx, callExpr.arguments, 0, { kind: "externref" }, "push_erased");
+  if (!built) return undefined;
+  built.emitStores({
+    pre: [{ op: "local.get", index: recv }],
+    post: [{ op: "call", funcIdx: ctx.funcMap.get("__vec_push")! }, { op: "drop" }],
+  });
+  fctx.body.push({ op: "local.get", index: recv }, { op: "call", funcIdx: ctx.funcMap.get("__vec_len")! });
+  if (!ctx.fast) fctx.body.push({ op: "f64.convert_i32_s" });
+  return ctx.fast ? { kind: "i32" } : { kind: "f64" };
+}
 
 /**
  * Append every argument value — spread sources expanded — to a native vec

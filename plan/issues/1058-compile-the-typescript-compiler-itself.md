@@ -777,6 +777,65 @@ reductions in both IR modes; insertion traps in both (**6/8**,
 `.tmp/comment-directive-merge.log`). This does not yet reproduce the full
 suite's undefined-vs-object deletion mismatch; do not equate the stopping points.
 
+### Erased vector receiver during comment merging
+
+Continuation after `16b003286c`: original-suite O1 session **83937** is terminal
+with that exact production state (`.tmp/incremental-optional-nested-o1.log`):
+native **153/153**, standalone **90/153**, **24,186,486 bytes**, **589,353 ms**,
+valid O1 binary, **zero imports**. The same 63 comment-comparison failures remain
+(27 undefined/object at assertion 421, 27 object/object at 422, nine at 683).
+Do not attribute the later spread candidate to this run.
+
+The insertion reduction traps in `addNewlyScannedDirectives`: its captured
+`commentDirectives` is an externref cell holding the generic `append` result,
+but spread-push casts it to the checker-inferred `Directive[]` vector layout.
+Those are distinct valid runtime vectors. The dispatch probe additionally
+looked at the capture CELL type rather than its value type. Evidence is in
+`.tmp/comment-directive-merge-stacks.log` and
+`.tmp/directive-reduced-insertion-false.wat`. Scanner-style producers do not
+reproduce the full deletion mismatch either (**8/10**, insertion alone traps;
+`.tmp/comment-directive-scanner-style.log`).
+
+Candidate: consult the existing boxed-capture value type and route native
+externref spread receivers through the existing `__vec_push`/`__vec_len`
+dispatch helpers and the shared spread-argument builder. Do not cast the
+receiver to its checker element view or duplicate iterable expansion.
+The extracted original merge body now gives **10/10** native-matching,
+zero-import results in both IR modes (`.tmp/comment-directive-erased-spread.log`).
+New durable reduction and adjacent spread checks are still in progress.
+This does not yet establish repair of any of the full suite's remaining 63 rows.
+
+Final focused evidence: **14/14** durable erased-vector cases, versus **6/14**
+with both changed lowering files restored from exact `16b003286c` by Vite
+pre-transform. The first candidate was **12/14**: a canonical undefined receiver
+was not caught by a raw null-pointer guard. Reusing the existing native nullish
+method-receiver guard restores a catchable TypeError BEFORE argument evaluation.
+The controls cover insertion, deletion, empty insertion, absent old input,
+self-spread identity and receiver-before-argument ordering in IR-off/on modes.
+Together with adjacent diagnostic/rest/splice spread files: **45/45** ordinary
+passes (`.tmp/erased-spread-guarded.log`, baseline
+`.tmp/erased-spread-controls-baseline.log`). No expected-failure markers here.
+
+This reuses the existing shared argument builder and vector dispatch providers.
+The current IR AST selector explicitly declines spread-push in
+`array-element-lowering.ts`; IR-on tests therefore also exercise the existing
+fallback, not a new claim that spread-push bodies are entirely IR-owned.
+No parallel expansion loop or new runtime array representation was introduced.
+LOC/function/coercion/oracle gates pass without new allowances; strict
+reachability remains FAIL/OPEN (preservation-only PASS).
+Diagnostic-only instrumentation of the earlier `5bc11fda58` binary confirms
+callback 69 supplies three old directives and undefined fresh directives to
+`getNewCommentDirectives` (`.tmp/incremental-directive-inputs-69.log`). The
+snapshot's object-field decoder did not expose their fields; its object strings
+do not prove the entries are empty or well-formed. The precise full-suite
+deletion defect still needs stronger evidence.
+Post-candidate source typecheck, changed-file format/lint and issue check pass.
+Fresh original-suite O1 run **70877** writes
+`.tmp/incremental-erased-spread-o1.log`; diagnostic-only capture **81816** writes
+`.tmp/incremental-capture-erased-spread.log` and
+`.tmp/incremental-raw-erased-spread.wasm`. Both start from `16b003286c` plus the
+complete erased-spread/nullish-guard repair. Do not restart live handles.
+
 Earlier requested upstream sync completed: authoritative `loopdive/js2` main at
 `c603404b4f2258ed59377bd591a287523e4af99b` merged cleanly in signed commit
 `c6d4582ccf`. The unfinished candidate was preserved first in `55261207d1`.

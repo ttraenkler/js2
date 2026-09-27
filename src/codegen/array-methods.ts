@@ -133,7 +133,7 @@ import { emitRuntimeEvalCarrierUnwrapAny } from "./runtime-eval-callable.js";
 import { emitSymbolOperandCoercionThrow } from "./tonumber-symbol-throw.js"; // (#3481)
 import { buildSpreadArgList, hasSpreadArgument } from "./spread-arg-list.js"; // (#5361)
 import { canBuildSpreadArgList, isTupleStructType } from "./spread-arg-list.js"; // (#5361)
-import { compileArrayPushSpread } from "./array-push-spread.js"; // (#5361)
+import { compileArrayPushSpread, compileErasedArrayPushSpread } from "./array-push-spread.js"; // (#5361)
 import { taDynDetachedGuardPrologue } from "./ta-dyn-method-call.js"; // (#6651 E6) join/toLocaleString
 import { reserveNumberToLocaleString } from "./to-locale-string-element.js"; // (#6651 TA1) numeric element Invoke
 
@@ -2154,7 +2154,7 @@ export function compileArrayMethodCall(
         // params, `paths.shift()` looks up the wrong local and dispatches
         // through a stale vec type idx, producing struct-type mismatches
         // at instantiation.
-        actualType = getLocalType(fctx, localIdx);
+        actualType = fctx.boxedCaptures?.get(name)?.valType ?? getLocalType(fctx, localIdx);
       } else {
         const gIdx = ctx.moduleGlobals.get(name);
         if (gIdx !== undefined) {
@@ -4423,6 +4423,9 @@ function tryCompileArrayPushDynamicSpread(
   elemType: ValType,
 ): ValType | undefined {
   if ((receiverIsExternref && !noJsHost(ctx)) || !hasSpreadArgument(callExpr.arguments)) return undefined;
+  if (receiverIsExternref && canBuildSpreadArgList(ctx, fctx, { kind: "externref" })) {
+    return compileErasedArrayPushSpread(ctx, fctx, propAccess, callExpr);
+  }
   if (callExpr.arguments.length === 1 && ts.isSpreadElement(callExpr.arguments[0]!)) {
     const spreadExpression = callExpr.arguments[0]!.expression;
     // (#5361) Tuple literals and opaque native iterables use the shared
