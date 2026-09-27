@@ -12952,6 +12952,34 @@ giving **16/16** candidate checks. Logs:
 The full checker's previous validation error is still not claimed fixed until
 a fresh complete build validates and all three cases execute correctly.
 
+Post-commit verification on `e6e47ff1cf`: original `compilerCore` native
+**11/11**, standalone **11/11**, valid zero-import Wasm, **1,114,275 bytes**,
+**12,254 ms**, O1, unchanged TypeScript pin. Terminal exit 0, evidence
+`.tmp/compiler-core-erased-this-o1.log`. Expanded constructor tests now include
+imported receiver interfaces/enums and two captured constructor activations.
+Same standalone baseline `453de050af`, same one-file replacement: **7/17 →
+17/17**, ten fixes, zero regressions. Evidence:
+`.tmp/checker-node-links-expanded-baseline.log` and
+`.tmp/checker-node-links-expanded.log`.
+
+Two exact active probes remain owned by this continuation: full checker
+**18770**, `.tmp/checker-erased-this-full.log`, and original factory suite
+**35851**, `.tmp/factory-erased-this-o1.log`. Both were re-polled live after
+the expanded controls finished; neither is terminal acceptance. Do not
+restart them just because their output is quiet. Compiler source remains
+`e6e47ff1cf`; only tests and this handoff changed afterwards.
+
+Namespace continuation: the central identifier write hook is
+`expressions/identifier-assignment.ts::emitResolvedIdentifierWriteFromStack`;
+it currently assumes either a local slot or a module global. An exported
+namespace-variable property target must be resolved by exact declaration
+identity before those storage choices, and paired with reads/updates, not
+merely special-cased at the external `Debug.loggingHost` assignment. The
+existing enum object's global-identity relookup after late imports provides
+an allocation pattern; its top-level-only/single-declaration lifetime is not
+sufficient for merged or nested namespaces. No namespace implementation or
+deprecation-test improvement is claimed in this verification continuation.
+
 The same eight reduced cases pass **8/8** when only the namespace provider is
 first lowered by TypeScript's standard ES2022/ESNext emitter; original
 namespace syntax fails **0/8**. The combined diagnostic is **8/16**, log
