@@ -5,6 +5,16 @@ import { compile } from "../src/index.js";
 
 const cases = [
   [
+    "self-recursive field preserves undefined before linking and identity afterwards",
+    `class Node { next!: Node; value: number; constructor(value:number){this.value=value;} link(next:Node){this.next=next;} } export function run(){const first=new Node(3);const second=new Node(4);const missing=(first as any).next===undefined;first.link(second);return (missing?10:0)+(first.next===second?20:0)+first.next.value;}`,
+    34,
+  ],
+  [
+    "mutually recursive fields preserve undefined before linking",
+    `class Left {right!:Right; attach(right:Right){this.right=right;}} class Right {left!:Left; attach(left:Left){this.left=left;}} export function run(){const left=new Left();const right=new Right();const missing=(left as any).right===undefined && (right as any).left===undefined;left.attach(right);right.attach(left);return (missing?10:0)+(left.right.left===left?1:0);}`,
+    11,
+  ],
+  [
     "definite-assignment symbol enumerates as undefined",
     `class C { symbol!: { pos: number }; emitNode?: {pos: number}; constructor() {this.emitNode = undefined;} } export function run() { const c:any=new C(); let n=0; for(const k in c) {if(c[k] === undefined) n++; else if(c[k] === null) return -1;} return n;}`,
     2,

@@ -271,6 +271,29 @@ oracle-ratchet-allow:
 
 ### Unfinished required-field checkpoint before upstream sync
 
+Follow-up: native-oracle recursive-field controls show an actual wrong value,
+not only an IR-ownership demotion. Before the finalizer fix, candidate passes
+15/16 but the mutually recursive IR-on case returns 1 instead of native 11;
+IR-off returns 11. The two-module pre-candidate substitution passes 0/16.
+`finalizeForwardClassFieldLayouts` narrows an undefined-preserving externref
+to a nullable class reference solely because its target is declared later.
+The finalizer must consult the existing shared undefined-write evidence before
+narrowing; preserving semantics takes precedence over retaining an invalid
+typed layout. This does not by itself solve the remaining IR representation
+work. Logs: `.tmp/required-recursive-candidate.log` and
+`.tmp/required-recursive-baseline.log`.
+
+With the finalizer guard, field-value tests pass **16/16**. The combined
+constructor-ownership run is **54/65**, with the exact same 11 failures as
+before this guard (`.tmp/required-recursive-finalizer.log`). Adjacent tests
+report 47 rows: **43 ordinary passes and four expected scalar failures**
+(`.tmp/required-finalizer-adjacent.log`). Lint passes for both edited code files.
+The original 153-callback incremental suite was started at `bfcf63f5d4`, before
+the finalizer guard, with `DOGFOOD_OPTIMIZE=1` and the unchanged native-oracle
+driver. Its current log is `.tmp/incremental-required-field-bfcf63f5d4.log`;
+session 48933 was confirmed live during this update. Do not restart it merely
+because observation times out; its result is still pending.
+
 Requested upstream sync completed: authoritative `loopdive/js2` main at
 `c603404b4f2258ed59377bd591a287523e4af99b` merged cleanly in signed commit
 `c6d4582ccf`. The unfinished candidate was preserved first in `55261207d1`.

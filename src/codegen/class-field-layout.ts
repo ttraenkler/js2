@@ -10,6 +10,7 @@
 import { ts } from "../ts-api.js";
 import type { FieldDef, StructTypeDef } from "../ir/types.js";
 import { ProgramAbiInvariantError } from "../ir/program-abi.js";
+import { collectUndefinedWrittenInstanceFields } from "../ir/class-field-undefined-storage.js";
 import type { CodegenContext } from "./context/types.js";
 
 function hasStaticModifier(node: ts.Node & { readonly modifiers?: ts.NodeArray<ts.ModifierLike> }): boolean {
@@ -97,6 +98,12 @@ export function finalizeForwardClassFieldLayouts(ctx: CodegenContext, sourceFile
     if (nameCounts.get(ownerName) !== 1 || ctx.classExternrefBackedSet.has(ownerName)) {
       continue;
     }
+    // An externref may preserve a real undefined, not merely a forward type
+    // placeholder. Narrowing it to a class ref would turn that value into null.
+    const undefinedFields = collectUndefinedWrittenInstanceFields(
+      owner,
+      (expression) => ctx.oracle.typeFactOf(expression).kind === "undefined",
+    );
     const fieldNameCounts = new Map<string, number>();
     for (const member of owner.members) {
       if (!ts.isPropertyDeclaration(member) || hasStaticModifier(member)) continue;
@@ -110,6 +117,7 @@ export function finalizeForwardClassFieldLayouts(ctx: CodegenContext, sourceFile
       const target = exactLocalClassReference(ctx, sourceFile, member.type);
       if (
         fieldName === undefined ||
+        undefinedFields.has(fieldName) ||
         fieldNameCounts.get(fieldName) !== 1 ||
         !target?.name ||
         target.getStart(sourceFile) <= owner.getStart(sourceFile) ||
