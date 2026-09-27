@@ -2757,7 +2757,8 @@ export function collectDeclarations(ctx: CodegenContext, sourceFile: ts.SourceFi
         let nestedDuplicate = false;
         if (ctx.classSet.has(stmt.name.text) || ctx.structMap.has(stmt.name.text)) {
           let owner: ts.Node | undefined = stmt.parent;
-          while (owner && !ts.isFunctionLike(owner) && !ts.isSourceFile(owner)) owner = owner.parent;
+          while (owner && !ts.isFunctionLike(owner) && !ts.isModuleBlock(owner) && !ts.isSourceFile(owner))
+            owner = owner.parent;
           nestedDuplicate = !!owner && !ts.isSourceFile(owner);
         }
         if (nestedDuplicate && !ctx.anonClassExprNames.has(stmt)) {
@@ -2889,6 +2890,7 @@ export function collectDeclarations(ctx: CodegenContext, sourceFile: ts.SourceFi
     }
   }
   collectClassesFromStatements(sourceFile.statements);
+  for (const group of runtimeModuleGroups) collectClassesFromStatements(group.block.statements);
 
   // A runtime TypeScript namespace emits a real object-like scope, but its
   // direct FunctionDeclarations are retained as nested-function IR units. Give
@@ -3964,7 +3966,6 @@ export function collectDeclarations(ctx: CodegenContext, sourceFile: ts.SourceFi
       }
       if (
         ts.isFunctionDeclaration(statement) ||
-        ts.isClassDeclaration(statement) ||
         ts.isEnumDeclaration(statement) ||
         ts.isInterfaceDeclaration(statement) ||
         ts.isTypeAliasDeclaration(statement) ||
@@ -3973,6 +3974,7 @@ export function collectDeclarations(ctx: CodegenContext, sourceFile: ts.SourceFi
       ) {
         continue;
       }
+      if (hasDeclareModifier(statement)) continue;
       ctx.moduleInitStatements.push(statement);
     }
   }
@@ -5901,6 +5903,11 @@ export function compileDeclarations(
   }
 
   compileClassesFromStatements(sourceFile.statements);
+  for (const group of runtimeModuleDeclarationGroups(sourceFile)) {
+    withRuntimeModuleBindings(ctx, group, exactRuntimeModuleFunctionEntries(ctx, group), () =>
+      compileClassesFromStatements(group.block.statements, true),
+    );
+  }
 
   // Compile away TDZ tracking for definite-assignment top-level let/const
   // variables (#906). If every read of a top-level let/const can be statically

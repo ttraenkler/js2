@@ -8,6 +8,7 @@ import { emitLayoutSelectingStructNew, maybeEmitLayoutHint } from "../fnctor-lay
  * new/super/class expression compilation.
  */
 import { forEachChild, ts } from "../../ts-api.js";
+import { exactClassExpressionTypeName } from "../class-expression-identity.js";
 import {
   emitStandaloneUnavailableGlobalThrow,
   standaloneUnavailableGlobalReference,
@@ -7222,7 +7223,7 @@ function compileNewExpression(ctx: CodegenContext, fctx: FunctionContext, expr: 
 
   const type = ctx.checker.getTypeAtLocation(expr);
   const symbol = type.getSymbol();
-  let className = symbol?.name;
+  let className = exactClassExpressionTypeName(ctx, type) ?? symbol?.name;
   // (#2681/#2686 A1) The fnctor symbol for a `new this()` callee, resolved from
   // the enclosing method's owner fnctor (the type symbol of `new this()` is
   // `any`/none, so `symbol` is undefined). Used by the #1679 build path below.

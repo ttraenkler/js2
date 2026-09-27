@@ -1654,7 +1654,7 @@ function buildIrClassShapes(
     if (!ts.isClassDeclaration(declaration) || !declaration.name) {
       continue;
     }
-    const className = declaration.name.text;
+    const className = ctx.anonClassExprNames.get(declaration) ?? declaration.name.text;
     if (
       !ctx.classSet.has(className) ||
       !ctx.structFields.has(className) ||
@@ -1675,7 +1675,7 @@ function buildIrClassShapes(
     out.set(classId, entry);
   }
   for (const { classId, declaration: stmt } of declarations) {
-    const className = ts.isClassExpression(stmt) ? ctx.anonClassExprNames.get(stmt) : stmt.name?.text;
+    const className = ctx.anonClassExprNames.get(stmt) ?? stmt.name?.text;
     if (!className) continue;
     // The selector needs a provisional descriptor population in order to
     // prove the bounded class atomically. Every downstream shape rebuild uses

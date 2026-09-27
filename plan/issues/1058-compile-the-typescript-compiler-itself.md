@@ -267,6 +267,41 @@ oracle-ratchet-allow:
 ---
 # #1058 — Compile the TypeScript compiler to Wasm (self-hosting stress test)
 
+## Namespace-class work in progress and main sync — 2026-09-27
+
+The namespace candidate extends existing class collection, exact declaration
+identity and runtime namespace initialization; it does not add a separate
+constructor lowering algorithm. On `0d666f5e85` plus the uncommitted candidate,
+`.tmp/namespace-classes-identity-candidate.log` measures **15/16** native-oracle,
+zero-import checks (eight shapes, IR on/off). The remaining IR-on case has two
+same-named namespace classes with different parameter-property layouts and
+reports duplicate direct-body receipts. This is unfinished, not accepted.
+Exported namespace function registration in the IR-off snapshot probe also
+remains open (the earlier separate matrix was **4/8**).
+
+User requested another main merge: fetched upstream main
+`7443ab4826fde65b72f875e0af12337a35520932` (six new commits). Preserve this
+candidate as a checkpoint before the merge, then finish exact body ownership
+and rerun focused checks on the merged tree. No new full scanner run has been
+completed; the last accepted result remains **0/984** callbacks passing.
+
+Checkpoint validation: namespace classes now defer their bodies to the existing
+in-scope class route, removing the duplicate receipts. Permanent regression
+tests pass **17/17**, including a shape-index conflict control; together with
+parameter-property tests, **37/37** (`.tmp/namespace-sync-tests-final.log`).
+The shape index is an IR-owned leaf keyed by class identity, refuses conflicting
+projections, and permits repeated aliases of the same shape object. Exact
+declaration ownership and source checks remain at the resolver boundary.
+Five adjacent files pass **22/22**; the broader module-bindings file passes
+**44/55** both with the candidate and on exact `0d666f5e85` production sources
+(all four tracked source diffs removed and verified clean for the baseline).
+The same eleven failing test names and failure messages reproduce; logs are
+`.tmp/namespace-sync-adjacent.log` and
+`.tmp/namespace-sync-bindings-baseline.log`. These failures are not resolved.
+Typecheck, lint, formatting and five architecture gates passed; no budget
+allowances increased. Reachability is preservation-only PASS, strict closure
+still FAIL/OPEN. This checkpoint is not a full upstream unit-suite pass.
+
 ## Resumed main integration — 2026-09-27
 
 Continuation verification: pinned original `factory.ts` passes **3/3** source

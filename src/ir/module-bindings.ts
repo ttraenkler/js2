@@ -21,6 +21,7 @@ import {
   type IrUnitId,
 } from "./identity.js";
 import type { IrClassShape } from "./nodes.js";
+import { indexIrClassShapesByIdentity } from "./class-shape-identity.js";
 import { makeFnctorArrayMethodPlan, type IrFnctorArrayMethodPlan } from "./fnctor-array-method.js";
 export type { IrFnctorArrayMethodPlan } from "./fnctor-array-method.js";
 import { heterogeneousAssignmentRetypesModuleBinding } from "./heterogeneous-module-bindings.js";
@@ -210,6 +211,7 @@ export function makeIrIdentityLocalClassExpressionResolver(
   const declarationCounts = new Map<ts.ClassDeclaration | ts.ClassExpression, number>();
   const symbolCounts = new Map<ts.Symbol, number>();
   const candidates: ProjectedClass[] = [];
+  const shapesByClassId = indexIrClassShapesByIdentity(projectedShapes.values());
   for (const record of identityContext.inventory.classes) {
     if (record.sourceId !== sourceId) continue;
     const statement = identityContext.declarationByClassId.get(record.id);
@@ -224,19 +226,13 @@ export function makeIrIdentityLocalClassExpressionResolver(
         ? statement.name?.text
         : irPreparedNestedOrdinaryClassBindingName(statement, fieldCallAdmission);
     if (legacyName === undefined) continue;
-    const shape = projectedShapes.get(legacyName);
+    const shape = shapesByClassId.get(record.id);
     if (!shape) continue;
     const classId = record.id;
     if (classId === undefined || identityContext.declarationByClassId.get(classId) !== statement) {
       return planningInvariant(
         "missing-class-declaration",
         `projected local class ${legacyName} has no exact structural class identity`,
-      );
-    }
-    if (shape.classId !== classId) {
-      return planningInvariant(
-        "class-record-mismatch",
-        `projected local class ${legacyName} carries ${shape.classId} instead of ${classId}`,
       );
     }
     const symbol = statement.name
