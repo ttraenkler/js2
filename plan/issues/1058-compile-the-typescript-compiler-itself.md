@@ -1298,6 +1298,71 @@ preservation-only contract, not a claim of strict closure. A fresh original
 `compilerCore` run passes **11/11 native and standalone callbacks**, zero imports,
 **1,573,325 bytes**, **3,539 ms** (`.tmp/source-compilerCore-physical-fields.log`).
 
+### Object-spread carrier continuation (2026-09-27, in progress)
+
+Signed checkpoint `4913aa84f1` completes the physical destructuring repair.
+The original scanner verification above terminated with native **984/984**,
+**54,829,428 bytes**, **323,462 ms**, but still invalid Wasm. Its first error
+moved from `doChange` to function 3080 `getRefactorActionsToRemoveFunctionBraces`:
+`fallthru[0] expected (ref null 6), got externref @+12991388`.
+Saved-binary inspection confirms `doChange` now reads the externref directly,
+without the invalid conversion. The new module still has 11 raw function imports:
+`Set_forEach`, `Set_add`, `__get_filename`, `__get_process_cwd`,
+`__get_process_platform`, `__get_dirname`, `__get_process_argv`,
+`__get_process_stdout`, `__process_exit`, `__js_array_new`, `__js_array_push`.
+No standalone scanner callback has executed.
+
+Diagnostic-only isolated-function validation identifies both failures as the
+`name` copy in `{ ...addBracesAction, notApplicableReason: info.error }` and its
+remove-action counterpart (`.tmp/scanner-remove-braces-validation.log`). The
+spread helper assumes the source field has the destination's carrier. A source
+`{ name: any }` spread into a typed `{ name: string }` return reproduces the exact
+validation error in **both lanes (0/2)** (`.tmp/spread-field-carrier-before.log`).
+The candidate reads source layout through the shared IR physical-field owner,
+tests absence using the source representation, and converts only the present
+value to the destination representation. Coercion keeps detached fallback
+bodies visible to late-import fixups. Both original reductions then pass **2/2**.
+
+Expanded carrier checks pass **12/12** for opaque/string, string/opaque,
+number/opaque, opaque/number, boolean/opaque, and object/opaque identity.
+Two exploratory optional-source cases still trap with `illegal cast`; the
+existing nullish-source suite also fails **2/2**, identically reproduced on
+clean `58fce98114` (`.tmp/spread-nullish-control.log` in the retained array control).
+Do not claim optional/nullish sources fixed by this carrier change. Testing
+absent properties separately exposed a second real defect: the "spread overrides
+a named writer" shortcut also ran when there was **no named writer**, discarding
+all earlier spreads. It now requires a named writer; spread-only literals use
+the existing ordered fallback chain. Both copies of that chain are kept visible
+to coercion-time import fixups. The final matrix passes **14/14**, including
+named fallback and earlier-spread fallback (bitmask **15**, previously **7**).
+
+Final focused tests pass **45/45 across four files**
+(`.tmp/spread-field-carrier-final-tests.log`), covering the new matrix, ordinary
+object literals, the prior destructuring fix, and symbolic IR field access.
+The generic spread/rest suite fails **13/13** on missing `string_constants`
+test imports; all 13 reproduce on clean `58fce98114`, while ordinary object
+literals pass **21/21** there (`.tmp/spread-generic-control.log`). This is
+separate from the two reproduced optional-source casts above.
+Type-checking, lint and all five source gates pass on the final production edit
+(`.tmp/spread-field-carrier-{tsc,lint,loc,func,coercion,oracle,exports}2.log`),
+without allowance growth. Dead-export checking remains preservation-only.
+
+Frozen-candidate full scanner verification is running in session `66192`,
+report `.tmp/source-scanner-spread-fields.log`, binary
+`.tmp/source-scanner-spread-fields.wasm`. Fresh compilerCore/factory verification
+is running in session `48211`, `.tmp/source-<suite>-spread-fields.log`.
+Keep this frontier open until the real scanner result is read; a reduced test
+passing is not proof the complete scanner now validates or runs.
+
+The source-unit loop (session `2269`) spans this next edit and is diagnostic,
+not a single frozen-candidate batch. Before the spread edit, factory **3/3**,
+diagnosticCollection **5/5**, and base64 **1/1** completed standalone with zero
+imports on `4913aa84f1`; compilerCore **11/11** was already verified above.
+The loop subsequently completed (exit 0); comments **3/3**, parsePseudoBigInt
+**5/5**, paths **14/14**, and asserts **2/2** each passed with zero imports.
+These later results must retain their mixed-edit provenance and must not be
+combined into a claimed post-spread **44/44** without a fresh frozen-candidate run.
+
 The user requested a main merge and continuation. The former temporary checkout
 was cleaned out, but branch `codex/1058-typescript-standalone` retained the signed
 handoff at `efd9aca79c5aba4bfd6670847be925a027ed219f`. Work now lives in

@@ -79,6 +79,7 @@ import {
 } from "./index.js";
 import { ensureExnTag, nextModuleGlobalIdx } from "./registry/imports.js";
 import { buildTargetTaggedTry } from "../ir/try-table.js";
+import { physicalObjectFields } from "../ir/physical-object-field.js";
 import {
   compileNativeGeneratorFunction,
   emitNativeGeneratorToVec,
@@ -3336,6 +3337,28 @@ function spreadGuardBlockType(fieldType: ValType): ValType {
   return fieldType;
 }
 
+/** Coerce the present source value while keeping fallback calls visible to late-import fixups. */
+function coerceSpreadFieldRead(
+  ctx: CodegenContext,
+  fctx: FunctionContext,
+  read: Instr[],
+  sourceType: ValType,
+  targetType: ValType,
+  fallback: Instr[],
+): Instr[] {
+  if (valTypesMatch(sourceType, targetType)) return read;
+  const saved = pushBody(fctx);
+  fctx.savedBodies.push(fallback);
+  fctx.body = read;
+  try {
+    coerceType(ctx, fctx, sourceType, targetType);
+    return fctx.body;
+  } finally {
+    fctx.savedBodies.pop();
+    popBody(fctx, saved);
+  }
+}
+
 /**
  * (#4616) Read `fieldIdx` from a spread source struct with an ABSENT-slot
  * fallback. A partial source (`{ ...defaults, ...options }` where `options`
@@ -3354,47 +3377,30 @@ function spreadFieldReadWithAbsentFallback(
   fieldType: ValType,
   fallback: Instr[],
 ): Instr[] {
+  const sourceType = physicalObjectFields(ctx.mod.types, src.srcStructTypeIdx)?.[fieldIdx]?.type;
+  if (!sourceType) throw new Error(`Missing physical spread field ${src.srcStructTypeIdx}:${fieldIdx}`);
   const read: Instr[] = [
     { op: "local.get", index: src.local },
     { op: "struct.get", typeIdx: src.srcStructTypeIdx, fieldIdx },
   ];
-  if (fieldType.kind === "externref") {
-    const isUndefIdx = ctx.funcMap.get("__extern_is_undefined");
-    if (isUndefIdx === undefined) return read;
-    const vTmp = allocTempLocal(fctx, { kind: "externref" });
-    const out: Instr[] = [
-      ...read,
-      { op: "local.tee", index: vTmp },
-      { op: "call", funcIdx: isUndefIdx },
-      {
-        op: "if",
-        blockType: { kind: "val", type: fieldType },
-        then: fallback,
-        else: [{ op: "local.get", index: vTmp }],
-      },
-    ];
-    releaseTempLocal(fctx, vTmp);
-    return out;
+  // Presence belongs to the source representation; only the present arm is
+  // converted to the destination field carrier (#1058).
+  if (sourceType.kind !== "f64" && !(sourceType.kind === "externref" && ctx.funcMap.has("__extern_is_undefined"))) {
+    return coerceSpreadFieldRead(ctx, fctx, read, sourceType, fieldType, fallback);
   }
-  if (fieldType.kind === "f64") {
-    const vTmp = allocTempLocal(fctx, { kind: "f64" });
-    const out: Instr[] = [
-      ...read,
-      { op: "local.tee", index: vTmp },
-      { op: "i64.reinterpret_f64" },
-      { op: "i64.const", value: 0x7ff00000deadc0den },
-      { op: "i64.eq" },
-      {
-        op: "if",
-        blockType: { kind: "val", type: fieldType },
-        then: fallback,
-        else: [{ op: "local.get", index: vTmp }],
-      },
-    ];
-    releaseTempLocal(fctx, vTmp);
-    return out;
-  }
-  return read;
+  const vTmp = allocTempLocal(fctx, sourceType);
+  const present = coerceSpreadFieldRead(ctx, fctx, [{ op: "local.get", index: vTmp }], sourceType, fieldType, fallback);
+  const missing: Instr[] =
+    sourceType.kind === "f64"
+      ? [{ op: "i64.reinterpret_f64" }, { op: "i64.const", value: 0x7ff00000deadc0den }, { op: "i64.eq" }]
+      : [{ op: "call", funcIdx: ctx.funcMap.get("__extern_is_undefined")! }];
+  releaseTempLocal(fctx, vTmp);
+  return [
+    ...read,
+    { op: "local.tee", index: vTmp },
+    ...missing,
+    { op: "if", blockType: { kind: "val", type: spreadGuardBlockType(fieldType) }, then: fallback, else: present },
+  ];
 }
 
 function pushStrictMethodLiteralAllocation(
@@ -3539,7 +3545,8 @@ export function compileObjectLiteralForStruct(
       let resolved = false;
       if (srcStructName) {
         const srcStructTypeIdx = ctx.structMap.get(srcStructName);
-        const srcFields = ctx.structFields.get(srcStructName);
+        const srcFields =
+          srcStructTypeIdx === undefined ? undefined : physicalObjectFields(ctx.mod.types, srcStructTypeIdx);
         if (srcStructTypeIdx !== undefined && srcFields) {
           const srcValType: ValType = { kind: "ref", typeIdx: srcStructTypeIdx };
           const srcLocal = allocLocal(fctx, `__spread_obj_${fctx.locals.length}`, srcValType);
@@ -3923,7 +3930,7 @@ export function compileObjectLiteralForStruct(
         }
       }
     }
-    if (overridingSpread) {
+    if (lastMatch && overridingSpread) {
       // (#4616) A spread source can be NULLISH at runtime (`{ a: 1,
       // ...options }` with `options` an optional param — jest's
       // deepCyclicCopy) and §13.2.5.5 CopyDataProperties SKIPS a nullish
@@ -4082,6 +4089,11 @@ export function compileObjectLiteralForStruct(
         const src = spreadSources[si]!;
         const fieldIdx = src.srcFields.findIndex((f) => f.name === field.name);
         if (fieldIdx < 0) continue;
+        // Both copies of the earlier-writer chain must survive any imports
+        // registered by source-to-destination coercion, without shared nodes.
+        fctx.savedBodies.push(chain);
+        const present = spreadFieldReadWithAbsentFallback(ctx, fctx, src, fieldIdx, field.type, structuredClone(chain));
+        fctx.savedBodies.pop();
         chain = [
           { op: "local.get", index: src.local },
           { op: "ref.is_null" },
@@ -4089,10 +4101,7 @@ export function compileObjectLiteralForStruct(
             op: "if",
             blockType: { kind: "val", type: spreadGuardBlockType(field.type) },
             then: chain,
-            // structuredClone: the fallback re-embeds the inner chain, and the
-            // late-import shifter must never see the SAME instr object through
-            // two parent arrays (it would double-shift its funcIdx).
-            else: spreadFieldReadWithAbsentFallback(ctx, fctx, src, fieldIdx, field.type, structuredClone(chain)),
+            else: present,
           },
         ];
       }
