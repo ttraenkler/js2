@@ -461,7 +461,7 @@ export function createMultiPreparedProgramOwner<Plan extends MultiPreparedScalar
     ctx,
     overlayEnabled: !!options?.experimentalIR && !ctx.fast,
   });
-  if (options?.trackIrOutcomes === true && options.experimentalIR !== true) owner.sealBodyBoundary();
+  if (options?.experimentalIR !== true) owner.sealBodyBoundary();
   return owner;
 }
 

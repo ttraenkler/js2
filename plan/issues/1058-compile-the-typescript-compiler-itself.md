@@ -302,6 +302,46 @@ Typecheck, lint, formatting and five architecture gates passed; no budget
 allowances increased. Reachability is preservation-only PASS, strict closure
 still FAIL/OPEN. This checkpoint is not a full upstream unit-suite pass.
 
+Main merge completed cleanly as signed `a1c55a375b`, with fetched upstream
+`7443ab4826fde65b72f875e0af12337a35520932` verified as an ancestor. On that
+tree, eight integration files pass **66/66**
+(`.tmp/main7443-namespace-integration.log`), typecheck and five architecture
+gates pass (preservation-only reachability caveat unchanged), and the pinned
+original compiler-core suite passes **11/11**, zero imports, 1,574,704 bytes.
+
+Corrected attribution for the remaining snapshot failure: namespace export is
+not the discriminator. A crossed export/tracking matrix is **2/4**: both
+unexported and exported namespaces fail with IR disabled and tracking off,
+and both pass with tracking on (`.tmp/main7443-namespace-tracking.log`). The
+eight snapshot cases remain **4/8** without tracking. `generateModule` and
+`generateMultiModule` currently create planning identities only for IR or
+outcome tracking, but namespace body emission requires the exact callable
+registry. Tracking therefore changes runtime behavior. Next: make that shared
+identity available for runtime namespaces independently of diagnostic tracking;
+test both toggles and ambient exclusions without introducing a name-based
+legacy fallback. The full scanner result is still not remeasured.
+
+The tracking-independent identity fix now passes **4/4** toggle controls and
+**8/8** snapshot variants. Linked-module testing additionally caught the
+telemetry-only lifecycle condition in `createMultiPreparedProgramOwner`; a
+non-IR owner now seals its body boundary regardless of telemetry, retaining
+the same lifecycle checks rather than bypassing them. Permanent tests cross
+IR on/off, tracking on/off, namespace export, class identity and initialization;
+they also cover linked sources, ambient exclusions and conflicting projections.
+Final focused run is **80/80** across four files, including the 18 existing
+whole-program lifecycle/census checks:
+`.tmp/namespace-tracking-lifecycle-final.log`. Format/lint and five gates pass
+against main `7443ab4826f`; no allowances increased, strict closure still open.
+
+Original factory source on the signed merge passes **3/3**, zero imports,
+14,308,932 bytes in 107,733 ms (`.tmp/main7443-source-factory.log`). It predates
+the tracking follow-up, so is not a final-tree source claim. Full scanner O1
+was started on the frozen tracking candidate as session `78623`, output
+`.tmp/main7443-namespace-source-scanner-o1.log`. Do not restart or kill it;
+poll that handle to completion. No scanner improvement is claimed yet.
+Final-tree typecheck also completed successfully (`20297`,
+`.tmp/namespace-tracking-typecheck-final.log`).
+
 ## Resumed main integration — 2026-09-27
 
 Continuation verification: pinned original `factory.ts` passes **3/3** source

@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Loopdive GmbH. Licensed under Apache-2.0 WITH LLVM-exception.
 import { ts, forEachChild } from "../ts-api.js";
+import { requiresRuntimeModuleIdentity } from "../ir/runtime-module-identity.js";
 import { collectClassInstanceFieldDeclarations } from "../ir/class-instance-initializers.js";
 import { fillLiveArrayIterator } from "./live-array-iterator.js";
 import { inferredClosureSignature, inferredReturnedClosureSignature } from "../ir/inferred-closure-signature.js";
@@ -5283,7 +5284,7 @@ export function generateModule(
 ): GeneratedModule {
   const mod = createEmptyModule();
   const irPlanningIdentityContext =
-    options?.experimentalIR || options?.trackIrOutcomes
+    options?.experimentalIR || options?.trackIrOutcomes || requiresRuntimeModuleIdentity(ast.sourceFile)
       ? buildIrPlanningIdentityContext(
           buildIrUnitInventory([ast.sourceFile], { ...inventoryOptions, entrySource: ast.sourceFile }),
         )
@@ -10673,7 +10674,7 @@ function compileMultiPreparedProgramOverlays(
 export function generateMultiModule(multiAst: MultiTypedAST, options?: CodegenOptions): GeneratedCodegenModule {
   const mod = createEmptyModule();
   const irPlanningIdentityContext =
-    options?.experimentalIR || options?.trackIrOutcomes
+    options?.experimentalIR || options?.trackIrOutcomes || multiAst.sourceFiles.some(requiresRuntimeModuleIdentity)
       ? buildIrPlanningIdentityContext(
           buildIrUnitInventory(multiAst.sourceFiles, {
             entrySource: multiAst.entryFile,
