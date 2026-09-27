@@ -830,11 +830,66 @@ snapshot's object-field decoder did not expose their fields; its object strings
 do not prove the entries are empty or well-formed. The precise full-suite
 deletion defect still needs stronger evidence.
 Post-candidate source typecheck, changed-file format/lint and issue check pass.
-Fresh original-suite O1 run **70877** writes
-`.tmp/incremental-erased-spread-o1.log`; diagnostic-only capture **81816** writes
-`.tmp/incremental-capture-erased-spread.log` and
-`.tmp/incremental-raw-erased-spread.wasm`. Both start from `16b003286c` plus the
-complete erased-spread/nullish-guard repair. Do not restart live handles.
+Original-suite O1 run **70877** is terminal:
+`.tmp/incremental-erased-spread-o1.log`, native **153/153**, standalone **90/153**,
+valid **24,189,083-byte** O1 binary, **653,827 ms**, **zero imports**, same
+27/27/9 comment-assertion mismatch rows. Diagnostic capture **81816** is also
+terminal: **38,672,300 bytes**, **456,750 ms**, seven diagnostic imports
+(`.tmp/incremental-capture-erased-spread.log`,
+`.tmp/incremental-raw-erased-spread.wasm`). Both use the complete production
+state committed as `db38cfd0f7`, not the guarded-receiver repair below.
+
+### Guarded structural field recovery investigation
+
+The improved callback-69 diagnostic reads native keys built with the binary's
+own string constructors, verifies their rendering, then uses the dynamic field
+getter. All three old directive entries are valid: ranges **43–56**, **137–150**,
+**233–246**, each type **1**, with undefined fresh directives
+(`.tmp/incremental-directive-fields-69.log`, artifact from `5bc11fda58`). Thus
+the previous object-field snapshot was incomplete, not evidence of empty data.
+An additional runtime-layout predicate experiment aborted inside Binaryen
+validation (`.tmp/incremental-directive-range-carrier-69.log`); it supplies no
+valid runtime evidence and must not be reported as a successful type test.
+
+The actual merge body's WAT uses a guarded cast for the destructured `range`.
+`emitNullGuardedStructGet` has a concrete control-flow defect: on cast mismatch
+it computes a read using the saved original receiver, then unconditionally
+dispatches again on the cast's null result, overwriting that recovered value.
+Candidate removes the duplicated recovery dispatch: after checking the backup
+is not genuinely nullish, replace the dispatch receiver with that backup and
+run the normal primary/alternate/dynamic lookup once. This changes no layout
+metadata or coercion vocabulary. Original-suite verification is pending.
+
+Durable zero-import/native-oracle controls now give **12/12**, versus **6/12**
+with only `property-access.ts` restored from exact `db38cfd0f7`. The six repaired
+rows cover a factory's wider physical layout passing through an optional field,
+nested destructuring, and zero/negative values, in IR-off/on modes. Exact-layout
+and genuinely null/undefined throwing controls continue to pass. Logs:
+`.tmp/guarded-receiver-candidate.log`, `.tmp/guarded-receiver-baseline.log`.
+Earlier raw-any/JSON variants do not reach this repair and still trap; do not
+claim general structural-cast completeness from this slice.
+
+Diagnostic-only capture **42724** writes
+`.tmp/incremental-capture-guarded-receiver.log` and
+`.tmp/incremental-raw-guarded-receiver.wasm`; original-suite O1 run **5466** writes
+`.tmp/incremental-guarded-receiver-o1.log`. Both start from `db38cfd0f7` plus this
+complete recovery repair. Do not restart live handles or call the 63 upstream
+rows fixed yet.
+
+Adjacent seven-file run reports 102/104 passes (includes explicit expected
+failures, not 102 semantic passes). Both failures reproduce with the exact
+`db38cfd0f7` property reader: the presence-read inlining census expects at least
+four but sees three, and the module-scope undefined receiver in the member-read
+suite unexpectedly passes its stale `it.fails` assertion. Neither is a new
+regression or repair credit. Logs: `.tmp/guarded-receiver-adjacent.log` and
+`.tmp/guarded-receiver-adjacent-baseline.log`. Typecheck, formatting, lint, LOC,
+function, coercion and oracle gates pass. Reachability is preservation-only
+PASS; strict modeled closure remains FAIL/OPEN. No new allowance was added.
+
+The next requested upstream sync fetched authoritative main at
+`f17af38a810e8ce8a3aa3b33c994a9a9965331ec`: one new baseline-refresh commit.
+Checkpoint this repair before merging; the live original-suite runs above
+remain pre-merge measurements.
 
 Earlier requested upstream sync completed: authoritative `loopdive/js2` main at
 `c603404b4f2258ed59377bd591a287523e4af99b` merged cleanly in signed commit

@@ -1879,39 +1879,12 @@ export function emitNullGuardedStructGet(
                   blockType: { kind: "empty" },
                   // Backup is also null → genuinely null, throw TypeError
                   then: typeErrorThrowInstrs(ctx, undefined, fctx),
-                  // Backup is non-null → wrong struct type, try primary + alternates on backup
+                  // Recover the receiver, then dispatch exactly once below.
+                  // Reading here would be overwritten by the subsequent
+                  // dispatch on the failed cast's null result.
                   else: [
                     { op: "local.get", index: backupLocal },
-                    { op: "ref.test", typeIdx },
-                    {
-                      op: "if",
-                      blockType: { kind: "empty" },
-                      then: [
-                        ...(primaryPresenceSlot !== undefined
-                          ? ([
-                              { op: "local.get", index: backupLocal },
-                              { op: "ref.cast", typeIdx },
-                              ...presenceTestInstrs(typeIdx, primaryPresenceSlot),
-                              {
-                                op: "if",
-                                blockType: { kind: "val", type: resultType },
-                                then: [
-                                  { op: "local.get", index: backupLocal },
-                                  { op: "ref.cast", typeIdx },
-                                  { op: "struct.get", typeIdx, fieldIdx },
-                                ],
-                                else: absentValueInstrs(),
-                              },
-                            ] satisfies Instr[])
-                          : ([
-                              { op: "local.get", index: backupLocal },
-                              { op: "ref.cast", typeIdx },
-                              { op: "struct.get", typeIdx, fieldIdx },
-                            ] satisfies Instr[])),
-                        { op: "local.set", index: resultLocal },
-                      ],
-                      else: buildFallback(backupLocal, 0),
-                    },
+                    { op: "local.set", index: tmpAny },
                   ],
                 },
               ] satisfies Instr[])
