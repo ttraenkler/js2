@@ -269,6 +269,24 @@ oracle-ratchet-allow:
 
 ## Main synchronization and incremental-parser trace — 2026-09-27
 
+### Latest accepted milestone and live work
+
+At `bbedc0f5bc`, the checked-in source-unit runner passes all **153/153 original
+incremental-parser callbacks** natively and in standalone Wasm, with **zero
+imports**. The durable O1 artifact is **23,649,983 bytes**, compilation
+**669,890 ms** (`.tmp/incremental-durable-runner-o1.log`, completed handle
+**40524**). This confirms admission of the tenth source-unit file, not
+completion of the 256-file goal. The nine earlier files' 1028/1028 result is
+historical and has not been rerun at this HEAD; do not present an aggregate
+1181/1181 as one current measurement.
+
+Live: full standalone checker, handle **13735**,
+`.tmp/checker-standalone-full.log`; original semantic-version units, handle
+**25190**, `.tmp/semver-original-o1.log` (native already **692/692**, Wasm not
+yet measured). Neither may be restarted merely because output is quiet.
+The full checker must execute all three exact diagnostic oracles, not merely
+compile; self-hosting and the remaining original unit files stay OPEN.
+
 ### Unfinished required-field checkpoint before upstream sync
 
 Follow-up: native-oracle recursive-field controls show an actual wrong value,
@@ -960,6 +978,14 @@ Durable standalone O1 handle **40524** remains live, logging to
 `.tmp/incremental-durable-runner-o1.log`; earlier-driver candidate rerun
 **8238** is separate. Do not restart either based on quiet output.
 
+The earlier-driver follow-up **8238 is now terminal and passes**: native
+**153/153**, standalone **153/153**, zero imports, valid **23,649,979-byte** O1
+binary, **598,327 ms** compilation. This revalidates `a1d142d1a1`'s generic
+push change. Durable-adapter run **40524** subsequently also passed
+**153/153 native and 153/153 standalone**, zero imports, valid **23,649,983-byte**
+O1 binary, **669,890 ms** compilation. Its 14 runner tests, unchanged original
+tree checks, and negative-control failures above remain part of the evidence.
+
 Next compiler stage is the full checker, whose older measurement stopped at
 an out-of-frame local in `shouldRemoveDeclaration`. A tracked standalone
 checker wrapper now keeps all three existing oracle strings inside Wasm,
@@ -973,6 +999,20 @@ zero-argument invocations is now running through the existing build probe
 (`.tmp/checker-standalone-full.log`, handle **13735**, one-hour timeout,
 8192 MB worker heap).
 No fresh full-checker compilation or Wasm execution is yet credited.
+
+### Next original unit file: semantic versions
+
+While those builds run, the unmodified `semver.ts` callback body is being
+measured against the original compiler namespace and original Utils.theory.
+Native requires the existing registration functions bound on globalThis so
+the separately imported theory helper can register its callbacks; without
+that binding, native initialization correctly fails rather than reporting an
+empty pass. With those bindings it registers and passes **692/692** callbacks
+(`.tmp/semver-native.log`). Standalone original-source O1 run **25190** is
+active in `.tmp/semver-original-o1.log`; no Wasm coverage credited yet and the
+file has not been admitted to the durable accepted-file list. The scratch
+driver is `.tmp/next-source-unit.mjs`; its initial diagnostic exit code remains
+1 regardless of success, so inspect result rows and provenance, not that code.
 
 Earlier requested upstream sync completed: authoritative `loopdive/js2` main at
 `c603404b4f2258ed59377bd591a287523e4af99b` merged cleanly in signed commit
