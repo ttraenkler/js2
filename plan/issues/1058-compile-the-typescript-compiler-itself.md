@@ -343,19 +343,41 @@ relocated), leaving the live source-suite compiler tree frozen; the rollback
 positive control reproduces **8/16**, matching the prior physical-removal run.
 `.tmp/ref-overlay-adjacent.log`, `.tmp/ref-overlay-adjacent-baseline.log`.
 
-The eight other original source suites are being rechecked serially under
-session **56632**, `.tmp/source-ref-overlay-<suite>.log`: factory **3/3**,
-compilerCore **11/11**, diagnosticCollection **5/5**, all zero imports, are
-terminal. Base64 was verified compiling in worker **44850**; comments,
-parsePseudoBigInt, paths, and asserts remain queued. Do not restart the batch
-just because an observation expires. Poll the same session to completion.
+The eight other original source suites completed revalidation under session
+**56632** (terminal exit 0), `.tmp/source-ref-overlay-<suite>.log`: factory
+**3/3**, compilerCore **11/11**, diagnosticCollection **5/5**, base64 **1/1**,
+comments **3/3**, parsePseudoBigInt **5/5**, paths **14/14**, asserts **2/2**.
+Every native and Wasm callback passes; every module validates with zero imports.
+Together with scanner recovery this is **1,028/1,028** callbacks across the
+**nine admitted source files**, not the full 256-file inventory.
 
 Next: finish that revalidation, then expand beyond the nine admitted original
 files. `incrementalParser.ts` is a relevant next target: it exercises parent
 links and incremental tree equivalence through original `Utils.assertInvariants`
 and `Utils.assertStructuralEquals`. Preserve these checks, resolve the original
 Utils namespace and shared assertion bootstrap, and measure native callback
-count before declaring a floor. **The 256-file unit inventory and standalone
+count before declaring a floor. Initial native measurement now passes
+**153/153** original incremental-parser callbacks, retaining original Utils
+tree checks (`.tmp/incremental-native.mjs`, `.tmp/incremental-native.log`).
+The native-only probe resolves existing Chai 5.3.3 and diff 8.0.3 dependencies
+from the shared dependency store; no dependencies were installed and no
+upstream assertions were removed. First source-graph standalone attempt
+completed as session **53971**, `.tmp/incremental-source-initial.log`:
+O0 compiles and validates **41,866,012 bytes** in **290,521 ms**, but seven
+Node-environment imports remain (filename, dirname, cwd, platform, argv,
+stdout, exit). The import gate correctly refuses execution: **0/153 measured
+Wasm callbacks**, not 153 runtime failures and not standalone acceptance.
+O1 remeasurement is running as session **59834** in
+`.tmp/incremental-source-o1.log`; resume the
+existing process rather than restarting it. Scanner recovery required O1 to
+eliminate the same import names, but this is not evidence it will do so here.
+Native anti-vacuity controls inject a throw into each original Utils check
+independently: both `assertInvariants` and `assertStructuralEquals` change
+**153/153** passing callbacks into **0/153**, with the injected error in all
+153 rows. `.tmp/incremental-invariant-control.log` and
+`.tmp/incremental-structural-control.log`. These controls modify only the
+in-memory diagnostic bundle, not the pinned upstream files or live compiler.
+**The 256-file unit inventory and standalone
 self-hosting goal are still OPEN**; scanner recovery completion is not parser
 or full-TypeScript completion.
 
