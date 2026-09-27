@@ -1010,6 +1010,22 @@ function valueRepresentableInField(ctx: CodegenContext, valueExpr: ts.Expression
   }
 }
 
+function supportsCompiledStructAccessor(
+  ctx: CodegenContext,
+  fctx: FunctionContext,
+  receiver: ts.Expression,
+  receiverType: ts.Type,
+  structName: string | undefined,
+): boolean {
+  // Constructor properties belong to the identity-keyed runtime bag, never
+  // the instance-type classAccessorSet consulted by compiled instance reads.
+  return (
+    structName !== undefined &&
+    !(ctx.standalone && receiverType.getConstructSignatures().length > 0) &&
+    (ctx.standalone || ctx.wasi || !bindingSlotIsExternref(ctx, fctx, receiver))
+  );
+}
+
 export function compileObjectDefineProperty(
   ctx: CodegenContext,
   fctx: FunctionContext,
@@ -1642,8 +1658,7 @@ export function compileObjectDefineProperty(
   // (an object literal with callable fields lowered to a host object) must take
   // the runtime accessor path — a compiled `${struct}_get_<p>` is invisible to
   // host [[Get]] and so to the iterator-protocol helpers.
-  const receiverIsStaticStruct =
-    structName !== undefined && (ctx.standalone || ctx.wasi || !bindingSlotIsExternref(ctx, fctx, objArg));
+  const receiverIsStaticStruct = supportsCompiledStructAccessor(ctx, fctx, objArg, objTsType, structName);
   // #4504: `C.prototype` is an inherited-descriptor owner, never the
   // instance's physical struct.  The historical static-struct accessor path
   // recorded `${C}_p` in `classAccessorSet`, which later made the closed-field

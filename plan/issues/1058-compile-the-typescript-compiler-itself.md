@@ -12869,6 +12869,52 @@ and deletion is not certified. No new size allowances were added.
 
 ### Qualified static-method mutation continuation (2026-09-28)
 
+Follow-up: the inline `Object.defineProperty` accessor path registered a
+constructor's descriptor as an instance-type accessor in `classAccessorSet`,
+while qualified static calls read the identity-keyed runtime bag. Constructor
+accessors now use the existing runtime descriptor applier. The routing-only
+candidate passed the original **18/18** but failed preservation of an omitted
+`configurable` flag: the bag had no initial method descriptor to merge against.
+That candidate alone is insufficient and was not committed.
+
+Ordinary own static methods are now installed into the identity-keyed bag once,
+inside the existing class-object singleton initializer, with explicit method
+attributes. This reuses the existing native descriptor implementation and
+closure creation rather than inventing parallel descriptor state. Private
+methods, static accessor/field collisions, and classes with runtime-key static
+members are excluded from this seed; their existing lowering remains, and this
+is not a claim of complete class descriptor semantics. Constructor definitions
+must not register instance-type accessors. Readers and mutators of
+`classAccessorSet`/`structAccessorClosure` were enumerated; no new registry or
+lifecycle was introduced. The shared static-method install helper also retains
+the host registration path; it was extracted to meet the function-size gate,
+not granted another allowance.
+
+Expanded standalone A/B (both IR settings), replacing exactly `object-ops.ts`
+and `expressions/extern.ts` with their `61a1a3cc21` versions, improves focused
+checks **16/28 → 28/28**. Added native-oracle controls cover accessor `this`,
+constructor/instance isolation, descriptor roundtrip, accessor-to-value
+redefinition and omitted-flag preservation. Six-file comparison is baseline
+**115 passed / 13 failed / 7 skipped**, candidate before helper extraction
+**127 passed / 1 failed / 7 skipped**, **135 total** on each side. The remaining
+host snapshot failure returns 66529 rather than its pinned 66528 on both sides;
+the skips are missing local fixtures, not passes. Evidence:
+`.tmp/static-accessor-seeded-final-baseline.log` and
+`.tmp/static-accessor-seeded-final.log`. Post-extraction verification repeats
+the same **127 passed / 1 failed / 7 skipped**, including **28/28** focused
+checks (`.tmp/static-accessor-final-v2.log`). Type checking, lint and
+LOC/function budgets pass without new allowances. The moved-code audit is
+preservation-only **6/6** full and **6/6** cut witnesses, not strict IR closure:
+the production graph remains **OPEN**, strict modeled closure **FAIL** and
+retirement/deletion **NOT CERTIFIED**.
+
+Original semver with the full descriptor seed, before the mechanical helper
+extraction: native **692/692**, standalone **684/692**, same eight failures at
+1002:31, valid zero-import Wasm, 7,064,133 bytes, 144,063 ms at O1, unchanged
+TypeScript pin. Evidence: `.tmp/semver-seeded-constructor-accessor-o1.log`.
+The namespace-object failure remains independent and open; no parser/checker
+or self-hosting completion is claimed.
+
 Qualified compiled class calls now reuse the existing dynamic member-call
 emitter instead of assuming the originally declared method remains installed.
 The caller records existing static-sidecar demand; the shared emitter evaluates

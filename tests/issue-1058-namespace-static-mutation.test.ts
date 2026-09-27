@@ -23,6 +23,26 @@ const cases: Record<string, readonly [string, number]> = {
     "let n=0;Object.defineProperty(ns.C,'read',{get(){throw new Error('stop');}});try{ns.C.read(++n);}catch{return n===0?7:0;}return 0;",
     7,
   ],
+  accessorReceiver: [
+    "Object.defineProperty(ns.C,'read',{get(){return function(this:any){return this===ns.C?8:0;};}});return ns.C.read();",
+    8,
+  ],
+  constructorInstanceIsolation: [
+    "Object.defineProperty(ns.C,'read',{get(){return()=>8;}});const instance:any=new ns.C();return typeof instance.read==='undefined'?ns.C.read():0;",
+    8,
+  ],
+  descriptorRoundtrip: [
+    "Object.defineProperty(ns.C,'read',{configurable:true,get(){return()=>8;}});const d=Object.getOwnPropertyDescriptor(ns.C,'read')!;return d.get!.call(ns.C)();",
+    8,
+  ],
+  accessorThenValue: [
+    "Object.defineProperty(ns.C,'read',{configurable:true,get(){return()=>8;}});Object.defineProperty(ns.C,'read',{value:()=>9});return ns.C.read();",
+    9,
+  ],
+  preserveConfigurable: [
+    "Object.defineProperty(ns.C,'read',{get(){return()=>8;}});return Object.getOwnPropertyDescriptor(ns.C,'read')!.configurable?1:0;",
+    1,
+  ],
 };
 
 for (const experimentalIR of [false, true]) {

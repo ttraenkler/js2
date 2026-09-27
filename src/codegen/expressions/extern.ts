@@ -19,7 +19,8 @@ import { tryCompileNativeWeakMethodCall } from "../weak-collections-runtime.js";
 import { tryCompileNativeWeakRefDeref } from "../weakref-runtime.js";
 import { noJsHost } from "../js-errors.js";
 import { tryEmitStaticOrNativeIsPrototypeOf } from "../native-is-prototype-of.js";
-import { addHostStringConstantGlobal } from "../registry/imports.js";
+import { addHostStringConstantGlobal, addStringConstantGlobal } from "../registry/imports.js";
+import { ensureObjectRuntime } from "../object-runtime.js";
 import { emitStandaloneClassProtoObject } from "../class-proto-object.js"; // (#3976) standalone proto as a real $Object
 import { classMemberFuncKey, fnctorAncestorOfClass } from "../class-member-keys.js";
 import { emitFuncRefAsClosure } from "../closures.js";
@@ -453,6 +454,19 @@ export function emitLazyClassObjectGet(ctx: CodegenContext, fctx: FunctionContex
   const fields = ctx.structFields.get(className);
   if (structTypeIdx === undefined || !fields) return false;
 
+  // Seed ordinary own static methods before this singleton can escape. The
+  // descriptor applier must merge against the actual initial property, not
+  // treat replacement of a method as creation of a non-configurable property.
+  // Runtime-key collisions remain owned by ClassDefinitionEvaluation.
+  const seedStandaloneMethods =
+    ctx.standalone && !(ctx.classDynamicMembers.get(className) ?? []).some((member) => member.isStatic);
+  if (seedStandaloneMethods && (ctx.classStaticMethodNames.get(className)?.length ?? 0) > 0) {
+    ensureObjectRuntime(ctx);
+    for (const methodName of ctx.classStaticMethodNames.get(className) ?? []) {
+      addStringConstantGlobal(ctx, methodName);
+    }
+  }
+
   // Look up the pre-registered `__register_class_object` host import (added
   // in `generateModule` when any class declaration is present). CSV string
   // global is registered lazily here so classes whose class object is
@@ -570,47 +584,7 @@ export function emitLazyClassObjectGet(ctx: CodegenContext, fctx: FunctionContex
     }
   }
 
-  // (#4371) Install the REAL compiled closures behind declared static-method
-  // reads on a dynamically carried class object. The legacy registration above
-  // provides the own-key/descriptor allowlist but its host bridge is only a
-  // throwing placeholder. A descriptor-aware sidecar value preserves the
-  // class object's closed-struct identity (needed by dynamic `new K()`) while
-  // letting the existing host closure wrapper dispatch back into Wasm.
-  //
-  // Build this inside `initBody`: the singleton guard means each closure is
-  // created once, and sidecar reads/reassign/delete all observe that same value.
-  const registerStaticMethodIdx = ctx.funcMap.get("__register_class_static_method");
-  if (registerStaticMethodIdx !== undefined) {
-    const staticMethodNames = ctx.classStaticMethodNames.get(className) ?? [];
-    const savedBody = fctx.body;
-    fctx.body = initBody;
-    ctx.liveBodies.add(savedBody);
-    try {
-      for (const methodName of staticMethodNames) {
-        const fullName = `${className}_${methodName}`;
-        const methodIdx = ctx.funcMap.get(classMemberFuncKey(ctx, fullName, "static"));
-        if (methodIdx === undefined) continue;
-        const methodNameGlobalIdx = addHostStringConstantGlobal(ctx, methodName);
-        if (methodNameGlobalIdx === undefined) continue;
-
-        fctx.body.push({ op: "global.get", index: classObjIdx() });
-        fctx.body.push({ op: "global.get", index: methodNameGlobalIdx });
-        const closureType = emitFuncRefAsClosure(ctx, fctx, fullName, methodIdx);
-        if (closureType === null) {
-          // Leave reflection on the established placeholder path if this
-          // method cannot be represented as a closure. Do not install a wrong
-          // value or change the class-object allowlist.
-          fctx.body.splice(fctx.body.length - 2, 2);
-          continue;
-        }
-        fctx.body.push({ op: "extern.convert_any" });
-        fctx.body.push({ op: "call", funcIdx: registerStaticMethodIdx });
-      }
-    } finally {
-      fctx.body = savedBody;
-      ctx.liveBodies.delete(savedBody);
-    }
-  }
+  emitClassObjectStaticMethods(ctx, fctx, className, initBody, seedStandaloneMethods);
 
   // (#4618) Register the compiled constructor closure + prototype + fnctor
   // parent so the host proxy can present this class object as a CONSTRUCTIBLE
@@ -736,6 +710,54 @@ export function emitLazyClassObjectGet(ctx: CodegenContext, fctx: FunctionContex
   });
   fctx.body.push({ op: "global.get", index: classObjIdx() });
   return true;
+}
+
+/** Install own method closures once, inside the class singleton initializer. */
+function emitClassObjectStaticMethods(
+  ctx: CodegenContext,
+  fctx: FunctionContext,
+  className: string,
+  initBody: Instr[],
+  standalone: boolean,
+): void {
+  const registerIdx = ctx.funcMap.get(standalone ? "__defineProperty_value" : "__register_class_static_method");
+  if (registerIdx === undefined) return;
+  const savedBody = fctx.body;
+  fctx.body = initBody;
+  ctx.liveBodies.add(savedBody);
+  try {
+    for (const methodName of ctx.classStaticMethodNames.get(className) ?? []) {
+      const fullName = `${className}_${methodName}`;
+      if (
+        standalone &&
+        (methodName.startsWith("__priv_") || ctx.staticAccessorSet.has(fullName) || ctx.staticProps.has(fullName))
+      )
+        continue;
+      const methodIdx = ctx.funcMap.get(classMemberFuncKey(ctx, fullName, "static"));
+      if (methodIdx === undefined) continue;
+      const nameGlobal = standalone ? undefined : addHostStringConstantGlobal(ctx, methodName);
+      if (!standalone && nameGlobal === undefined) continue;
+
+      // Re-read the singleton index after any string interning/import shifts.
+      const operandStart = fctx.body.length;
+      fctx.body.push({ op: "global.get", index: ctx.classObjectGlobals.get(className)! });
+      if (standalone) fctx.body.push(...stringConstantExternrefInstrs(ctx, methodName));
+      else fctx.body.push({ op: "global.get", index: nameGlobal! });
+      if (emitFuncRefAsClosure(ctx, fctx, fullName, methodIdx) === null) {
+        // Preserve the established fallback; never install an absent closure.
+        fctx.body.splice(operandStart);
+        continue;
+      }
+      fctx.body.push({ op: "extern.convert_any" });
+      // Explicit writable/configurable true, enumerable false, value present.
+      if (standalone) fctx.body.push({ op: "f64.const", value: 0xbd });
+      fctx.body.push({ op: "call", funcIdx: registerIdx });
+      if (standalone) fctx.body.push({ op: "drop" });
+    }
+  } finally {
+    fctx.body = savedBody;
+    ctx.liveBodies.delete(savedBody);
+  }
 }
 
 /**
