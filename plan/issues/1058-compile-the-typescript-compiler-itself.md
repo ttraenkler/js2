@@ -267,6 +267,40 @@ oracle-ratchet-allow:
 ---
 # #1058 — Compile the TypeScript compiler to Wasm (self-hosting stress test)
 
+## Pragma failure isolated to undefined-to-map write coherence — 2026-09-27
+
+Further diagnostic instrumentation at `bdeb3ce09d` disproves the hypothesis
+that the generic getter simply lacks SourceFileObject coverage. A directly
+constructed SourceFileObject, assigned a new native map, is read correctly by
+both generic and named getters. Capturing the actual failing parser receiver
+shows the **same fifth named-getter class arm**, but its generic read returns
+the canonical undefined value while the named getter returns a non-null map.
+`__carrier_bag_has(receiver, "pragmas")` returns **1**. Logs:
+`.tmp/diagnose-pragma-carrier.log` and
+`.tmp/diagnose-pragma-captured-bag.log`; instrumentation source
+`.tmp/diagnose-pragma-carrier.mts`. These are diagnostic-only binary exports,
+not compiler changes or standalone acceptance.
+
+The source reduction now reproduces the failure by adding
+`context.pragmas = undefined` before `context.pragmas = new Map()`:
+**4/8** pass, with every class-backed case trapping on an illegal cast and all
+plain-object controls passing, independent of IR toggle and explicit Map type
+arguments. Without that first assignment the same separate-source matrix is
+**8/8**. All native references pass. Logs:
+`.tmp/pragma-map-undefined-overwrite.log` and
+`.tmp/pragma-map-separated-sources.log`.
+
+Root boundary to fix: the member setter sends an incompatible value such as
+undefined to the property bag, then writes a compatible Map directly into the
+physical class slot without reconciling the existing bag entry. The generic
+reader correctly gives the own bag descriptor precedence and sees the stale
+undefined. Do NOT fix this by bypassing the generic getter: that would erase
+legitimate own descriptor precedence. Next use the existing shared descriptor
+write authority (`__extern_set_decide` / `__extern_set_own`) to keep member and
+generic writes coherent, including strict refusal/accessor semantics, and
+retain native controls for undefined, null, data descriptors and aliases.
+No production changes made in this diagnostic turn.
+
 ## Scanner pragma-field diagnostic and source-suite results — 2026-09-27
 
 At signed `bb26a90c26`, scanner session `41973` completed exit 1: native
