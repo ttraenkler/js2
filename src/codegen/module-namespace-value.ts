@@ -317,8 +317,8 @@ function moduleSourceFile(symbol: ts.Symbol): ts.SourceFile | undefined {
 
 function namespaceFunctionExports(
   ctx: CodegenContext,
-  declaration: ts.NamespaceImport,
-): readonly NamespaceExport[] | undefined {
+  declaration: ts.NamespaceImport | ts.ImportSpecifier,
+): { readonly cacheKey: ts.Symbol; readonly exports: readonly NamespaceExport[] } | undefined {
   // (#5330) `import * as path from 'path'` — a namespace import OF a Node
   // builtin is served by the host module thunk (`__node_<mod>`), never by a
   // synthesized object. This optimizer asks the CHECKER for the module's
@@ -337,7 +337,7 @@ function namespaceFunctionExports(
   // This does NOT affect a user module that RE-EXPORTS builtin members
   // (`export { join } from 'node:path'`): that namespace belongs to the user
   // module, and its entries keep the `host-member` lowering below.
-  const specifier = namespaceImportSpecifier(declaration);
+  const specifier = ts.isNamespaceImport(declaration) ? namespaceImportSpecifier(declaration) : undefined;
   if (specifier !== undefined && isNodeBuiltin(specifier)) return undefined;
   let moduleSymbol = ctx.checker.getSymbolAtLocation(declaration.name);
   if (!moduleSymbol) return undefined;
@@ -348,7 +348,12 @@ function namespaceFunctionExports(
       return undefined;
     }
   }
-  return moduleSymbolNamespaceExports(ctx, moduleSymbol, new Set());
+  // A named import may resolve to `export * as ns`. Only a concrete source
+  // module owns an ESM namespace; ordinary exported objects are not namespaces.
+  const source = moduleSourceFile(moduleSymbol);
+  if (!source || source.isDeclarationFile) return undefined;
+  const exports = moduleSymbolNamespaceExports(ctx, moduleSymbol, new Set());
+  return exports ? { cacheKey: moduleSymbol, exports } : undefined;
 }
 
 /**
@@ -1333,9 +1338,9 @@ function emitNamespaceObject(
 }
 
 /**
- * Materialize a stable enumerable namespace object when every runtime export is
- * an immutable function compiled into this module. Mixed/mutable namespaces
- * decline until live-binding getter cells are available.
+ * Materialize one namespace object per source-module symbol when all runtime
+ * exports have supported carriers. Named namespace re-exports share the same
+ * object as direct namespace imports; unsupported exports decline the object.
  */
 export function tryEmitCompiledModuleNamespaceObject(
   ctx: CodegenContext,
@@ -1343,9 +1348,10 @@ export function tryEmitCompiledModuleNamespaceObject(
   identifier: ts.Identifier,
 ): ValType | undefined {
   const declaration = ctx.oracle.valueDeclarationOf(identifier);
-  if (declaration === undefined || !ts.isNamespaceImport(declaration)) return undefined;
-  const exports = namespaceFunctionExports(ctx, declaration);
-  return exports ? emitNamespaceObject(ctx, fctx, declaration, exports, true) : undefined;
+  if (declaration === undefined || (!ts.isNamespaceImport(declaration) && !ts.isImportSpecifier(declaration)))
+    return undefined;
+  const namespace = namespaceFunctionExports(ctx, declaration);
+  return namespace ? emitNamespaceObject(ctx, fctx, namespace.cacheKey, namespace.exports, true) : undefined;
 }
 
 function namespaceMemberAccessForIdentifier(

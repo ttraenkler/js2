@@ -12790,4 +12790,37 @@ remain open.
 
 ## Stewardship angle
 
+### ESM namespace identity continuation (2026-09-27)
+
+The initialization hypothesis above is now confirmed and fixed: the shared IR
+identity context was absent for ESM namespace imports with both IR emission and
+outcome tracking disabled. `requiresRuntimeModuleIdentity` now includes runtime
+namespace imports and namespace re-exports, while excluding type-only forms and
+declaration files. This enables the existing declaration-owned callable registry;
+it does not introduce a parallel legacy name-based registry.
+
+Additional controls exposed named imports of `export * as ns`: these were not
+materialized at all. The shared namespace emitter now accepts those imports only
+when the aliased symbol proves a concrete source module, and caches by that module
+symbol so direct, repeated, and named namespace imports share object identity.
+Ordinary exported objects and declaration-only modules do not qualify.
+
+Fresh standalone A/B, same Vitest harness and tests, replacing exactly
+`src/ir/runtime-module-identity.ts` and `src/codegen/module-namespace-value.ts`
+with their `54fd09a584` versions: baseline **14/19**, candidate **19/19**.
+The four added cases exercise same-named functions in distinct modules during
+initialization, direct versus named namespace re-exports, canonical namespace
+identity, and both IR settings. Expanded enum/namespace/host-builtin controls
+pass **46/46** across nine files. Type checking and lint pass. Logs:
+`.tmp/namespace-esm-final-baseline.log`, `.tmp/namespace-esm-final-focused.log`,
+and `.tmp/namespace-esm-final-typecheck.log`.
+
+The earlier adjacent run was **67/77**, not green: eight existing runtime
+namespace static-class failures and two missing local Test262 fixture files.
+These were not skipped or counted as passing. The original semver rerun after
+the identity-planning fix (before named-import materialization) remains
+**684/692** standalone, native **692/692**, valid zero-import Wasm,
+7,063,962 bytes, 139,505 ms (`.tmp/semver-esm-identity-o1.log`). Full TypeScript
+checker, self-hosting, strict IR closure, and the eight semver cases remain open.
+
 "js2wasm compiles 60% of test262" is a percentage. "js2wasm compiles the TypeScript compiler itself" is a story. Landing even Tier 3 is the single strongest artifact for conversations with potential maintainers or funders — it demonstrates the compiler has enough depth to handle production TypeScript, not just hand-picked benchmark inputs. The gap between "a toy subset compiles" and "the real compiler compiles" is exactly what separates a proof-of-concept from a usable tool.

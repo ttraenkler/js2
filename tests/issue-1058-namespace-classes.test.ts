@@ -66,6 +66,11 @@ it("requires namespace identity only for runtime declarations", () => {
   for (const [source, required] of [
     ["namespace N { export function f(){} }", true],
     ["namespace A.B { export function f(){} }", true],
+    ['import * as ns from "./provider.js";', true],
+    ['export * as ns from "./provider.js";', true],
+    ['import type * as ns from "./provider.js";', false],
+    ['export type * as ns from "./provider.js";', false],
+    ['import { value } from "./provider.js";', false],
     ["declare namespace N { function f():void; }", false],
     ['declare module "pkg" { function f():void; }', false],
     ["export {}; declare global { function f():void; }", false],

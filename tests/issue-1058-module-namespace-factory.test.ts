@@ -4,6 +4,34 @@ import { compileMulti } from "../src/index.js";
 
 for (const experimentalIR of [false, true]) {
   for (const barrel of [false, true]) {
+    it(`calls exact namespace function bindings during initialization IR=${experimentalIR} barrel=${barrel}`, async () => {
+      const result = await compileMulti(
+        {
+          "./left.ts": "export function read(){return 7;}",
+          "./right.ts": "export function read(){return 42;}",
+          "./barrel.ts": "export * as left from './left.js'; export * as right from './right.js';",
+          "./entry.ts": `
+            ${barrel ? "import {left,right} from './barrel.js';" : "import * as left from './left.js'; import * as right from './right.js';"}
+            import * as directLeft from './left.js';
+            import * as directRight from './right.js';
+            function invoke(namespace:any){return namespace.read();}
+            const answer=invoke(left)*100+invoke(right);
+            export function run(){return left===directLeft && right===directRight && left!==right ? answer : 0;}
+          `,
+        },
+        "./entry.ts",
+        { target: "standalone", experimentalIR },
+      );
+      expect(result.success, JSON.stringify(result.errors)).toBe(true);
+      const module = new WebAssembly.Module(result.binary);
+      expect(WebAssembly.Module.imports(module)).toEqual([]);
+      expect((new WebAssembly.Instance(module).exports.run as () => number)()).toBe(742);
+    });
+  }
+}
+
+for (const experimentalIR of [false, true]) {
+  for (const barrel of [false, true]) {
     for (const exportedEnum of [false, true]) {
       it(`reads a class factory beside enum exports IR=${experimentalIR} barrel=${barrel} enum=${exportedEnum}`, async () => {
         const result = await compileMulti(
