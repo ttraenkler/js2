@@ -742,7 +742,7 @@ function compileBoundIdentifierCall(
   // Spread args keep the static path (their arity machinery is elsewhere).
   if (
     ts.isIdentifier(expr.expression) &&
-    isShadowedTopLevelFn(ctx, expr.expression.text) &&
+    isShadowedTopLevelFn(ctx, expr.expression.text, expr.expression) &&
     fctx.localMap.get(expr.expression.text) === undefined &&
     !(fctx.boxedCaptures?.has(expr.expression.text) ?? false) &&
     !expr.arguments.some((a) => ts.isSpreadElement(a)) &&

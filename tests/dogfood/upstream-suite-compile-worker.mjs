@@ -9,6 +9,7 @@ import {
   configuredUpstreamOptimization,
   emitWorkerResult,
   readStandaloneGuestError,
+  readStandaloneException,
   runSequentialUpstreamTests,
   signalWorkerCompileComplete,
 } from "./upstream-suite-worker-protocol.mjs";
@@ -71,6 +72,8 @@ function describeImportFrontier(provenance) {
 
 function errorText(error, instance) {
   let text = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+  const guestMessage = readStandaloneException(error, instance?.exports);
+  if (guestMessage) text += ` guest=${guestMessage}`;
   if (error && typeof error.getArg === "function" && instance?.exports) {
     for (const tagName of ["__exn_tag", "__tag"]) {
       const tag = instance.exports[tagName];

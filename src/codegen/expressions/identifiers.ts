@@ -52,6 +52,7 @@ import { coerceType, compileExpression, isAnyValue } from "../shared.js";
 import {
   fnShadowSlot,
   isShadowedTopLevelFn,
+  isModuleFunctionReference,
   isShadowStaticArmFor,
   withShadowReadSuppressed,
 } from "../fn-global-shadow.js"; // (#4630 / #4648)
@@ -1067,7 +1068,7 @@ function compileIdentifierCore(
   // IS a global-object property, so the write rebinds it). Locals/captures
   // still win; the static closure serves until the first reassignment.
   if (
-    isShadowedTopLevelFn(ctx, name) &&
+    isShadowedTopLevelFn(ctx, name, id) &&
     fctx.localMap.get(name) === undefined &&
     !(fctx.boxedCaptures?.has(name) ?? false)
   ) {
@@ -1645,7 +1646,13 @@ function compileIdentifierCore(
   // function, and round-tripping it through the host global object loses the
   // WasmGC closure representation the call path needs. Host lane only, so the
   // standalone lowering stays byte-identical.
-  if (ctx.sloppyImplicitGlobals?.has(name) && !(!ctx.standalone && !ctx.wasi && isShadowStaticArmFor(name))) {
+  // A module's function binding is not the same-named global-object property.
+  // The property prescan is graph-wide; resolved source ownership must win.
+  if (
+    ctx.sloppyImplicitGlobals?.has(name) &&
+    !isModuleFunctionReference(ctx, id) &&
+    !(!ctx.standalone && !ctx.wasi && isShadowStaticArmFor(name))
+  ) {
     return emitImplicitGlobalRead(ctx, fctx, name);
   }
   // Standalone built-in namespace values (Array/Object) materialize as lazy

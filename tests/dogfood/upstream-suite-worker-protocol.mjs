@@ -71,6 +71,25 @@ export function readStandaloneGuestError(exports) {
   }
 }
 
+/** Render an uncaught guest exception (including module init) without host imports. */
+export function readStandaloneException(error, exports) {
+  if (typeof error?.getArg !== "function" || typeof exports?.__exn_render_prepare !== "function") return "";
+  for (const tagName of ["__exn_tag", "__tag"]) {
+    if (!exports[tagName]) continue;
+    try {
+      const payload = error.getArg(exports[tagName], 0);
+      const message = readStandaloneGuestError({
+        upstreamStandaloneErrorLength: () => exports.__exn_render_prepare(payload),
+        upstreamStandaloneErrorCodeUnit: exports.__exn_render_char,
+      });
+      if (message) return message;
+    } catch {
+      // The exception can belong to a different tag; preserve the original failure.
+    }
+  }
+  return "";
+}
+
 export async function withUpstreamTestTimeout(run, timeoutMs, label) {
   if (!(Number.isFinite(timeoutMs) && timeoutMs > 0)) return run();
   let timer;

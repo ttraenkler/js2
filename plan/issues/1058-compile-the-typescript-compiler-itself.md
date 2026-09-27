@@ -269,6 +269,48 @@ oracle-ratchet-allow:
 
 ## Remaining scanner errors: descriptor-aware nominal-array rollback — 2026-09-27
 
+Follow-up at `ccca001c45`: incremental-parser O1 compiles and validates
+**26,138,018 bytes**, **zero imports**, **464,240 ms**; initialization throws,
+so **0/153 callbacks executed** (`.tmp/incremental-source-o1.log`, session
+59834 terminal exit 1). This is not a standalone pass. A two-module reduction
+finds a separate binding defect: `function assert` followed by
+`globalThis.assert = assert` causes the property-name prescan to redirect the
+module-local function read through an absent global property. Initialization
+throws `ReferenceError: assert is not defined` with IR both off and on.
+Renaming only the local function restores positive and negative assertion
+behavior. `.tmp/global-assert-original.log`, `.tmp/global-assert-decoded.log`,
+`.tmp/global-assert-renamed.log`. Next: honor the resolved module-function
+binding before the implicit-global read; preserve script global replacement
+semantics and original cross-module assertions. Full-suite attribution awaits
+remeasurement; the reduction alone does not prove the full init failure's cause.
+
+The candidate shares an exact source-function ownership predicate between
+the existing implicit-global read and function shadow read/call guards. It
+keeps module functions separate from realm properties while preserving
+script top-level function replacement. This repairs existing fallback binding
+resolution; it adds no duplicate AST lowering. Running with IR enabled is not
+claimed as proof that these functions have fully migrated to IR ownership.
+
+Durable binding suite: baseline **2/8**, candidate **8/8**; the two script
+controls stay passing, four cross-module assertion cases and two module
+replacement cases flip. Baseline substitution uses Vite's pre-transform hook
+to read the exact three affected source files from `ccca001c45`, without
+changing the live compiler tree. `.tmp/global-assert-final-baseline.log`.
+Final focused and adjacent checks: **59/59**, seven files, including native
+oracles, missing-global checks, cross-module collisions and error rendering.
+`.tmp/global-binding-final-tests.log`. Typecheck and scoped lint pass:
+`.tmp/global-binding-final-typecheck.log`, `.tmp/global-binding-final-lint.log`.
+Uncaught guest exception text is now decoded through existing bounded numeric
+exports, including initialization errors; unavailable/invalid renderers retain
+the original failure. No host imports or assertion suppression are introduced.
+
+Original-suite run **81151** (`.tmp/incremental-source-binding-o1.log`) is
+still live: it loaded the **initial implicit-read-only candidate**, before
+the later shadow read/call guard and error-renderer edits. Last process check:
+worker **74962**, elapsed 8m11s, ~198% CPU. Resume it; do not restart it or
+attribute its result to the final candidate. After it terminates, run the
+same original suite again with the final guard and improved diagnostics.
+
 At `1bb2797b9b`, a six-context original-source probe shows that speculative
 diagnostics are retained, not merely missed by `find`: array context retains
 code **1181** at position 2, property context retains **1003** at position 8,

@@ -72,10 +72,27 @@ export function scanGlobalThisFnShadows(ctx: CodegenContext, sourceFile: ts.Sour
 }
 
 /** Is `name` a scanned `globalThis.<name> =` target that also names a top-level function? */
-export function isShadowedTopLevelFn(ctx: CodegenContext, name: string): boolean {
+export function isShadowedTopLevelFn(ctx: CodegenContext, name: string, reference?: ts.Identifier): boolean {
   if (readSuppression > 0) return false;
   const names = shadowNamesByCtx.get(ctx);
-  return names !== undefined && names.has(name) && ctx.topLevelFunctionNames.has(name) && ctx.funcMap.has(name);
+  return (
+    names !== undefined &&
+    names.has(name) &&
+    ctx.topLevelFunctionNames.has(name) &&
+    ctx.funcMap.has(name) &&
+    (reference === undefined || !isModuleFunctionReference(ctx, reference))
+  );
+}
+
+/** Module function bindings never alias properties of the realm global object. */
+export function isModuleFunctionReference(ctx: CodegenContext, reference: ts.Identifier): boolean {
+  const declaration = ctx.oracle.valueDeclarationOf(reference);
+  return (
+    declaration !== undefined &&
+    ts.isFunctionDeclaration(declaration) &&
+    declaration.body !== undefined &&
+    ts.isExternalModule(declaration.getSourceFile())
+  );
 }
 
 /** Get-or-mint the mutable externref override slot for `name`. */
