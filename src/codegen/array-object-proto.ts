@@ -1,4 +1,5 @@
 import { emitNativeGeneratorProtocolMethodBody } from "./generators-native-protocol.js";
+import { ensureLiveArrayIterator } from "./live-array-iterator.js";
 import { emitIteratorFamilyNextBody } from "./iterator-proto-next.js"; // (#6484 S2)
 import { ITER_FAMILY_ARRAY, ITER_FAMILY_MAP, ITER_FAMILY_SET } from "./iterator-native.js"; // (#6484 S1)
 // Copyright (c) 2026 Loopdive GmbH. Licensed under Apache-2.0 WITH LLVM-exception.
@@ -909,6 +910,16 @@ const ASYNCDISPOSABLESTACK_PROTO_METHOD_LENGTH: Readonly<Record<string, number>>
  * compile refusal). Returns externref (the uniform closure-call result type).
  */
 function emitArrayProtoMemberBody(ctx: CodegenContext, fctx: FunctionContext, member: string): ValType | null {
+  if (ctx.standalone && (member === "values" || member === "keys" || member === "entries")) {
+    ensureLiveArrayIterator(ctx);
+    flushLateImportShifts(ctx, fctx);
+    fctx.body.push(
+      { op: "local.get", index: 1 },
+      { op: "i32.const", value: member === "keys" ? 1 : member === "entries" ? 2 : 0 },
+      { op: "call", funcIdx: ctx.funcMap.get("__live_array_iterator_new")! },
+    );
+    return { kind: "externref" };
+  }
   if (member === "concat") {
     return compileArrayConcatNativeSpecFromReceiverAndArgsVec(ctx, fctx, 1, 2) ?? null;
   }

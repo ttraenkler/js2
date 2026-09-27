@@ -50,6 +50,11 @@ export function ensureVecProjectionIdentity(ctx: CodegenContext): number {
     [extern],
     [{ name: "entry", type: entryRef }],
     [
+      { op: "local.get", index: 0 },
+      { op: "any.convert_extern" },
+      { op: "ref.test", typeIdx: base },
+      { op: "i32.eqz" },
+      { op: "if", blockType: { kind: "empty" }, then: [{ op: "local.get", index: 0 }, { op: "return" }] },
       { op: "global.get", index: head },
       { op: "local.set", index: 1 },
       {

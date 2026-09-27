@@ -5,6 +5,8 @@ import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { build } from "esbuild";
 import { setupTypescriptUpstreamSuite } from "./setup-typescript-upstream-suite.mjs";
+import { typescriptHarnessAugmentation } from "./typescript-harness-augmentation.mjs";
+import { TYPESCRIPT_SOURCE_ASSERT } from "./typescript-source-assert.mjs";
 import { TYPESCRIPT_STANDALONE_TEST_EXPORTS } from "./typescript-upstream-suite.mjs";
 import {
   UPSTREAM_TEST_EXPORTS,
@@ -22,6 +24,8 @@ const FILES = {
   comments: 3,
   parsePseudoBigInt: 5,
   paths: 14,
+  asserts: 2,
+  regExpScannerRecovery: 984,
 };
 
 export const SOURCE_UNIT_DIAGNOSTIC_EXPORTS = String.raw`
@@ -44,15 +48,26 @@ export async function runSourceUnitFile(name) {
   const originalPath = join(suite.root, "src/testRunner/unittests", `${name}.ts`);
   const generatedPath = resolve(HERE, "../../.typescript-upstream-suite-generated/source-modules", `${name}.ts`);
   mkdirSync(dirname(generatedPath), { recursive: true });
-  const namespace = relative(dirname(generatedPath), join(suite.root, "src/compiler/_namespaces/ts.js"));
+  const needsServices = name === "regExpScannerRecovery";
+  const namespace = relative(
+    dirname(generatedPath),
+    join(suite.root, `src/${needsServices ? "services" : "compiler"}/_namespaces/ts.js`),
+  );
   const original = readFileSync(originalPath, "utf8");
   const importPattern = /^import \* as ts from "\.\.\/_namespaces\/ts\.js";/m;
   if (!importPattern.test(original)) throw new Error("Upstream namespace import changed");
-  // These files use compiler APIs only. Redirect the harness-wide namespace to
-  // its compiler re-export; all original declarations and assertions remain.
+  // Redirect the harness-wide namespace to the original APIs under test.
+  // Scanner recovery also uses language-service source files and snapshots.
+  // All original declarations and assertions remain unchanged.
   const transformed = original.replace(importPattern, `import * as ts from ${JSON.stringify(`./${namespace}`)};`);
+  const augmentation = typescriptHarnessAugmentation(
+    readFileSync(join(suite.root, "src/harness/harnessGlobals.ts"), "utf8"),
+  );
   const testBody = TYPESCRIPT_STANDALONE_TEST_EXPORTS.replace("runStandaloneUpstreamTest", "runSourceUnitTestBody");
-  const source = `${UPSTREAM_TEST_SHIM}\nconst assert = __qunitAssert;\n${transformed}\n${UPSTREAM_TEST_EXPORTS}\n${testBody}\n${SOURCE_UNIT_DIAGNOSTIC_EXPORTS}`;
+  // Preserve the measured compiler-only bootstrap; service tests also call
+  // assert itself, in addition to its methods and the upstream augmentation.
+  const assertionBootstrap = needsServices ? TYPESCRIPT_SOURCE_ASSERT : "const assert = __qunitAssert;";
+  const source = `${UPSTREAM_TEST_SHIM}\n${assertionBootstrap}\n${augmentation}\n${transformed}\n${UPSTREAM_TEST_EXPORTS}\n${testBody}\n${SOURCE_UNIT_DIAGNOSTIC_EXPORTS}`;
   // Upstream's cyclic namespace graph relies on bundled initialization and
   // const-enum folding. Use the same source for the native reference, bundled
   // independently; Wasm still compiles the original source module graph.

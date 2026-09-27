@@ -35,6 +35,8 @@ it.each([
   ["comments", 3],
   ["parsePseudoBigInt", 5],
   ["paths", 14],
+  ["asserts", 2],
+  ["regExpScannerRecovery", 984],
 ] as const)("requires all original %s callbacks for full-source coverage", (name, count) => {
   const result = passingResult();
   result.file = `src/testRunner/unittests/${name}.ts`;

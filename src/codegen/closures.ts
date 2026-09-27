@@ -18,6 +18,7 @@ import { widenJsDefaultGuessSlot } from "./js-default-param-type-guess.js";
 
 import { ts, forEachChild } from "../ts-api.js";
 import { preserveOptionalDeclarationParameter } from "./optional-declaration-parameter.js";
+import { assignedCallableParameterIsDynamic } from "../frontend/ts/assigned-callable-parameter.js";
 import { isVoidType, unwrapPromiseType, isPromiseType } from "../checker/type-mapper.js";
 import type { FieldDef, Instr, LocalDef, StructTypeDef, ValType } from "../ir/types.js";
 import { isStandalonePromiseActive } from "./async-scheduler.js"; // (#2867 Gap 1) native-$Promise carrier gate
@@ -91,7 +92,6 @@ import {
 } from "./destructuring-params.js";
 import { compileObjectLiteralAsExternref, objectLiteralForcesHostPath } from "./literals.js";
 import { sourceCollectionCallbackParameterIsErased } from "./source-collection-factory.js";
-import { isGeneratorClosureDeclaration } from "./closures/generator-declaration.js";
 import {
   cacheParamDefaultArgc,
   emitF64ParamSentinelCheck,
@@ -2075,7 +2075,11 @@ export function computeClosureWrapperSig(
               runtimeIndex,
             );
     wasmType = preserveOptionalDeclarationParameter(ctx, p, wasmType);
-    if (sourceCollectionCallbackParameterIsErased(ctx, arrow, runtimeIndex)) wasmType = EXTERNREF_PARAM;
+    if (
+      sourceCollectionCallbackParameterIsErased(ctx, arrow, runtimeIndex) ||
+      assignedCallableParameterIsDynamic(arrow, runtimeIndex, ctx.oracle)
+    )
+      wasmType = EXTERNREF_PARAM;
     // JSDoc optional parameters (for example `@param {number=} size`) are
     // commonly exported from JavaScript modules and called from a different
     // source file. The local call-site scan cannot see those callers, so a

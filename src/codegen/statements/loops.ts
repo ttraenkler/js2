@@ -4087,13 +4087,10 @@ export function compileForInStatement(ctx: CodegenContext, fctx: FunctionContext
   // array TYPE members. `for (k in arr)` must yield the own enumerable keys —
   // the integer-index keys "0".."length-1" as strings, ascending
   // (§13.7.5 / OrdinaryOwnPropertyKeys). The receiver lowers to a WasmGC vec
-  // struct (not `$Object`, so `__object_keys` returns empty; not a closed
-  // struct, so the static-unroll path enumerated `length`+prototype members =
-  // wrong, and host mode enumerated nothing). Emit a self-contained native
-  // index loop here for BOTH host and standalone — length from vec field 0,
-  // each index ToString'd via the sealed decimal-key formatter, no host import.
+  // struct rather than a closed object. Keep the host index loop; native-first
+  // uses the runtime enumeration path below so array metadata is included.
   const recvArrayInfo = resolveArrayInfo(ctx, ctx.checker.getTypeAtLocation(stmt.expression));
-  if (recvArrayInfo) {
+  if (recvArrayInfo && ctx.targetProfile.semanticProviders !== "native-first") {
     emitArrayForIn(ctx, fctx, stmt, recvArrayInfo, keyLocal, memberTarget, bindingPattern, callTarget);
     restoreForInHeadBindings(fctx, headSaved);
     return;
@@ -4130,8 +4127,7 @@ export function compileForInStatement(ctx: CodegenContext, fctx: FunctionContext
     // `$Object` (so `__object_keys` would return empty) — those keep the
     // static-unroll path below, which is exact for a non-mutated closed shape.
     const recvWasmType = resolveWasmType(ctx, ctx.checker.getTypeAtLocation(stmt.expression));
-    const isDynamicReceiver = isOpenForInReceiver(ctx, stmt.expression) || forInReceiverIsDynamic(ctx, recvWasmType);
-    if (isDynamicReceiver) {
+    if (recvArrayInfo || isOpenForInReceiver(ctx, stmt.expression) || forInReceiverIsDynamic(ctx, recvWasmType)) {
       ensureObjectRuntime(ctx);
       // #2964 — for-in must enumerate inherited enumerable keys too, so route
       // through `__object_keys_forin` (own ordered keys per level + `$proto`

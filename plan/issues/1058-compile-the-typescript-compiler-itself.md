@@ -542,6 +542,504 @@ sample plus paths accounts for 42 callbacks, but revalidate those six files
 after these shared changes before claiming a fresh 42/42 sample. This remains
 only seven files of the 256-file pinned upstream inventory, not completion.
 
+Coverage expansion after `00fe83b397`: original `asserts.ts` has two callbacks.
+Its array-extra-properties check exposed a missing harness requirement: upstream
+`src/harness/harnessGlobals.ts` wraps Chai deepEqual to compare enumerable
+non-numeric array properties. The generic dogfood shim compares elements only.
+The source runner now extracts the original augmentation block from the pinned
+checkout, rejecting missing/ambiguous blocks, and prepends it without changing
+its implementation. Shared generic assertion behavior remains unchanged.
+Native negative/positive controls cover the missing extra-property check;
+original asserts native/Wasm execution is pending. The six-suite revalidation
+started before this harness change may span both harness revisions; do not call
+it a uniform post-augmentation sample. Revalidate all eight source suites with
+this stronger harness before claiming a fully current count.
+
+First original asserts run: native **2/2**, standalone **1/2**, valid zero-import
+Wasm (110,557 ms, 14,157,268 bytes); the deepEqual callback reports "expected
+matching throw". The isolated original augmentation fails similarly. Metadata
+reads and local for-in controls pass, but a `readonly unknown[]` parameter's
+for-in skips its non-index properties: `.tmp/array-metadata-enumeration.mts`
+returns 1 rather than 11. The same runtime value through an `any` parameter
+correctly enumerates metadata. The typed array fast path explicitly excludes
+native sidecars, while the existing native `__object_keys_forin` path already
+handles them. Candidate routes native-first typed arrays through that existing
+runtime and leaves host array lowering intact. The small probe now returns 11.
+Original-source rerun and wider loop regressions are pending; do not weaken
+upstream assertion semantics to make the original tests pass.
+
+Current **uncommitted candidate** audit: original asserts still **1/2** after
+native typed-array enumeration (110,500 ms, 14,157,239 bytes, zero imports).
+The existing for-in regression files pass **49/49**, but new strict matrix
+checks fail for sparse and inherited keys: the shape probe reports
+`0,1,2,tag,` after deleting index 1 and also after setting an inherited key.
+The hidden non-enumerable property is correctly excluded. Do not commit this
+candidate as finished until these failures are explained against a pre-fix
+control or repaired. Evidence: `.tmp/array-enumeration-regressions.log`,
+`.tmp/array-enumeration-matrix.log`, `.tmp/array-enumeration-shapes.log`.
+
+The augmentation still does not throw on different metadata even though direct
+reads and local for-in checks pass. A second independent small reproduction
+isolates shorthand-method replacement: `const o={m(a,b){return a+b}}; const
+alias=o; const saved=alias.m; alias.m=(a,b)=>saved(a,b)+10; alias.m(1,2)` returns
+**3 instead of 13**, in both IR modes, including calls through the original
+object. The same example with an arrow-valued property returns 13. The generic
+shim's `deepEqual` is a shorthand method, so the upstream wrapper assignment
+is bypassed by stale direct-method dispatch. Evidence:
+`.tmp/callable-property-reassign-method.log`, compared with
+`.tmp/callable-property-reassign.log`. Next inspect the static struct-method
+selection in `call-receiver-method.ts`, preserving receiver semantics and
+using source/IR mutation evidence instead of globally disabling optimization.
+
+The original six-suite post-path batch completed with all **28/28** callbacks
+passing, zero imports (`.tmp/source-postpaths-<suite>.log`), but it spans harness
+and compiler edits and is not a uniform final-revision sample. No runner is
+still live from that batch. The new harness runtime control and the new array
+metadata matrix deliberately remain failing in the worktree as regression
+targets; native harness validation/count tests pass. HEAD remains `00fe83b397`.
+
+Further uncommitted continuation: source-resolved method writes now invalidate
+the stale shorthand-method fast path. The source fact lives in
+`src/frontend/ts/object-method-writes.ts`, without codegen context mutation;
+the existing receiver-binding owner consumes it in both IR modes. The focused
+replacement regression passes **2/2**, covering aliases, pre-write calls,
+unrelated methods and a replacement reading `this`. This is a resolved-dot-write
+fact, **not** a general immutability proof (computed/reflective writes remain
+outside its coverage). Type checking and focused lint pass.
+
+The broader five-file method regression run is **86 passed / 13 failed /
+3 skipped**. The 12 IR ownership expectation failures also occur in the
+`7cf98cb97e` control (**58 passed / 12 failed**); its direct factory-method
+capture control independently returns 7 instead of 107, matching the thirteenth
+failure. Evidence: `.tmp/method-write-regressions.log` and the control checkout's
+`.tmp/method-ownership-control.log`, `.tmp/method-direct-control.log`.
+
+Original asserts after only that method fix still measures native **2/2**,
+standalone **1/2**, zero imports (108,003 ms, 14,198,831 bytes). A separate probe
+then found that the generic deep-equality helper considers `{flag:true}` and
+`{flag:false}` equal even **without** the TypeScript augmentation. Its absent
+dynamic `.length` incorrectly has `typeof "number"`, activating the array-like
+comparison branch. Computed-key reads preserve absence. Evidence:
+`.tmp/source-asserts-method-write.log`, `.tmp/harness-object-probe-details.log`,
+`.tmp/harness-object-bracket-probe.log`.
+
+The current candidate routes opaque standalone `.length` reads through the
+existing shared `emitDynGet` reader, retaining the old fallback if unavailable.
+The new dynamic-length regression passes both IR modes (missing, string-valued
+and fractional lengths), and the full augmentation control now passes:
+**5/5** combined. Existing any-length, function-name/length and reified typed-array
+constructor metadata regressions pass **27/27**. No generic assertion semantics
+were weakened. Evidence: `.tmp/dynamic-length-candidate.log`,
+`.tmp/dynamic-length-regressions.log`. Original asserts revalidation now passes
+native **2/2** and standalone **2/2**, valid zero-import Wasm, 109,558 ms,
+14,203,058 bytes (`.tmp/source-asserts-dynamic-length.log`). Final type checking
+passes (`.tmp/dynamic-length-tsc.log`). This is not a full-suite pass or a fresh
+revalidation of all previously passing source files.
+
+The sparse/inherited enumeration failures are now compared to the same exact
+`7cf98cb97e` control: both produce `0,1,2,` there and `0,1,2,tag,` here. The new
+metadata key is observed, but deleted index 1 and inherited keys were already
+wrong before the candidate. They remain unfixed, with strict failing regression
+expectations retained. Evidence: `.tmp/array-forin-control.log`. LOC and function
+budget gates now pass without new allowances after simplifying the loop branch;
+this does not certify the still-failing boundary/oracle publication gates.
+
+Next continuation resolved the sparse-enumeration cause: `delete a[1]` itself
+works (`delete` true, `1 in a` false, indexed read undefined), but passing the
+array to `readonly unknown[]` creates a physical vec projection. Bag properties
+already resolve through `__vec_projection_root`; descriptor-overlay lookup and
+creation did not. The same for-in probe passes with `any` or `readonly number[]`
+and fails only with `readonly unknown[]` before the fix. Evidence:
+`.tmp/array-state-descriptor-probe.log`, `.tmp/array-enumeration-parameter.log`.
+
+The current uncommitted fix canonicalizes overlay lookup, ensure and fresh
+ensure keys through the projection identity. A non-vec guard on the root helper
+preserves other carrier inputs. The lookup instructions now live in the
+AST/context-free `src/wasm/model/vec-overlay-lookup.ts`, consumed by the existing
+runtime owner shared by both compiler modes; the large overlay builder shrank.
+New regression **2/2** covers deletion before projection, deletion/descriptor
+writes through a projection, and independent arrays, in both IR modes.
+Nullable-projection and the then-current deep-equality harness controls make
+**7/7** (`.tmp/projection-final-regressions.log`). Final type checking, focused
+lint and LOC/function gates pass. This does not clear existing publication gates.
+
+The wider projection matrix is **14 passed / 5 failed**: both remaining
+enumeration failures are now **inherited keys only**, not sparse indices. The
+other three failures reproduce on exact `7cf98cb97e`: gc NodeArray metadata (-2
+instead of 1), standalone user class named Map (invalid Wasm), and standalone
+user interface named Map (module-init stack underflow). Evidence:
+`.tmp/array-projection-descriptors.log`, and the control checkout's
+`.tmp/array-projection-control.log` (**10 passed / 3 failed**).
+
+Inherited-key follow-up: explicit `Object.setPrototypeOf(array, p)` is visible
+to a property read, but not `in`, prototype identity comparison, or for-in in
+the probe (`inherited` bit result 1 instead of 111). `buildVecEnumerationTail`
+consults `protoIndexForInPushInstrs`, whose implementation walks the implicit
+brand companion, not `VEC_PROTO_HAS`/`VEC_PROTO_GET` explicit vec prototypes.
+Do not solve only the for-in snapshot and leave its `__extern_has` liveness
+check inconsistent. This remains a runtime-protocol defect, not a source-test
+adapter exception.
+
+The stronger original harness also exposes a separate omission-ABI frontier:
+fresh `compilerCore` is native **11/11**, standalone **6/11**, zero imports.
+All five failures call upstream's replacement `assert.isFalse(expr, msg: string)`
+without a message. The old shorthand method was bypassing this replacement.
+A minimal replacement with an optional original message and a string-typed
+replacement traps in **both IR modes** when omitted, while an explicit message
+passes. Emitted `run` shows the omitted externref undefined being narrowed with
+`ref.cast` to non-null `$AnyString` in callable-property candidate dispatch.
+Do not substitute an empty string or disable the original wrapper: the native
+call's value is undefined. Inspect physical closure parameter admission and
+`callablePropertyRefBridge` in `expressions/calls-closures.ts` next. Evidence:
+`.tmp/replaced-method-missing-argument.log`, `-stack.log`, `-wat2.log`, and
+`.tmp/source-postasserts-compilerCore.log`.
+
+The harness regression fixture previously included only the deepEqual portion
+of the upstream block; it now also includes the original isFalse replacement
+and checks an omitted message. It correctly fails that call (native controls
+**2/2**, standalone control fails), while its preceding metadata assertions
+still pass. Evidence: `.tmp/harness-omitted-message.log`. The seven-test result
+above predates this deliberate strengthening and must not be reported as the
+current full harness result.
+
+Original-source revalidation completed; session `41399` is terminal (exit 1),
+with logs `.tmp/source-postasserts-<suite>.log`: factory **3/3**, diagnostics
+**5/5**, compilerCore **6/11**, base64 **1/1**, comments **3/3**, parsePseudoBigInt
+**5/5**, paths **10/14** — **33/42** total, against native **42/42**, all modules
+zero-import. Paths has two omitted-message illegal casts (`isUrl`,
+`isRootedDiskPath`) plus two distinct wrong answers (`resolvePath`,
+`getNormalizedAbsolutePath`: `//b` instead of `/b`). The latter need separate
+isolation against the length-reader and projection edits; do not attribute all
+failures to omitted messages. This batch spans the projection edits and is not
+a uniform final-revision sample. No runner remains live from this batch.
+
+The omitted-message frontier is now fixed in the working candidate. The assigned
+callable's original parameter contract can be any/unknown even when its new
+implementation annotates that parameter as string. The new frontend fact
+`assignedCallableParameterIsDynamic` reads that contract through the existing
+oracle signature-position API, keeping the replacement's physical parameter
+externref. The same fact prevents an unsound static typeof fold; the first
+candidate preserved the value but still called a numeric argument a string.
+Regression **2/2**, both IR modes, checks omitted/explicit undefined, null,
+string and numeric arguments plus the exact isFalse shape. Together with method
+replacement and the strengthened harness, **7/7** pass
+(`.tmp/replacement-open-parameters-final.log`). Original compilerCore now passes
+native/standalone **11/11**, zero imports, 3,010 ms, 957,012 bytes
+(`.tmp/source-compilerCore-open-parameter.log`). No missing value is replaced
+with an empty string, and no upstream assertion is changed.
+
+Nearby parameter regressions are **16 passed / 4 failed**. All four failures
+reproduce on exact `7cf98cb97e`: three legacy optional-param tests instantiate
+without required `string_constants` imports, and the standalone shadowed
+undefined test returns 0 instead of 2. Evidence: `.tmp/open-parameter-regressions.log`
+and control `.tmp/open-parameter-control.log`, `.tmp/open-nested-parameter-control.log`.
+
+With the omission fix, paths improved to **12/14**, leaving only the `//b`
+normalization results. These were isolated to the earlier ordinary dynamic
+length-reader change: `length(value:any){return value.length}` returns NaN for
+`'/'`, while arrays and ordinary `{length:1}` objects work. The shared
+`__extern_get` protocol lacked primitive and boxed String length. The new pure
+Wasm model helper `src/wasm/model/string-exotic-length.ts` resolves string data
+and reads its UTF-16 length in the existing String-exotic runtime owner; both
+compiler modes consume it. The first primitive-only version restored paths
+**14/14** (native **14/14**, zero imports, 81,114 ms, 7,938,647 bytes), but a wider
+matrix caught boxed String still returning NaN, so the final helper handles
+both. The final string/ordinary-length/harness matrix passes **7/7**, including
+empty strings, Unicode surrogate pairs, concatenation, computed keys, boxed
+strings, absent unrelated properties and arbitrary ordinary-object length
+values. Evidence: `.tmp/dynamic-string-length.log`,
+`.tmp/source-paths-open-parameter.log`, `.tmp/source-paths-string-length.log`,
+`.tmp/string-exotic-length-final.log`. The full path source measurement predates
+the boxed-string unification; fresh final-source cohort validation is still
+required. These remain uncommitted candidates, not a full TypeScript-suite pass.
+
+Final nearby String/any-length/function-metadata regression run passes **38/38**
+(`.tmp/string-length-neighbor-regressions.log`). Type checking and LOC/function
+gates pass (`.tmp/string-exotic-length-tsc.log`, `.tmp/string-exotic-final-*.log`).
+The two new frontend facts now import the clean canonical
+`frontend/typescript.ts` namespace rather than the legacy runtime-selection
+shim; this removes their newly detected boundary violations rather than granting
+exceptions. Focused source-fact regressions pass **4/4**. Older boundary debt
+elsewhere still prevents claiming a clean full architectural gate.
+
+A uniform final-candidate source batch is running in session `20694`, writing
+`.tmp/source-final-abi-<suite>.log` for compilerCore, paths, asserts, factory,
+diagnosticCollection, base64, comments, parsePseudoBigInt. Keep runtime/compiler
+sources frozen until that batch completes; inspect the existing live handle,
+do not restart merely because a poll times out. Its full denominator is **44**
+callbacks, not the entire upstream inventory. The next expansion candidate is
+original `regExpScannerRecovery.ts`; its generated cases call Chai's callable
+`assert(...)`, whereas the current adapter only supplies an assertion-method
+object. Implement and verify faithful callable assertion support before running
+that file; do not delete or rewrite its original checks.
+
+While the frozen 44-callback batch runs, a separate callable assertion adapter
+was added in `tests/dogfood/typescript-source-assert.mjs` (not yet wired into the
+production source runner). It delegates truthiness and methods to the existing
+checked shim operations and then allows the unchanged upstream augmentation.
+Native plus both-IR callable controls and object/callable augmentation controls
+pass **8/8** (`.tmp/typescript-callable-assert-augmentation.log`). Negative
+controls require rejection of false, zero, empty string, null, undefined,
+unequal scalars and unequal arrays, so successful calls alone cannot certify it.
+
+Original `regExpScannerRecovery.ts` registers and passes **984/984** native
+callbacks against the pinned source (`.tmp/regex-scanner-native.log`). It needs
+the **services** namespace re-export, not only compiler: the original calls
+`createLanguageServiceSourceFile` and `ScriptSnapshot.fromString`. No original
+checks or service calls are substituted. A standalone probe using that namespace
+and the callable adapter first completed in session `32981`, log
+`.tmp/regex-scanner-standalone.log`, with a **launcher failure before compilation**:
+the omitted `--import tsx` prevented the worker from resolving
+`src/bundle-manifest.js` to its TypeScript source. This is not a compiler failure.
+The corrected invocation, `RUN_STANDALONE=1 node --experimental-wasm-exnref
+--import tsx .tmp/regex-scanner-native.mjs`, is running in session `17545`, log
+`.tmp/regex-scanner-standalone-tsx.log`. Native callback count is measured, not an
+estimate from source registration sites. Wasm compilation/runtime results are
+still pending. The frozen final-candidate batch completed with exit zero:
+**44/44** original callbacks across all eight files pass in native and
+zero-import standalone Wasm. Each report independently passes
+`sourceUnitFileSucceeded`, including exact callback counts, validation, target
+and import provenance; this is not the full TypeScript unit inventory.
+
+After that batch completed, the source runner gained an explicit
+`regExpScannerRecovery` entry with the measured **984** callback floor, services
+namespace and callable assertion bootstrap. The eight compiler-only entries
+retain their measured bootstrap. Its count-floor regression rejects partial
+results just like the existing entries. The corrected standalone scratch probe
+remains running; do not count its native 984 successes as standalone successes.
+Runner count/provenance guards, callable assertions and original augmentation
+integration pass **20/20** tests in three files
+(`.tmp/source-scanner-adapter-integration.log`, session `38030`, exit zero).
+
+The corrected scanner probe (`17545`) is now terminal: compilation took
+**304,245 ms**, returned no binary and reported **three errors** (plus warnings).
+Original native cases still pass **984/984**; no Wasm callbacks executed.
+The errors are `flatMapIterator` in `compiler/core.ts:437` (generator lowering
+rejects the loop's conditional `continue`), and physical-ABI changes between
+reservation and emission for nested `addArrayBindingPatterns` in
+`services/codefixes/fixMissingTypeAnnotationOnExports.ts` and
+`getFunctionFromCalls` in `services/codefixes/inferFromUsage.ts`. Both latter
+errors change an array parameter's nullable reference type from type index 2
+to a subsequently registered specialized type; preserve the signature invariant,
+do not silence the guard. Host-import warnings are additional unresolved
+evidence, not a measured import list from a valid binary. Focused pre-change
+generator worklist/callback/open-object controls pass **11/11**
+(`.tmp/generator-oracle-prechange.log`). Next reduce the original iterator
+shape without dropping its `continue`, delegation or iterator-close behavior.
+
+`tests/issue-1058-flat-map-iterator.test.ts` now reproduces that first error
+independently: **1 native control passes; both standalone IR settings fail
+compilation** (`.tmp/flat-map-iterator-prechange.log`, session `33500`, terminal
+exit one). The original generic signature/body is unchanged; the callers test
+undefined mappings being skipped, both array and generator delegates, normal
+exhaustion and early-return cleanup. This is deliberately a red regression, not
+a claimed fix. The immediate refusal is `loopBodyHasUnsupportedJump` at the
+source-iterable admission and `lowerForOfWithClose`. Simply removing it is
+unsound: `lowerStatements` currently treats yield-free `if (!iter2) continue`
+as an ordinary statement, and its native continue would target the generated
+resume loop rather than the source iterator header. Add an explicit state-plan
+continue destination, preserve nested-loop ownership, and handle or reject
+crossed finally regions until their completion routing is represented. The
+existing iterator close states must remain on abrupt return/throw, but must not
+run for a continue targeting the same source loop.
+
+Candidate continuation fix: shared frontend `sourceLoopContinues` identifies
+unlabelled continues owned by the source loop, excluding nested loop/function
+ownership and declining labelled destinations/breaks. The existing generator
+state planner binds them to that loop's iterator-step header and forces their
+enclosing conditionals/blocks through structural lowering. A differing unwind
+chain still refuses compilation rather than skipping a finally. Both compiler
+modes pass the new before/after-suspension and early-return controls (**2/2**);
+source ownership controls pass **9/9**. The new frontend leaf is registered as
+clean in the compiler boundary manifest, with no codegen-context dependency.
+
+The unchanged generic flat-map body then exposed a second defect: opaque
+delegation operands had supplied no carrier evidence, defaulting the generator
+to f64 and producing invalid Wasm at the externref delegation boundary. Such
+operands now conservatively select the boxed-any carrier. The original focused
+case now **compiles and validates but throws `Invalid iterator protocol` before
+its first value**, in both modes; it is still red, not a passing test. A four-way
+probe (`.tmp/flat-map-iterator-protocol-matrix.log`) reproduces this with array
+and generator inputs and with/without skipped mappings. Stage instrumentation
+confirms the mapped result is an actual array before generic `yield*` fails
+(`.tmp/flat-map-iterator-stage.log`, -13). Merely mentioning array Symbol.iterator
+in source does not repair it (`.tmp/flat-map-iterator-reflect-control.log`).
+Investigate the generic delegation getter/start protocol for builtin arrays;
+do not substitute eager flattening or remove original iterator checks.
+
+Combined flat-map, existing worklist/callback/open-object and equivalence tests
+are **18 passing / 2 failing**, the two being this remaining runtime frontier
+(`.tmp/generator-continue-carrier.log`). Typecheck, focused lint, whitespace,
+LOC and function-size gates pass (`.tmp/generator-continue-{tsc,lint,loc,func}.log`);
+broader protocol regressions also pass **43/43** across four files
+(`.tmp/generator-continue-protocol-regressions.log`, session `88031`, exit zero).
+A fresh full source-unit scanner run has been launched through the production
+runner, writing `.tmp/source-scanner-continue-candidate.log`; its result is
+now complete (session `60203`, exit one). Native reference remains **984/984**.
+Compilation took **296,901 ms** and now reports **two errors instead of three**:
+the `flatMapIterator` refusal is gone; the two previously identified nested
+array-parameter ABI mismatches remain. No Wasm binary/callback result exists.
+The compiler freeze for this run is released; retain its report as evidence for
+this candidate, not for subsequent edits.
+
+Further runtime reduction: `tests/issue-1058-opaque-builtin-delegation.test.ts`
+removes flat-map/callback/continue entirely and uses `yield* input` with an
+`any` parameter. Native array, Unicode string and set controls pass **3/3**;
+all **6** standalone mode/case combinations compile to valid zero-import Wasm
+but throw before their first value (`.tmp/opaque-builtin-delegation-prechange.log`,
+session `13028`, terminal exit one). The string case requires Unicode code-point
+iteration, not merely the expected UTF-16 concatenation.
+
+Two separate runtime layers are now directly observed. An ignored diagnostic
+script `.tmp/inspect-builtin-delegation.mjs` adds exports to existing functions
+and exception tag 0 in the compiled binary (in memory only), then calls the
+actual getter, invocation and start helpers. Without explicit prototype
+initialization, `__gen_delegate_get_iterator` and ordinary `__extern_get` both
+return canonical undefined for an array. With Array/ArrayIterator prototype
+initialization, the getter becomes callable, but invoking that actual closure
+throws **`Array.prototype.values is not yet callable as a value in --target
+standalone`** (`.tmp/inspect-builtin-delegation-exception.log`). This is the
+explicit refusal in `emitArrayProtoMemberBody`, not a callback ABI failure.
+The next runtime work needs both proper implicit iterator-member dependencies
+and a real reflective Array values/keys/entries implementation using shared
+iterator machinery. Preserve override lookup and lazy/live iteration; do not
+short-circuit builtins directly into snapshot flattening. Existing direct array
+iterator production is in `array-methods.ts::compileNativeArrayIterator`;
+generic borrowed Array iterator methods must also support array-like receivers.
+
+Do **not** reuse that producer unchanged: it eagerly copies the array into an
+externref vector. New `tests/issue-1058-reflective-array-iterators.test.ts`
+measures the resulting semantic gap independently: **4/4 native controls pass;
+0/8 standalone combinations pass** (`.tmp/reflective-array-iterators-baseline.log`,
+session `55290`, terminal exit one). The direct values/for-of mutation control
+returns a wrong value in both modes; the six reflective values/keys/entries
+cases throw. Controls require post-creation mutation/extension visibility,
+exhaustion, deferred length reads/coercion, no indexed reads for keys, and fresh
+entry pairs with undefined holes. An initial extra assertion about length-getter
+counts *after* exhaustion did not hold in the Node reference and was removed;
+the retained getter assertions cover creation, yielded keys and first completion.
+
+Implementation direction from actual runtime inspection: keep the existing
+`__IterRec` layout stable (kind=0, vec=1, i32 index=2, userIter=3, family=4).
+A live Array iterator needs an independent payload retaining the original
+receiver, a full ToLength-range cursor, and values/keys/entries mode; the i32
+snapshot cursor cannot represent generic array-like lengths. Add its pure body
+builder in the Wasm/IR model owner with thin resource registration, not another
+copy of the AST-driven snapshot loop. `__iterator_next` and strict step dispatch
+must agree; `__iterator_rest` has an explicit step-driven-kind allowlist and
+must also include the new carrier. `%ArrayIteratorPrototype%.next` already calls
+`__iter_next_result` after family validation (`iterator-proto-next.ts`), so keep
+that shared result/prototype path. Reuse ordinary Get and full ToLength coercion
+(`object-runtime-enumeration.ts::buildArrayLikeToLengthFromExternref`), preserving
+observable getters and abrupt completion; do not use raw vec length for generic
+receivers. The existing arguments iterator length helper shows the required
+provider checks and scratch-local ABI. No production iterator implementation was
+changed in this investigation; these regressions remain deliberately red.
+
+Live iterator implementation candidate now added. New context-free
+`src/wasm/model/live-array-iterator.ts` owns the stepping and provider dispatch;
+`src/codegen/live-array-iterator.ts` is the explicitly unmigrated resource bridge.
+The immutable existing record layout is unchanged; kind 10 stores a live payload
+with receiver, f64 next index and mode in `userIter`. Both direct standalone
+Array iteration and reflective values/keys/entries construct it. Each step
+performs ordinary length Get plus the existing full ToLength provider, advances
+before indexed Get, skips indexed Get for keys, creates fresh entry vectors, and
+clears its receiver upon completion. Nullish receivers throw on creation.
+
+The existing rest/drain body and its local ABI moved mechanically from the large
+iterator module into `src/wasm/model/iterator-rest.ts`; initial and step-driven
+builders both remain shared. This removes more legacy code than the integration
+adds, rather than granting larger budgets. Both model leaves are classified
+clean; the context-bearing registration bridge remains explicitly unmigrated.
+The first extraction missed exporting the initial vec-only builder; corrected
+before the final verification, not accepted as a regression.
+
+The expanded live-iterator suite passes **21/21** (seven native cases plus both
+standalone modes), including length/indexed getter throws and nullish creation.
+Together with Array.from driver and iterator-prototype tests, final corrected
+checks pass **40/40** (`.tmp/live-array-iterator-model-corrected.log`, session
+`36648`, exit zero). LOC/function gates and focused lint pass without added
+allowances. Broader final regressions and typecheck are still being collected.
+Opaque delegation remains separate: an explicitly seeded diagnostic now
+successfully invokes Array.values and obtains an iterator object, but generic
+`__gen_delegate_get_next` still returns a non-callable value
+(`.tmp/live-array-iterator-protocol-seeded.log`). The implicit iterator lookup
+dependency must also be fixed. This candidate does not establish complete
+ToObject boxing for borrowed primitive receivers; the pre-existing standalone
+Object(any) implementation itself uses an identity fallback, and that wider
+primitive-wrapper behavior must not be claimed as covered by object-only tests.
+
+Final candidate verification completed: broader iterator/generator regressions
+are **138 passing, 8 failing, 2 skipped across 14 files**
+(`.tmp/live-array-iterator-final-regressions.log`, session `61735`, exit one).
+Failures remain the six opaque builtin-delegation cases and the two original
+flat-map cases, not the new live iterator controls. Source typecheck and all
+eight edited-file lint checks pass (`.tmp/live-array-iterator-final-{tsc,lint}.log`).
+Fresh original `compilerCore.ts` still passes **11/11** native and **11/11**
+validated zero-import standalone callbacks (`.tmp/source-compilerCore-live-array.log`,
+session `2362`, exit zero). This is the only original-source file rerun on the
+live-iterator candidate; do not relabel the older eight-file 44/44 batch as fresh.
+
+### Fresh main synchronization checkpoint (2026-09-27)
+
+Fetched `loopdive/js2` main at
+`2a58b9fe9f95dc17bd5d2ba44ecd564b9695356b`. The current branch is
+41 commits ahead and 42 behind that fetched tip. This fresh tip is **not yet
+merged**; the earlier merge below covered `dc7eb2c1e3`, not this new tip.
+The dirty TypeScript candidate is preserved in the isolated worktree. Main
+overlaps its array prototype, generator, object runtime, finalization and
+boundary-manifest changes. Do not stash or overwrite those files to merge.
+
+The required pre-checkpoint checks were rerun before attempting to commit:
+LOC and function budgets pass against the previous merged main base; coercion,
+oracle and dead-export checks fail (`.tmp/sync-pre-{loc,func,coercion,oracle,exports}.log`).
+Specifically: the live-array bridge directly checks three conversion-provider
+names; generator array layout adds one direct checker query; structural-class
+receiver admission adds another checker use. Three old helpers are unreferenced:
+`isGeneratorClosureDeclaration`, the separate `function-proto-call.ts` emitter,
+and `registerResolvedRestParam`. The dead-export command additionally reports
+incomplete moved-runtime evidence for nonliteral dynamic imports in
+`optimize.ts` and `runtime/platform-capability-adapter.ts`. Do not weaken these
+gates or misrepresent the checkpoint as merge-ready. No staging, commit, merge
+or push was performed during this synchronization attempt.
+
+An additional uncommitted delegation dependency fix now reserves
+`ensureIterRecPrototypeHelper` before ordinary object runtime setup. With
+explicit Array/ArrayIterator prototype initialization, the diagnostic getter
+finds callable `next` and delegation yields both values
+(`.tmp/live-array-next-getter-demand.log`). Unseeded opaque builtin and flat-map
+tests still fail: implicit builtin prototype-member demand remains unresolved.
+This new dependency fix has not received the full earlier regression run.
+
+Checkpoint cleanup continuation: removed the three unused superseded helpers
+and their stale imports/manifest entry; their previous versions remain in git.
+Moved the live iterator's full-conversion dependency requirement into the shared
+array-like ToLength builder. Its existing numeric clamp now lives in the
+context-free `src/wasm/model/to-length.ts`, without new legacy size allowances.
+Generator numeric classification and delegated declaration lookup now use the
+existing oracle queries. The physical array-layout query and structural-class
+predicate remain migration debt; this is not a claim that all checker uses are
+gone. LOC, function, coercion and oracle gates pass against `dc7eb2c1e3`.
+
+The configured dead-export command also exits zero after cleanup: its
+`preservation-v1` contract passes 6/6 full and 6/6 cut witnesses. The strict
+modeled-closure diagnostic remains OPEN, but is not a failure of that configured
+contract. The earlier record conflated the printed diagnostic with the overall
+command status before the orphan-helper cleanup.
+
+New executed clamp/missing-provider tests plus live iterator regressions pass
+**35/35** (`.tmp/sync-cleanup-model.log`). Generator/oracle checks pass **50/52**
+(`.tmp/sync-cleanup-generator.log`): the old string-outer refusal expectation
+now observes compilation success, while a resume binding before delegation
+still refuses compilation. Both failures reproduce with the two new oracle
+query substitutions removed (**32/34**, `.tmp/sync-cleanup-generator-query-control.log`),
+so they precede this cleanup. A clean `7cf98cb97e` control passes **34/34**
+in the same standalone Vitest suite (`.tmp/sync-cleanup-generator-control.log`
+in the retained string-control worktree). Therefore the resume-binding failure
+is a regression within the intervening candidate, not an upstream baseline
+failure. Preserve this explicit handoff; do not publish the checkpoint as a
+finished or fully passing TypeScript implementation.
+
 The user requested a main merge and continuation. The former temporary checkout
 was cleaned out, but branch `codex/1058-typescript-standalone` retained the signed
 handoff at `efd9aca79c5aba4bfd6670847be925a027ed219f`. Work now lives in

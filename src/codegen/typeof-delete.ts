@@ -4,6 +4,7 @@
  * Extracted from expressions.ts (issue #688 step 5).
  */
 import { ts } from "../ts-api.js";
+import { parameterNeedsRuntimeTypeof } from "../frontend/ts/assigned-callable-parameter.js";
 import { chainRootIsGrowable, isNumericIndexExpression, runtimeAccessorDescriptorKey } from "./property-access.js";
 import { emitHostEqualityFromStack } from "./coercion-engine.js";
 import { resolveWidenedVarKey } from "./widened-var-key.js";
@@ -1679,9 +1680,7 @@ function typeofFoldUnsoundForJsParam(ctx: CodegenContext, operand: ts.Expression
   if (!ts.isIdentifier(bare)) return false;
   const decl = ctx.oracle.valueDeclarationOf(bare);
   if (decl === undefined || !ts.isParameter(decl)) return false;
-  if (decl.type !== undefined) return false; // explicit TS annotation → trusted
-  const fileName = decl.getSourceFile().fileName;
-  return /\.(js|mjs|cjs|jsx)$/.test(fileName);
+  return parameterNeedsRuntimeTypeof(decl, ctx.oracle);
 }
 
 /** Same-name function declarations replace an existing var/parameter binding. */

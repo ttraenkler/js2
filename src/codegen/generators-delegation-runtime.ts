@@ -6,6 +6,7 @@ import { definedFuncAt, mintDefinedFunc, pushDefinedFunc } from "./func-space.js
 import { addFuncType, getOrRegisterVecType, getArrTypeIdxFromVec } from "./registry/types.js";
 import { ensureObjectRuntime, reserveApplyClosure } from "./object-runtime.js";
 import { ensureNativeIteratorRuntime, externIsObjectInstrs } from "./iterator-native.js";
+import { ensureIterRecPrototypeHelper } from "./iterator-proto-next.js";
 import { carrierIsAny } from "./generators-native.js";
 import { stringConstantExternrefInstrs } from "./native-strings.js";
 import { canonicalUndefinedExternInstrs } from "./any-helpers.js";
@@ -89,6 +90,7 @@ export function ensureNativeDelegatedResultHelpers(ctx: CodegenContext): void {
   // types are deliberately absent.
   addStringConstantGlobals(ctx, ["next", "throw", "return", "done", "value"]);
   ensureNativeIteratorRuntime(ctx);
+  if (ctx.standalone || ctx.wasi) ensureIterRecPrototypeHelper(ctx);
   ensureObjectRuntime(ctx);
   reserveApplyClosure(ctx);
   for (const name of ["__typeof_object", "__typeof_function"]) {

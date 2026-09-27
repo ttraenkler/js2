@@ -91,8 +91,10 @@
  *    `super`, or when it reads its own `this` in an object literal promoted to
  *    the standalone dynamic-prototype representation.** The latter narrow
  *    gate keeps mixed literals' ordinary methods on the same call-time
- *    receiver path as their `super` sibling; ordinary closed literals remain
- *    on the established static path.
+ *    receiver path as their `super` sibling. A resolved source write also
+ *    admits a shorthand method: its replacement must be read at runtime and
+ *    can reference `this` even when the original method did not. Other closed
+ *    literals remain on the established static path.
  *  - **Every declaration must qualify.** A symbol declared by two literals, one
  *    of them arrow-valued, is refused rather than half-bound.
  *
@@ -101,6 +103,7 @@
  * receiver could be anything — on its existing lowering.
  */
 import { ts } from "../ts-api.js";
+import { objectMethodHasResolvedWrite } from "../frontend/ts/object-method-writes.js";
 import type { Instr, ValType } from "../ir/types.js";
 import type { CodegenContext, FunctionContext } from "./context/types.js";
 import { allocLocal } from "./context/locals.js";
@@ -168,6 +171,7 @@ function methodBodyReferencesSuper(body: ts.Node): boolean {
 function shorthandMethodNeedsReceiver(ctx: CodegenContext, declaration: ts.MethodDeclaration): boolean {
   if (!declaration.body || !ts.isObjectLiteralExpression(declaration.parent)) return false;
   return (
+    objectMethodHasResolvedWrite(declaration, ctx.callableSourceFiles ?? [declaration.getSourceFile()], ctx.oracle) ||
     methodBodyReferencesSuper(declaration.body) ||
     (ctx.dynamicProtoLiteralNodes.has(declaration.parent) && functionLikeReferencesOwnThis(declaration))
   );

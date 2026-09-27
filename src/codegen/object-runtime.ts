@@ -259,6 +259,7 @@ import { ensureWrapperConstructorCarriers, wrapperConstructorArmInstrs } from ".
 import { overlayRouteActive } from "./typed-lane-overlay-route.js"; // (#4222) overlay-aware index presence
 import { backedBoundsGuard, canonicalIndexDigitStep } from "./vec-index-domain.js"; // (#4434) index domain + sparse tail
 import { buildVecIndexKeyPush, reserveVecIndexEnumerable } from "./vec-index-enumerable.js"; // (#4491) overlay-aware key flags
+import { stringExoticLengthRead, stringReceiverData } from "../wasm/model/string-exotic-length.js";
 import { fillHostArrayCarrierPredicate } from "./host-array-carrier.js"; // (#4649) js-host late-bound carrier test
 import {
   emitStandaloneLinkBoundaryTerminals,
@@ -11008,11 +11009,16 @@ export function unshiftExternGetStringExoticArm(ctx: CodegenContext): void {
   );
 
   const arm: Instr[] = [
-    // data = StringData(receiver); a null result means this is not a String
-    // wrapper and leaves the existing dynamic reader authoritative.
-    { op: "local.get", index: 0 },
-    { op: "call", funcIdx: slotIdx },
-    { op: "local.set", index: stringData },
+    // A primitive or wrapper shares StringData; other receivers fall through.
+    ...stringReceiverData(ctx.anyStrTypeIdx, slotIdx, stringData),
+    ...stringExoticLengthRead(
+      stringData,
+      ctx.anyStrTypeIdx,
+      flattenIdx,
+      equalsIdx,
+      ctx.funcMap.get("__box_number"),
+      nativeStringLiteralInstrs(ctx, "length"),
+    ),
     { op: "local.get", index: stringData },
     { op: "ref.is_null" },
     { op: "i32.eqz" },

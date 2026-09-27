@@ -21,6 +21,7 @@
  * preserved exactly.
  */
 import type { Instr, ValType } from "../ir/types.js";
+import { toLengthClamp } from "../wasm/model/to-length.js";
 import type { CodegenContext } from "./context/types.js";
 import { getStringToNumberProvider, getToPrimitiveProvider } from "./coercion-engine.js";
 import { buildThrowJsErrorInstrs } from "./js-errors.js";
@@ -115,8 +116,11 @@ function nonObjectForInKeysIf(ctx: CodegenContext, boundaryObjectForInKeysIdx?: 
  * Locals it uses, as registered by the caller: 2=lenF64(f64),
  * 3=lenTrunc(f64), 4=primExt(externref, the ToPrimitive scratch).
  */
-export function buildArrayLikeToLengthFromExternref(ctx: CodegenContext, symbolTypeIdx: number): Instr[] {
-  const MAX_SAFE = 9007199254740991; // 2^53 - 1
+export function buildArrayLikeToLengthFromExternref(
+  ctx: CodegenContext,
+  symbolTypeIdx: number,
+  requireFullConversion = false,
+): Instr[] {
   const unboxIdx2036 = ctx.funcMap.get("__unbox_number")!;
   // (#4556) ToNumber, not just unbox. §7.1.20 ToLength is
   // `ToIntegerOrInfinity(ToNumber(Get(O,"length")))`, and ToNumber of an
@@ -141,6 +145,12 @@ export function buildArrayLikeToLengthFromExternref(ctx: CodegenContext, symbolT
   const toPrimIdx2036 = getToPrimitiveProvider(ctx);
   const typeofStrIdx2036 = ctx.funcMap.get("__typeof_string");
   const strToNumIdx2036 = getStringToNumberProvider(ctx);
+  if (
+    requireFullConversion &&
+    [unboxIdx2036, toPrimIdx2036, typeofStrIdx2036, strToNumIdx2036].some((provider) => provider === undefined)
+  ) {
+    throw new Error("Missing provider for full array-like ToLength conversion");
+  }
   const L_PRIM = 4; // scratch externref local (registered below)
   // §7.1.4 ToNumber(Symbol) is abrupt.  Native Symbols cross the externref
   // boundary as the `$Symbol` carrier, which otherwise falls through
@@ -190,40 +200,7 @@ export function buildArrayLikeToLengthFromExternref(ctx: CodegenContext, symbolT
           { op: "local.get", index: L_PRIM },
           { op: "call", funcIdx: unboxIdx2036 },
         ];
-  return [
-    // ToLength: ToNumber (above — NaN for a non-numeric length), then
-    // truncate + clamp to [0, 2^53-1].
-    ...toNumberInstrs,
-    { op: "local.tee", index: 2 },
-    // if NaN → 0 (n != n)
-    { op: "local.get", index: 2 },
-    { op: "f64.ne" },
-    {
-      op: "if",
-      blockType: { kind: "val", type: { kind: "f64" } },
-      then: [{ op: "f64.const", value: 0 }],
-      else: [
-        // trunc toward zero
-        { op: "local.get", index: 2 },
-        { op: "f64.trunc" },
-        { op: "local.tee", index: 3 },
-        // if <= 0 → 0
-        { op: "f64.const", value: 0 },
-        { op: "f64.le" },
-        {
-          op: "if",
-          blockType: { kind: "val", type: { kind: "f64" } },
-          then: [{ op: "f64.const", value: 0 }],
-          else: [
-            // min(trunc, 2^53-1)
-            { op: "local.get", index: 3 },
-            { op: "f64.const", value: MAX_SAFE },
-            { op: "f64.min" },
-          ],
-        },
-      ],
-    },
-  ];
+  return [...toNumberInstrs, ...toLengthClamp(2, 3)];
 }
 
 /** `$Object` arm: Get first, then the shared ordinary ToLength conversion. */

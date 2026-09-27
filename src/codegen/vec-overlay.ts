@@ -104,6 +104,8 @@ import { canonicalNumericKeyGuard } from "./vec-index-domain.js"; // (#4434) ind
 import { SPARSE_INDEX_CEILING } from "./vec-sparse-index.js";
 import { growHighArrayIndexLength, markNumericLikeNamedKey } from "./vec-overlay-high-index.js";
 import { holeTestInstrs } from "./array-holes.js";
+import { VEC_PROJECTION_ROOT } from "./vec-projection-identity.js";
+import { buildVecOverlayLookupBody, vecProjectionOverlayIdentity } from "../wasm/model/vec-overlay-lookup.js";
 import { buildVecGopdHoleBail } from "./vec-overlay-hole-bail.js"; // (#4491 T11) sparse marker descriptor guard
 import {
   buildArgumentsOrdinaryLengthDefineArm,
@@ -320,83 +322,13 @@ function ensureOverlayCore(ctx: CodegenContext, objectTypeIdx: number, newPlainO
   {
     const sigIdx = addFuncType(ctx, [{ kind: "anyref" }], [objRefNull], `$${LOOKUP_NAME}_type`);
     const funcIdx = mintDefinedFunc(ctx);
-    const body: Instr[] = [
-      // st = state ; if st == null → null (the fast path for overlay-free runs)
-      { op: "global.get", index: stateGlobalIdx },
-      { op: "local.tee", index: 1 },
-      { op: "ref.is_null" },
-      {
-        op: "if",
-        blockType: { kind: "empty" },
-        then: [{ op: "ref.null", typeIdx: NONE_HEAP }, { op: "return" }],
-      },
-      { op: "local.get", index: 1 },
-      { op: "ref.as_non_null" },
-      { op: "struct.get", typeIdx: stateTypeIdx, fieldIdx: 1 },
-      { op: "local.set", index: 2 },
-      { op: "local.get", index: 1 },
-      { op: "ref.as_non_null" },
-      { op: "struct.get", typeIdx: stateTypeIdx, fieldIdx: 0 },
-      { op: "local.set", index: 4 },
-      // (#3673 round 14) Scan NEWEST-FIRST (count-1 → 0). `__vec_overlay_ensure`
-      // appends at tab[count], and the hot probes — the standalone regex-exec
-      // path defining/reading `index`/`input` on a FRESH match array — always
-      // target the most recently ensured pair, which the old forward scan
-      // reached only after walking every older (usually dead) entry. The table
-      // is append-only (identity pairs, no eviction), so as it grows across a
-      // run the forward scan degraded superlinearly; newest-first makes the
-      // common hit O(1) regardless of table size. Identities are unique, so
-      // scan order cannot change which pair matches.
-      { op: "local.get", index: 4 },
-      { op: "i32.const", value: 1 },
-      { op: "i32.sub" },
-      { op: "local.set", index: 3 },
-      {
-        op: "block",
-        blockType: { kind: "empty" },
-        body: [
-          {
-            op: "loop",
-            blockType: { kind: "empty" },
-            body: [
-              { op: "local.get", index: 3 },
-              { op: "i32.const", value: 0 },
-              { op: "i32.lt_s" },
-              { op: "br_if", depth: 1 },
-              // pair = tab[i] ; if (pair.vec ref.eq vec) → pair.companion
-              { op: "local.get", index: 2 },
-              { op: "ref.as_non_null" },
-              { op: "local.get", index: 3 },
-              { op: "array.get", typeIdx: tabTypeIdx },
-              { op: "local.tee", index: 5 },
-              { op: "ref.as_non_null" },
-              { op: "struct.get", typeIdx: pairTypeIdx, fieldIdx: 0 },
-              // ref.eq operands must be eqref — struct refs are.
-              { op: "ref.cast", typeIdx: -19 /* eq */ },
-              { op: "local.get", index: 0 },
-              { op: "ref.cast", typeIdx: -19 /* eq */ },
-              { op: "ref.eq" },
-              {
-                op: "if",
-                blockType: { kind: "empty" },
-                then: [
-                  { op: "local.get", index: 5 },
-                  { op: "ref.as_non_null" },
-                  { op: "struct.get", typeIdx: pairTypeIdx, fieldIdx: 1 },
-                  { op: "return" },
-                ],
-              },
-              { op: "local.get", index: 3 },
-              { op: "i32.const", value: 1 },
-              { op: "i32.sub" },
-              { op: "local.set", index: 3 },
-              { op: "br", depth: 0 },
-            ],
-          },
-        ],
-      },
-      { op: "ref.null", typeIdx: NONE_HEAP },
-    ];
+    const body = buildVecOverlayLookupBody({
+      stateGlobalIdx,
+      stateTypeIdx,
+      tabTypeIdx,
+      pairTypeIdx,
+      rootIdx: ctx.funcMap.get(VEC_PROJECTION_ROOT),
+    });
     pushDefinedFunc(ctx, funcIdx, {
       name: LOOKUP_NAME,
       typeIdx: sigIdx,
@@ -524,6 +456,7 @@ function ensureOverlayCore(ctx: CodegenContext, objectTypeIdx: number, newPlainO
     const funcIdx = mintDefinedFunc(ctx);
     const body: Instr[] = [
       // comp = lookup(vec) ; hit → return
+      ...vecProjectionOverlayIdentity(ctx.funcMap.get(VEC_PROJECTION_ROOT)),
       { op: "local.get", index: 0 },
       { op: "call", funcIdx: lookupIdx },
       { op: "local.tee", index: 1 },
@@ -565,7 +498,7 @@ function ensureOverlayCore(ctx: CodegenContext, objectTypeIdx: number, newPlainO
       name: ENSURE_FRESH_NAME,
       typeIdx: sigIdx,
       locals: ensureLocals(),
-      body: buildEnsureAppendBody(),
+      body: [...vecProjectionOverlayIdentity(ctx.funcMap.get(VEC_PROJECTION_ROOT)), ...buildEnsureAppendBody()],
       exported: false,
     });
     ctx.funcMap.set(ENSURE_FRESH_NAME, funcIdx);

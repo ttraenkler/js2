@@ -32,18 +32,13 @@ import {
  *     (try/finally without catch is, as in Phase 1).
  */
 import { ts } from "../ts-api.js";
+import { sourceLoopContinues } from "../frontend/ts/loop-continues.js";
 import { emitVecDelegationAbrupt } from "./generator-vec-abrupt.js";
 import { getVecInfo } from "./type-coercion.js";
 import { resolveComputedKeyExpression } from "./literals.js";
 import { nativeGeneratorFactoryIdentity } from "./generator-factory-identity.js";
 import { mintDefinedFunc, pushDefinedFunc } from "./func-space.js"; // (#1916 S3b) stable-regime minting
-import {
-  isBooleanType,
-  isNumberType,
-  isStringType,
-  isUndefWidenedBindingElement,
-  resolveBindingElementType,
-} from "../checker/type-mapper.js";
+import { isStringType, isUndefWidenedBindingElement, resolveBindingElementType } from "../checker/type-mapper.js";
 import type { TypeFact } from "../checker/oracle.js";
 import type { FieldDef, Instr, ValType, WasmFunction } from "../ir/types.js";
 import { allocLocal, getLocalType } from "./context/locals.js";
@@ -445,8 +440,8 @@ function noJsHostTarget(ctx: CodegenContext): boolean {
 
 function isNumericExpression(ctx: CodegenContext, expr: ts.Expression | undefined): boolean {
   if (!expr) return true;
-  const t = ctx.checker.getTypeAtLocation(expr);
-  return isNumberType(t) || isBooleanType(t);
+  const kind = ctx.oracle.typeFactOf(expr).kind;
+  return kind === "number" || kind === "boolean";
 }
 
 // (#2171) Native-string yield support. A yield expression qualifies for the
@@ -511,6 +506,9 @@ function generatorElemValType(ctx: CodegenContext, decl: GeneratorDecl): ValType
           else if (delegated.element.kind === "string") sawString = true;
           else sawOther = true;
         } else if (isStringYieldExpression(ctx, node.expression)) sawString = true;
+        // An opaque iterable is not evidence for the numeric default. Its
+        // iterator can yield any JS value (including a generic U or an object).
+        else sawOther = true;
       } else if (isNumericExpression(ctx, node.expression)) sawNumeric = true;
       else if (isStringYieldExpression(ctx, node.expression)) sawString = true;
       else sawOther = true;
@@ -784,6 +782,9 @@ function buildNativeGeneratorPlan(ctx: CodegenContext, decl: GeneratorDecl): Nat
     closeEntry: (entry) => ({ kind: "dstr-close", ...entry }),
   };
 
+  const continueTargets = new Map<ts.ContinueStatement, { next: number; unwind: readonly UnwindEntry[] }>();
+  const continueContainers = new Set<ts.Node>();
+
   /**
    * Lower a list of statements into the state graph, threading the "current
    * state" cursor. Each `yield` closes the current state with a yield
@@ -804,6 +805,20 @@ function buildNativeGeneratorPlan(ctx: CodegenContext, decl: GeneratorDecl): Nat
     for (const stmt of statements) {
       if (!ok) return false;
       if (stmt.kind === ts.SyntaxKind.EmptyStatement) continue;
+      if (ts.isContinueStatement(stmt)) {
+        const target = continueTargets.get(stmt);
+        // Crossing a finally/close region needs completion routing, not a jump.
+        if (
+          !target ||
+          stateFinallyDepth > 0 ||
+          target.unwind.length !== unwind.length ||
+          target.unwind.some((entry, index) => entry !== unwind[index])
+        )
+          return fail();
+        finishState(curId, { kind: "jump", next: target.next });
+        curId = startState();
+        return true;
+      }
 
       // A top-level `return` always terminates the current state. (Routed here
       // first so a bare `return expr;` is a completion terminator, not a raw
@@ -849,7 +864,7 @@ function buildNativeGeneratorPlan(ctx: CodegenContext, decl: GeneratorDecl): Nat
 
       // Straight-line statement (no yield, no nested return): append to the
       // current state's prelude and let compileStatement emit it verbatim.
-      if (!statementNeedsStructuralLowering(stmt)) {
+      if (!continueContainers.has(stmt) && !statementNeedsStructuralLowering(stmt)) {
         collectSpillsIn(stmt);
         curStatements.push(stmt);
         continue;
@@ -1332,8 +1347,9 @@ function buildNativeGeneratorPlan(ctx: CodegenContext, decl: GeneratorDecl): Nat
     // TS CallExpression's callee is `.expression`.
     const callee = expr.expression;
     if (!ts.isIdentifier(callee)) return undefined;
-    const sym = ctx.checker.getSymbolAtLocation(callee);
-    const innerDecl = sym?.declarations?.find((d): d is ts.FunctionDeclaration => ts.isFunctionDeclaration(d));
+    const innerDecl = ctx.oracle
+      .declarationsOf(callee)
+      .find((d): d is ts.FunctionDeclaration => ts.isFunctionDeclaration(d));
     if (!innerDecl || !innerDecl.asteriskToken || !innerDecl.body) return undefined;
     if (!isNativeGeneratorCandidate(ctx, innerDecl)) return undefined;
     // (#2170 slice-1 / #2171 interop) Only numeric (f64) inner generators are
@@ -2264,7 +2280,8 @@ function buildNativeGeneratorPlan(ctx: CodegenContext, decl: GeneratorDecl): Nat
       return fail();
     if (!ts.isVariableDeclarationList(stmt.initializer) || stmt.initializer.declarations.length !== 1) return fail();
     const binding = stmt.initializer.declarations[0]!;
-    if (!ts.isIdentifier(binding.name) || loopBodyHasUnsupportedJump(stmt.statement)) return fail();
+    const continues = sourceLoopContinues(stmt.statement);
+    if (!ts.isIdentifier(binding.name) || !continues) return fail();
     if (!forOfBindingIsFrameSafe(decl.body!, binding.name)) return fail();
     if (decl.parameters.some((p) => ts.isIdentifier(p.name) && p.name.text === binding.name.getText())) return fail();
     const iterator = continuationSpillName("operand");
@@ -2282,7 +2299,12 @@ function buildNativeGeneratorPlan(ctx: CodegenContext, decl: GeneratorDecl): Nat
     curThrowRoute = { kind: "finally", region };
     const bodyEntry = reserveState();
     resetCursor(bodyEntry);
-    const bodyOk = lowerStatements(thenBody(stmt.statement), [...unwind, { kind: "finally", region }], false);
+    const bodyUnwind: readonly UnwindEntry[] = [...unwind, { kind: "finally", region }];
+    for (const jump of continues) {
+      continueTargets.set(jump, { next: header, unwind: bodyUnwind });
+      for (let node: ts.Node = jump; node !== stmt; node = node.parent) continueContainers.add(node);
+    }
+    const bodyOk = lowerStatements(thenBody(stmt.statement), bodyUnwind, false);
     curThrowRoute = outerRoute;
     if (!bodyOk) return false;
     finishState(curId, { kind: "jump", next: header });
@@ -2426,7 +2448,7 @@ function buildNativeGeneratorPlan(ctx: CodegenContext, decl: GeneratorDecl): Nat
       !stmt.awaitModifier &&
       stateFinallyDepth === 0 &&
       !nodeContainsYield(stmt.expression) &&
-      !loopBodyHasUnsupportedJump(stmt.statement) &&
+      sourceLoopContinues(stmt.statement) !== undefined &&
       binding &&
       ts.isIdentifier(binding.name) &&
       forOfBindingIsFrameSafe(decl.body!, binding.name) &&

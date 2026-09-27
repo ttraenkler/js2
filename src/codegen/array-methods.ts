@@ -1,4 +1,5 @@
 // Copyright (c) 2026 Loopdive GmbH. Licensed under Apache-2.0 WITH LLVM-exception.
+import { ensureLiveArrayIterator } from "./live-array-iterator.js";
 /**
  * Array method compilation — extracted from expressions.ts.
  *
@@ -3210,6 +3211,18 @@ function compileNativeArrayIterator(
   propAccess: ts.PropertyAccessExpression | ts.ElementAccessExpression,
   methodName: string,
 ): ValType | null {
+  if (ctx.standalone) {
+    ensureLiveArrayIterator(ctx);
+    flushLateImportShifts(ctx, fctx);
+    const receiverType = compileExpression(ctx, fctx, propAccess.expression);
+    if (!receiverType) return null;
+    coerceType(ctx, fctx, receiverType, { kind: "externref" });
+    fctx.body.push(
+      { op: "i32.const", value: methodName === "keys" ? 1 : methodName === "entries" ? 2 : 0 },
+      { op: "call", funcIdx: ctx.funcMap.get("__live_array_iterator_new")! },
+    );
+    return { kind: "externref" };
+  }
   ensureNativeIteratorRuntime(ctx);
   const iterRecTypeIdx = getOrRegisterIterRecType(ctx);
   const canonVecTypeIdx = getOrRegisterVecType(ctx, "externref", { kind: "externref" });

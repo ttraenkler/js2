@@ -69,6 +69,9 @@
       "roots": [
         "src/frontend/builtins/contracts.ts",
         "src/frontend/builtins/prepare-string-output.ts",
+        "src/frontend/ts/object-method-writes.ts",
+        "src/frontend/ts/assigned-callable-parameter.ts",
+        "src/frontend/ts/loop-continues.ts",
         "src/frontend/typescript.ts"
       ],
       "required": true,
@@ -1670,6 +1673,31 @@
       "layer": "wasm-model"
     },
     {
+      "path": "src/wasm/model/vec-overlay-lookup.ts",
+      "state": "clean",
+      "layer": "wasm-model"
+    },
+    {
+      "path": "src/wasm/model/string-exotic-length.ts",
+      "state": "clean",
+      "layer": "wasm-model"
+    },
+    {
+      "path": "src/wasm/model/live-array-iterator.ts",
+      "state": "clean",
+      "layer": "wasm-model"
+    },
+    {
+      "path": "src/wasm/model/to-length.ts",
+      "state": "clean",
+      "layer": "wasm-model"
+    },
+    {
+      "path": "src/wasm/model/iterator-rest.ts",
+      "state": "clean",
+      "layer": "wasm-model"
+    },
+    {
       "path": "src/runtime/wasmgc/values/string-number-grammar.ts",
       "state": "clean",
       "layer": "native-runtime"
@@ -2777,6 +2805,14 @@
       "destination": "backend-wasmgc",
       "owner": "1058",
       "nextBoundary": "Move AST argument evaluation into IR planning; retain the existing native undefined and numeric providers."
+    },
+    {
+      "path": "src/codegen/live-array-iterator.ts",
+      "state": "unmigrated",
+      "layer": "mixed-needs-split",
+      "destination": "backend-wasmgc",
+      "owner": "1058",
+      "nextBoundary": "Move resource registration and existing ToLength adapter into backend resources; preserve the context-free Wasm model step."
     },
     {
       "path": "src/codegen/array-join-element.ts",
@@ -13183,6 +13219,21 @@
       "layer": "frontend-ts"
     },
     {
+      "path": "src/frontend/ts/object-method-writes.ts",
+      "state": "clean",
+      "layer": "frontend-ts"
+    },
+    {
+      "path": "src/frontend/ts/assigned-callable-parameter.ts",
+      "state": "clean",
+      "layer": "frontend-ts"
+    },
+    {
+      "path": "src/frontend/ts/loop-continues.ts",
+      "state": "clean",
+      "layer": "frontend-ts"
+    },
+    {
       "path": "src/ir/program/native-promise-inventory.ts",
       "state": "clean",
       "layer": "ir-program"
@@ -13215,14 +13266,6 @@
     },
     {
       "path": "src/codegen/null-ref-undefined-box.ts",
-      "state": "unmigrated",
-      "layer": "mixed-needs-split",
-      "destination": "backend-wasmgc",
-      "owner": "3518-coordinator",
-      "nextBoundary": "Separate AST/context-driven generation, physical resources and generated native runtime."
-    },
-    {
-      "path": "src/codegen/resolved-rest-param.ts",
       "state": "unmigrated",
       "layer": "mixed-needs-split",
       "destination": "backend-wasmgc",

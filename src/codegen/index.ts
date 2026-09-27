@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Loopdive GmbH. Licensed under Apache-2.0 WITH LLVM-exception.
 import { ts, forEachChild } from "../ts-api.js";
+import { fillLiveArrayIterator } from "./live-array-iterator.js";
 import { inferredClosureSignature, inferredReturnedClosureSignature } from "../ir/inferred-closure-signature.js";
 import { irInferredClosureCarriers } from "./ir-inferred-closure-carriers.js";
 import { dataFieldsHashKey } from "./registry/data-fields-key.js";
@@ -6287,6 +6288,7 @@ export function generateModule(
       addUnionImports(ctx);
     }
     fillNativeIteratorLateArms(ctx);
+    fillLiveArrayIterator(ctx);
     fillNativeGeneratorMethodDispatches(ctx);
 
     // (#2903) Rebuild the Iterator-helper steppers (iter-hof-native.ts) with
@@ -11605,6 +11607,7 @@ export function generateMultiModule(multiAst: MultiTypedAST, options?: CodegenOp
       addUnionImports(ctx);
     }
     profilePhase("fill-native-iterator-late-arms", () => fillNativeIteratorLateArms(ctx));
+    profilePhase("fill-live-array-iterator", () => fillLiveArrayIterator(ctx));
     profilePhase("fill-native-generator-method-dispatches", () => fillNativeGeneratorMethodDispatches(ctx));
     profilePhase("fill-iter-hof-steppers", () => fillIterHofSteppers(ctx));
     profilePhase("fill-lazy-iter-ladder-arms", () => fillLazyIterLadderArms(ctx));

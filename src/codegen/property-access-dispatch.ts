@@ -3624,15 +3624,10 @@ export function tryLengthAndNameReads(
         rollbackSpeculative(ctx, fctx, snap);
       }
     }
-    // #1472 Phase B Blocker B Slice 2 — standalone `.length` on an `any`/unknown
-    // receiver. None of the vec fast-paths matched, so the receiver is an opaque
-    // externref at runtime (e.g. the $ObjVec result of `Object.keys(o)` stored
-    // in an `any`). In standalone, `__extern_length` is the native $ObjVec
-    // reader (Blocker B Slice 1), so routing here keeps `.length` host-free and
-    // correct instead of falling through to `__extern_get("length")` (which the
-    // native `__extern_get` would mis-handle by casting "length" → key lookup,
-    // yielding 0). JS-host mode is unchanged (this gate is standalone-only; the
-    // host path's generic `__extern_get("length")` already works there).
+    // Opaque standalone receivers need ordinary Get, not numeric length
+    // coercion: an absent property is undefined and a present one can contain
+    // any value. The shared dynamic reader handles native arrays and callable
+    // metadata too. Keep the prior fallback only if that reader is unavailable.
     if (ctx.standalone) {
       const isAnyOrUnknown = (objType.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown)) !== 0;
       if (isAnyOrUnknown) {
@@ -3641,6 +3636,7 @@ export function tryLengthAndNameReads(
           if (exprResult.kind !== "externref") {
             coerceType(ctx, fctx, exprResult, { kind: "externref" });
           }
+          if (emitDynGet(ctx, fctx, "length")) return { kind: "externref" };
           return emitStandaloneAnyLength(ctx, fctx);
         }
       }
