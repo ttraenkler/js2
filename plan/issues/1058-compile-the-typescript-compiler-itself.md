@@ -12764,6 +12764,30 @@ The same eight namespace static-class cases fail. Logs are worktree-local
 Recheck after the merge; do not revive the rejected eager class-object shortcut
 or describe the older parser measurement as validation of this checkpoint.
 
+The requested merge completed as signed commit `b916ca3d76`; upstream
+`359c2d63b6753e0c540b8761d13647b00e24a9a4` is a verified ancestor. The merge
+changed benchmark artifacts only, with no compiler conflicts. Work was preserved
+in signed checkpoint `6a17ea2736`, without manual stashing.
+
+Post-merge continuation isolates the remaining opaque-enum failure to **module
+initialization with IR disabled when the provider also exports a function**.
+The durable test now varies that export independently of IR, keeps all six value
+assertions, and executes deferred initialization explicitly so failures identify
+the phase. Both IR-enabled variants pass; IR-disabled passes without the function
+export and fails with it. A separate scratch probe catches and decodes the error:
+`Cannot access property on null or undefined` inside the opaque namespace reader.
+Changing duplicate reader names does not change the outcome. Inspect availability
+of declaration-owned callable registry entries during namespace materialization
+at module initialization next; this is a hypothesis, not a proven fix. Do not
+replace declaration identity with a bare function-name lookup.
+
+The post-merge focused enum/factory/order suite is **24/25**; type checking and
+lint pass. Evidence: `.tmp/namespace-enum-postmerge-final.log`,
+`.tmp/namespace-enum-postmerge-final-typecheck.log`, and
+`.tmp/namespace-enum-init-function-probe.log`. No fresh full parser or semver run
+was performed after the merge. Full checker/self-hosting and strict IR closure
+remain open.
+
 ## Stewardship angle
 
 "js2wasm compiles 60% of test262" is a percentage. "js2wasm compiles the TypeScript compiler itself" is a story. Landing even Tier 3 is the single strongest artifact for conversations with potential maintainers or funders — it demonstrates the compiler has enough depth to handle production TypeScript, not just hand-picked benchmark inputs. The gap between "a toy subset compiles" and "the real compiler compiles" is exactly what separates a proof-of-concept from a usable tool.

@@ -3,27 +3,28 @@ import { expect, it } from "vitest";
 import { compileMulti } from "../src/index.js";
 
 for (const experimentalIR of [false, true]) {
-  it(`keeps an opaque namespace enum live across initialization IR=${experimentalIR}`, async () => {
-    const result = await compileMulti(
-      {
-        "./provider.ts": `
+  for (const exportedFunction of [false, true]) {
+    it(`keeps an opaque namespace enum live across initialization IR=${experimentalIR} function=${exportedFunction}`, async () => {
+      const result = await compileMulti(
+        {
+          "./provider.ts": `
         import * as self from './provider.js';
         function read(namespace:any,key:string){return namespace[key];}
         export const before=typeof read(self,'Kind');
         export enum Kind { First=11, Alias=First, Text='text' }
-        export function own(){return Kind;}
+        ${exportedFunction ? "export function own(){return Kind;}" : ""}
       `,
-        "./barrel.ts": "export * from './provider.js';",
-        "./entry.ts": `
+          "./barrel.ts": "export * from './provider.js';",
+          "./entry.ts": `
         import * as ns from './barrel.js';
-        import { Kind, own, before } from './provider.js';
+        import { Kind, before ${exportedFunction ? ", own" : ""} } from './provider.js';
         function read(namespace:any,key:string){return namespace[key];}
         export function run(index:number){
           const kind=read(ns,'Kind');
           switch(index){
             case 0:return before==='undefined'?42:0;
             case 1:return kind===Kind?42:0;
-            case 2:return kind===own()?42:0;
+            case 2:return kind===${exportedFunction ? "own()" : "Kind"}?42:0;
             case 3:return kind[11]==='Alias'?42:0;
             case 4:return kind.Text==='text'?42:0;
             case 5:kind.extra=7;return read(ns,'Kind').extra===7?42:0;
@@ -31,14 +32,23 @@ for (const experimentalIR of [false, true]) {
           }
         }
       `,
-      },
-      "./entry.ts",
-      { target: "standalone", experimentalIR },
-    );
-    expect(result.success, JSON.stringify(result.errors)).toBe(true);
-    const module = new WebAssembly.Module(result.binary);
-    expect(WebAssembly.Module.imports(module)).toEqual([]);
-    const run = new WebAssembly.Instance(module).exports.run as (index: number) => number;
-    for (let index = 0; index < 6; index++) expect.soft(run(index), `case ${index}`).toBe(42);
-  });
+        },
+        "./entry.ts",
+        { target: "standalone", experimentalIR, deferTopLevelInit: true },
+      );
+      expect(result.success, JSON.stringify(result.errors)).toBe(true);
+      const module = new WebAssembly.Module(result.binary);
+      expect(WebAssembly.Module.imports(module)).toEqual([]);
+      const instance = new WebAssembly.Instance(module);
+      try {
+        (instance.exports.__module_init as () => void)();
+      } catch (error) {
+        throw new Error("module initialization failed before enum assertions", { cause: error });
+      }
+      const run = instance.exports.run as (index: number) => number;
+      for (let index = 0; index < 6; index++) {
+        expect.soft(() => expect(run(index), `case ${index}`).toBe(42), `case ${index}`).not.toThrow();
+      }
+    });
+  }
 }

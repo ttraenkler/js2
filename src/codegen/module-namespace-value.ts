@@ -850,7 +850,7 @@ function ensureNestedNamespaceGetters(
 }
 
 /**
- * (#6651 N4) Mint one zero-argument getter per exported class, BEFORE the
+ * (#6651 N4, #1058) Mint a zero-argument getter per exported class or enum, BEFORE the
  * enclosing namespace object reserves any of its own helpers, keyed by export
  * name.
  *
@@ -866,6 +866,7 @@ function ensureNestedNamespaceGetters(
  * The body is the helper's usual lazy singleton: `global.get __class_<Name>`,
  * initialize on null, then read it back — so the namespace slot and a direct
  * `C` reference in the exporting module answer the SAME constructor object.
+ * Enum getters read the declaration-owned live binding without initializing it.
  */
 function ensureNamespaceValueGetters(
   ctx: CodegenContext,
@@ -874,7 +875,7 @@ function ensureNamespaceValueGetters(
   const getters = new Map<string, string>();
   for (const entry of exports) {
     if (entry.kind !== "class" && entry.kind !== "enum") continue;
-    const name = `__module_namespace_class_${ctx.mod.functions.length}`;
+    const name = `__module_namespace_value_${ctx.mod.functions.length}`;
     const fctx: FunctionContext = {
       name,
       params: [],
@@ -932,8 +933,8 @@ function ensureNamespaceObjectGetter(
 
   const nestedGetters = ensureNestedNamespaceGetters(ctx, fctx, exports);
   if (nestedGetters === undefined) return undefined;
-  const classGetters = ensureNamespaceValueGetters(ctx, exports);
-  if (classGetters === undefined) return undefined;
+  const valueGetters = ensureNamespaceValueGetters(ctx, exports);
+  if (valueGetters === undefined) return undefined;
 
   const helpers = reserveNamespaceObjectHelpers(ctx, fctx, exports, moduleNamespaceTag);
   if (helpers === undefined) return undefined;
@@ -961,7 +962,7 @@ function ensureNamespaceObjectGetter(
     exports,
     moduleNamespaceTag,
     nestedGetters,
-    classGetters,
+    valueGetters,
     helpers,
     cacheGlobal,
   });
@@ -1082,7 +1083,7 @@ interface NamespaceObjectGetterPlan {
   readonly exports: readonly NamespaceExport[];
   readonly moduleNamespaceTag: boolean;
   readonly nestedGetters: ReadonlyMap<string, string>;
-  readonly classGetters: ReadonlyMap<string, string>;
+  readonly valueGetters: ReadonlyMap<string, string>;
   readonly helpers: NamespaceObjectHelpers;
   readonly cacheGlobal: GlobalDef;
 }
@@ -1094,7 +1095,7 @@ interface NamespaceObjectGetterPlan {
  * bakes is final except the global reads, which are rebased at the end.
  */
 function buildNamespaceObjectGetterBody(ctx: CodegenContext, plan: NamespaceObjectGetterPlan): string | undefined {
-  const { cacheKey, exports, moduleNamespaceTag, nestedGetters, classGetters, cacheGlobal } = plan;
+  const { cacheKey, exports, moduleNamespaceTag, nestedGetters, valueGetters, cacheGlobal } = plan;
   const {
     objectCreateIdx: finalObjectCreateIdx,
     preventExtensionsIdx: finalPreventExtensionsIdx,
@@ -1168,7 +1169,7 @@ function buildNamespaceObjectGetterBody(ctx: CodegenContext, plan: NamespaceObje
         finalDefineAccessorIdx === undefined
           ? undefined
           : entry.kind === "enum"
-            ? ctx.funcMap.get(classGetters.get(entry.key) ?? "")
+            ? ctx.funcMap.get(valueGetters.get(entry.key) ?? "")
             : mintLiveBindingGetter(ctx, entry, globalReads);
       if (getterFuncIdx === undefined || finalDefineAccessorIdx === undefined) {
         popBody(getterFctx, savedBody);
@@ -1203,7 +1204,7 @@ function buildNamespaceObjectGetterBody(ctx: CodegenContext, plan: NamespaceObje
     } else if (entry.kind === "class") {
       // (#6651 N4) The class getter is the same lazy singleton the exporting
       // module's own `C` reference reads, so the slot publishes one identity.
-      const classIdx = ctx.funcMap.get(classGetters.get(entry.key) ?? "");
+      const classIdx = ctx.funcMap.get(valueGetters.get(entry.key) ?? "");
       if (classIdx === undefined) {
         popBody(getterFctx, savedBody);
         return undefined;
