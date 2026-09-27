@@ -267,6 +267,34 @@ oracle-ratchet-allow:
 ---
 # #1058 — Compile the TypeScript compiler to Wasm (self-hosting stress test)
 
+## Latest main sync and continuation — 2026-09-27
+
+Merged upstream main `5ad53338fe27735305bf656c931df7f46f785e1d` into
+`codex/1058-typescript-standalone` as signed `d5f5a33cbe`, without conflicts.
+Ancestry verified; this main delta changes only six npm-compat benchmark
+artifacts, not compiler or test sources. Post-merge namespace/carrier integration
+checks pass **44/44** (`.tmp/main5ad533-integration.log`).
+
+The frozen `61d5930e0a` original factory source run finished **3/3**, zero
+imports, 14,308,932 bytes, 111,293 ms
+(`.tmp/source-factory-heritage61d593.log`). Its full optimized scanner run
+remains live as session `55011`; preserve it and inspect
+`.tmp/source-scanner-heritage61d593-o1.log` for the final result.
+
+Preserved that scanner run's pre-optimization binary as
+`.tmp/source-scanner-heritage61d593-raw.wasm`, SHA-256
+`eaf52098b242740b046df1be237836070eafdcb0e1439dfcb8bed7cc297bbaf7`.
+Diagnostic session `61482` completed: registered/executed **984**, passed **0**.
+Its seven throwing Node imports were not invoked; this is not standalone
+acceptance. The first two errors now report a guest null-property exception at
+`1276:9`, matching `createRegularExpressionLiteral`'s `node.text = text` in
+the pinned node factory. Fresh identifier-factory WAT shows
+`createBaseIdentifierNode` now returns `externref`, so do not assume the prior
+closed Node return cast remains the root cause. Next inspect token construction
+and its interface carrier before changing production. Artifacts:
+`.tmp/source-scanner-heritage61d593-raw-diagnostic.log` and
+`.tmp/scanner-heritage61d593-baseidentifier-wat.log`.
+
 ## Namespace-class work in progress and main sync — 2026-09-27
 
 The namespace candidate extends existing class collection, exact declaration
