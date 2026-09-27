@@ -12869,6 +12869,26 @@ and deletion is not certified. No new size allowances were added.
 
 ### Qualified static-method mutation continuation (2026-09-28)
 
+Upstream sync: fetched `https://github.com/loopdive/js2.git` main at
+`aca46e64cd` and merged it without conflicts as signed commit `1dfdd8a571`.
+Verified upstream ancestry and clean worktree after the merge; no main push.
+Post-merge typecheck passes. Focused validation is **66/70 passing**: all
+**54/54** checked-in tests across the incoming dynamic-callback regression,
+module-class initialization, readonly class plan and namespace-class surface
+pass. The remaining scratch capture matrix is **12/16**, with exactly the
+same four two-factory wrong values as before sync. Evidence:
+`.tmp/upstream-aca46-focused.log`, `.tmp/upstream-aca46-typecheck.log`.
+
+Continuation direction: reuse per-object closure environments, not global
+promotion. The open-object method route already calls `compileArrowAsClosure`,
+whose `closures/arrow-phases.ts` capture discovery follows transitive nested
+function requirements. Structured methods instead promote captures and wrap
+a static body. Any fix must keep object production, interface/return types,
+stored method closures and direct method calls on a consistent ABI; merely
+forcing literals onto the open-object route is not yet justified. Prefer an
+exact-declaration shared IR capture/ownership plan for that decision. Full
+checker compilation has not been remeasured or fixed by this merge.
+
 Checker continuation: reducing the recorded invalid grandparent capture in
 `SyntacticTypeNodeBuilderResolver_shouldRemoveDeclaration`. Its source calls
 `checkComputedPropertyName` from an object-literal method inside
