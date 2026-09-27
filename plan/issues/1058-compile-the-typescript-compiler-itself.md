@@ -1429,6 +1429,45 @@ full-suite result. A fresh fetch and merge of `loopdive/js2` main confirms
 `2a58b9fe9f95dc17bd5d2ba44ecd564b9695356b` is already an ancestor; merge reports
 already up to date. The next task is the callback return-carrier mismatch.
 
+Signed constructor checkpoint: `03fe514745`. The next diagnostic isolates
+`__closure_1231` to `trackChanges` in `src/services/codefixes/addMissingAsync.ts`
+line 71: `cb => (cb(t), [])`. Diagnostic-only binary isolation confirms the
+result block expects the externref-element vector while its tail constructs a
+different vector. A source-shaped reduced test reproduces the validation error
+in both IR modes (**0/2**); the exploratory array-return matrix is **0/8**, with
+four validation failures and four runtime exceptions, not eight equivalent
+failures (`.tmp/closure-return-carrier-exact-before.log`). The closure source
+mapping run is session `80480`, `.tmp/scanner-closure-return-source-map.log`.
+Investigation now checks concise-body coercion's kind-only comparison, which
+ignores different physical heap types sharing a reference kind.
+
+The two concise-body consumers now compare full physical value types and call
+the existing shared coercion engine, rather than introducing an array-specific
+conversion. The permanent source-shaped regression executes the callback
+directly, checks its captured side effect and the returned empty array, and
+requires zero imports in both IR modes. Before: **0/2**, invalid return heap
+type (`.tmp/closure-array-return-before.log`). Candidate: **2/2**. The broader
+six-file batch passes **35/37** (`.tmp/closure-array-return-after.log`); both
+failures reproduce on clean `58fce98114` (**9/11** in the two affected files,
+`.tmp/closure-array-return-control.log` in the array control checkout): the GC
+parser-list illegal cast and an expected generic-callback rejection that no
+longer throws. Neither is credited as fixed.
+
+The exploratory indirect-call variants remain **0/8** with runtime exceptions
+after the conversion (`.tmp/closure-return-carrier-direct-after.log`, including
+the two passing direct cases gives **2/10**). These are unresolved callback
+dispatch failures, not passing array-return tests. Source mapping session
+`80480` terminated with heap exhaustion (exit 134) after emitting the necessary
+`trackChanges` mapping; it provides source attribution only, not a completed
+compile. Full scanner verification of the candidate is running in session
+`89089`, `.tmp/source-scanner-closure-return.log`, with binary preservation at
+`.tmp/source-scanner-closure-return.wasm`. Fresh compilerCore/factory controls
+are session `15653`. Additional closure-ABI regressions pass **41/41** across
+three files (session `16512`, `.tmp/closure-return-abi-regressions.log`).
+Type-checking, lint, formatting and all five source gates pass without allowance
+growth (`.tmp/closure-array-return-{typecheck,lint,loc,func,coercion,oracle,exports}.log`).
+Dead-export verification remains preservation-only, not strict closure proof.
+
 The user requested a main merge and continuation. The former temporary checkout
 was cleaned out, but branch `codex/1058-typescript-standalone` retained the signed
 handoff at `efd9aca79c5aba4bfd6670847be925a027ed219f`. Work now lives in

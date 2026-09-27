@@ -3394,7 +3394,7 @@ export function compileLiftedClosureBody(
       // The actual expression type may differ from the declared return type
       // (e.g. TS infers `any`->externref but codegen produces f64 for arithmetic).
       // Coerce the expression result to match the declared return type.
-      if (exprType.kind !== closureReturnType.kind) {
+      if (!valTypesMatch(exprType, closureReturnType)) {
         const instrs = coercionInstrs(ctx, exprType, closureReturnType, liftedFctx);
         if (instrs.length > 0) {
           liftedFctx.body.push(...instrs);
@@ -4618,7 +4618,7 @@ export function compileArrowAsCallback(
       // Expression result is the return value — already on stack
       exprBodyHasReturnValue = true;
       // Coerce expression type to declared return type if needed
-      if (exprType.kind !== cbReturnType.kind) {
+      if (!valTypesMatch(exprType, cbReturnType)) {
         const instrs = coercionInstrs(ctx, exprType, cbReturnType, cbFctx);
         if (instrs.length > 0) {
           cbFctx.body.push(...instrs);
