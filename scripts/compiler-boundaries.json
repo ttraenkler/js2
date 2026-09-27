@@ -2771,6 +2771,14 @@
       "nextBoundary": "Separate AST/context-driven generation, physical resources and generated native runtime."
     },
     {
+      "path": "src/codegen/array-slice-end.ts",
+      "state": "unmigrated",
+      "layer": "mixed-needs-split",
+      "destination": "backend-wasmgc",
+      "owner": "1058",
+      "nextBoundary": "Move AST argument evaluation into IR planning; retain the existing native undefined and numeric providers."
+    },
+    {
       "path": "src/codegen/array-join-element.ts",
       "state": "unmigrated",
       "layer": "mixed-needs-split",

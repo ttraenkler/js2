@@ -519,6 +519,29 @@ model leaf is registered and depends only on model instruction types; the full
 boundary gate still reports older unclassified modules and IR object-layout
 paths, so publication architecture remains incomplete.
 
+Relative-path continuation at `f11cfa18e9`: the original-source probe proves
+normalized components are correct, then `getPathFromPathComponents(['','..'])`
+returns empty. A small faithful join reproduces this: `slice(1, length)` with an
+omitted optional length returns empty, unlike `slice(1)`. The existing static
+undefined-token exception misses runtime undefined (and ignores shadowing).
+Checking the f64 sentinel after numeric conversion also fails: undefined has
+already become ordinary NaN. Candidate evaluates the end once as externref,
+uses the existing undefined provider before numeric conversion, and passes the
+result into the unchanged AST-free slice core. This also preserves NaN/null
+as numeric zero. The small probe now passes; tests cover optional/erased end,
+NaN, null, numeric strings, negatives, side effects and shadowed undefined.
+The new argument leaf is explicitly marked unmigrated in the boundary inventory;
+it does not introduce a second runtime or claim IR architecture completion.
+Original paths now passes **14/14** in native and standalone lanes with unchanged
+assertions, valid Wasm and zero imports (84,415 ms, 7,660,835 bytes), recorded in
+`.tmp/source-paths-slice-end.log`. The new optional-end and existing sparse-copy
+tests pass **10/10**; an additional slice-name-filtered existing array-method
+run passes **3/3 executed**, with **45 skipped** (not credited). Typecheck,
+scoped lint and LOC/function gates pass. The previously measured six-file
+sample plus paths accounts for 42 callbacks, but revalidate those six files
+after these shared changes before claiming a fresh 42/42 sample. This remains
+only seven files of the 256-file pinned upstream inventory, not completion.
+
 The user requested a main merge and continuation. The former temporary checkout
 was cleaned out, but branch `codex/1058-typescript-standalone` retained the signed
 handoff at `efd9aca79c5aba4bfd6670847be925a027ed219f`. Work now lives in
