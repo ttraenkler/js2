@@ -3,7 +3,7 @@ id: 1058
 title: "Compile the TypeScript compiler itself to Wasm — self-hosting stress test"
 status: in_progress
 created: 2026-04-11
-updated: 2026-09-27
+updated: 2026-09-28
 priority: high
 feasibility: hard
 model: fable
@@ -12915,6 +12915,42 @@ Evidence: `.tmp/incremental-method-environment-o1.log`. Full checker **63849**
 was repolled live, compiling `checker.ts`; do not restart it for quiet output.
 
 #### Runtime namespace implementation boundary
+
+Latest sync (2026-09-28): merged authoritative `loopdive/js2` main
+`fb006fe124` without conflicts; incoming changes only refresh six npm-compat
+report artifacts. The full checker run on `702c2ef3a9` has now finished:
+1,564,797 ms wall time, 4,465.3 MiB peak RSS, 68,532,301 binary bytes.
+Compilation reports success, but Wasm validation fails in
+`__fnctor_NodeLinks_new`: fallthrough expects a nullable reference and receives
+`f64`. All **3/3 invocation cases are blocked at instantiation**, not executed;
+this is not checker acceptance. Evidence:
+`.tmp/checker-method-environment-full.log`.
+
+Continuation is isolating this new constructor boundary alongside the open
+namespace work below. A minimal same-named interface/function constructor gives
+**2/4** standalone passes: unannotated `this` passes in both IR settings;
+explicit `this: NodeLinks` validates but traps on the property read in both.
+This reduced failure is not yet proven to explain the full checker's validation
+error. Evidence: `.tmp/checker-node-links-v1.log`. No test assertions have been
+weakened and the full checker is not being restarted unchanged.
+
+The constructor argument-slot defect is now fixed: shared IR source helper
+`runtimeFunctionParameters` removes the erased receiver annotation while
+retaining exact declaration nodes. Synthesized function constructors use that
+same list for physical parameter types and body bindings, so hidden constructor
+identity, actual arguments and the allocated receiver no longer shift by one.
+This does not widen IR-body admission or mutate a shared context registry.
+
+Fresh standalone Vitest A/B against post-merge `453de050af`, replacing only
+`new-super.ts` in the baseline: **7/13 → 13/13**, six fixes, zero regressions.
+The matrix covers zero/one runtime formal, extra actual arguments, `arguments`
+length/indexing, annotated/unannotated receiver and both IR settings, with
+native numeric controls. Two adjacent constructor files contribute **3/3**,
+giving **16/16** candidate checks. Logs:
+`.tmp/checker-node-links-production-baseline.log` and
+`.tmp/checker-node-links-production.log`. Type checking and targeted lint pass.
+The full checker's previous validation error is still not claimed fixed until
+a fresh complete build validates and all three cases execute correctly.
 
 The same eight reduced cases pass **8/8** when only the namespace provider is
 first lowered by TypeScript's standard ES2022/ESNext emitter; original

@@ -1,4 +1,5 @@
 import type { FieldDef, Instr, ValType } from "../../ir/types.js";
+import { runtimeFunctionParameters } from "../../ir/runtime-function-parameters.js";
 import { widenJsDefaultGuessSlot } from "../js-default-param-type-guess.js";
 import { materializeFnctorTwinCaptures } from "../fnctor-twin-captures.js";
 import { resolveStaticSpreadArgs } from "../static-spread-arity.js"; // (#6460)
@@ -2852,8 +2853,8 @@ function compileNewFunctionDeclaration(
   // 3. Build the constructor function
   // Constructor params match the function declaration params
   const userCtorParams: ValType[] = [];
-  for (let i = 0; i < funcDecl.parameters.length; i++) {
-    const param = funcDecl.parameters[i]!;
+  const runtimeParams = runtimeFunctionParameters(funcDecl);
+  for (const param of runtimeParams) {
     const paramType = ctx.checker.getTypeAtLocation(param);
     userCtorParams.push(widenJsDefaultGuessSlot(param, resolveWasmType(ctx, paramType)));
   }
@@ -2929,8 +2930,8 @@ function compileNewFunctionDeclaration(
   // sits, past the capture / TDZ-flag parameters — the `paramOffset` the
   // `arguments` vec indexes from.
   const userParamOffset = paramDefs.length;
-  for (let i = 0; i < funcDecl.parameters.length; i++) {
-    const p = funcDecl.parameters[i]!;
+  for (let i = 0; i < runtimeParams.length; i++) {
+    const p = runtimeParams[i]!;
     paramDefs.push({
       name: ts.isIdentifier(p.name) ? p.name.text : `__param${i}`,
       type: userCtorParams[i] ?? { kind: "f64" },
