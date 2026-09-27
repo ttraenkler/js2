@@ -12869,6 +12869,23 @@ and deletion is not certified. No new size allowances were added.
 
 ### Qualified static-method mutation continuation (2026-09-28)
 
+Checker continuation: reducing the recorded invalid grandparent capture in
+`SyntacticTypeNodeBuilderResolver_shouldRemoveDeclaration`. Its source calls
+`checkComputedPropertyName` from an object-literal method inside
+`createNodeBuilder`, while that function belongs to `createTypeChecker` and
+requires captures including function-valued `error`. The existing method
+promotion walk follows function dependencies but skips promotion of function
+values themselves. A reduced matrix now distinguishes ordinary nested calls
+from escaped function values and tests two independent factory activations;
+no source fix or checker-success claim has been made yet.
+
+The reduced matrix measured **12/16 passing** before upstream sync: all four
+two-factory structured-method cases return **2122**, rather than native
+**1122**. Adding an accessor to select the open-object closure path passes
+the corresponding controls in both IR modes. Evidence:
+`.tmp/checker-method-capture-open-control.log`; this isolates per-activation
+capture ownership, not yet the full checker's invalid local index.
+
 **Original semver milestone:** native **692/692**, standalone **692/692**,
 valid zero-import Wasm, 7,066,645 bytes, 142,187 ms at O1, pinned TypeScript
 `c63de15a992d37f0d6cec03ac7631872838602cb`; durable runner exit **0**.
@@ -12911,10 +12928,11 @@ to quiet wrong values is accepted. Oracle/coercion ratchets pass. Preservation
 audit passes **6/6** full and **6/6** cut witnesses only; production graph remains
 **OPEN**, strict closure **FAIL**, deletion not certified.
 
-A fresh original incremental-parser run on the hardened candidate is active
-(`.tmp/incremental-readonly-class-o1.log`, session 79645); do not restart it
-merely because the compiler is quiet. Its previous **153/153** predates these
-changes. Semver success is not proof of full checker compilation, all TypeScript
+The original incremental-parser run on hardened commit `b6353445c2` finished
+with exit **0**: native **153/153**, standalone **153/153**, valid zero-import
+Wasm, **23,759,247 bytes**, **554,691 ms** at O1. Evidence:
+`.tmp/incremental-readonly-class-o1.log`, session 79645. These measurements
+precede the next upstream merge. Success is not proof of full checker compilation, all TypeScript
 unit tests, strict IR closure or self-hosting; those requirements remain open.
 
 Follow-up: the inline `Object.defineProperty` accessor path registered a
