@@ -69,4 +69,13 @@ describe("TypeScript standalone oracle fixtures", () => {
       runDuplicateLet: "00ed58aa09db27c103cbd6b1913e174edbf2cde2d9789d46c1d9c80808f77bbb",
     });
   });
+
+  it("preserves all three checker inputs behind zero-argument exports", () => {
+    const values = zeroArgumentRunCaseLiterals(parseFixture("typescript-checker-standalone-workload.ts"));
+    expect(Object.fromEntries(values)).toEqual({
+      runAssignMismatch: readFileSync(join(FIXTURES, "typescript-checker/assign-mismatch.ts"), "utf8"),
+      runAssignOk: readFileSync(join(FIXTURES, "typescript-checker/assign-ok.ts"), "utf8"),
+      runTwoMismatches: readFileSync(join(FIXTURES, "typescript-checker/two-mismatches.ts"), "utf8"),
+    });
+  });
 });

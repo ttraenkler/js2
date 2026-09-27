@@ -2,7 +2,11 @@
 import { expect, it } from "vitest";
 import { compile } from "../../src/index.js";
 // @ts-expect-error — .mjs dogfood helpers have no declaration files
-import { SOURCE_UNIT_DIAGNOSTIC_EXPORTS, sourceUnitFileSucceeded } from "./typescript-source-unit-suite.mjs";
+import {
+  SOURCE_UNIT_DIAGNOSTIC_EXPORTS,
+  sourceUnitFileSucceeded,
+  redirectSourceUnitImports,
+} from "./typescript-source-unit-suite.mjs";
 // @ts-expect-error — .mjs dogfood helpers have no declaration files
 import { readStandaloneGuestError } from "./upstream-suite-worker-protocol.mjs";
 
@@ -37,6 +41,7 @@ it.each([
   ["paths", 14],
   ["asserts", 2],
   ["regExpScannerRecovery", 984],
+  ["incrementalParser", 153],
 ] as const)("requires all original %s callbacks for full-source coverage", (name, count) => {
   const result = passingResult();
   result.file = `src/testRunner/unittests/${name}.ts`;
@@ -50,6 +55,29 @@ it.each([
   expect(sourceUnitFileSucceeded(result)).toBe(false);
   result.wasm.count = count - 1;
   expect(sourceUnitFileSucceeded(result)).toBe(false);
+});
+
+it("redirects incremental parser imports without replacing original tree checks", () => {
+  const body =
+    "\r\nUtils.assertInvariants(tree);\r\nUtils.assertStructuralEquals(left, right);\r\nassert.deepEqual(left.commentDirectives, right.commentDirectives);";
+  const imports = 'import * as ts from "../_namespaces/ts.js";\r\nimport * as Utils from "../_namespaces/Utils.js";';
+  const result = redirectSourceUnitImports("incrementalParser", imports + body, "/suite", "/generated/unit.ts");
+  expect(result.needsServices).toBe(true);
+  expect(result.transformed).toBe(
+    'import * as ts from "./../suite/src/services/_namespaces/ts.js";\r\nimport * as Utils from "./../suite/src/testRunner/_namespaces/Utils.js";' +
+      body,
+  );
+  expect(() =>
+    redirectSourceUnitImports(
+      "incrementalParser",
+      imports.replace("Utils.js", "Other.js") + body,
+      "/suite",
+      "/generated/unit.ts",
+    ),
+  ).toThrow("Upstream Utils import changed");
+  expect(() => redirectSourceUnitImports("incrementalParser", body, "/suite", "/generated/unit.ts")).toThrow(
+    "Upstream namespace import changed",
+  );
 });
 
 it("rejects empty, partial, failed and unknown-file results", () => {

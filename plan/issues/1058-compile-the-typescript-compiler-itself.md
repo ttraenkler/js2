@@ -937,6 +937,43 @@ against this candidate in `.tmp/incremental-overloaded-append-o1.log`, handle
 153/153: admit `incrementalParser` to the durable source-unit runner with
 original Utils imports/assertions, then move to additional original files.
 
+### Durable incremental-parser source-unit admission
+
+Candidate admits the original `incrementalParser.ts` with a **153 callback**
+floor. Only namespace import paths are redirected: services and the original
+Utils module, whose invariant/structural comparison routines remain intact.
+The existing standalone assertion implementation is also bound globally for
+Utils. Native bundling resolves real chai/diff from the installed pnpm
+dependency links, without replacing them or installing dependencies. New
+runner checks require the unchanged test body and reject drifted imports;
+the common verdict tests require all 153 callbacks and zero imports.
+Durable-run validation is pending; earlier scratch-driver 153/153 is not
+automatically credited to this adapter.
+
+Native generated adapter now passes **153/153**. Independent negative controls
+inject a throw into each original `assertInvariants` and
+`assertStructuralEquals` function: each produces **0/153 passes**, with all
+153 failures attributed to the injected sentinel, so neither tree check is
+silently bypassed. Logs `.tmp/incremental-durable-native.log` and
+`.tmp/incremental-durable-killswitch.log`. Runner tests pass **14/14**.
+Durable standalone O1 handle **40524** remains live, logging to
+`.tmp/incremental-durable-runner-o1.log`; earlier-driver candidate rerun
+**8238** is separate. Do not restart either based on quiet output.
+
+Next compiler stage is the full checker, whose older measurement stopped at
+an out-of-frame local in `shouldRemoveDeclaration`. A tracked standalone
+checker wrapper now keeps all three existing oracle strings inside Wasm,
+instead of crossing the host boundary with JS strings. Its fixture test
+requires byte-for-byte equality with all three existing inputs. Expected
+numeric oracles remain **67858 / 0 / 133394**, not weaker compile-only checks.
+Native wrapper returns all **3/3** expected numbers
+(`.tmp/checker-standalone-native.log`); combined adapter/fixture tests pass
+**17/17**. A fresh full-checker standalone build with all three required
+zero-argument invocations is now running through the existing build probe
+(`.tmp/checker-standalone-full.log`, handle **13735**, one-hour timeout,
+8192 MB worker heap).
+No fresh full-checker compilation or Wasm execution is yet credited.
+
 Earlier requested upstream sync completed: authoritative `loopdive/js2` main at
 `c603404b4f2258ed59377bd591a287523e4af99b` merged cleanly in signed commit
 `c6d4582ccf`. The unfinished candidate was preserved first in `55261207d1`.

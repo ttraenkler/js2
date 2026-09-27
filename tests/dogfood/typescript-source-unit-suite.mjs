@@ -26,6 +26,7 @@ const FILES = {
   paths: 14,
   asserts: 2,
   regExpScannerRecovery: 984,
+  incrementalParser: 153,
 };
 
 export const SOURCE_UNIT_DIAGNOSTIC_EXPORTS = String.raw`
@@ -42,31 +43,47 @@ export function upstreamStandaloneErrorLength(): number { return __sourceUnitErr
 export function upstreamStandaloneErrorCodeUnit(index: number): number { return __sourceUnitError.charCodeAt(index); }
 `;
 
+export function redirectSourceUnitImports(name, original, root, generatedPath) {
+  const needsServices = name === "regExpScannerRecovery" || name === "incrementalParser";
+  const namespace = relative(
+    dirname(generatedPath),
+    join(root, `src/${needsServices ? "services" : "compiler"}/_namespaces/ts.js`),
+  );
+  const importPattern = /^import \* as ts from "\.\.\/_namespaces\/ts\.js";/m;
+  if (!importPattern.test(original)) throw new Error("Upstream namespace import changed");
+  // Redirect the harness-wide namespace to the original APIs under test.
+  // Parser suites also use language-service source files and snapshots.
+  // All original declarations and assertions remain unchanged.
+  let transformed = original.replace(importPattern, `import * as ts from ${JSON.stringify(`./${namespace}`)};`);
+  if (name === "incrementalParser") {
+    const utilsPattern = /^import \* as Utils from "\.\.\/_namespaces\/Utils\.js";/m;
+    if (!utilsPattern.test(transformed)) throw new Error("Upstream Utils import changed");
+    const utils = relative(dirname(generatedPath), join(root, "src/testRunner/_namespaces/Utils.js"));
+    transformed = transformed.replace(utilsPattern, `import * as Utils from ${JSON.stringify(`./${utils}`)};`);
+  }
+  return { transformed, needsServices };
+}
+
 export async function runSourceUnitFile(name) {
   if (!Object.hasOwn(FILES, name)) throw new Error(`Unsupported source unit file: ${name}`);
   const suite = setupTypescriptUpstreamSuite();
   const originalPath = join(suite.root, "src/testRunner/unittests", `${name}.ts`);
   const generatedPath = resolve(HERE, "../../.typescript-upstream-suite-generated/source-modules", `${name}.ts`);
   mkdirSync(dirname(generatedPath), { recursive: true });
-  const needsServices = name === "regExpScannerRecovery";
-  const namespace = relative(
-    dirname(generatedPath),
-    join(suite.root, `src/${needsServices ? "services" : "compiler"}/_namespaces/ts.js`),
+  const { transformed, needsServices } = redirectSourceUnitImports(
+    name,
+    readFileSync(originalPath, "utf8"),
+    suite.root,
+    generatedPath,
   );
-  const original = readFileSync(originalPath, "utf8");
-  const importPattern = /^import \* as ts from "\.\.\/_namespaces\/ts\.js";/m;
-  if (!importPattern.test(original)) throw new Error("Upstream namespace import changed");
-  // Redirect the harness-wide namespace to the original APIs under test.
-  // Scanner recovery also uses language-service source files and snapshots.
-  // All original declarations and assertions remain unchanged.
-  const transformed = original.replace(importPattern, `import * as ts from ${JSON.stringify(`./${namespace}`)};`);
   const augmentation = typescriptHarnessAugmentation(
     readFileSync(join(suite.root, "src/harness/harnessGlobals.ts"), "utf8"),
   );
   const testBody = TYPESCRIPT_STANDALONE_TEST_EXPORTS.replace("runStandaloneUpstreamTest", "runSourceUnitTestBody");
   // Preserve the measured compiler-only bootstrap; service tests also call
   // assert itself, in addition to its methods and the upstream augmentation.
-  const assertionBootstrap = needsServices ? TYPESCRIPT_SOURCE_ASSERT : "const assert = __qunitAssert;";
+  let assertionBootstrap = needsServices ? TYPESCRIPT_SOURCE_ASSERT : "const assert = __qunitAssert;";
+  if (name === "incrementalParser") assertionBootstrap += "\nglobalThis.assert = assert;";
   const source = `${UPSTREAM_TEST_SHIM}\n${assertionBootstrap}\n${augmentation}\n${transformed}\n${UPSTREAM_TEST_EXPORTS}\n${testBody}\n${SOURCE_UNIT_DIAGNOSTIC_EXPORTS}`;
   // Upstream's cyclic namespace graph relies on bundled initialization and
   // const-enum folding. Use the same source for the native reference, bundled
@@ -77,6 +94,9 @@ export async function runSourceUnitFile(name) {
     platform: "node",
     format: "esm",
     write: false,
+    // pnpm exposes transitive harness dependencies (chai/diff) here. Ordinary
+    // upstream/root node_modules resolution still runs first; no stubs are used.
+    nodePaths: [resolve(HERE, "../../node_modules/.pnpm/node_modules")],
     banner: {
       js: 'import { createRequire } from "node:module"; import { fileURLToPath } from "node:url"; import { dirname } from "node:path"; const require = createRequire(import.meta.url); const __filename = fileURLToPath(import.meta.url); const __dirname = dirname(__filename);',
     },
