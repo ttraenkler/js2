@@ -15,6 +15,58 @@ function fields(source: string, provesUndefined = true): string[] {
   ].sort();
 }
 
+it("elides only an unobservable prefix of own-field constructor writes", () => {
+  expect(
+    fields(`class C {
+    first!: object; second!: object; third!: object;
+    constructor(value: object) {
+      this.first = value;
+      observe(this);
+      this.second = value;
+    }
+  }`),
+  ).toEqual(["second", "third"]);
+});
+
+it("keeps initialization when a field initializer or assignment RHS may observe it", () => {
+  expect(
+    fields(`class C {
+    first!: object; seen = observe(this);
+    constructor(value: object) { this.first = value; }
+  }`),
+  ).toEqual(["first"]);
+  expect(
+    fields(`class C {
+    first!: object;
+    constructor() { this.first = observe(this); }
+  }`),
+  ).toEqual(["first"]);
+});
+
+it("starts the derived own-field proof after super and preserves private identity", () => {
+  expect(
+    fields(`class C extends Base {
+    #first!: object; second!: object;
+    constructor(value: object) { super(observe()); this.#first = value; }
+  }`),
+  ).toEqual(["second"]);
+});
+
+it("does not treat conditional or undeclared-property writes as a safe prefix", () => {
+  expect(
+    fields(`class C {
+    first!: object;
+    constructor(value: object) { if (value) this.first = value; }
+  }`),
+  ).toEqual(["first"]);
+  expect(
+    fields(`class C {
+    first!: object;
+    constructor(value: object) { this.external = value; this.first = value; }
+  }`),
+  ).toEqual(["first"]);
+});
+
 it("tracks constructors, field initializers, methods and lexical arrows", () => {
   expect(
     fields(`class C {

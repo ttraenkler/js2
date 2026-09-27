@@ -271,6 +271,19 @@ oracle-ratchet-allow:
 
 ### Unfinished required-field checkpoint before upstream sync
 
+Requested upstream sync completed: authoritative `loopdive/js2` main at
+`c603404b4f2258ed59377bd591a287523e4af99b` merged cleanly in signed commit
+`c6d4582ccf`. The unfinished candidate was preserved first in `55261207d1`.
+Post-merge eight-file run: 125 rows, 110 ordinary passes, four expected
+boolean/bigint failures, and the same 11 unexpected failures listed below
+(`.tmp/required-field-post-main.log`). All seven host-import-policy tests pass.
+Four additional source-proof checks now cover safe constructor prefixes,
+observation barriers, derived super/private fields, and conditional writes;
+the source-proof file passes 8/8 (`.tmp/required-field-proof-tests.log`).
+No new full TypeScript parser acceptance claim follows from these reductions.
+Post-merge TypeScript typecheck also exits zero
+(`.tmp/required-field-post-main-types.log`); the additional proof tests pass lint.
+
 The required-field candidate is **not ready to merge**. The native-oracle
 regression file passes 12/12 with the candidate versus 0/12 with the two
 production modules substituted from `8eb72dd5cc`. The six-file candidate run
