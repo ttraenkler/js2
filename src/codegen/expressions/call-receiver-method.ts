@@ -200,6 +200,8 @@ import {
 } from "./helpers.js";
 import { ensureLateImport, flushLateImportShifts } from "./late-imports.js";
 import { resolveStructName, resolveStructNameForExpr, tryCompileCallableStaticField } from "./misc.js";
+import { tryEmitClassDynamicMemberCall } from "./class-dynamic-member-call.js";
+import { recordStandaloneRuntimeKeyClassMemberRead } from "../standalone-class-dyn-member.js";
 
 /**
  * A source-level delete removes the builtin prototype member before the call
@@ -1866,6 +1868,20 @@ export function compileReceiverMethodCall(
     const receiverMemberKind = receiverIsClassObject ? "static" : "instance";
     if (receiverIsClassObject && tryCompileCallableStaticField(ctx, fctx, expr, propAccess, fullName))
       return { kind: "externref" };
+    // A qualified class value may have had this method replaced through an
+    // alias. Read the live callable before evaluating arguments; a fixed body
+    // handle is not authority for the current property value.
+    if (
+      ctx.standalone &&
+      receiverIsClassObject &&
+      ctx.staticMethodSet.has(fullName) &&
+      ts.isPropertyAccessExpression(staticReceiverExpr) &&
+      !expr.arguments.some(ts.isSpreadElement)
+    ) {
+      recordStandaloneRuntimeKeyClassMemberRead(ctx, ctx.structMap.get(receiverClassName));
+      const dynamic = tryEmitClassDynamicMemberCall(ctx, fctx, expr, propAccess);
+      if (dynamic !== undefined) return dynamic;
+    }
     const hasReceiverMember = receiverIsClassObject
       ? ctx.staticMethodSet.has(fullName)
       : ctx.classMethodSet.has(fullName);

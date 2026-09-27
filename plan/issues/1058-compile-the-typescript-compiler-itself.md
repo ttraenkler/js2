@@ -12867,6 +12867,43 @@ Moved-code audit is preservation-only **6/6** full-source and **6/6** cut
 witnesses; the production graph remains **OPEN**, strict closure **FAIL**,
 and deletion is not certified. No new size allowances were added.
 
+### Qualified static-method mutation continuation (2026-09-28)
+
+Qualified compiled class calls now reuse the existing dynamic member-call
+emitter instead of assuming the originally declared method remains installed.
+The caller records existing static-sidecar demand; the shared emitter evaluates
+the receiver once and captures the live callable before evaluating arguments.
+Callable static fields retain their dedicated path. No new context registry or
+checker query was introduced. This is shared physical lowering, not a claim of
+new IR-body coverage or completed runtime TypeScript namespace objects.
+
+Standalone Vitest A/B, both IR settings, replacing only
+`call-receiver-method.ts` and `class-dynamic-member-call.ts` with their exact
+`e5c3c04f33` versions: baseline **8/18**, candidate **14/18**. Direct replacement,
+replacement through an opaque alias, and replacement preserving `this` now pass
+in both settings. Original methods, callable fields, receiver-once and
+callee-before-arguments controls stay passing. The four remaining failures are
+getter replacement and throwing-getter replacement, in both settings; they
+already fail on the baseline and remain ordinary failing tests, not skips.
+Their descriptor-storage/lookup cause is not yet established. Bare class-name
+calls and spread calls are outside this new gate.
+
+Evidence: `.tmp/namespace-static-mutation-final-baseline.log` and
+`.tmp/namespace-static-mutation-final.log` (the latter also includes **15/15**
+existing namespace-factory checks, giving **29/33** overall). Four adjacent
+class-call files pass **80/80 executed**, with **9 skipped** missing-fixture
+controls, **89 total** (`.tmp/namespace-static-mutation-final-adjacent.log`).
+Fresh original semver remains **684/692** standalone versus **692/692** native,
+same eight comparison/prerelease callbacks failing on a null namespace receiver
+(now reported at generated line 1002:31). The current candidate produces valid,
+zero-import Wasm, 7,063,925 bytes in 147,693 ms at O1, same TypeScript pin above.
+Evidence: `.tmp/semver-static-mutation-o1.log`, terminal exit 1. Parser **153/153**
+above predates this mutation change and is not current candidate acceptance.
+Type checking, targeted lint/formatting, issue validation, LOC/function budgets,
+oracle and coercion ratchets pass; no new size allowance was added. Accessor
+replacement, namespace materialization, full checker compilation, self-hosting
+and strict IR closure remain open.
+
 ### ESM namespace identity continuation (2026-09-27)
 
 The initialization hypothesis above is now confirmed and fixed: the shared IR

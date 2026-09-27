@@ -37,8 +37,10 @@
  * so consulting it directly is both shorter and the one place the class
  * knowledge lives.
  *
- * Scope: standalone only, and only for a class hierarchy that actually has a
- * runtime-keyed member — every other receiver keeps its existing lowering, so a
+ * Scope: standalone runtime-key class calls, plus named static methods selected
+ * by the qualified class-value caller. That caller records the shared sidecar
+ * demand so an unmodified static method is as visible as a replacement.
+ * Every other receiver keeps its existing lowering, so a
  * module without one compiles to identical bytes. The host lane keeps its own
  * `__extern_method_call_<n>` bridge (`dynamic-element-host-call.ts`).
  */
@@ -54,6 +56,8 @@ import { emitToPropertyKeyOnce } from "./computed-member-reference.js";
 import { classHierarchyHasDynamicMember } from "../class-dynamic-keys.js";
 import { standaloneClassProtoObjectApplies } from "../class-proto-object.js";
 import { elemAccessReceiverClassName } from "./calls.js";
+import { addStringConstantGlobal } from "../registry/imports.js";
+import { stringConstantExternrefInstrs } from "../native-strings.js";
 
 const EXTERNREF: ValType = { kind: "externref" };
 
@@ -65,9 +69,14 @@ const EXTERNREF: ValType = { kind: "externref" };
 function classDynamicMemberCallApplies(
   ctx: CodegenContext,
   fctx: FunctionContext,
-  elemAccess: ts.ElementAccessExpression,
+  elemAccess: ts.ElementAccessExpression | ts.PropertyAccessExpression,
 ): boolean {
   if (!ctx.standalone) return false;
+  if (ts.isPropertyAccessExpression(elemAccess)) {
+    // The named-call entry is selected by the caller's compiled-class-value
+    // check. Lookup remains fully dynamic; no method identity is assumed here.
+    return !ts.isPrivateIdentifier(elemAccess.name) && elemAccess.expression.kind !== ts.SyntaxKind.SuperKeyword;
+  }
   // (#5195 R2-1) `super[k](...)` is a DIFFERENT operation and must not be
   // lowered as an ordinary member call. §13.3.7.1 reads the member off the HOME
   // OBJECT's [[Prototype]] and invokes it with the CURRENT `this`; compiling
@@ -221,11 +230,12 @@ export function tryEmitClassDynamicMemberCall(
   ctx: CodegenContext,
   fctx: FunctionContext,
   expr: ts.CallExpression,
-  elemAccess: ts.ElementAccessExpression,
+  elemAccess: ts.ElementAccessExpression | ts.PropertyAccessExpression,
 ): InnerResult | undefined {
   if (!classDynamicMemberCallApplies(ctx, fctx, elemAccess)) return undefined;
-  if (elemAccess.argumentExpression === undefined) return undefined;
+  if (ts.isElementAccessExpression(elemAccess) && elemAccess.argumentExpression === undefined) return undefined;
   if (expr.arguments.some((arg) => ts.isSpreadElement(arg))) return undefined;
+  if (ts.isPropertyAccessExpression(elemAccess)) addStringConstantGlobal(ctx, elemAccess.name.text);
 
   const { newIdx, pushIdx } = ensureObjVecBuilders(ctx);
   const externGetIdx = ctx.funcMap.get("__extern_get");
@@ -243,7 +253,7 @@ export function tryEmitClassDynamicMemberCall(
     return true;
   };
 
-  if (classValueReceiverApplies(ctx, elemAccess)) {
+  if (ts.isElementAccessExpression(elemAccess) && classValueReceiverApplies(ctx, elemAccess)) {
     return emitClassValueDynamicCall(ctx, fctx, expr, elemAccess, pushExtern, { newIdx, pushIdx, applyIdx });
   }
 
@@ -269,7 +279,9 @@ export function tryEmitClassDynamicMemberCall(
   }
 
   const keyLocal = allocLocal(fctx, `__cdyn_key_${fctx.locals.length}`, EXTERNREF);
-  if (!pushExtern(elemAccess.argumentExpression)) return undefined;
+  if (ts.isPropertyAccessExpression(elemAccess)) {
+    fctx.body.push(...stringConstantExternrefInstrs(ctx, elemAccess.name.text));
+  } else if (!pushExtern(elemAccess.argumentExpression)) return undefined;
   // A numeric computed key (`[ID(2)]`) is stored under its canonical decimal
   // string, and a symbol key must survive as a symbol — which is exactly
   // ToPropertyKey.
