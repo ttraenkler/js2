@@ -1744,6 +1744,47 @@ source callbacks, not evidence of scanner execution. Keep production unchanged w
 this candidate. The accidental full-suite run `65915` is concurrent, so these
 wall-clock timings are not controlled performance comparisons.
 
+Signed and SSH-signature-verified checkpoint `eff7752105`. The full scanner
+completed: native **984/984**, **54,837,434 bytes / 702,777 ms**, still valid.
+Both host-array imports are removed. **Seven imports remain**:
+__get_filename, __get_process_cwd, __get_process_platform, __get_dirname,
+__get_process_argv, __get_process_stdout, and __process_exit. The zero-import
+gate still correctly prevents execution: **0 standalone scanner callbacks**.
+All intended candidate tests and source runs above are terminal; the accidental
+full-suite run is separate and must not be mistaken for this checkpoint's proof.
+
+Next diagnostic is live in session `33552`: the production
+`optimizeBinaryAsync` at its default optimization level (3), applied to the
+frozen `.tmp/source-scanner-includes.wasm`, reporting to
+`.tmp/scanner-optimized-imports.log` and saving successful optimizer output as
+`.tmp/source-scanner-includes-optimized.wasm`. Script:
+`.tmp/optimize-scanner-imports.mts`. This only measures whether the existing
+optimizer removes the Node dependencies. It supplies no host imports and
+executes no callbacks; it is not a passing suite, nor a substitute for the
+normal compile pipeline's runtime-rec-group fingerprint guard. Session `65915`
+was re-polled and remains live; no permission to stop that accidental full
+suite has arrived. Do not restart either live process.
+
+The next goal turn re-polled optimizer `33552` and confirmed it is still live.
+A frozen six-file source recheck is running in session `70275`:
+diagnosticCollection, base64, comments, parsePseudoBigInt, paths, asserts;
+reports `.tmp/source-<suite>-includes-full.log`. This will supply the remaining
+30 callbacks needed to remeasure the established eight-file/44-callback slice
+on this checkpoint. Do not count the 30, or the combined 44, before the actual
+per-file reports show successful execution and zero imports.
+
+Main-sync continuation: fetched `loopdive/js2` main at
+`688eb4de4184a6f8db74ff1ed73ab9612289e99c`, newer than the previously integrated
+`2a58b9fe9f95dc17bd5d2ba44ecd564b9695356b`. Preserve this checkpoint before
+merging. Optimizer session `33552` is terminal: its 600-second limit was reached
+(`optimized: false`, 600,489 ms); the fallback is the original 54,837,434-byte
+binary with all seven Node imports. No optimized scanner or callback result
+was produced. In the six-file recheck, diagnosticCollection **5/5**, base64
+**1/1**, and comments **3/3** have completed with zero imports; parsePseudoBigInt
+is running, paths and asserts have not yet started. No test process was stopped.
+If the merge occurs before this sequential recheck ends, its later files must
+not be combined with pre-merge results as a single-checkpoint 44/44 claim.
+
 The environment diagnostic has two distinct outcomes: with explicit ambient
 declarations in the input, `optimize: true` still retains process.cwd (**0/2**);
 without those declarations, the optimized reduction passes **2/2**. The actual
