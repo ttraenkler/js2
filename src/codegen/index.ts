@@ -5819,8 +5819,8 @@ export function generateModule(
     finalizeForwardClassFieldLayouts(ctx, ast.sourceFile);
     // #3522 R3: callable slots with exact references to a later local class
     // must receive their final struct ABI before prepared IR planning decides
-    // which direct bodies will never run. The direct body compiler retains its
-    // idempotent re-resolution as a temporary hybrid assertion.
+    // which direct bodies will never run. Constructor frames consume this
+    // published ABI; the remaining direct member paths still re-resolve it.
     finalizeForwardClassCallableAbis(ctx, ast.sourceFile);
     // #2847: declaration collection has now materialized the initial struct
     // field table. Brand proven boolean i32 slots before compiling bodies so

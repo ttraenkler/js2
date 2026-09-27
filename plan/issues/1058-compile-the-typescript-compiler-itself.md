@@ -1363,6 +1363,72 @@ The loop subsequently completed (exit 0); comments **3/3**, parsePseudoBigInt
 These later results must retain their mixed-edit provenance and must not be
 combined into a claimed post-spread **44/44** without a fresh frozen-candidate run.
 
+### Published constructor ABI continuation (2026-09-27, in progress)
+
+Signed checkpoint `e3b786c6c6` completes the spread-field repair. The frozen
+scanner run terminates with native **984/984**, **54,831,929 bytes**, **316,209 ms**,
+but still invalid Wasm. It passes the earlier refactor spread failures and now
+stops at function 5267 `__closure_846`: `ChangeTracker_new` argument 1 expects
+`ref null 3004` but the emitted argument is `ref null 1622`
+(`.tmp/source-scanner-spread-fields.log`). Binaryen diagnostic-only isolation
+confirms the exact constructor call (`.tmp/scanner-closure-846-validation.log`).
+No standalone scanner callbacks execute. Fresh source controls on the same
+checkpoint pass compilerCore **11/11** and factory **3/3**, both with zero imports;
+factory emits **14,199,590 bytes** in **112,449 ms**, compilerCore **1,573,325 bytes**
+in **3,261 ms** (`.tmp/source-<suite>-spread-fields.log`).
+
+The constructor trace proves a phase-order defect, not a stale function-index
+lookup. Collection publishes `ChangeTracker_new(string, ref __anon_69)` with
+the FormatContext argument at pre-emission index **1624**. Dynamic constructor
+arms, including `__closure_846`, emit against that live published signature.
+Class-body compilation then re-resolves the same source annotation to named
+`FormatContext` at **3011** and overwrites the function signature. The old and
+new layouts have the same three properties but differ in identity and reference
+nullability. `.tmp/scanner-constructor-abi-trace.log` records collection,
+dispatch, replacement, and later dispatch using the changed signature. Direct
+compile emits the same **54,831,929-byte** binary. Type details are retained in
+`.tmp/scanner-constructor-types.tsv`.
+
+The first trace attempt through the unit runner (session `90053`, exit 1)
+does not preserve successful-worker stderr; the direct diagnostic above
+(session `96831`, exit 0) is the authoritative trace. All temporary logging
+has been removed. A cyclic-module source probe validates but throws at runtime
+in both lanes, so it is **not** a reproducer of this ABI validation defect;
+retained only as `.tmp/constructor-interface-smoke.test.ts`.
+
+The targeted owner regression reserves an anonymous interface layout,
+collects a constructor, then registers the named interface before compiling
+the body. Before the change the published parameter changes **6 → 10**
+(`.tmp/constructor-interface-owner-before.log`, **0/1**). The candidate binds
+constructor frame names to the published physical signature through the shared
+class-callable ABI owner and removes body-time signature replacement. Existing
+pre-emission forward-class ABI planning remains responsible for deliberate
+finalization. The new regression and adjacent IR/host class-ABI tests pass
+**7/7** (`.tmp/constructor-interface-owner-after.log`). Broader constructor
+regressions pass **31/32** across eight files, including inherited constructors,
+native annotations, overload ownership, imported class identity, and the earlier
+class-callback hoisting regression (`.tmp/constructor-interface-regressions.log`).
+The sole built-in-parent forwarding failure reproduces unchanged on clean
+`58fce98114` (**4/5**, `.tmp/constructor-2086-control.log` in the array control
+checkout). It is not a new regression or a claimed success.
+
+Type-checking, lint, formatting and all five source gates pass on the final
+constructor edit (`.tmp/constructor-interface-{tsc,lint,loc,func,coercion,oracle,exports}2.log`),
+with no allowance growth and preservation-only dead-export verification.
+Full scanner verification completed (session `3633`, exit 1): native **984/984**,
+**54,834,035 bytes**, **316,204 ms**. The `ChangeTracker` constructor call now
+passes validation, but a later function 6240 `__closure_1231` fails: fallthrough
+expects `ref null 2`, receives `ref 1524`, offset **28,546,240**. No standalone
+scanner callbacks execute; import closure remains unverified. Report:
+`.tmp/source-scanner-constructor-abi.log`; binary:
+`.tmp/source-scanner-constructor-abi.wasm`.
+Fresh frozen-candidate compilerCore **11/11** and factory **3/3** pass with zero
+imports (`.tmp/source-<suite>-constructor-abi.log`): **1,573,325 bytes / 3,354 ms**
+and **14,199,590 bytes / 111,560 ms**, respectively. This is **14/14**, not a new
+full-suite result. A fresh fetch and merge of `loopdive/js2` main confirms
+`2a58b9fe9f95dc17bd5d2ba44ecd564b9695356b` is already an ancestor; merge reports
+already up to date. The next task is the callback return-carrier mismatch.
+
 The user requested a main merge and continuation. The former temporary checkout
 was cleaned out, but branch `codex/1058-typescript-standalone` retained the signed
 handoff at `efd9aca79c5aba4bfd6670847be925a027ed219f`. Work now lives in

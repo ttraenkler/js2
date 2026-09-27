@@ -15,6 +15,19 @@ import type { CodegenContext } from "./context/types.js";
 import { definedFuncAt } from "./func-space.js";
 import { addFuncType } from "./registry/types.js";
 
+/** Bind source names to the published physical ABI; body emission cannot re-plan callers. */
+export function classCallableFrameParameters(
+  ctx: CodegenContext,
+  func: WasmFunction,
+  names: readonly string[],
+): { name: string; type: ValType }[] {
+  const signature = ctx.mod.types[func.typeIdx];
+  if (signature?.kind !== "func" || signature.params.length !== names.length) {
+    throw new Error(`class callable ${func.name} has no matching published parameter ABI`);
+  }
+  return names.map((name, index) => ({ name, type: signature.params[index]! }));
+}
+
 function hasFixedForwardClassAbiParameters(parameters: readonly ts.ParameterDeclaration[]): boolean {
   return parameters.every(
     (parameter) =>

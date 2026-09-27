@@ -32,6 +32,7 @@ import { dynamicClassKeyGlobalKey, dynamicClassMemberName, isDynamicClassMemberN
 import { recordFnMetaMemberDeclaration } from "./function-instance-meta-methods.js"; // (#4440)
 import { resolveClassHeritageAlias } from "./class-expression-identity.js";
 import { installAstFreeClassConstructorNewWrapper } from "./class-constructor-wrapper.js";
+import { classCallableFrameParameters } from "./class-callable-abi.js";
 import { commitClassStructLayout } from "./class-layout-registration.js";
 import { mintDefinedFunc, pushProgramAbiClassCallable } from "./program-abi-class-callable-planning.js";
 import { setProgramAbiInheritedClassCallableAlias } from "./program-abi-class-callable-planning.js";
@@ -2524,7 +2525,7 @@ function compileClassBodiesInner(
   ) {
     const func = ctx.mod.functions[ctorLocalIdx]!;
     assertDirectClassBodyAllowed(ctx, ctorName, ctor ?? decl);
-    const params: { name: string; type: ValType }[] = [];
+    let params: { name: string; type: ValType }[] = [];
     // (#2086) Match the synthetic forwarder params added during pre-registration
     // from the SAME shared rule — `__arg{i}` externref forwarders (#1833) and/or
     // the bound ancestor-ctor params (#2082) so the replayed parent
@@ -2565,6 +2566,13 @@ function compileClassBodiesInner(
     const initFunc = initLocalIdx !== undefined ? ctx.mod.functions[initLocalIdx] : undefined;
     const splitInit = !isExternrefBacked && initFunc !== undefined;
 
+    // Registration/planning owns the ABI. A later named interface can replace
+    // an anonymous view in type lookup without invalidating emitted callers.
+    params = classCallableFrameParameters(
+      ctx,
+      func,
+      params.map((p) => p.name),
+    );
     const fctxParams = splitInit
       ? [...params, { name: "__self", type: { kind: "ref", typeIdx: structTypeIdx } as ValType }]
       : params;
@@ -2586,28 +2594,6 @@ function compileClassBodiesInner(
       isDerivedConstructor: ctx.classParentMap.has(className),
     };
     fctx.activationEntryBody = fctx.body;
-
-    // Re-resolve the constructor (and init) function types now that all class
-    // struct types are registered. Constructor parameter types that reference
-    // forward-declared classes may have resolved to externref during the
-    // collection phase.
-    {
-      const resolvedParams = params.map((p) => p.type);
-      const resolvedResults: ValType[] = isExternrefBacked
-        ? [{ kind: "externref" }]
-        : [{ kind: "ref", typeIdx: structTypeIdx }];
-      const updatedTypeIdx = addFuncType(ctx, resolvedParams, resolvedResults, `${ctorName}_type`);
-      if (updatedTypeIdx !== func.typeIdx) {
-        func.typeIdx = updatedTypeIdx;
-      }
-      if (splitInit && initFunc) {
-        const initResolvedParams = fctxParams.map((p) => p.type);
-        const updatedInitTypeIdx = addFuncType(ctx, initResolvedParams, resolvedResults, `${className}_init_type`);
-        if (updatedInitTypeIdx !== initFunc.typeIdx) {
-          initFunc.typeIdx = updatedInitTypeIdx;
-        }
-      }
-    }
 
     // (#5377) Materialize this class's class-object singleton at the top of its
     // constructor, so a compiled instance can answer `i.constructor` with the
