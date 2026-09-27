@@ -269,6 +269,43 @@ oracle-ratchet-allow:
 
 ## Main synchronization and incremental-parser trace — 2026-09-27
 
+Follow-up candidate after `d5565d3da7`: the existing variable initializer now
+resets bare lexical nullable-reference locals on every declaration execution,
+using the existing undefined producer and storage coercion. Bare `var`
+redeclarations retain their values. IR already emits the scalar initialization;
+the reference reductions currently fall back because their assignments are not
+admitted by IR, so this is a fallback correctness repair, not an IR migration
+claim or a new duplicate lowering path.
+
+Bounded native-oracle reduction, standalone with IR off/on, arrays, nominal
+arrays, objects and numbers, `let`/`var`, captured/uncaptured: baseline
+**22/32**, candidate **28/32** (`.tmp/loop-local-reset-expanded-baseline.log`,
+`.tmp/loop-local-reset-expanded.log`). Six uncaptured lexical-reference cases
+flip. The remaining four optional-number closure cases fail identically on
+both sides: undefined returned through the closure is not recognized by
+`=== undefined`. These are explicitly retained as expected-failure tests,
+not counted as semantic passes. Existing adjacent suites for captured
+initialization, bare `var` redeclaration and closure struct types pass **22/22**.
+The first candidate also passed the existing explicit IR initialization suite
+**10/10** (`.tmp/loop-local-reset-candidate.log`).
+Final regression command reports **64/64** across five files, which explicitly
+includes **four expected failures**, not 64 semantic passes. The scalar loop
+control asserts actual IR body emission. Typecheck and scoped lint pass (two
+pre-existing `noExplicitAny` warnings in the variable compiler).
+`.tmp/loop-local-reset-final-tests.log`, `.tmp/loop-local-reset-typecheck.log`,
+`.tmp/loop-local-reset-lint.log`.
+
+The diagnostic reset's next guest error decodes to
+`Cannot access property on null or undefined at 149:38`, original harness
+`isNodeOrArray`: `a !== undefined && typeof a.pos === "number"`.
+`.tmp/incremental-reset-decoded.log`. Do not weaken this original invariant.
+A first original-suite launch exited before compilation because its worker
+lacked the TypeScript loader (`.tmp/incremental-loop-reset-o1.log`, session
+54748 terminal exit 1). The corrected original 153-callback O1 run with the
+production reset candidate is in progress: session **90753**,
+`.tmp/incremental-loop-reset-o1-tsx.log`.
+Resume that run, rather than restarting on an observation timeout.
+
 Merged authoritative `loopdive/js2` main `349eab3bf5` into
 `codex/1058-typescript-standalone` as signed merge `52af6cfb3e`.
 All 15 incoming commits merged without conflicts; no compiler-source files

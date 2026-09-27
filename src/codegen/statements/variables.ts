@@ -2579,7 +2579,7 @@ export function compileVariableStatement(ctx: CodegenContext, fctx: FunctionCont
           fctx.body.push({ op: "local.set", index: nativeGeneratorCaptureMirrorSlot });
         }
       }
-    } else if (wasmType.kind === "externref") {
+    } else if (wasmType.kind === "externref" || (!isVar && wasmType.kind === "ref_null")) {
       // (#2705) A bare `var x;` redeclaration whose slot was already hoisted to
       // the function scope (and initialized to `undefined` at function entry by
       // `hoistVarDecl`) is a runtime NO-OP per ECMA-262 §14.3.2.1 — re-emitting
@@ -2604,6 +2604,7 @@ export function compileVariableStatement(ctx: CodegenContext, fctx: FunctionCont
         // because JS undefined is not a struct ref.
         const boxedNoInit = fctx.boxedCaptures?.get(name);
         if (boxedNoInit && !dropStaleBindingBox(fctx, name, boxedNoInit, localIdx)) {
+          coerceType(ctx, fctx, { kind: "externref" }, boxedNoInit.valType);
           const tmpVal = allocLocal(fctx, `__box_init_tmp_${fctx.locals.length}`, boxedNoInit.valType);
           fctx.body.push({ op: "local.set", index: tmpVal });
           fctx.body.push({ op: "local.get", index: localIdx });
@@ -2619,7 +2620,9 @@ export function compileVariableStatement(ctx: CodegenContext, fctx: FunctionCont
             ],
           });
         } else {
-          fctx.body.push({ op: "local.set", index: localIdx });
+          // A lexical declaration executes on every loop entry. Wasm's
+          // frame-entry null is not a substitute after a previous assignment.
+          emitCoercedLocalSet(ctx, fctx, localIdx, { kind: "externref" });
         }
       }
     }
