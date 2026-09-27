@@ -9,7 +9,7 @@ export interface OverlayCarrier {
   vecTypeIdx: number;
   arrTypeIdx: number;
   elemType: ValType;
-  kind: "f64" | "externref" | "any" | "anystr";
+  kind: "f64" | "externref" | "any" | "anystr" | "ref";
 }
 
 export type CarrierDefaultMode = "default" | "undefined" | "holes";
@@ -35,6 +35,10 @@ export function allowedCarriers(ctx: CodegenContext): OverlayCarrier[] {
         out.push({ vecTypeIdx, arrTypeIdx, elemType, kind: "any" });
       } else if (ti >= 0 && (ti === ctx.anyStrTypeIdx || ti === ctx.nativeStrTypeIdx)) {
         out.push({ vecTypeIdx, arrTypeIdx, elemType, kind: "anystr" });
+      } else if (elemType.kind === "ref_null") {
+        // Nominal object arrays are JS arrays too. Excluding them makes a
+        // descriptor-aware length assignment silently leave their length intact.
+        out.push({ vecTypeIdx, arrTypeIdx, elemType, kind: "ref" });
       }
     }
   };
@@ -59,6 +63,9 @@ export function carrierDefaultInstrs(
       : [{ op: "f64.const", value: 0 }];
   }
   if (carrier.kind === "externref") return mode === "undefined" ? missExtern() : [{ op: "ref.null.extern" }];
+  if (carrier.kind === "ref" && carrier.elemType.kind === "ref_null") {
+    return [{ op: "ref.null", typeIdx: carrier.elemType.typeIdx }];
+  }
   return carrier.kind === "any"
     ? [{ op: "ref.null", typeIdx: ctx.anyValueTypeIdx }]
     : [{ op: "ref.null", typeIdx: -15 }];
@@ -72,17 +79,23 @@ export function carrierRefWriteBack(
   anyStrTypeIdx: number,
 ): Instr[] {
   if (carrier.kind === "any") return [];
-  if (carrier.kind !== "anystr") return [];
+  const typeIdx =
+    carrier.kind === "anystr"
+      ? anyStrTypeIdx
+      : carrier.kind === "ref" && carrier.elemType.kind === "ref_null"
+        ? carrier.elemType.typeIdx
+        : undefined;
+  if (typeIdx === undefined) return [];
   return [
     { op: "local.get", index: 12 },
-    { op: "ref.test", typeIdx: anyStrTypeIdx },
+    { op: "ref.test", typeIdx },
     {
       op: "if",
       blockType: { kind: "empty" },
       then: [
         ...castVecAndIdx,
         { op: "local.get", index: 12 },
-        { op: "ref.cast", typeIdx: anyStrTypeIdx },
+        { op: "ref.cast", typeIdx },
         { op: "call", funcIdx: elemSetIdx },
         ...wrote,
       ],

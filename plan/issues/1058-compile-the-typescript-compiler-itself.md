@@ -267,6 +267,98 @@ oracle-ratchet-allow:
 ---
 # #1058 — Compile the TypeScript compiler to Wasm (self-hosting stress test)
 
+## Remaining scanner errors: descriptor-aware nominal-array rollback — 2026-09-27
+
+At `1bb2797b9b`, a six-context original-source probe shows that speculative
+diagnostics are retained, not merely missed by `find`: array context retains
+code **1181** at position 2, property context retains **1003** at position 8,
+where native returns **1161**. The two more deeply nested passing contexts
+also retain extra diagnostics (3 and 4 entries versus native 1). Thus the
+656 passing callbacks do not imply exact diagnostic-array equivalence.
+`.tmp/scanner-context-1bb279.log`; source `.tmp/scanner-context-entry.ts`.
+The raw probe has seven throwing Node imports, none invoked; it is diagnostic
+evidence, NOT standalone acceptance. A first typed-global probe failed graph
+compilation; the executed probe uses an `any` diagnostic observation global
+and the source-suite `allowJs` option, without changing upstream sources.
+
+Root boundary: an unrelated accessor definition arms
+`vecAccessorDescriptorDirty`. The shared length store then delegates to
+`__vec_dp_value`, but `allowedCarriers` excludes nullable nominal-object
+vectors. Its whitelist silently returns without shrinking `Diagnostic[]`.
+TypeScript's duplicate-position error suppression then retains the speculative
+error instead of appending the expected regexp diagnostic. Binary tracing
+confirms regexp rescanning occurs; a diagnostic-only physical length repair
+at parser rollback restores exact native diagnostics in all **6/6** contexts.
+`.tmp/scanner-context-trace.log`, `.tmp/scanner-context-force-length.log`.
+This intervention is attribution, not a production fix or acceptance result.
+
+Candidate: extend the existing shared vector descriptor carrier classification
+to nullable nominal references, with correctly typed default values and
+brand-checked physical write-back. No AST-specific duplicate lowering or
+descriptor bypass is introduced. Both direct and IR lowering consume the
+shared runtime helper. Non-nullable internal representations are not newly
+admitted because they cannot store a hole default.
+
+Durable rollback matrix: **8/16** at the unchanged baseline, **16/16** with
+the candidate; all eight accessor-overlay cases flip, while the unarmed
+controls stay passing. An earlier generic/optional-array reduction passed
+until the unrelated accessor trigger was added. Logs:
+`.tmp/ref-overlay-rollback-baseline.log`, `.tmp/ref-overlay-focused.log`.
+Baseline was measured by removing only `vec-overlay-carriers.ts` changes.
+Adjacent array-length suites plus rollback pass **28/28**.
+
+Scratch descriptor controls improve **2/12 to 10/12**. The remaining two
+regrow cases are identical on baseline and candidate: shrinking then growing
+nominal-reference arrays exposes stale elements instead of holes (score 1
+versus native 31). `buildVecLengthHoleFill` currently supports numeric and
+externref storage, not nominal reference storage. This remains OPEN; do not
+claim full reference-array hole semantics. Logs:
+`.tmp/ref-overlay-controls-baseline.log`, `.tmp/ref-overlay-controls-bits.log`.
+Durable coverage also pins compatible/incompatible data defines, readonly
+length, and non-configurable-index refusal.
+
+The frozen production candidate completes original scanner O1 at **984/984**
+native and **984/984 Wasm**, valid **26,033,438-byte** module with **zero imports**,
+**488,162 ms** compile/optimization. `.tmp/source-scanner-ref-overlay.log`.
+The independently compiled six-context source probe also matches native
+exactly (one code-1161 diagnostic per context, correct start and length),
+including removing the extra errors in formerly passing contexts.
+`.tmp/scanner-context-ref-overlay.log`; its raw seven-import artifact remains
+diagnostic-only, unlike the zero-import original-suite acceptance run.
+
+Final focused checks pass **58/58** across rollback, reference descriptors,
+own-field coherence, and the two existing length suites. Typecheck, lint,
+LOC/function/coercion/oracle gates pass with no allowance growth.
+Reachability is preservation-only PASS; strict modeled closure remains OPEN.
+Logs: `.tmp/ref-overlay-final-focused.log`, `.tmp/ref-overlay-final-typecheck.log`,
+`.tmp/ref-overlay-final-gates.log`.
+
+Broader six-file batch: **29 passed / 14 failed / 4 skipped**, plus a suite-level
+missing-harness error. All 15 failure headings reproduce against the exact
+`1bb2797b9b` carrier implementation: stale prescan test contexts omit the
+per-key set, the host-mode descriptor fixture has the same shrink/grow mismatch,
+and the pregrow fixture lacks `test262/harness/propertyHelper.js`. Baseline
+substitution uses a Vite alias to an unchanged-logic copy (only import paths
+relocated), leaving the live source-suite compiler tree frozen; the rollback
+positive control reproduces **8/16**, matching the prior physical-removal run.
+`.tmp/ref-overlay-adjacent.log`, `.tmp/ref-overlay-adjacent-baseline.log`.
+
+The eight other original source suites are being rechecked serially under
+session **56632**, `.tmp/source-ref-overlay-<suite>.log`: factory **3/3**,
+compilerCore **11/11**, diagnosticCollection **5/5**, all zero imports, are
+terminal. Base64 was verified compiling in worker **44850**; comments,
+parsePseudoBigInt, paths, and asserts remain queued. Do not restart the batch
+just because an observation expires. Poll the same session to completion.
+
+Next: finish that revalidation, then expand beyond the nine admitted original
+files. `incrementalParser.ts` is a relevant next target: it exercises parent
+links and incremental tree equivalence through original `Utils.assertInvariants`
+and `Utils.assertStructuralEquals`. Preserve these checks, resolve the original
+Utils namespace and shared assertion bootstrap, and measure native callback
+count before declaring a floor. **The 256-file unit inventory and standalone
+self-hosting goal are still OPEN**; scanner recovery completion is not parser
+or full-TypeScript completion.
+
 ## Upstream merged; original scanner reaches 656/984 — 2026-09-27
 
 Fetched `loopdive/js2` main `dbba95acb11b525b03b5739469d0c4f132fb0474`
