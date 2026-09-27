@@ -39,6 +39,7 @@ import { addFuncType } from "./registry/types.js";
 import { definedFuncAt, mintDefinedFunc, pushDefinedFunc } from "./func-space.js";
 import { COLLECTION_KIND } from "./collection-kind.js"; // (#6419) import-free leaf — map-runtime.js is in an import cycle
 import { ensureMapHelpers } from "./map-runtime.js";
+import { nativeCollectionPrototypeInitInstrs } from "./native-collection-prototype-init.js";
 import { addUnionImports } from "./registry/imports.js";
 
 /** Allocate the native `$Map` backing an IR-owned module binding. */
@@ -71,6 +72,7 @@ export function ensureIrNativeMapAdapters(ctx: CodegenContext): void {
   addUnionImports(ctx);
   ensureMapHelpers(ctx);
   if (ctx.mapTypeIdx < 0) return;
+  const prototypeInit = nativeCollectionPrototypeInitInstrs(ctx, "Map");
 
   const mapRef: ValType = { kind: "ref", typeIdx: ctx.mapTypeIdx };
   const mapRefNull: ValType = { kind: "ref_null", typeIdx: ctx.mapTypeIdx };
@@ -97,10 +99,7 @@ export function ensureIrNativeMapAdapters(ctx: CodegenContext): void {
     IR_NATIVE_MAP_NEW_FN,
     [],
     [mapRef],
-    [
-      { op: "i32.const", value: COLLECTION_KIND.MAP },
-      { op: "call", funcIdx: mapNewIdx },
-    ],
+    [...prototypeInit, { op: "i32.const", value: COLLECTION_KIND.MAP }, { op: "call", funcIdx: mapNewIdx }],
   );
 
   addAdapter(

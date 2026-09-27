@@ -1910,6 +1910,225 @@ passed **11/11** through the production O1 worker route, 1,096,104 bytes /
 Keep scanner `85299` running to learn its next execution frontier, then rerun
 on the final source before claiming scanner acceptance.
 
+Checkpoint signed as `e169d3aa68`, embedded SSH signature verified, working tree
+clean immediately after commit. Scanner `85299` was re-polled and remains live.
+The accidental full-suite session `65915` is now terminal (exit 1), without
+intervention. Its mixed-source aggregate is not candidate or baseline evidence;
+do not use it to attribute regressions. No tests were stopped or restarted.
+
+Scanner `85299` is in the production O1 subprocess (verified active PID 79900,
+parent 72124). Its raw optimizer input was preserved as
+`.tmp/source-scanner-iife-pre-guard.wasm`, SHA-256
+`2ad90a8190faa4538548bab7f603585b01cef295379cce2f561911c47709eaf4`, matched
+against the live compiler temporary input. Initialization-only attribution
+of that raw seven-import binary supplied throwing diagnostic implementations
+for exactly those seven Node imports; this is NOT the standalone harness and
+executes **zero callbacks**. It now reaches a guest
+`TypeError: Cannot access property on null or undefined`, rather than the
+prior `ref.as_non_null` trap. Message decoded with the module's existing
+`__exn_render_prepare`/`__exn_render_char` exports. Logs:
+`.tmp/scanner-iife-initializer-rendered.log`; script
+`.tmp/inspect-scanner-initializer-only.mts`. This is the next diagnostic lead,
+not an import-free pass or attribution of the property access to a source line.
+
+Scanner `85299` has now completed (exit 1): native **984/984**, production O1
+compile succeeds and validates, **29,754,836 bytes / 777,366 ms**, requested and
+actual target `standalone`, **zero imports**. Initialization throws a guest
+exception before callback registration/execution (**0/984**). This is the
+pre-final-consuming-slot-guard candidate described above, not exact checkpoint
+acceptance. The import gate was neither bypassed nor relaxed.
+
+Next-failure attribution uses only the preserved raw binary, not an acceptance
+artifact: `.tmp/trace-scanner-init.mjs` appends a diagnostic marker global and
+instruments initializer entries; all original function bodies remain present.
+The instrumented binary validates. Startup reaches function **14197**, named
+`__module_init_chunk_42`; the Diagnostics object (global 167), MultiMap (520),
+and first registration's error-code array (524) are non-null. Instrumenting
+`registerCodeFix` entry and normal exit then leaves marker **2640**, establishing
+the guest TypeError occurs inside that call rather than its caller's subsequent
+diagnostic reads. No Node capability was reached; **zero callbacks executed**.
+WAT: `.tmp/scanner-init-14197-wat.log` and
+`.tmp/scanner-register-codefix-wat.log`. Upstream
+`src/services/codeFixProvider.ts:51` calls the custom `add` method attached by
+`src/compiler/core.ts:1542` (`createMultiMap`). Whether that method or another
+registration access is responsible remains unproven. A focused two-lane
+MultiMap-registration reduction completed **0/2** (IR on/off): valid zero-import
+modules throw a guest exception during initialization. Log
+`.tmp/multimap-init.log`, explicit test-only config
+`.tmp/multimap-vitest.config.mts`. A follow-up first verified native execution
+returns 42 for both cases; its attempted guest-message renderer was unavailable
+in this smaller binary (`__exn_render_prepare` absent), so the full scanner's
+rendered TypeError must not be attributed to the reduction yet. Follow-up log
+`.tmp/multimap-init-rendered.log`, terminal session `71925`. The reduced shape is:
+
+```typescript
+interface MultiMap<K, V> extends Map<K, V[]> { add(key: K, value: V): V[]; }
+function createMultiMap<K, V>(): MultiMap<K, V> {
+  const map = new Map<K, V[]>() as MultiMap<K, V>;
+  map.add = multiMapAdd;
+  return map;
+}
+function multiMapAdd<K, V>(this: MultiMap<K, V>, key: K, value: V) {
+  let values = this.get(key);
+  if (values !== undefined) values.push(value);
+  else this.set(key, values = [value]);
+  return values;
+}
+interface Registration { errorCodes: number[]; }
+const registrations = createMultiMap<string, Registration>();
+function register(reg: Registration) {
+  for (const error of reg.errorCodes) registrations.add(String(error), reg);
+}
+register({ errorCodes: [42] });
+export function run(): number { return registrations.get("42")![0].errorCodes[0]; }
+```
+
+Next: distinguish attached-method preservation from callable receiver binding
+and body execution, using native positive controls before changing production
+code. Prefer the shared IR/native collection owner. No production changes were
+made for this new frontier; no standalone scanner callback has passed yet.
+
+Continuation: the eight-case MultiMap reduction completed **2/8** on the signed
+checkpoint (IR on/off each: presence, constant method body, receiver get/set,
+original registration). The presence check uses statically typed `typeof` and
+is not storage proof. The other six cases throw. Independent dynamic-key reads
+and function-identity comparisons subsequently establish that native collections
+drop own properties: baseline **4/12** in `.tmp/collection-own-baseline.log`,
+with scalar/identity, function identity, own keys/descriptors, and defineProperty
+all failing in both lanes. The baseline delete checks pass vacuously because the
+write was dropped; strengthen them with a pre-delete presence assertion before
+using them as delete acceptance evidence. Native controls return the expected
+value before every compiled run.
+
+A **withdrawn** six-line candidate admitted `ctx.mapTypeIdx` to
+`instanceCarrierTypeIdxs` in `src/codegen/instance-props.ts`, reusing the existing
+identity bag instead of inventing collection-specific storage. Readers were
+enumerated: own get/set/method call, carrier-bag visibility/define, integrity,
+and Reflect target classification; deletion has a separate narrower inventory.
+The candidate gave **8/12** (`.tmp/collection-own-candidate.log`): own properties
+were retained, but deletion failed and assignment to the inherited getter-only
+`size` accessor created an own property (the latter is a genuine newly introduced
+regression relative to the passing baseline). **The candidate is removed.**
+Do not restore it without descriptor refusal and deletion parity.
+
+The candidate's MultiMap matrix still scored **2/8**, but failures moved from
+guest exceptions to null dereferences (`.tmp/multimap-carrier-candidate.log`).
+WAT proves another boundary: `__fn_tramp_multiMapAdd_cached` reads its explicit
+`this` from `__current_this`, whereas `calls-closures.ts` only installs a receiver
+when `planObjectLiteralMethodReceiverBind` admits the property declaration.
+An interface `MethodSignature` such as `MultiMap.add` is currently refused.
+The constant-returning method additionally crosses a generic ObjVec to typed
+Vec return boundary; its exact failure mechanism still needs attribution.
+No count improvement is claimed for these changed signatures.
+
+Current production source remains exactly signed checkpoint `e169d3aa68`.
+Diagnostic matrix source is retained in `.tmp/multimap-init.test.ts` and
+`.tmp/collection-own-diagnostic.test.ts` (not default-suite failing tests).
+Next implementation must preserve ordinary collection own-property semantics
+end-to-end (especially the inherited `size` accessor and delete), then address
+method receiver installation and the measured return boundary through shared
+owners. No full scanner job is live; its authoritative last result remains
+zero imports, startup failure, **0/984 standalone callbacks**.
+
+Further descriptor attribution: briefly re-enabled the same collection-carrier
+candidate for diagnostic tests only, then removed it again. Calling
+`Object.getOwnPropertyDescriptor(Map.prototype, "size")` directly did **not**
+repair the failing write. Nor did adding an unrelated non-writable descriptor
+definition to activate the shared inherited-Set resolver. Both variants remain
+**0/2** for the size case (IR on/off). Distinguishing return values shows native
+size still reads 1, but `Object.hasOwn(map, "size")` becomes true: a hidden own
+property is incorrectly deposited, not a change to the entry count.
+
+WAT `.tmp/collection-size-armed.wat` showed `__instance_prop_set` correctly calls
+`__extern_set_decide`, which reaches `__protoidx_set_r`; no Map companion seeder
+was emitted. The direct descriptor expression uses the compiler's synthesized
+descriptor path and does not materialize a runtime Map prototype. Passing
+`Map.prototype` through an ordinary `opaque(value: any)` function before the
+descriptor query **does** materialize it, and the same size assignment then
+passes **2/2**, with both runtime lanes still using the candidate own-property
+storage. Log `.tmp/collection-size-opaque.log`. This is a diagnostic lever, not
+an acceptable source workaround: TypeScript must not need extra prototype
+reflection for ordinary assignment semantics.
+
+Implementation lead: collection own-property admission requires intrinsic
+prototype descriptor availability as well as enabling the shared inherited-Set
+decision. The existing authorities are `inherited-set-gate.ts` (early reservation),
+`native-proto.ts:ensureNativeProtoCompanionSeeder` (demand/materialization),
+`array-object-proto.ts:ensureMapNativeProtoGlue` / `ensureSetNativeProtoGlue`,
+and `proto-index-store.ts:fillSetRBody` (nearest descriptor decision). Reuse these;
+do not add an unconditional name-based `size` write refusal, which would be wrong
+after prototype descriptor replacement/deletion or an own writable definition.
+The full `__reflect_set_receiver` helper cannot simply be called from the
+instance write helper: its successful ordinary-receiver tail calls
+`__extern_set` again, creating recursion at that insertion point.
+
+Deletion's exact native-generator identity inventory in
+`carrier-bag-delete.ts:fillCarrierBagDelete` provides the neighboring pattern for
+collections, but must stay separate from the callable closure classifier. Keep
+the original no-reflection size control, strengthen delete with a pre-delete
+read, and test prototype/own-descriptor overrides before accepting any candidate.
+All diagnostic jobs from this continuation are terminal; production source is
+still unchanged from `e169d3aa68`.
+
+New candidate (not yet accepted): native collection allocation now materializes
+the existing lazy Map/Set prototype companion, paired with early reservation
+of the inherited `size` descriptor decision. Native collections join the
+existing identity-bag carrier and its exact-type deletion lookup. This reuses
+`buildLazyNativeProtoGetInstrs`, the existing collection prototype glue and
+shared ordinary-property store; no duplicate collection property table or
+name-only size refusal. The pre-scan over-approximates Map/Set identifier use
+(a shadowed spelling reserves helpers but does not claim runtime values).
+The unmodified no-reflection diagnostic controls pass **12/12**, including
+strengthened deletion with a pre-delete value assertion:
+`.tmp/collection-own-intrinsic-candidate.log`.
+
+Permanent candidate tests are in
+`tests/issue-1058-native-collection-own-properties.test.ts`; they now add own
+writable size, writable prototype replacement, prototype deletion followed by
+another constructor, and Set/WeakMap property identity. Native prototype edits
+in the JS oracle are restored in `finally`. Expanded candidate and adjacent
+instance/optional Map tests run as `83536`, `.tmp/collection-own-expanded.log`.
+No scanner callback improvement is claimed until the real source run executes.
+
+The expanded controls initially exposed six size-override failures: the native
+dynamic read shortcut answered intrinsic size before consulting ordinary own
+properties/prototype changes. `map-runtime.ts` now excludes seeded Map/Set
+brands from that shortcut, using the same seeded-descriptor evidence pattern
+as its existing iterator shortcut. Own writable size, writable prototype
+replacement, and deletion followed by another constructor now pass. The
+prototype-initialization instruction builder is shared by direct construction
+and **`ir-native-map.ts`**, so this is not a direct-codegen-only repair.
+
+Verification before the final standalone-only admission guard:
+- **36/36** focused own-property, adjacent instance-expando and optional Map-size
+  tests; `.tmp/collection-own-final36.log`.
+- **47/48** broader IR/native collection/iterator tests;
+  `.tmp/collection-own-ir-broad.log`. The one imported user-class `Map` failure
+  (`__sget_value`, expected f64/got ref) independently reproduces with the same
+  filtered harness at pre-merge `2f3a7f68291c` in the separate control worktree:
+  `.tmp/collection-own-pre688-map-control.log`. It predates this work; not fixed.
+- Original TypeScript compilerCore **11/11**, zero imports, 1,573,470 bytes,
+  3,357 ms; `.tmp/source-compilerCore-collection-own.log`.
+- Typecheck and lint clean. Five selected gates exit 0 after extracting the
+  size shortcut guard to satisfy the function budget; no allowance growth.
+  Reachability remains **preservation-only PASS**, strict closure FAIL/OPEN,
+  never a deletion certificate (`.tmp/collection-own-*-2.log` naming is not
+  literal: actual gate logs end in `loc2`, `func2`, `coercion2`, `oracle2`,
+  `reachability2`).
+- MultiMap reduction remains **2/8**, six null-pointer failures after property
+  retention; `.tmp/multimap-after-own-properties.log`. Receiver binding and
+  generic callable array-return adaptation are still open. The presence-only
+  passes are not evidence of working registration.
+
+Final guard restricts collection identity-bag admission and early descriptor
+reservation to standalone, matching the existing prototype seeder's supported
+lane; WASI must not gain writes without matching descriptor initialization.
+Reverification completed as session `30740`, exit 0: **36/36**, typecheck, all five
+gates, `.tmp/collection-own-*-scoped.log`. No allowances changed. Reachability
+remains preservation-only, not strict closure. No tests have been stopped. Full
+scanner acceptance is still unmeasured on this candidate; last measured
+standalone callback count remains **0/984**.
+
 The environment diagnostic has two distinct outcomes: with explicit ambient
 declarations in the input, `optimize: true` still retains process.cwd (**0/2**);
 without those declarations, the optimized reduction passes **2/2**. The actual

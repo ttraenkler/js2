@@ -218,6 +218,8 @@ function instanceCarrierTypeIdxs(ctx: CodegenContext): number[] {
       idxs.push(info.stateTypeIdx);
     }
   }
+  // Collection internals stay private; ordinary own properties use the identity bag.
+  if (ctx.standalone && ctx.mapTypeIdx >= 0 && !seen.has(ctx.mapTypeIdx)) idxs.push(ctx.mapTypeIdx);
   return idxs;
 }
 

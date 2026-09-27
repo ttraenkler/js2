@@ -576,6 +576,8 @@ export function fillCarrierBagDelete(ctx: CodegenContext): void {
   // registry path is already the canonical storage for these state objects.
   const nativeGeneratorStateTypeIdxs = [
     ...new Set([...ctx.nativeGenerators.values()].map((info) => info.stateTypeIdx)),
+    // Collections share the identity bag, not the callable closure classifier.
+    ...(ctx.standalone && ctx.mapTypeIdx >= 0 ? [ctx.mapTypeIdx] : []),
   ];
   const nativeGeneratorArm: Instr[] =
     nativeGeneratorStateTypeIdxs.length === 0 || ctx.funcMap.get(CLOSURE_BAG_LOOKUP) === undefined

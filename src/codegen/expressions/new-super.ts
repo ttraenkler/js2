@@ -66,6 +66,7 @@ import { isStandaloneArraySubclass, withArraySubclassReceiverAsVec } from "../ar
 import { emitObjectCoercion } from "./calls-guards.js"; // (#3118) shared Object(...) / new Object(...) ToObject coercion
 import { COLLECTION_KIND } from "../collection-kind.js"; // (#6419) import-free leaf — map-runtime.js is in an import cycle
 import { ensureMapHelpers, coerceMapKeyToAnyref } from "../map-runtime.js";
+import { nativeCollectionPrototypeInitInstrs } from "../native-collection-prototype-init.js";
 import { ensureDisposableStackNew } from "../disposable-runtime.js";
 import { emitSetNewTargetBeforeCall, ensureNewTargetGlobal } from "../new-target.js"; // (#2023)
 import {
@@ -6753,6 +6754,7 @@ function compileNewExpression(ctx: CodegenContext, fctx: FunctionContext, expr: 
     if (args.length === 0 || nullishArg || seedablePairs || driveMap) {
       addUnionImports(ctx);
       ensureMapHelpers(ctx);
+      fctx.body.push(...nativeCollectionPrototypeInitInstrs(ctx, "Map"));
       const mapNewIdx = ctx.mapHelpers.get("__map_new");
       const mapSetIdx = ctx.mapHelpers.get("__map_set");
       if (mapNewIdx !== undefined && ctx.mapTypeIdx >= 0) {
@@ -6864,6 +6866,7 @@ function compileNewExpression(ctx: CodegenContext, fctx: FunctionContext, expr: 
     if (args.length === 0 || nullishArg || arrArg || nonLiteralArrArg || driveSet) {
       addUnionImports(ctx);
       ensureSetHelpers(ctx);
+      fctx.body.push(...nativeCollectionPrototypeInitInstrs(ctx, "Set"));
       const mapNewIdx = ctx.mapHelpers.get("__map_new");
       const setAddIdx = ctx.mapHelpers.get("__set_add");
       if (mapNewIdx !== undefined && ctx.mapTypeIdx >= 0) {

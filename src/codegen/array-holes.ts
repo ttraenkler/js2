@@ -62,6 +62,14 @@ import { recordDescriptorArrayReceiver } from "./declarations/descriptor-array-c
 export function scanForArrayHoles(ctx: CodegenContext, root: ts.Node): void {
   const pendingBagIdents = new Set<string>();
   const visit = (node: ts.Node): void => {
+    // Intrinsic collection size accessors exist without source reflection.
+    // Reserve descriptor decisions before any dynamic property writer. A
+    // shadowed spelling only over-reserves helpers; it does not claim a value.
+    if (ctx.standalone && ts.isIdentifier(node) && (node.text === "Map" || node.text === "Set")) {
+      ctx.inheritedSetDirtyKeys.add("size");
+      ctx.protoNamedDirty = true;
+      ctx.protoMemberDirty = true;
+    }
     if (
       ctx.usesArrayHoles &&
       ctx.protoIndexDirty &&

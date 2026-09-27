@@ -44,7 +44,7 @@ import { definedFuncAt, mintDefinedFunc, pushDefinedFunc } from "./func-space.js
 import { nativeStringLiteralInstrs } from "./native-string-literals.js"; // (#4629) dyn-dispatch fill key compares
 import { getWellKnownSymbolId } from "./literals.js"; // (#4629) @@iterator id
 import { BUILTIN_BRAND_TABLE } from "./builtin-brands.js";
-import { seededNativeProtoSymbolMembersByBrand } from "./native-proto.js";
+import { seededNativeProtoOwnMembersByBrand, seededNativeProtoSymbolMembersByBrand } from "./native-proto.js";
 import { ensureSymbolCarrier, usesNativeSymbolProvider } from "./symbol-native.js"; // (#5267 A-2) symbol keys box as symbols, not ids
 import { ensureNativeIteratorRuntime, ITER_FAMILY_MAP, ITER_FAMILY_SET } from "./iterator-native.js"; // (#5267 B-2) live collection iterator records; (#6484 S1) family tags
 import { getClosureFuncSelfTypeIdx, getOrCreateFuncRefWrapperTypes } from "./closures/funcref-wrapper-types.js"; // (#4629) iterator closure singleton
@@ -2794,6 +2794,20 @@ function mapSetIteratorShortcutGuard(ctx: CodegenContext, iteratorId: number, ca
   ];
 }
 
+/** Ordinary descriptors, once seeded, own size shadowing/replacement/deletion. */
+function mapSetSizeShortcutExclusions(ctx: CodegenContext, castMap: () => Instr[]): Instr[] {
+  const seededMembers = seededNativeProtoOwnMembersByBrand(ctx);
+  return (["Map", "Set"] as const)
+    .filter((name) => seededMembers.get(BUILTIN_BRAND_TABLE[name])?.includes("size"))
+    .flatMap((name): Instr[] => [
+      ...castMap(),
+      { op: "struct.get", typeIdx: ctx.mapTypeIdx, fieldIdx: MAP_LAYOUT.M_KIND },
+      { op: "i32.const", value: name === "Map" ? COLLECTION_KIND.MAP : COLLECTION_KIND.SET },
+      { op: "i32.ne" },
+      { op: "i32.and" },
+    ]);
+}
+
 export function fillMapSetDynDispatchArms(ctx: CodegenContext): void {
   if (ctx.mapTypeIdx < 0) return;
   const mapSizeIdx = ctx.mapHelpers.get("__map_size");
@@ -2989,6 +3003,7 @@ export function fillMapSetDynDispatchArms(ctx: CodegenContext): void {
   const boxNumIdx = ctx.funcMap.get("__box_number");
   if (externGetFn && boxNumIdx !== undefined) {
     const sizeTest = keyEqualsStr("size", 1);
+    sizeTest?.push(...mapSetSizeShortcutExclusions(ctx, castMap));
     const arms: Instr[] = [];
     if (sizeTest) {
       arms.push(...sizeTest, {
