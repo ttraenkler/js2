@@ -12980,6 +12980,67 @@ an allocation pattern; its top-level-only/single-declaration lifetime is not
 sufficient for merged or nested namespaces. No namespace implementation or
 deprecation-test improvement is claimed in this verification continuation.
 
+Factory recheck **35851** is now terminal, exit 1: native **3/3**, standalone
+**1/3**, valid zero-import Wasm, **11,401,201 bytes**, **225,093 ms**, O1 at
+the same TypeScript pin. Both default-export and concise-arrow parenthesizer
+callbacks fail with an illegal cast; arrow-in-binary-expression passes.
+This contradicts historical factory acceptance and must be triaged before
+crediting the current branch with a factory pass. The source-map location
+`factory.ts:799:22` is in the generated harness, not a proven root-cause site.
+Evidence: `.tmp/factory-erased-this-o1.log`.
+
+Fresh attribution runs: **7344**, original factory O1 with only `new-super.ts`
+loaded from pre-fix `453de050af` (log
+`.tmp/factory-receiver-baseline-o1-v2.log`); **55590**, current factory O0
+(`.tmp/factory-erased-this-o0.log`). The first synchronous-loader attempt failed
+before compilation and is not a baseline. The asynchronous loader passed a
+positive control: it prints the exact substituted revision and restores the
+known typed-receiver null trap (`.tmp/factory-baseline-loader-control.log`).
+The active checker **18770** remains independent; do not restart any of these
+live processes merely because output is quiet.
+
+Factory attribution results are now terminal (both exit 1): the one-file
+pre-receiver-fix O1 baseline is also **1/3**, the same two cast failures and
+**11,401,201 bytes**, **227,305 ms**. Current O0 is also **1/3**,
+**14,994,906 bytes**, **166,966 ms**. This is neither introduced by the
+receiver-annotation fix nor specific to optimization. O0 preserves function
+names: both failures enter `createNodeArray`, source `nodeFactory.ts:1198:9`.
+The diagnostic original-source build **14745** confirms the same result and
+retains `.tmp/factory-create-node-array.wat` and
+`.tmp/factory-named-diagnostic.wasm` (log `.tmp/factory-node-array-wat-o0.log`).
+
+Both the full WAT and the reduced parser-list control show the same unsafe
+`slice()` receiver lowering: an `externref` formal is read, directly cast to
+the checker's concrete vector, then stored in the slice receiver local. A
+sibling vector is not cast-compatible. The shared physical slice entry now
+passes its expected vector carrier to `compileExpression`, invoking existing
+vector realization instead of leaving a raw cast to stack repair. This is a
+one-line shared-backend fix, not a TypeScript-name special case or new IR-body
+admission. No new size allowance or shared context state is introduced.
+
+The existing four-file matrix improves **14/17 → 15/17**; standalone
+parser-list construction now passes. The two remaining host-mode failures
+(optional-node forwarding returns NaN, projection metadata deletion returns
+-2) are identical to baseline. New argument-order and null-receiver controls
+in both IR settings, optional slice ends and dynamic-array methods pass
+**13/13**; final array-method, parser-list and durable new controls pass
+**28/28**. Evidence: `.tmp/factory-array-existing-controls.log`,
+`.tmp/factory-array-receiver-candidate.log`,
+`.tmp/factory-slice-order-candidate.log`, `.tmp/factory-slice-final-focused.log`.
+Original factory candidate O1 **85990** is still running in
+`.tmp/factory-slice-receiver-candidate-o1.log`; full checker **18770** started
+before this slice change and remains a receiver-fix-only measurement.
+
+Expanded same-harness standalone/host A/B against `ef98501b2e`, replacing
+only `array-methods.ts`: **49/52 → 50/52**, one fix, zero new failures.
+The two remaining failures are the same host-only rows above. Logs:
+`.tmp/factory-slice-expanded-baseline.log` and
+`.tmp/factory-slice-expanded-candidate.log`. Type checking, formatting,
+targeted lint (two pre-existing warnings), LOC/function budgets, coercion
+and oracle ratchets pass. The legacy reachability audit remains
+preservation-only **6/6 + 6/6**, graph **OPEN**, strict closure **FAIL**;
+this change makes no retirement claim.
+
 The same eight reduced cases pass **8/8** when only the namespace provider is
 first lowered by TypeScript's standard ES2022/ESNext emitter; original
 namespace syntax fails **0/8**. The combined diagnostic is **8/16**, log

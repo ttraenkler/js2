@@ -5038,8 +5038,8 @@ function compileArraySlice(
 ): ValType {
   const vecTmp = allocLocal(fctx, `__arr_slc_vec_${fctx.locals.length}`, { kind: "ref_null", typeIdx: vecTypeIdx });
 
-  // Compile receiver -> vec ref, stash in vecTmp, null-guard, drop the tee leftover.
-  compileExpression(ctx, fctx, propAccess.expression);
+  // Realize the vector carrier before storing; erased generic inputs can hold sibling vector layouts.
+  compileExpression(ctx, fctx, propAccess.expression, { kind: "ref_null", typeIdx: vecTypeIdx });
   fctx.body.push({ op: "local.tee", index: vecTmp });
   emitReceiverNullGuard(ctx, fctx, vecTmp, propAccess.expression);
   fctx.body.push({ op: "drop" });
