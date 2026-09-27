@@ -2,7 +2,7 @@
 import { ts } from "../../ts-api.js";
 import type { ValType } from "../../ir/types.js";
 import type { CodegenContext, FunctionContext } from "../context/types.js";
-import { addUnionImports } from "../index.js";
+import { addUnionImports, hostMapCarrierClassName } from "../index.js";
 import { compileCollectionElementArg, ensureMapHelpers, tryCompileNativeCollectionForEach } from "../map-runtime.js";
 import { canonicalUndefinedExternInstrs } from "../any-helpers.js";
 import { ensureSetHelpers } from "../set-runtime.js";
@@ -17,10 +17,12 @@ export function compileOptionalNativeCollectionSize(
   property: string,
 ): ValType | null {
   if (!ctx.nativeStrings || property !== "size") return null;
-  const symbol = receiverTsType.getSymbol();
-  if (!symbol || !["Map", "ReadonlyMap", "Set", "ReadonlySet"].includes(symbol.name)) return null;
-  if (!symbol.declarations?.length || symbol.declarations.some((decl) => !decl.getSourceFile().isDeclarationFile))
-    return null;
+  if (hostMapCarrierClassName(ctx, receiverTsType) === undefined) {
+    const symbol = receiverTsType.getSymbol();
+    if (!symbol || !["Map", "ReadonlyMap", "Set", "ReadonlySet"].includes(symbol.name)) return null;
+    if (!symbol.declarations?.length || symbol.declarations.some((decl) => !decl.getSourceFile().isDeclarationFile))
+      return null;
+  }
   addUnionImports(ctx);
   ensureMapHelpers(ctx);
   if (receiverType.kind === "externref") fctx.body.push({ op: "any.convert_extern" });

@@ -1599,6 +1599,53 @@ The fresh controls completed: compilerCore **11/11**, **1,573,325 bytes /
 standalone counts match and both standalone modules have zero imports. This
 is **14/14**, not proof of the pending scanner or full upstream unit suite.
 
+Signed checkpoint `f8f456b626`. Scanner `20318` completed with native
+**984/984**, **54,837,450 bytes / 326,007 ms**, still invalid. It passes
+`invokeCallbacks` and advances to function 10866 `__closure_4199`: fallthrough
+expects externref but receives `ref null 113`, offset **37,975,863**.
+No standalone scanner callbacks execute, and total imports remain unverified.
+Next diagnostic: `.tmp/scanner-closure-4199-validation.log`, using the preserved
+`.tmp/source-scanner-optional-foreach.wasm` candidate binary.
+
+The failing expression is `realpathsWithSymlinks?.size` in exportInfoMap.ts
+line 512, where the receiver is TypeScript's `MultiMap` interface extending
+`Map<K, V[]>`. It already lowers to the native Map carrier. Optional size
+recognition only admits directly named ambient Map/Set symbols, rejects the
+refining interface, and leaves the receiver on an externref-result branch.
+Reuse the existing shared Map-inheritance proof (`hostMapCarrierClassName`)
+instead of inventing a second heritage traversal. Raw binary inspection also
+confirms the prior Set_forEach import is gone: ten imports remain, beginning
+with Set_add. This is not a zero-import scanner result.
+
+The source-shaped inherited Map/ReadonlyMap size tests fail validation **0/4**
+before the change (`.tmp/optional-inherited-map-size-before.log`) and pass
+**4/4** after reusing the inheritance proof, in both IR modes with zero imports.
+They distinguish a missing receiver, an empty Map, and a populated Map through
+two levels of interface inheritance. The adjacent five-file batch passes
+**22/23** (`.tmp/optional-inherited-map-size-after.log`); the sole GC optional
+Map.size mismatch is the previously reproduced clean-58fce98114 baseline failure.
+User-defined Map and Set size getters still pass their negative-admission tests.
+Type-checking, formatting/lint, and all five source gates passed without
+allowance growth (`.tmp/optional-inherited-map-size-{typecheck,style,gates}.log`).
+The frozen scanner rerun completed (session `35023`, exit 1): native
+**984/984**, **54,837,485 bytes / 305,574 ms**, and the full module now
+**validates**. Report `.tmp/source-scanner-inherited-size.log`, preserved
+binary `.tmp/source-scanner-inherited-size.wasm`. The standalone import gate
+correctly rejects ten remaining imports: Set_add, __get_filename,
+__get_process_cwd, __get_process_platform, __get_dirname, __get_process_argv,
+__get_process_stdout, __process_exit, __js_array_new, and __js_array_push.
+**Zero standalone scanner callbacks executed**; validation is not unit-test
+success or standalone completion. Next work must remove these dependencies
+through their native owners, not bypass the import gate.
+
+Independent next-target probe: optional `Set.add` silently omits mutation
+in both IR modes (**0/2**, `.tmp/optional-collection-mutation-before.log`);
+the original TypeScript sources contain five `?.add(...)` sites, and Set_add
+is still a raw scanner import. The ignored reduced source is
+`.tmp/optional-collection-mutation.test.ts`. Native optional mutation dispatch
+and chainable receiver identity need repair after the frozen scanner run;
+no production mutation fix has been attempted yet.
+
 The user requested a main merge and continuation. The former temporary checkout
 was cleaned out, but branch `codex/1058-typescript-standalone` retained the signed
 handoff at `efd9aca79c5aba4bfd6670847be925a027ed219f`. Work now lives in
