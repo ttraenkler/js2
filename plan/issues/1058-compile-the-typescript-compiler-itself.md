@@ -267,6 +267,70 @@ oracle-ratchet-allow:
 ---
 # #1058 — Compile the TypeScript compiler to Wasm (self-hosting stress test)
 
+## Upstream merged; original scanner reaches 656/984 — 2026-09-27
+
+Fetched `loopdive/js2` main `dbba95acb11b525b03b5739469d0c4f132fb0474`
+and merged it without conflicts as `800ad598b4`. The own-field write candidate
+was checkpointed first as `4e5fd3657d`; both commits are signed. Worktree:
+`/private/tmp/ts2wasm-ts5-1058-20260927`, branch
+`codex/1058-typescript-standalone`. No stash restore, force push, or budget
+allowance increase was used.
+
+On this merged candidate, the pinned original `regExpScannerRecovery.ts`
+suite now passes **656/984**, versus the previously recorded **0/984** on
+`bb26a90c26`. Native passes **984/984**. The new standalone O1 artifact
+validates, has **zero imports**, is **25,923,526 bytes**, and compiles/optimizes
+in **475,278 ms**. Log: `.tmp/source-scanner-own-write-post-sync.log`.
+This is a before/after progress observation across an upstream merge, not a
+same-base claim that this fix alone caused all 656 gains.
+
+All **328** remaining errors are assertion 1: the expected unterminated-regexp
+diagnostic is absent (`object:null`). Reading the individual rows against the
+original six-source loop isolates two failing forms, each **0/164**:
+`([<regex>]);` and `({prop: <regex>});`. The declaration, parenthesized,
+nested-parenthesized property, and computed-property forms each pass
+**164/164**. Next diagnose why these two parse contexts lose the diagnostic;
+do not infer a common root solely from the shared error text.
+
+Original `factory.ts` remains **3/3**, zero imports, 15,840,571 bytes,
+121,949 ms; `.tmp/source-factory-own-write-post-sync.log`. Full TypeScript
+unit-suite acceptance and self-hosting remain OPEN.
+
+Durable regression: `tests/issue-1058-own-field-write-coherence.test.ts`
+contains **20** native-vs-zero-import-Wasm tests, both IR toggles, covering
+undefined/null/wrong-carrier to Map, runtime-selected keys, alias and physical
+slot identity, writable data descriptor fidelity, and strict readonly refusal.
+On this same merged base, removing only the two production wiring changes
+gives **4/20**; restoring them gives **20/20**. Logs:
+`.tmp/own-write-twenty-baseline.log`, `.tmp/own-write-twenty-restored.log`.
+The IR composer stays present but unused during the removal control.
+The prior seven focused files plus the initial twelve new cases pass **95/95**
+(`.tmp/own-write-post-sync-focused.log`). IR ownership probes still report
+direct-body fallback for the Map writer (body-shape/parameter resolution), so
+these toggles are NOT evidence of an IR-emitted writer body. Shared instruction
+composition is in `src/ir/`; full frontend IR adoption remains follow-up work.
+
+Adjacent checks and limitations:
+
+- First five-file batch: **36/37**. The computed fnctor read returns 1 rather
+  than 11 in the existing computed-write test, identically with the candidate
+  wiring removed (`.tmp/own-write-post-sync-baseline.log`).
+- Reflection/data-define/per-key checks plus the twenty new cases pass
+  **63/63**. The larger batch is **73 passed / 14 failed / 12 skipped**:
+  twelve failures lack the local test262 harness; two inherited-set runtime
+  failures reproduce with the candidate wiring removed (exception in physical
+  field precedence and flow-slot score 6 rather than 7). Logs:
+  `.tmp/own-write-post-sync-descriptors.log`, `.tmp/own-write-inherited-baseline.log`.
+- Scratch descriptor controls still expose undefined-valued readonly descriptor
+  readback and accessor installation/callback failures. Explicit strict mode
+  confirms refusal throws; using a Map-valued readonly descriptor passes.
+  Accessor failure remains even with function-valued descriptor properties.
+  Do not claim these residuals fixed. `.tmp/own-write-descriptor-probe.log`,
+  `.tmp/own-write-descriptor-functions.log`.
+- Post-merge typecheck, lint, LOC/function/coercion/oracle gates pass. Reachability
+  is preservation-only PASS; strict modeled closure remains FAIL/OPEN.
+  `.tmp/own-write-post-sync-typecheck.log`, `.tmp/own-write-post-sync-gates.log`.
+
 ## Own-field write checkpoint before upstream sync — 2026-09-27
 
 Candidate reconciliation lives in `src/ir/existing-own-field-write.ts` and is
