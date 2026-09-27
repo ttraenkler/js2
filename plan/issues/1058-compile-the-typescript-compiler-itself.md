@@ -267,6 +267,49 @@ oracle-ratchet-allow:
 ---
 # #1058 — Compile the TypeScript compiler to Wasm (self-hosting stress test)
 
+## Scanner pragma-field diagnostic and source-suite results — 2026-09-27
+
+At signed `bb26a90c26`, scanner session `41973` completed exit 1: native
+**984/984**, standalone Wasm **0/984**, valid zero-import O1 output,
+23,839,560 bytes, 462,390 ms. The optimized source-map annotation is not
+authoritative after Binaryen renumbers functions. The raw diagnostic locates
+the new first failure in `processPragmasIntoFields`, after token construction:
+an illegal cast on the value returned by `__extern_get(context, "pragmas")`.
+Raw artifact `.tmp/source-scanner-bb26a90-raw.wasm` has SHA-256
+`ed424eeeb612d62ccaa8dcb79c2b07841da4d74f359edff19ac3c43d33fe599e`.
+Raw diagnostic `85266` also registers/executes 984 and passes 0; its seven
+throwing imports are not invoked, and it is NOT standalone acceptance.
+
+Diagnostic-only binary intervention `.tmp/diagnose-pragma-get.mts` changes
+exactly that read to the existing `__get_member_pragmas` getter, validates and
+runs the resulting module without changing production. Session `30895` then
+reaches the first upstream assertion instead of the cast: expected an
+unterminated-regexp diagnostic, got null. Still **0/984**; this is attribution
+evidence, not an accepted fix. Log
+`.tmp/source-scanner-bb26a90-direct-pragma-get.log`. Binaryen's experimental
+custom-descriptor feature must remain disabled when re-emitting this diagnostic
+module for Node 24. The initial All-features attempt did not execute.
+
+The simplified pragma-map matrix passes **8/8** at every measured refinement:
+plain/class receiver, typed/inferred Map construction, generic overloaded map
+methods, inherited/merged interfaces and separate parser/services sources.
+Logs `.tmp/pragma-map-field-baseline.log`, `.tmp/pragma-map-generic-methods.log`,
+`.tmp/pragma-map-inherited-field.log`, `.tmp/pragma-map-linked-outcomes.log`,
+`.tmp/pragma-map-separated-sources.log`. These do NOT reproduce the full-source
+failure; tracked outcomes show the reduced read/initialize functions use direct
+bodies even when experimental IR is enabled. Next inspect generic closed-field
+reader registration/guards against the successful named getter, including
+`fillClosedStructExternGetArms` allocation filtering and structural-contract
+reads. Do not patch all Map operations based on the failed full-source cast.
+
+Frozen source batch `22636` completed successfully at `bb26a90c26`:
+compilerCore **11/11**, diagnosticCollection **5/5**, base64 **1/1**, comments
+**3/3**, parsePseudoBigInt **5/5**, paths **14/14**, asserts **2/2**, all zero
+imports. Logs `.tmp/interface-refinement-source-<suite>.log`. With the factory
+result below, eight original source suites pass **44/44**; scanner remains
+**0/984**. This is nine measured files, not the full 256-file upstream scope.
+No source test process from these runs remains live.
+
 ## Class-backed interface refinement continuation — 2026-09-27
 
 Frozen scanner session `55011` completed exit 1 on `61d5930e0a` compiler
