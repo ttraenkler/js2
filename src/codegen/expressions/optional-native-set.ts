@@ -31,7 +31,7 @@ export function compileOptionalNativeCollectionSize(
   return { kind: "i32" };
 }
 
-/** Native collection lookups on the receiver already saved by `?.`. */
+/** Native collection calls on the receiver already saved by `?.`. */
 export function compileOptionalNativeCollectionLookup(
   ctx: CodegenContext,
   fctx: FunctionContext,
@@ -46,7 +46,9 @@ export function compileOptionalNativeCollectionLookup(
   const set = className === "Set" || className === "ReadonlySet" || className === "WeakSet";
   if (!map && !set) return false;
   const forEach = methodName === "forEach" && className !== "WeakMap" && className !== "WeakSet";
-  if (!forEach && methodName !== "has" && methodName !== "delete" && !(map && methodName === "get")) return false;
+  const add = className === "Set" && methodName === "add";
+  if (!forEach && !add && methodName !== "has" && methodName !== "delete" && !(map && methodName === "get"))
+    return false;
   const receiver = (expr.expression as ts.PropertyAccessExpression).expression;
   const declarations = ctx.oracle.typeDeclarationsOf(receiver);
   if (!declarations?.length || declarations.some((declaration) => !declaration.getSourceFile().isDeclarationFile))
@@ -68,7 +70,7 @@ export function compileOptionalNativeCollectionLookup(
   }
   addUnionImports(ctx);
   ensureSetHelpers(ctx);
-  const helper = ctx.mapHelpers.get(`__map_${methodName}`);
+  const helper = ctx.mapHelpers.get(add ? "__set_add" : `__map_${methodName}`);
   if (helper === undefined) throw new Error(`Missing native ${className}.${methodName} helper`);
   fctx.body.push({ op: "local.get", index: receiverLocal });
   if (receiverType.kind === "externref") fctx.body.push({ op: "any.convert_extern" });
@@ -79,8 +81,8 @@ export function compileOptionalNativeCollectionLookup(
   }
   fctx.body.push({ op: "call", funcIdx: helper });
   // Keep both a missing get result and false distinct from short-circuiting.
-  // Map.get already returns the stored value in anyref, without coercing it.
-  if (methodName === "get") fctx.body.push({ op: "extern.convert_any" });
+  // Map.get returns the stored value; Set.add returns the same receiver.
+  if (methodName === "get" || add) fctx.body.push({ op: "extern.convert_any" });
   else fctx.body.push({ op: "call", funcIdx: ctx.funcMap.get("__box_boolean")! });
   return true;
 }

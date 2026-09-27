@@ -1638,13 +1638,63 @@ __get_process_stdout, __process_exit, __js_array_new, and __js_array_push.
 success or standalone completion. Next work must remove these dependencies
 through their native owners, not bypass the import gate.
 
-Independent next-target probe: optional `Set.add` silently omits mutation
+Independent next-target probe: optional `Set.add` produces a wrong answer
 in both IR modes (**0/2**, `.tmp/optional-collection-mutation-before.log`);
 the original TypeScript sources contain five `?.add(...)` sites, and Set_add
 is still a raw scanner import. The ignored reduced source is
 `.tmp/optional-collection-mutation.test.ts`. Native optional mutation dispatch
 and chainable receiver identity need repair after the frozen scanner run;
 no production mutation fix has been attempted yet.
+
+Inherited-size checkpoint saved and SSH-signature verified: `8cbaead03d`.
+Continuation adds `Set.add` to the existing shared optional native collection
+owner, invoking `__set_add` and converting its returned receiver to the
+optional-chain result carrier. It reuses the native Set kernel; there is no
+second mutation algorithm or IR-mode-specific implementation.
+The final four regressions check actual membership/size, present receiver
+identity, undefined short-circuit result, single receiver evaluation, and
+skipped argument evaluation. Disabling only the new admission yields **0/4**
+(`.tmp/optional-set-add-disabled.log`, all return -1 at present identity);
+enabling it passes **4/4**, and the six-file adjacent batch passes **29/29**
+(`.tmp/optional-set-add-final.log`).
+
+The initial probe combined those semantics with a distinct representation
+problem: comparing the short-circuit result directly to a typed optional
+receiver containing undefined returns false. The diagnostic test returns -2
+at that comparison (`.tmp/optional-set-add-diagnostic.log`); the preserved
+`.tmp/optional-collection-mutation.test.ts` still records it. The focused
+mutation tests compare the missing result to the literal `undefined` and
+the present result to the receiver. This does **not** fix or establish baseline
+attribution for the typed-undefined equality defect.
+
+Frozen Set.add scanner run: session `78300`,
+`.tmp/source-scanner-set-add.log`, preserved binary
+`.tmp/source-scanner-set-add.wasm`. Fresh compilerCore/factory controls run in
+session `57773`, `.tmp/source-<suite>-set-add.log`. The controls completed:
+compilerCore **11/11**, **1,573,325 bytes / 3,375 ms**; factory **3/3**,
+**14,199,590 bytes / 110,216 ms**. Both match native counts with zero imports.
+Do not modify production while the scanner is running. Type-check session
+`31698` passed; all five source gates completed successfully without allowance
+growth (`.tmp/optional-set-add-gates.log`), including preservation-only (not
+strict closure certification) for the legacy reachability gate.
+
+Next-target reduction: TypeScript core.ts `isNodeLikeSystem()` checks
+`typeof process`/`require`; sys.ts calls `getNodeSystem()` behind that guard.
+The ignored `.tmp/node-environment-dead-branch.test.ts` reproduces a retained
+`__get_process_cwd` import in **0/2** zero-import checks across both IR modes
+(`.tmp/node-environment-dead-branch-focused.log`). No environment/DCE fix yet.
+The diagnostic runtime variant supplies a throwing process.cwd import; both
+IR modes return 1 without calling it, then still fail only the zero-import
+assertion (`.tmp/node-environment-dead-branch-runtime.log`). That proves the
+small reproduction's dependency is unused at runtime, not that the complete
+scanner can run with a stub or that all nine other imports share this cause.
+The first diagnostic invocation accidentally concatenated the base Vitest
+include list and selected the full repository suite (session `65915`,
+`.tmp/node-environment-dead-branch.log`); this run remains live and is not
+attributable as a focused regression result. Asked permission to stop only
+that accidental run, not the intended source runs. The ignored config is
+corrected to replace the include list, and the focused rerun explicitly
+filters to its one file.
 
 The user requested a main merge and continuation. The former temporary checkout
 was cleaned out, but branch `codex/1058-typescript-standalone` retained the signed
