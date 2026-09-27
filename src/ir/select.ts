@@ -1257,7 +1257,7 @@ function constructorFieldInitializersAreIrSafe(
   const initializers = collectIrClassInstanceInitializers(owner);
   if (initializers === undefined) return shapeNo("constructor-field-name-unsupported", owner);
   for (const initializer of initializers) {
-    if (!isPhase1Expr(initializer.expression, scope, localClasses)) return false;
+    if (initializer.expression && !isPhase1Expr(initializer.expression, scope, localClasses)) return false;
   }
   return true;
 }

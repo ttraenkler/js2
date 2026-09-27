@@ -57,9 +57,8 @@ it("requires supplied semantic evidence except for void and keeps private identi
   ).toEqual(["__priv_private", "known"]);
 });
 
-// #1058 follow-up: this needs an IR operation anchored to the declaration,
-// not a fabricated TypeScript expression that breaks exact source ownership.
-it.fails("plans implicit undefined in source order but excludes type-only and static declarations", () => {
+// Implicit writes retain the exact declaration, not a fabricated expression.
+it("plans implicit undefined in source order but excludes type-only and static declarations", () => {
   const file = ts.createSourceFile(
     "input.ts",
     `abstract class C {
@@ -76,8 +75,9 @@ it.fails("plans implicit undefined in source order but excludes type-only and st
   const declaration = file.statements.find(ts.isClassDeclaration)!;
   const initializers = collectIrClassInstanceInitializers(declaration)!;
   expect(initializers.map((row) => row.fieldName)).toEqual(["first", "second", "parameter"]);
-  expect(ts.isVoidExpression(initializers[0]!.expression)).toBe(true);
-  expect(ts.isObjectLiteralExpression(initializers[1]!.expression)).toBe(true);
-  expect(ts.isIdentifier(initializers[2]!.expression)).toBe(true);
+  expect(initializers[0]!.expression).toBeUndefined();
+  expect(initializers[0]!.declaration).toBe(declaration.members[0]);
+  expect(ts.isObjectLiteralExpression(initializers[1]!.expression!)).toBe(true);
+  expect(ts.isIdentifier(initializers[2]!.expression!)).toBe(true);
   expect(fields(file.text)).toEqual(["first"]);
 });

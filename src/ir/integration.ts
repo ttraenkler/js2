@@ -3440,7 +3440,7 @@ export function compileIrPathFunctions(
         }
         if (!isImplicitCtorMember) directCallsFor(member, ownerUnitId);
         for (const initializer of constructorFieldInitializers ?? []) {
-          directCallsFor(initializer.expression, ownerUnitId);
+          if (initializer.expression) directCallsFor(initializer.expression, ownerUnitId);
         }
         const loweringOptions: AstToIrOptions = {
           exported: false,

@@ -67,6 +67,7 @@ import {
 import { remainderFastPathPlan } from "./analysis/remainder-fast-path.js";
 import { evaluateConstantCondition } from "../codegen/statements/control-flow.js";
 import type { IrClassInstanceInitializer } from "./class-instance-initializers.js";
+import { lowerImplicitFieldUndefined } from "./class-field-undefined-value.js";
 // #2766 — reuse the legacy counted-loop proof predicates (pure AST analysis, no
 // codegen state) to port the `safeIndexedArrays` in-bounds proof into the IR.
 import { isIncreasingStep, loopBodyMutatesIndexOrArray } from "./analysis/loop-shape.js";
@@ -9882,7 +9883,7 @@ function lowerCheckedClassFieldSet(
   receiver: IrValueId,
   shape: IrClassShape,
   fieldName: string,
-  expression: ts.Expression,
+  expression: ts.Expression | undefined,
   cx: LowerCtx,
 ): void {
   const field = shape.fields.find((candidate) => candidate.name === fieldName);
@@ -9892,7 +9893,9 @@ function lowerCheckedClassFieldSet(
       `ir/from-ast: class ${shape.className} has no field "${fieldName}" in ${cx.funcName}`,
     );
   }
-  const rawValue = lowerExpr(expression, cx, field.type);
+  const rawValue = expression
+    ? lowerExpr(expression, cx, field.type)
+    : lowerImplicitFieldUndefined(cx.builder, field.type);
   // (#3673) Native numeric slots retain their physical representation while
   // JavaScript expressions remain number-valued at the source boundary.
   const newValue = irTypeEquals(cx.builder.typeOf(rawValue), field.type)

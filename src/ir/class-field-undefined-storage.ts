@@ -50,10 +50,16 @@ export function collectUndefinedWrittenInstanceFields(
   for (const member of declaration.members) {
     if (ts.canHaveModifiers(member) && ts.getModifiers(member)?.some((m) => m.kind === ts.SyntaxKind.StaticKeyword))
       continue;
-    if (ts.isPropertyDeclaration(member) && member.initializer) {
+    if (
+      ts.isPropertyDeclaration(member) &&
+      !member.modifiers?.some(
+        ({ kind }) => kind === ts.SyntaxKind.DeclareKeyword || kind === ts.SyntaxKind.AbstractKeyword,
+      )
+    ) {
       const name = irClassInstanceFieldName(member.name);
-      if (name !== undefined && clears(member.initializer)) fields.add(name);
-      visit(member.initializer);
+      if (name !== undefined && (member.initializer ? clears(member.initializer) : !!member.questionToken))
+        fields.add(name);
+      if (member.initializer) visit(member.initializer);
     } else if (
       (ts.isConstructorDeclaration(member) ||
         ts.isMethodDeclaration(member) ||

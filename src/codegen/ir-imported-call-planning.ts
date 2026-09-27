@@ -550,7 +550,7 @@ function appendAmbientClassCalls(
       identityPlan.identityContext.terminalByUnitId.get(ownerUnitId)?.kind === "class-implicit-constructor";
     const executableRoots =
       implicitConstructor && declaration && (ts.isClassDeclaration(declaration) || ts.isClassExpression(declaration))
-        ? collectIrClassInstanceInitializers(declaration)?.map(({ expression }) => expression)
+        ? collectIrClassInstanceInitializers(declaration)?.flatMap(({ expression }) => (expression ? [expression] : []))
         : declaration &&
             (ts.isMethodDeclaration(declaration) ||
               ts.isGetAccessorDeclaration(declaration) ||

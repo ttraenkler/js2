@@ -6,7 +6,8 @@ import { ts } from "../ts-api.js";
 interface ClassInstanceInitializerSource {
   readonly declaration: ts.PropertyDeclaration | ts.ParameterDeclaration;
   readonly name: ts.PropertyName;
-  readonly expression: ts.Expression;
+  /** Absent for the implicit undefined write; never fabricate a source AST. */
+  readonly expression?: ts.Expression;
   readonly sourceOrdinal: number;
 }
 
@@ -70,14 +71,25 @@ export function irClassInstanceFieldName(name: ts.PropertyName): string | undefi
   return undefined;
 }
 
-/** Fields initialize before parameter-property assignments in ES2022 output. */
+/** Fields initialize before parameter-property assignments in ES2022 output.
+ * Implicit writes are currently admitted for optional fields only: required
+ * reference-field projection still relies on its existing precise layout.
+ */
 export function collectClassInstanceInitializerSources(
   declaration: ts.ClassDeclaration | ts.ClassExpression,
 ): readonly ClassInstanceInitializerSource[] {
   const result: ClassInstanceInitializerSource[] = [];
   for (let sourceOrdinal = 0; sourceOrdinal < declaration.members.length; sourceOrdinal++) {
     const member = declaration.members[sourceOrdinal]!;
-    if (!ts.isPropertyDeclaration(member) || hasStaticModifier(member) || !member.initializer) continue;
+    if (
+      !ts.isPropertyDeclaration(member) ||
+      hasStaticModifier(member) ||
+      (!member.initializer && !member.questionToken) ||
+      member.modifiers?.some(
+        ({ kind }) => kind === ts.SyntaxKind.DeclareKeyword || kind === ts.SyntaxKind.AbstractKeyword,
+      )
+    )
+      continue;
     result.push({ declaration: member, name: member.name, expression: member.initializer, sourceOrdinal });
   }
   // ES2022 fields initialize before the constructor's parameter-property writes.

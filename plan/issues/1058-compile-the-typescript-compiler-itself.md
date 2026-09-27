@@ -269,6 +269,45 @@ oracle-ratchet-allow:
 
 ## Main synchronization and incremental-parser trace — 2026-09-27
 
+Follow-up sync: fetched `loopdive/js2` main at
+`05f3f5e8e5f94669ad9b9d5cf0f633455106d1a5` and merged without conflicts as
+`b5c8e93e40`. The pending reproductions/handoff were preserved first in
+`83b253043e`. Post-merge policy and field checks: **33 ordinary passes and
+5 expected failures**, not 38 semantic passes (`.tmp/main-sync-05f3-focused.log`).
+
+Resumed implementation uses an absent expression in the shared IR constructor
+plan to represent an implicit undefined write, anchored to the original field
+declaration. Selection and both direct-call/dependency-root collectors skip
+these non-expression operations. The IR lowers them through the canonical
+undefined producer or the exact numeric undefined sentinel; the direct adapter
+consumes the same plan. No synthetic TypeScript nodes or weakened ownership
+checks. Type-only/static declarations remain excluded.
+
+The admitted scope is **optional fields only**. Widening required reference
+fields disturbed existing exact-layout class projection, so that broader
+attempt was narrowed. Required uninitialized fields remain follow-up work.
+On the merged baseline, the 73 constructor ownership checks yield **68 passes,
+5 failures** (`.tmp/implicit-ir-plan-baseline-tests.log`); the narrowed candidate
+retains those same five failures (`.tmp/implicit-ir-plan-optional-tests.log`).
+The original 18 reference runtime rows now pass. Two string rows also improve;
+numeric rows preserve baseline behavior after retaining the exact sentinel.
+An explicit numeric constructor proves `irBodyEmitted: true` and
+`legacyBodyEmitted: false` (`.tmp/implicit-ir-plan-numeric-tests.log`). The
+interface-reference example still rejects class projection and uses the direct
+adapter even with IR enabled; do not claim that example is IR-owned.
+Four boolean/bigint optional-field rows fail on both baseline and candidate
+and remain expected failures, not semantic passes
+(`.tmp/implicit-ir-plan-scalar-baseline.log`).
+
+Final focused matrix: **97 ordinary passes, 4 expected scalar failures, and
+the same 5 baseline constructor failures**, 106 total
+(`.tmp/implicit-ir-plan-acceptance.log`). This includes both derived optional
+field checks: initialize after `super()` but before the following field.
+
+The full original incremental suite has **not** been rerun on this new attempt;
+the last full result remains the 0/153 measurement below. Strict modeled
+reachability closure remains OPEN; preservation checks do not certify deletion.
+
 At `acb870289f`, original-suite session **64524** completed: O1 standalone
 compiles and validates **26,194,816 bytes**, **zero imports**, **599,745 ms**;
 all **153 callbacks execute, 0/153 pass**, with the same `149:38` / `8564:12`

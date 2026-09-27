@@ -2872,7 +2872,13 @@ function compileClassBodiesInner(
         const fieldIdx = fields.findIndex((field) => field.name === fieldName);
         if (fieldIdx !== -1) {
           fctx.body.push({ op: "local.get", index: selfLocal });
-          compileExpression(ctx, fctx, initializer.expression, fields[fieldIdx]!.type);
+          if (initializer.expression) compileExpression(ctx, fctx, initializer.expression, fields[fieldIdx]!.type);
+          else if (fields[fieldIdx]!.type.kind === "f64") {
+            fctx.body.push({ op: "i64.const", value: UNDEF_F64_BITS }, { op: "f64.reinterpret_i64" });
+          } else {
+            emitUndefined(ctx, fctx);
+            coerceType(ctx, fctx, { kind: "externref" }, fields[fieldIdx]!.type);
+          }
           fctx.body.push({ op: "struct.set", typeIdx: structTypeIdx, fieldIdx });
         }
       }
