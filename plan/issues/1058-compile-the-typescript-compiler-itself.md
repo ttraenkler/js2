@@ -13041,6 +13041,22 @@ and oracle ratchets pass. The legacy reachability audit remains
 preservation-only **6/6 + 6/6**, graph **OPEN**, strict closure **FAIL**;
 this change makes no retirement claim.
 
+Original factory candidate **85990** is now terminal, exit **0**: native
+**3/3**, standalone **3/3**, valid zero-import Wasm, **11,402,685 bytes**,
+**235,488 ms**, O1, unchanged pinned TypeScript source. This verifies the
+original-suite improvement **1/3 → 3/3**, not just the reduced control.
+Production slice fix is signed commit `b0e8b61b96`; the worktree is clean.
+Evidence: `.tmp/factory-slice-receiver-candidate-o1.log`.
+
+Post-fix original-source rechecks have started on `b0e8b61b96`: semver
+**77653**, `.tmp/semver-slice-receiver-o1.log`; incremental parser **1839**,
+`.tmp/parser-slice-receiver-o1.log`. Both request standalone O1 with unchanged
+callback denominators. Full checker **18770** is still live on the earlier
+receiver fix, before the slice change; its latest heartbeat was past 21
+minutes in `checker.ts`. Preserve these handles rather than restarting quiet
+builds. Runtime namespace allocation/publication remains unimplemented; the
+full TypeScript unit population, checker, and self-hosting remain open.
+
 The same eight reduced cases pass **8/8** when only the namespace provider is
 first lowered by TypeScript's standard ES2022/ESNext emitter; original
 namespace syntax fails **0/8**. The combined diagnostic is **8/16**, log
