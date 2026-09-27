@@ -1176,13 +1176,85 @@ credited as a regression flip. An earlier variant exposed a separate existing
 optional self-reference/undefined comparison failure and was not used as
 evidence for this default-count defect.
 
-A fresh original scanner run is live as session `47314`, log
-`.tmp/source-scanner-constructor-defaults.log`. Keep production source frozen
-until it finishes; do not claim scanner standalone readiness from the reduced
-fixture. All five configured source gates and typecheck/lint passed (sessions
+A fresh original scanner run finished as session `47314`, exit 1, log
+`.tmp/source-scanner-constructor-defaults.log`: the constructor error is gone,
+but validation now fails in function 2605,
+`SourceFileObject_computeNamedDeclarations`, where `struct.new[0]` expects
+`ref null 276` and gets an i32 local. Compilation succeeds in **314861 ms**,
+emits **54799018 bytes**, native callbacks pass **984/984**, and standalone
+callbacks remain unexecuted. Do not count the frontier movement as a runtime
+pass. Fresh `compilerCore` passes **11/11 in both lanes** on checkpoint
+`3a49c5bc96` with zero imports, 3580 ms, 1573325 bytes
+(`.tmp/source-compilerCore-constructor-defaults.log`).
+
+All five configured source gates and typecheck/lint passed (sessions
 `78179` and `21824`, terminal exit 0; `.tmp/constructor-default-*.log`). Lint
 reports existing warnings, not errors. The class/optional-field regression
-batch is running as `53914`, `.tmp/constructor-default-regressions.log`.
+batch finished **35/35**, session `53914`, `.tmp/constructor-default-regressions.log`.
+The fixes and prior evidence are committed, signed, and locally verified as
+`3a49c5bc96e18f50b9d6fd7e7a65ed147f9b79f1`; not pushed.
+
+The diagnostic-only compile finished as session `3805`, exit 0, with the same
+options plus WAT selection for `SourceFileObject_computeNamedDeclarations`
+and `SourceFileObject_new`. Its log is
+`.tmp/sourcefile-named-declarations-wat.log`; the updated ignored diagnostic
+script also preserves `.tmp/sourcefile-named-declarations.wasm` for subsequent
+inspection without recompiling. Binaryen cannot parse this saved invalid module
+(empty-stack parse exception at offset 29719212), so do not assume its text
+emitter can replace compiler-selected WAT for the remaining failures.
+
+#### Class method nested-callback hoisting candidate
+
+The WAT shows `SourceFileObject_computeNamedDeclarations` allocating `visit`'s
+closure with captures `bestResult` and `lastNodeEntirelyBeforePosition` from an
+unrelated nested `visit` in `compiler/parser.ts`. Its own callback should capture
+the local declaration map and sibling helpers. Ordinary class methods hoisted
+var/let/const bindings but omitted `hoistFunctionDeclarations` before the
+statement loop, so their first callback-value read reached a stale graph-wide
+name entry before their own declaration had been registered.
+
+`tests/issue-1058-class-nested-function-hoist.test.ts` reproduces the wrong
+callback in both modes (**0/2**, null-pointer runtime failures), then passes
+**2/2** after ordinary class methods use the existing shared declaration-hoisting
+step following local binding setup. The ordered three-step preparation is
+extracted into a small method helper; there is no new capture representation or
+ABI lookup algorithm. Combined nearby class/capture coverage passes **31/31**
+(`.tmp/class-nested-hoist-{before,after,regressions}.log`). All five configured
+source gates pass (`.tmp/class-hoist-{loc,func,coercion,oracle,exports}.log`);
+Initial typecheck (`68492`) caught the helper's overly broad readonly-array
+parameter annotation. It now accepts the actual `ts.NodeArray<ts.Statement>`
+passed at the call site (erased, runtime-identical change). Recheck passed,
+session `20439`, `.tmp/class-hoist-{tsc2,lint2}.log`; all source gates also passed
+with `2`-suffixed logs after that annotation change (session `95846`). Expanded
+instance/static × direct/transitive sibling capture × both-IR coverage passes
+**8/8**, `.tmp/class-hoist-matrix.log`, session `12149`, exit 0.
+
+The fresh original scanner run finished as session `52443`, exit 1, log
+`.tmp/source-scanner-class-hoist.log`: the callback allocation failure is gone;
+the next validation error is function 2943 `doChange`, where
+`extern.convert_any` receives an already-externref `struct.get`. Compilation
+succeeds in **314199 ms**, emits **54828548 bytes**, native passes **984/984**,
+and standalone callbacks remain unexecuted. The saved binary is exactly
+54828548 bytes, matching the runner report.
+An ignored preloader only records the bytes submitted to the original
+`WebAssembly.compile` and forwards the call unchanged, preserving validation
+and runtime semantics. Expected artifact: `.tmp/source-scanner-class-hoist.wasm`.
+Do not claim full scanner success from the reduced callback test.
+
+The ignored `.tmp/inspect-binary-function.mjs` preserves type/import/name
+sections and the selected function body, replacing other bodies with
+`unreachable` solely for disassembly. This lets Binaryen read the selected
+function without encountering unrelated invalid later bodies; the isolated
+module is never executed or counted as a compiler result. Inspection of index
+2943 completes in under a second (`.tmp/doChange-binary-inspect.log`). The
+source is `services/codefixes/fixForgottenThisPropertyAccess.ts`, destructuring
+`{ node, className }: Info`. The physical field `node` is externref but its
+destructuring read adds `extern.convert_any`. Next inspect
+`destructureParamObject`: it chooses the heap type from `paramType` but reads
+field metadata through the name-keyed `ctx.structFields`, rather than the
+physical `ctx.mod.types[structTypeIdx]`. Prove the metadata drift and add a
+regression before replacing that reader; do not merely delete the emitted
+conversion from the binary.
 
 The user requested a main merge and continuation. The former temporary checkout
 was cleaned out, but branch `codex/1058-typescript-standalone` retained the signed

@@ -123,9 +123,21 @@ import {
   emitBoundsCheckedArrayGet,
   ensureLateImport,
   flushLateImportShifts,
+  hoistFunctionDeclarations,
   resolveComputedKeyExpression,
   valTypesMatch,
 } from "./shared.js";
+
+/** Prepare method-local bindings before a callback can resolve by a foreign name. */
+function hoistMethodBodyBindings(
+  ctx: CodegenContext,
+  fctx: FunctionContext,
+  statements: ts.NodeArray<ts.Statement>,
+): void {
+  hoistVarDeclarations(ctx, fctx, statements);
+  hoistLetConstWithTdz(ctx, fctx, statements);
+  hoistFunctionDeclarations(ctx, fctx, statements);
+}
 
 /**
  * (#846h / #1682) Returns true if `body` lexically contains a `super(...)` call
@@ -3592,8 +3604,7 @@ function compileClassBodiesInner(
           if (builders.size > 0) fctx.pendingStringBuilders = builders;
           if (presize.size > 0) fctx.stringBuilderPresize = presize;
         }
-        hoistVarDeclarations(ctx, fctx, member.body.statements);
-        hoistLetConstWithTdz(ctx, fctx, member.body.statements);
+        hoistMethodBodyBindings(ctx, fctx, member.body.statements);
         for (const stmt of member.body.statements) {
           compileStatement(ctx, fctx, stmt);
         }
