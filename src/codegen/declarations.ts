@@ -6,6 +6,7 @@
  * Extracted from codegen/index.ts (#1013).
  */
 import { isTopLevelClassPrototypeWrite } from "./class-proto-toplevel-write.js";
+import { parameterObservesNullishSwitch } from "../frontend/ts/nullish-switch-parameter.js";
 import { widenJsDefaultGuessSlot } from "./js-default-param-type-guess.js";
 import { collectScopeLocalDeclNames } from "./scope-local-decl-names.js";
 import { widenUndefinedDefaultParamSlot } from "./destructuring-params.js";
@@ -1443,11 +1444,12 @@ function lowerParamType(
   // (#3673) An explicit native annotation (`function f(a: i32)`) pins the
   // parameter's Wasm type; see `native-type-annotations.ts`.
   const nativeParam = nativeTypeOfDeclaration(ctx.checker, param);
-  let wasmType: ValType = bindingPatternParamNeedsWiden(param)
-    ? { kind: "externref" }
-    : restBindingOverridesToExternref(param)
+  let wasmType: ValType =
+    bindingPatternParamNeedsWiden(param) || parameterObservesNullishSwitch(param, ctx.oracle)
       ? { kind: "externref" }
-      : (nativeParam ?? resolveWasmType(ctx, paramType));
+      : restBindingOverridesToExternref(param)
+        ? { kind: "externref" }
+        : (nativeParam ?? resolveWasmType(ctx, paramType));
   // A JSDoc/TypeScript optional parameter may be omitted by a caller that is
   // compiled in another source module. Keep the ABI in the undefined-capable
   // externref domain unless an explicit native annotation has opted into a

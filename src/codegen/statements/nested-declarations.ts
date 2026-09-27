@@ -108,6 +108,7 @@ import { objectLiteralForcesHostPath, objectLiteralSpreadTakesHostPath } from ".
 import { genericCallbackResultDeclaration } from "../generic-callback-result.js";
 import { nativeTypeOfDeclaration } from "../native-type-annotations.js";
 import { preserveOptionalDeclarationParameter } from "../optional-declaration-parameter.js";
+import { parameterObservesNullishSwitch } from "../../frontend/ts/nullish-switch-parameter.js";
 import {
   collectDirectEvalActivationBindingNames,
   collectDirectEvalBindingNames,
@@ -228,7 +229,9 @@ function preserveOmittedNestedParameter(
   param: ts.ParameterDeclaration,
   wasmType: ValType,
 ): ValType {
-  return preserveOptionalDeclarationParameter(ctx, param, wasmType);
+  return parameterObservesNullishSwitch(param, ctx.oracle)
+    ? { kind: "externref" }
+    : preserveOptionalDeclarationParameter(ctx, param, wasmType);
 }
 
 function nestedParameterIsTrailingForwardedArgument(

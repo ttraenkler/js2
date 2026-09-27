@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Loopdive GmbH. Licensed under Apache-2.0 WITH LLVM-exception.
 import { ts, forEachChild } from "../ts-api.js";
+import { parameterObservesNullishSwitch } from "../frontend/ts/nullish-switch-parameter.js";
 import { requiresRuntimeModuleIdentity } from "../ir/runtime-module-identity.js";
 import { collectClassInstanceFieldDeclarations } from "../ir/class-instance-initializers.js";
 import { preserveUndefinedReferenceCarrier } from "../ir/undefined-reference-carrier.js";
@@ -2870,7 +2871,8 @@ function resolveIrOverrideParamType(
   classShapes: IrClassShapeLookup,
   resolveImplicitParamType: ReturnType<typeof makeIrImplicitParamTypeResolver>,
 ): IrType {
-  if (parameterNeedsAccessorCarrier(ctx, parameter)) return irDynamic();
+  if (parameterNeedsAccessorCarrier(ctx, parameter) || parameterObservesNullishSwitch(parameter, ctx.oracle))
+    return irDynamic();
   const projected = resolveImplicitParamType(parameter);
   // Keep the established numeric parity-withdrawal path (#3551): lattice f64
   // may still form the speculative IR view, and the patch-time ABI guard then

@@ -712,6 +712,80 @@ Its three new commits change website/compatibility artifacts, not compiler
 source. Checkpoint the current candidate before merging; full TypeScript and
 self-hosting acceptance remain open.
 
+### Upstream merged; nullish parameter follow-up
+
+Signed checkpoint **ba45600413** preserves the tuple/write candidate and its
+known failing controls. Merge **e37978eccd** contains upstream main
+**c2601efa8948c46515c96cad15da92a93c71fbde**, verified by ancestor check; clean
+merge, no compiler-source conflicts. The original workspace remains untouched.
+
+The new shared frontend predicate `parameterObservesNullishSwitch` keeps a
+plain string parameter in the dynamic representation when its own binding is
+observed by a nullish switch case. It is consulted by declaration and closure
+signature construction, nested declarations, and the IR parameter projection.
+This preserves null and undefined before information is lost; no switch-local
+null reinterpretation and no change to global boxing policy. Unresolved binding
+identity widens conservatively; known unrelated same-spelling bindings do not.
+Explicit native annotations are outside this predicate's plain-string scope.
+
+The original semver file now passes **684/692** standalone, versus native
+**692/692**, up from **594/692**. All callbacks register; valid zero-import
+**6,912,288-byte** binary, O1, **161,893 ms**. Eight failures remain, beginning
+with null/undefined property accesses. Log: `.tmp/semver-nullish-param-o1.log`.
+This full run predates the final nested-declaration consult (its reduced
+reproducer required that additional integration); do not relabel it as a
+full validation of the final source.
+
+Focused durable controls pass **32/32**, covering top-level/nested declarations,
+arrows, function expressions, missing captures, explicit undefined/null, matching
+captures and empty strings, both IR settings, native oracle and zero imports.
+Log: `.tmp/nullish-switch-nested-candidate.log`. The first 16-case matrix passed
+**16/16** versus **8/16** with the three initial signature integrations restored
+to merge **e37978eccd** (`.tmp/nullish-switch-durable-baseline.log`). Expanded
+four-file A/B and adjacent controls are recorded separately, not folded into
+the full semver count.
+
+Important IR limitation: `.tmp/nullish-ir-outcomes.log` shows the mixed-type
+switch witness rejected by IR selection (`body-shape-rejected`, with caller
+`call-graph-closure`), then handled by shared lowering. Passing with IR enabled
+does **not** prove an IR body was emitted. The shared frontend/IR parameter
+projection avoids conflicting representation choices, but strict IR closure
+and actual mixed-switch IR support remain open.
+
+Validation process note: the first scratch reduction command omitted its
+explicit test-file filter; configuration merging added the base test list and
+started an unintended broad run (**86140**, `.tmp/semver-nullish-param-candidate.log`).
+The user was asked for permission to stop it; no test process was killed.
+Do not use that run as targeted acceptance or launch another broad run. The
+subsequent scratch command explicitly names `.tmp/semver-range-reduction.test.ts`.
+
+Expanded signature A/B is terminal: candidate **32/32**, baseline **16/32**
+with only `declarations.ts`, `closures.ts`, `index.ts` and
+`statements/nested-declarations.ts` loaded from merge **e37978eccd** through the
+same Vitest standalone/native-oracle harness. The three host optional-parameter
+import failures and one standalone shadowed-undefined failure reproduce on
+that baseline too; they are not counted as passes or attributed to this fix.
+Log: `.tmp/nullish-param-expanded-baseline.log`. The original-regex reduction
+now passes **26/26** after the nested-declaration integration, versus the
+earlier **24/26** (`.tmp/semver-nullish-param-nested-scoped.log`).
+
+The eight remaining original semver failures are callback indices **8–15**:
+`<`, `<=`, `>`, `>= works`, and the corresponding `with prerelease` tests.
+Their reported source location is the returned callback's
+`ts.VersionRange.tryParse(version)` call in `assertVersionRange`, generated
+entry line **1001:31**. This is a diagnostic lead, not proof that parsing itself
+is broken: distinguish captured namespace/static-method receiver access from
+the parse result before changing semver or its assertions.
+
+Final post-integration original semver rerun is terminal: native **692/692**,
+standalone **684/692**, valid zero-import **6,912,288-byte** binary, O1,
+**163,833 ms** (`.tmp/semver-nullish-param-final-o1.log`). Final focused run is
+**44/44**: 32 runtime cases, 5 frontend predicate checks, and 7 existing IR
+tail-switch checks (`.tmp/nullish-param-final-focused.log`). Typecheck,
+format/lint, LOC/function budgets, coercion and oracle gates pass, with no new
+allowance. Dead-export preservation witnesses pass, but its strict modeled
+graph remains **OPEN/FAIL**; do not call that strict closure.
+
 ### Unfinished required-field checkpoint before upstream sync
 
 Follow-up: native-oracle recursive-field controls show an actual wrong value,
