@@ -267,6 +267,53 @@ oracle-ratchet-allow:
 ---
 # #1058 — Compile the TypeScript compiler to Wasm (self-hosting stress test)
 
+## Main synchronization and incremental-parser trace — 2026-09-27
+
+Merged authoritative `loopdive/js2` main `349eab3bf5` into
+`codex/1058-typescript-standalone` as signed merge `52af6cfb3e`.
+All 15 incoming commits merged without conflicts; no compiler-source files
+changed on the incoming side. Post-merge focused regressions pass **40/40**
+across module/global bindings, initialization error rendering, nominal-array
+descriptors and own-field write coherence. Typecheck passes.
+Artifacts: `.tmp/main-349eab3-postmerge-tests.log` and
+`.tmp/main-349eab3-postmerge-typecheck.log`.
+
+The initial implicit-read-only O1 run below has now terminated at its
+**1,200,000 ms execution timeout** (`.tmp/incremental-source-binding-o1.log`).
+It is not a measurement of the final binding fix and supplies no callback
+pass count. A raw diagnostic build of `7fea568309` initializes and registers
+**153 callbacks**, then stalls at index **31**, “Test generic invocation to
+contextual shift”. Callbacks 0–30 returned, but this driver deferred their
+results until the end, so their pass/fail counts are not available.
+Artifact `.tmp/incremental-raw-7fea568309.wasm` has seven throwing diagnostic
+Node imports; it is **not** zero-import standalone acceptance.
+
+Do not attribute this stall to string comparison: its inspected loops
+terminate normally. The first one-million-event fuel bound also stops the
+callback-0 control, so its stack is not causal evidence. A subsequent
+30-second bounded trace repeatedly visits `parseCallExpressionRest`,
+`parseArgumentList`, error recovery and call-node construction
+(`.tmp/incremental-fuel-31-timed.log`). A second bounded trace observes
+unchanging position **22**, token **1 (end-of-file)** throughout the repeated
+call parsing (`.tmp/incremental-fuel-31-position.log`). Generated
+`parseCallExpressionRest` has no reset of local 2 for the loop's bare
+`let typeArguments`; the source requires a fresh undefined binding each
+iteration. A diagnostic reset experiment completed:
+`.tmp/incremental-fuel.mts 31 --reset`, log
+`.tmp/incremental-fuel-31-reset.log`. Exactly one loop reset was inserted;
+callback 31 no longer exhausts the bound and reaches original
+`assertInvariantsWorker` / `isNodeOrArray`, then throws a guest exception
+(904,558 instrumented events). This attributes the stall to the missing reset,
+but is **not a passing callback**. Next: add a bounded reduction, prefer shared
+IR initialization ownership, and decode the subsequent invariant failure.
+All Binaryen instrumentation is diagnostic-only and remains in `.tmp/`.
+The original source suite is not yet admitted as a passing standalone suite.
+Post-merge ratchet checks exited successfully; reachability remains only
+**preservation-only PASS, strict modeled closure FAIL/OPEN**, not proof of
+complete closure (`.tmp/main-349eab3-postmerge-gates.log`).
+Earlier unbounded diagnostic processes were not killed; user permission to
+stop stalled runs remains outstanding. Check live processes before reruns.
+
 ## Remaining scanner errors: descriptor-aware nominal-array rollback — 2026-09-27
 
 Follow-up at `ccca001c45`: incremental-parser O1 compiles and validates
@@ -304,12 +351,12 @@ Uncaught guest exception text is now decoded through existing bounded numeric
 exports, including initialization errors; unavailable/invalid renderers retain
 the original failure. No host imports or assertion suppression are introduced.
 
-Original-suite run **81151** (`.tmp/incremental-source-binding-o1.log`) is
-still live: it loaded the **initial implicit-read-only candidate**, before
-the later shadow read/call guard and error-renderer edits. Last process check:
-worker **74962**, elapsed 8m11s, ~198% CPU. Resume it; do not restart it or
-attribute its result to the final candidate. After it terminates, run the
-same original suite again with the final guard and improved diagnostics.
+Original-suite run **81151** (`.tmp/incremental-source-binding-o1.log`)
+loaded the **initial implicit-read-only candidate**, before the later shadow
+read/call guard and error-renderer edits. It subsequently terminated at its
+execution timeout; see the synchronization entry above. Do not attribute
+its result to the final candidate. The final guard still needs a completed
+zero-import original-suite run with improved diagnostics.
 
 At `1bb2797b9b`, a six-context original-source probe shows that speculative
 diagnostics are retained, not merely missed by `find`: array context retains
