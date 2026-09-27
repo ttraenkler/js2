@@ -267,6 +267,47 @@ oracle-ratchet-allow:
 ---
 # #1058 — Compile the TypeScript compiler to Wasm (self-hosting stress test)
 
+## Class-backed interface refinement continuation — 2026-09-27
+
+Frozen scanner session `55011` completed exit 1 on `61d5930e0a` compiler
+sources: native **984/984**, Wasm **0/984**, valid standalone O1 output,
+**zero imports**, 30,374,920 bytes, 571,009 ms. Both first errors are the
+explicit guest null-property exception at `1276:9`; this is not merely a raw
+diagnostic anymore. Log: `.tmp/source-scanner-heritage61d593-o1.log`.
+
+Fresh raw WAT `.tmp/scanner-heritage61d593-token-wat.log` shows
+`createBaseTokenNode` and `createBaseToken` return externref, but
+`createRegularExpressionLiteral` guard-casts the result to its closed literal
+interface struct and substitutes null. The service class implements Node/Token,
+not every interface used to refine a token after allocation.
+
+Native-oracle reduction `.tmp/service-token-refinement.test.ts` crosses IR
+on/off, direct/generic mapped return and explicit literal implementation.
+Baseline with class `implements Node` versus `implements Node, Literal` is
+**4/8**: only the explicit literal implementations pass. The shared IR heritage
+index now closes named interface inheritance in both directions: base views and
+derived refinements of a class-backed interface preserve the dynamic instance
+carrier. The same reduction passes **8/8**; no new backend lowering or array
+materialization is added. Logs `.tmp/service-token-refinement-direct-control.log`
+and `.tmp/service-token-refinement-heritage.log`.
+
+Permanent linked native/Wasm tests additionally cover a class implementing only
+the derived interface, method calls, alias identity and field mutation: **12/12**.
+Source-index controls cover transitive inheritance, unrelated components,
+cycles and ambient exclusions. Initial focused/adjacent run is **42/43**; the
+sole failure is the same existing Greeter-only IR field-read/parity error
+previously measured on the baseline, not a newly attributed regression.
+Typecheck, format/lint and all five architecture gates pass against main
+`5ad53338fe`; no allowances increased. Reachability remains preservation-only
+PASS, strict closure OPEN. Full source confirmation is pending: scanner
+session `41973`, `.tmp/source-scanner-interface-refinement-o1.log`; factory
+session `91395`, `.tmp/source-factory-interface-refinement.log`. Preserve these
+runs and keep compiler sources frozen until their results are read. Final
+focused integration run passes **83/83** across seven files
+(`.tmp/interface-refinement-final.log`), including the new inheritance controls.
+Factory session `91395` then completed successfully: native and Wasm **3/3**,
+zero imports, 14,308,828 bytes, 114,741 ms. Only the scanner run remains live.
+
 ## Latest main sync and continuation — 2026-09-27
 
 Merged upstream main `5ad53338fe27735305bf656c931df7f46f785e1d` into

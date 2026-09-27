@@ -41,6 +41,9 @@ it("selects interface carriers from source evidence before class registration", 
     "input.ts",
     `
    interface Node { getKind(): number; }
+   interface Literal extends Node { text: string; }
+   interface RegExpLiteral extends Literal { kind: 14; }
+   interface Unrelated { text: string; }
    class Token implements Node { getKind() { return 80; } }
    function nested() { class Local implements Nested {} return Local; }
    const Value = class implements Expression {};
@@ -61,9 +64,11 @@ it("selects interface carriers from source evidence before class registration", 
   );
   expect([...collectClassImplementedInterfaceNames([source, declarationFile])].sort()).toEqual([
     "Expression",
+    "Literal",
     "Namespaced",
     "Nested",
     "Node",
+    "RegExpLiteral",
   ]);
   const ctx = {
     callableSourceFiles: [source, declarationFile],
@@ -80,4 +85,24 @@ it("does not memoize incomplete registry answers when no source population is av
   expect(interfaceHasClassImplementer(ctx, "I")).toBe(false);
   ctx.classDeclarationMap.set("C", source.statements[0] as ts.ClassDeclaration);
   expect(interfaceHasClassImplementer(ctx, "I")).toBe(true);
+});
+
+it("closes class-backed interface inheritance without admitting unrelated or ambient edges", () => {
+  const source = ts.createSourceFile(
+    "inheritance.ts",
+    `interface Base {} interface Derived extends Base {} interface Sibling extends Base {}
+     interface CycleA extends CycleB {} interface CycleB extends CycleA {}
+     interface Unrelated {} interface PureDerived extends Unrelated {}
+     declare namespace Ambient { interface Hidden extends Base {} }
+     class C implements Derived {} class Cyclic implements CycleA {}`,
+    ts.ScriptTarget.Latest,
+    true,
+  );
+  expect([...collectClassImplementedInterfaceNames([source])].sort()).toEqual([
+    "Base",
+    "CycleA",
+    "CycleB",
+    "Derived",
+    "Sibling",
+  ]);
 });
