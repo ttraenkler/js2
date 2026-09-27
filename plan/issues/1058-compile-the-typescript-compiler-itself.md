@@ -492,6 +492,33 @@ native remains 14/14. The binary is valid with zero imports (83,943 ms,
 is unchanged. Next: resolve the generic identity callback representation and
 rerun the original suite; no claim that all TypeScript units pass.
 
+Generic callback continuation after `7cf98cb97e`: the minimal `identity<T>`
+callback fails only when no unrelated direct call specializes its ABI. With a
+pure callback use, the implementation returns externref and the declared
+callback returns a native string; candidate admission lacks that inverse bridge
+and omits the live function signature. A shared Wasm-model instruction plan now
+preserves native string references across erased callable slots with an exact
+cast, not ToString coercion. The small reproducer now returns 11 instead of
+throwing. Regression tests deliberately omit direct generic calls and cover
+empty/Unicode strings and the boolean/function selection used by paths.
+Original paths remains **13/14**, but now reaches assertion 4 in
+`getPathRelativeTo`: `/a` to `/` produces `""` instead of `".."`, replacing the
+previous callback exception. All original assertions remain; compile is valid,
+zero imports, 84,421 ms and 7,660,787 bytes. This is a removed blocker, not an
+additional passing upstream callback. `.tmp/source-paths-string-bridge.log`
+records the result. A control of the comparison loops, slice, push and spread
+alone passes (`.tmp/relative-components.mts`, result 21 and spread length 2),
+so trace original path helper outputs rather than assuming spread is broken.
+Focused tests pass **15/16**; the sole expected-throw assertion in multi-file
+generic callback registration fails identically in a detached exact pre-fix
+`7cf98cb97e` checkout at `/private/tmp/ts2wasm-ts5-string-control-7cf9`
+(**8/9**, `.tmp/generic-control.log`). No claim that the stale refusal test is
+fixed by this patch. The final new/string plus overloaded-property tests pass
+**7/7**, both compiler modes. Source typecheck and size checks pass. The shared
+model leaf is registered and depends only on model instruction types; the full
+boundary gate still reports older unclassified modules and IR object-layout
+paths, so publication architecture remains incomplete.
+
 The user requested a main merge and continuation. The former temporary checkout
 was cleaned out, but branch `codex/1058-typescript-standalone` retained the signed
 handoff at `efd9aca79c5aba4bfd6670847be925a027ed219f`. Work now lives in

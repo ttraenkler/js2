@@ -31,6 +31,7 @@ import {
 } from "./callable-rest-bridge.js"; // (#5334)
 import { isBooleanType, isPromiseType, isStringType, isVoidType } from "../../checker/type-mapper.js";
 import type { Instr, ValType } from "../../ir/types.js";
+import { nativeStringAbiBridge } from "../../wasm/model/native-string-abi.js";
 import { resolveArrayInfo } from "../array-methods.js";
 import { ensureAnyHelpers, ensureAnyToExternHelper } from "../any-helpers.js";
 import { compileArrowAsClosure, getClosureFuncSelfTypeIdx, getOrCreateFuncRefWrapperTypes } from "../closures.js";
@@ -2437,6 +2438,8 @@ function compileBoundIdentifierCall(
             allowGeneralRefExport: boolean,
           ): Instr[] | null => {
             if (scalarAbiTypesMatch(from, to)) return [];
+            const stringBridge = nativeStringAbiBridge(from, to, [ctx.anyStrTypeIdx, ctx.nativeStrTypeIdx]);
+            if (stringBridge !== null) return stringBridge;
             // A predicate may implement a boolean|string callback result.
             // Its branded i32 must enter the tagged union as a Boolean.
             if (
