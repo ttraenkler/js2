@@ -14753,4 +14753,33 @@ include the harness's preceding `Error.stackTraceLimit` mutation. Full checker
 and regex recovery runs remain in progress on their recorded pre-merge source
 snapshots; their results must not be attributed to the merged tree.
 
+The pre-merge checker run **10792** subsequently completed (exit 1):
+**1,408,661 ms**, compilation succeeds, **58,891,145 bytes**, validates, zero
+imports, but **0/3** original runtime cases match. All three throw
+`TypeError: Cannot access property on null or undefined at 9316:65`.
+The location has not yet been mapped to its owning source file. Log:
+`.tmp/checker-parser-fixed-diagnostic.log`; preserved artifact prefix:
+`.tmp/checker-parser-fixed`. This is evidence for `189abffe3d`, not the new
+main merge. Compiler/checker acceptance remains incomplete.
+
+The pre-merge regex recovery run **28999** completed with exit 0 on
+`4a22206317`: original upstream **984/984** callbacks pass, **984** true
+status rows, no nonempty errors. Native callback count **984**. Compilation
+took **434,470 ms**, produced **37,111,979 bytes**, validates, requested/actual
+target standalone, and both module/linked import lists are empty (total 0).
+Log: `.tmp/regexp-recovery-parser-fixed-units.log`. This is not a post-merge
+measurement and does not expand the 13/232 registered source-entry coverage.
+
+Merge integration preserves upstream descriptor-specific closure admission and
+capture-layout factories alongside this branch's physical capture keys and
+inferred function-declaration closures. `fixedClosureParameters` now admits
+function declarations under the same existing parameter-shape checks.
+Flattened the nested annotated-variable assignability condition to stay below
+the function-size threshold; no new allowance. Typecheck and function-budget
+checks pass. Coercion and oracle checks pass against fetched main. Dead-export
+preservation remains **6/6 full + 6/6 cut**, graph OPEN, strict modeled closure
+FAIL, retirement/deletion NOT CERTIFIED. Focused merged tests are still active
+in **28353** (`.tmp/main-3eb7-focused.log`) and final IR controls in **4758**
+(`.tmp/main-3eb7-ir-final.log`); do not treat unfinished runs as passes.
+
 "js2wasm compiles 60% of test262" is a percentage. "js2wasm compiles the TypeScript compiler itself" is a story. Landing even Tier 3 is the single strongest artifact for conversations with potential maintainers or funders — it demonstrates the compiler has enough depth to handle production TypeScript, not just hand-picked benchmark inputs. The gap between "a toy subset compiles" and "the real compiler compiles" is exactly what separates a proof-of-concept from a usable tool.
