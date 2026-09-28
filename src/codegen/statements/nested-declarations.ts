@@ -40,7 +40,7 @@ import { recordLiftedCaptureBox, recordLiftedCaptureSlots } from "../closures/ca
 import { recordEagerCaptureBox } from "./eager-capture-box.js";
 import {
   collectOwnerBindingsWrittenAfterDeclaration,
-  scopeVariableDeclarations,
+  findScopedVariableDeclaration,
 } from "../closures/declaration-write-analysis.js";
 import { popBody, pushBody } from "../context/bodies.js";
 import { recordNestedFunctionBody } from "../context/body-route-audit.js";
@@ -1596,23 +1596,6 @@ function compileNestedFunctionDeclarationInScope(
   }
   const writtenAfterDeclaration = collectOwnerBindingsWrittenAfterDeclaration(stmt);
 
-  // (#5148 checkpoint) Resolve the VariableDeclaration a captured NAME refers
-  // to, scanning outward from the nested declaration through its enclosing
-  // function-like scopes (stopping at the first hit — inner shadows win).
-  // Purely syntactic on purpose: this runs during hoisting, when the checker
-  // symbol for the not-yet-compiled binding is the only alternative and the
-  // oracle has no identifier NODE to resolve from.
-  const findScopedVariableDeclaration = (from: ts.Node, name: string): ts.VariableDeclaration | undefined => {
-    let scope: ts.Node | undefined = from.parent;
-    while (scope !== undefined) {
-      const found = scopeVariableDeclarations(scope).get(name);
-      if (found) return found;
-      if (ts.isFunctionLike(scope) || ts.isSourceFile(scope)) return undefined;
-      scope = scope.parent;
-    }
-    return undefined;
-  };
-
   let captures: NestedFunctionCapturePlanEntry[] = [];
   // A phase-0 pre-registration is the ABI earlier call sites already emit;
   // keep it across an intermediate promotion (see collectPromotedPreRegisteredSlots).
@@ -1657,7 +1640,9 @@ function compileNestedFunctionDeclarationInScope(
       localIdx < fctx.params.length
         ? fctx.params[localIdx]!.type
         : (fctx.locals[localIdx - fctx.params.length]?.type ?? { kind: "f64" });
-    const capturedDecl = findScopedVariableDeclaration(stmt, name);
+    const capturedBinding = findScopedVariableDeclaration(stmt, name);
+    // A pattern's initializer creates the container, not each leaf's value.
+    const capturedDecl = capturedBinding && ts.isIdentifier(capturedBinding.name) ? capturedBinding : undefined;
     // (#5148 checkpoint) Function declarations hoist, so captures are
     // collected BEFORE the captured binding's declaration statement compiles —
     // and the pre-allocated local can still carry the closed anonymous-shape
@@ -1726,7 +1711,7 @@ function compileNestedFunctionDeclarationInScope(
     // the destructure-assign path to be box-aware. Both are out of scope
     // for this PR; the test is marked `.todo` until that follow-up lands.
     const isMutable =
-      (hasTdzFlag && sameBlockLexicalCapture(capturedDecl, stmt)) ||
+      (hasTdzFlag && sameBlockLexicalCapture(capturedBinding, stmt)) ||
       writtenInBody.has(name) ||
       mutatedInSiblingScope.has(name) ||
       writtenAfterDeclaration.has(name) ||

@@ -53,12 +53,25 @@ export function collectOwnerBindingsWrittenAfterDeclaration(stmt: ts.FunctionDec
 
 const scopeVariableDeclarationCache = new WeakMap<ts.Node, Map<string, ts.VariableDeclaration>>();
 
+/** Resolve the nearest binding without crossing a function boundary. */
+export function findScopedVariableDeclaration(from: ts.Node, name: string): ts.VariableDeclaration | undefined {
+  let scope: ts.Node | undefined = from.parent;
+  while (scope !== undefined) {
+    const found = scopeVariableDeclarations(scope).get(name);
+    if (found) return found;
+    if (ts.isFunctionLike(scope) || ts.isSourceFile(scope)) return undefined;
+    scope = scope.parent;
+  }
+  return undefined;
+}
+
 /**
  * (#1058) First `VariableDeclaration` per identifier name in `scope`, in
  * pre-order, without entering nested functions or classes. Built once per
  * scope: scanning the enclosing body again for every capture of every nested
  * function made TypeScript's `createTypeChecker` (about 380 captures, 2,000
  * nested functions) cubic to compile.
+ * Pattern leaves belong only to their declaring scope, not enclosing scans.
  */
 export function scopeVariableDeclarations(scope: ts.Node): Map<string, ts.VariableDeclaration> {
   let names = scopeVariableDeclarationCache.get(scope);
@@ -66,8 +79,19 @@ export function scopeVariableDeclarations(scope: ts.Node): Map<string, ts.Variab
   const found = new Map<string, ts.VariableDeclaration>();
   const scan = (node: ts.Node): void => {
     if (node !== scope && (ts.isFunctionLike(node) || ts.isClassLike(node))) return;
-    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && !found.has(node.name.text)) {
-      found.set(node.name.text, node);
+    if (
+      ts.isVariableDeclaration(node) &&
+      (ts.isIdentifier(node.name) ||
+        (ts.isVariableStatement(node.parent.parent) && node.parent.parent.parent === scope))
+    ) {
+      const addBinding = (name: ts.BindingName): void => {
+        if (ts.isIdentifier(name)) {
+          if (!found.has(name.text)) found.set(name.text, node);
+        } else {
+          for (const element of name.elements) if (ts.isBindingElement(element)) addBinding(element.name);
+        }
+      };
+      addBinding(node.name);
     }
     ts.forEachChild(node, scan);
   };

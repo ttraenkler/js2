@@ -15370,4 +15370,178 @@ Logs: `.tmp/transported-callback-baseline.log`,
 `.tmp/transported-callback-lifetime-controls.log`,
 `.tmp/transported-callback-gates.log`.
 
+After signed commit `f6be8231a2`, scratch WAT comparison **59583** confirms
+the destructured residual (**1/2 selected checks pass**, four unselected):
+`.tmp/transform-capture-destructure-true.wat` seeds `__captured_bias` from
+uninitialized local 1, then destructures into a different local 12 without
+updating that global. The passing member-initializer counterpart
+`.tmp/transform-capture-member-true.wat` uses an activation-owned `__boxed_bias`
+cell instead. `sameBlockLexicalCapture` currently admits only identifier
+variable declarations, excluding binding patterns; that is a candidate planning
+boundary to investigate, not yet a proven safe extension. Typed-struct and
+externref destructuring stores differ; verify cell writes and shadowing before
+changing admission. Log `.tmp/transform-destructure-wat.log`; no production
+change for this residual yet.
+
+### 2026-09-28 — full checker reaches invalid-Wasm validation
+
+Full checker **47834** on `0c16c43373` terminated exit 1 after **1449053 ms**.
+The compiler reports success and emits **60,233,733 bytes**, but Wasm validation
+FAILS: `createNodeBuilder` function **8311**, offset **25467412**, constructs a
+struct whose field 7 expects `(ref null 1773)` but receives an `i32` local.
+Nearest source-map location is checker.ts **6234:9**. All **0/3** original
+oracles fail during module instantiation; no checker invocation executes.
+Actual imports are unverified because module construction fails. Complete
+compiler diagnostics have no errors; that does not override Wasm validation.
+Artifacts `.tmp/checker-excluded-capture.wasm`, `.wasm.map`, `-metadata.json`,
+`-errors.json`; log `.tmp/checker-excluded-capture-diagnostic.log`. This snapshot
+predates callback guard `f6be8231a2`. Inspect the invalid construction before
+another full run, without weakening validation or modifying upstream inputs.
+
+Isolated-body disassembly (`.tmp/checker-excluded-nodebuilder.wat`, session
+**62619** exit 0; NEVER execute the diagnostic module with other bodies stubbed)
+finds two constructions forwarding raw `strictNullChecks` param **60** into
+a cell field: `__fn_tramp_isStringNamed_3107` and
+`__fn_tramp_symbolToDeclarations_3165`. Stack-balance staging locals **417**
+and **803** retain `i32`; the existing canonical boolean cell is local **395**,
+type **1773**. The imported-function section parser records zero imports, but
+the original module still does not validate. A simple nested-function source
+matrix **3258** passes **6/6** already; it is a control, not a reproduction.
+
+Read-only full checker experiment **13636** runs against `f6be8231a2` plus
+`.tmp/checker-resolved-box-loader.mjs`: in the immutable-box admission check,
+compare the slot actually selected by `captureSourceSlot`, rather than the
+declaring-frame `outerLocalIdx` that selection may override. The hypothesis is
+that the recorded slot happens to be a cell while the actual selected lifted
+slot is raw; existing admission then incorrectly declines the live cell.
+Exact source-frame logs `NODEBUILDER-BOX-SOURCE` will confirm or reject this.
+Original three oracles unchanged; artifacts use `.tmp/checker-resolved-box*`.
+No production change yet. This full comparison includes the already-committed
+callback fix too; do not attribute its entire delta to this experiment alone.
+Direct emitter diagnostics **30879** baseline and **67938** experiment use
+`.tmp/checker-box-emitter.test.ts` with a read-only export of the private
+materializer. They are pending and are not standalone execution evidence.
+
+Direct emitter baseline **30879** terminated exit 1: **1/2** passes; the
+transported-slot case emits raw local 0 instead of cell local 1. Experiment
+**67938** exits 0, **2/2** passes, including the owner-frame control. This
+supports the source-selection hypothesis but uses a minimal frame fixture,
+not a source-program reproduction. The real full checker experiment **13636**
+is still running. No production emitter edit has been made.
+
+### 2026-09-28 — resume the original JSON recovery unit harness
+
+The old transformer compile blocker has a validated isolated build after
+`f6be8231a2`, so rerun original `jsonParserRecovery` with its native denominator
+**5**, real baseline-generation calls, and unchanged source callbacks.
+Runner `.tmp/json-virtual-transported-run.mjs` uses the existing source-unit
+runner with a one-hour timeout and a fresh report destination
+`.tmp/json-virtual-transported-result.json`; log
+`.tmp/json-virtual-transported-units.log`. This production-source run does NOT
+include the read-only checker capture-box experiment. The 232-entry upstream
+unit inventory remains the acceptance scope, not this five-callback milestone.
+
+JSON recovery session **43930** is live. Read-only destructuring-admission
+experiment **13993**, `.tmp/transform-pattern-cells.log`, adds binding-pattern
+names to the existing declaration scan and admits them into same-function-body
+lexical cells. It deliberately changes neither production source nor pattern
+stores; use its result to identify the next missing store path, not to claim
+pattern support. Configuration `.tmp/transform-pattern-cells.config.mts`;
+the six-case native/standalone matrix is `.tmp/transform-capture.test.ts`.
+
+Admission-only **13993** exits 1, **4/6** pass; destructured cases now null-trap
+instead of returning 304. Typed object-pattern stores currently coerce and
+write the extracted value into the cell slot itself. Read-only experiment
+`PATTERN_CELL_STORE=1` redirects that store to a value-typed temporary, then
+writes the value through the existing cell. **76002** exits 0, **6/6** pass
+(`.tmp/transform-pattern-cell-store.log`). Production is unchanged. Expanded
+default/nested/array coverage is running in
+`.tmp/transform-pattern-cell-store-expanded.log`; this admission change must
+not land while other pattern-store paths remain unsafe.
+
+Expanded experiment **23632** exits 0, **12/12** pass: both IR settings for
+object destructuring, member/parameter controls, an exercised default, nested
+object pattern, and array-literal pattern. The array literal may use a different
+store path from a dynamic array parameter, so additional array-parameter,
+opaque-object and closure-created-before-initialization cases are running in
+`.tmp/transform-pattern-cell-store-dynamic.log`. Do not extrapolate the 12
+passing cases to all binding-pattern stores.
+
+Dynamic/lifetime matrix **34364** exits 0, **18/18** pass with the read-only
+admission + typed-object-store experiment, including dynamic array parameters,
+opaque objects, and creation before initialization (invocation after it).
+These are native-oracle checks in both IR settings; production remains
+unchanged. Next implementation should share capture-cell store planning with
+the existing externref-object pattern path rather than duplicating its
+redirect/flush sequence. Preserve per-element initialization order, missing
+properties/defaults, shadowing and abrupt-completion semantics with controls.
+`scopeVariableDeclarations` and `sameBlockLexicalCapture` each have one direct
+consumer in nested-declaration capture planning; the cache is a per-scope
+WeakMap populated by that scanner. Expanding pattern names also affects the
+other uses of `capturedDecl` inside that consumer, so review them before landing.
+
+### 2026-09-28 — production pattern-cell candidate, not committed yet
+
+Implemented shared `pattern-capture-store.ts` planning/flush helpers, reusing
+the existing externref-object store's nullable-cell behavior. Typed object
+properties and absent/defaulted properties now store through the same cells.
+Pattern leaf names participate in function-body capture lifetime planning.
+Extracted the unchanged nearest-scope lookup into declaration-write analysis;
+other initializer-based inference still sees identifier declarations only,
+because a pattern initializer produces its container, not each captured leaf.
+No source-growth grant added; the destructuring driver shrinks.
+
+Initial production scratch **21200** passes **18/18**. Tracked candidate
+**12575** passes **38/38** across pattern cells and deferred lexical controls.
+Baseline **88090** at `f6be8231a2` passes **8/22**, fails **14/22** of the first
+tracked pattern tests. Typecheck **66412** exits 0. Expanded tracked run
+**75256** passes **26/28**: captured object-rest bindings expose another direct
+cell overwrite and illegal cast. Routed that rest store through the shared
+helper too; `.tmp/pattern-cells-rest-fixed.log` is running. Do not commit until
+the expanded suite and fresh gates pass. Long checker/JSON runs still use
+their earlier snapshots, not these uncommitted pattern changes.
+
+Rest-store correction **20715** passes **28/28**. Final baseline **49610** at
+`f6be8231a2` passes **12/28**, fails **16/28**; object-rest and absent-leaf
+controls already passed before, while the new abrupt-completion case failed.
+The initial wider controls **11985** pass **88/91**; the three failures are
+all `issue-1553e.test.ts` explicit-undefined array defaults. Baseline-only
+**27957** reproduces the same three failures (**9/12** pass), so they are
+pre-existing on `f6be8231a2`, not a newly introduced pattern-cell regression.
+
+Initial gates **61301** stopped at function budget: typed object destructuring
+was one line over its existing allowance. Shared store finalization now also
+performs optional per-leaf TDZ initialization, removing that duplicate driver
+step without a new grant. Fresh combined **52262** and gates **52468** run
+against that final candidate; logs `.tmp/pattern-cells-final-controls.log` and
+`.tmp/pattern-cells-final-gates.log`. Keep the three existing array-default
+failures visible; do not label the broader suite all-green.
+
+Combined **52262** completed **116 pass / 3 fail**, all three the verified
+pre-existing explicit-undefined cases; gates **52468** exit 0 with no new
+grants and the usual preservation-only dead-export caveats. A subsequent
+scope-order audit found a NEW candidate regression before commit: scratch
+**69879** fails **0/2**, because an earlier inner-block pattern leaf wins the
+enclosing scope's first-name cache and hides a later body lexical binding.
+Restricted NEW pattern-name entries to their declaring lexical scope (legacy
+identifier behavior unchanged). Added both IR checks to the tracked suite;
+candidate **96906**, baseline **18542**, logs `.tmp/pattern-cells-scoped.log`
+and `.tmp/pattern-cells-scoped-baseline.log`, are pending. The last gates
+predate this scope fix and must be rerun before committing.
+
+Scoped candidate **96906** passes **30/30**; baseline **18542** passes
+**14/30**, fails **16/30**. Combined final **88782** passes **118/121**, with
+only the same three explicit-undefined failures in `issue-1553e.test.ts`.
+Scratch reference-carrier controls **87371** pass **6/6** (object, function,
+string leaves captured before initialization; native and import-free standalone,
+both IR settings). Logs `.tmp/pattern-cells-scoped-controls.log` and
+`.tmp/pattern-reference-captures.log`. Final scoped gates **69724** are still
+running; production sources are held unchanged while dead-export children run.
+
+Scoped gates **69724** terminated exit 0: typecheck, formatting/lint,
+LOC/function, coercion and oracle checks pass without new grants. Dead-export
+preservation **6/6 full + 6/6 cut** passes; graph OPEN, strict modeled closure
+FAIL, moved-runtime incomplete and retirement NOT CERTIFIED remain unchanged.
+Issue-format/schema check **21405** also exited 0 before this terminal note.
+
 "js2wasm compiles 60% of test262" is a percentage. "js2wasm compiles the TypeScript compiler itself" is a story. Landing even Tier 3 is the single strongest artifact for conversations with potential maintainers or funders — it demonstrates the compiler has enough depth to handle production TypeScript, not just hand-picked benchmark inputs. The gap between "a toy subset compiles" and "the real compiler compiles" is exactly what separates a proof-of-concept from a usable tool.

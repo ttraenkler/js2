@@ -10,7 +10,6 @@ export function sameBlockLexicalCapture(
     ts.isBlock(capturingDeclaration.parent) &&
     ts.isFunctionLike(capturingDeclaration.parent.parent) &&
     binding !== undefined &&
-    ts.isIdentifier(binding.name) &&
     ts.isVariableDeclarationList(binding.parent) &&
     (binding.parent.flags & ts.NodeFlags.BlockScoped) !== 0 &&
     ts.isVariableStatement(binding.parent.parent) &&

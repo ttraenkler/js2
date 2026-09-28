@@ -6,6 +6,7 @@
  */
 import { ts } from "../ts-api.js";
 import { paramTypeIsJsDefaultGuess } from "./js-default-param-type-guess.js";
+import { finishPatternCaptureStore, planPatternCaptureStore } from "./pattern-capture-store.js";
 import type { Instr, ValType } from "../ir/types.js";
 import { prepareDynamicArrayBindingLocals } from "./dynamic-array-binding-locals.js";
 import { popBody, pushBody } from "./context/bodies.js";
@@ -883,6 +884,8 @@ export function destructureParamObjectExternref(
       if (restIdx === undefined) {
         restIdx = allocLocal(fctx, restName, { kind: "externref" });
       }
+      const captureStore = planPatternCaptureStore(fctx, restName, restIdx);
+      restIdx = captureStore.valueLocal;
       // (#3223/#4397) Native semantic providers use the Wasm-defined
       // __extern_rest_object instead of the legacy host semantic import.
       // The native helper takes an EXCLUSION OBJECT (own keys = excluded
@@ -902,6 +905,7 @@ export function destructureParamObjectExternref(
         );
         getIdx = ctx.funcMap.get("__extern_get");
         if (!ok) continue;
+        finishPatternCaptureStore(fctx, captureStore);
         if (isDecl) emitLocalTdzInit(fctx, restName);
         continue;
       }
@@ -925,6 +929,7 @@ export function destructureParamObjectExternref(
       for (const instr of stringConstantExternrefInstrs(ctx, excludedStr)) fctx.body.push(instr);
       fctx.body.push({ op: "call", funcIdx: restObjIdx });
       fctx.body.push({ op: "local.set", index: restIdx });
+      finishPatternCaptureStore(fctx, captureStore);
       if (isDecl) emitLocalTdzInit(fctx, restName);
       continue;
     }
@@ -998,20 +1003,8 @@ export function destructureParamObjectExternref(
       if (localIdx === undefined) {
         localIdx = allocLocal(fctx, localName, elemType);
       }
-      // (#4618) A boxed capture's slot IS the ref cell (a spilled async-frame
-      // binding referenced by a hoisted fn-decl). A plain local.set here would
-      // coerce the extracted VALUE to the cell type — any.convert_extern +
-      // ref.cast on a symbol/object value is a guaranteed trap. Redirect the
-      // element's stores to a scratch local typed as the cell's VALUE type,
-      // then write the result through the cell (the #3396/#1177
-      // boxedForInitStore convention) so captures observe the binding.
-      const boxedDstrCell = fctx.boxedCaptures?.get(localName);
-      const boxedDstrCellLocalIdx = boxedDstrCell !== undefined ? fctx.localMap.get(localName) : undefined;
-      const boxedDstrRedirected =
-        boxedDstrCell !== undefined && boxedDstrCellLocalIdx !== undefined && localIdx === boxedDstrCellLocalIdx;
-      if (boxedDstrRedirected) {
-        localIdx = allocLocal(fctx, `__box_dstr_${localName}_${fctx.locals.length}`, boxedDstrCell.valType);
-      }
+      const captureStore = planPatternCaptureStore(fctx, localName, localIdx);
+      localIdx = captureStore.valueLocal;
       const localType = getLocalType(fctx, localIdx);
 
       if (element.initializer) {
@@ -1089,21 +1082,7 @@ export function destructureParamObjectExternref(
         fctx.body.push({ op: "local.set", index: localIdx });
         if (isDecl) emitLocalTdzInit(fctx, localName);
       }
-      // (#4618) Flush the redirected scratch value through the ref cell.
-      if (boxedDstrRedirected) {
-        fctx.body.push({ op: "local.get", index: boxedDstrCellLocalIdx! });
-        fctx.body.push({ op: "ref.is_null" });
-        fctx.body.push({
-          op: "if",
-          blockType: { kind: "empty" },
-          then: [],
-          else: [
-            { op: "local.get", index: boxedDstrCellLocalIdx! },
-            { op: "local.get", index: localIdx },
-            { op: "struct.set", typeIdx: boxedDstrCell!.refCellTypeIdx, fieldIdx: 0 },
-          ],
-        });
-      }
+      finishPatternCaptureStore(fctx, captureStore);
     } else if (ts.isObjectBindingPattern(element.name) || ts.isArrayBindingPattern(element.name)) {
       const nestedLocal = allocLocal(fctx, `__ext_dparam_nested_${fctx.locals.length}`, elemType);
       fctx.body.push({ op: "local.set", index: nestedLocal });
@@ -1388,8 +1367,10 @@ function emitAbsentStructPropertyBinding(
   localName: string,
   isDecl: boolean,
 ): void {
-  const localIdx = fctx.localMap.get(localName);
-  if (localIdx === undefined) return;
+  const bindingLocal = fctx.localMap.get(localName);
+  if (bindingLocal === undefined) return;
+  const captureStore = planPatternCaptureStore(fctx, localName, bindingLocal);
+  const localIdx = captureStore.valueLocal;
   const localType = getLocalType(fctx, localIdx);
   if (!localType) return;
 
@@ -1399,7 +1380,7 @@ function emitAbsentStructPropertyBinding(
     if (!initType) return;
     if (!valTypesMatch(initType, localType)) coerceType(ctx, fctx, initType, localType);
     fctx.body.push({ op: "local.set", index: localIdx });
-    if (isDecl) emitLocalTdzInit(fctx, localName);
+    finishPatternCaptureStore(fctx, captureStore, isDecl ? localName : undefined);
     return;
   }
 
@@ -1415,7 +1396,7 @@ function emitAbsentStructPropertyBinding(
     return;
   }
   fctx.body.push({ op: "local.set", index: localIdx });
-  if (isDecl) emitLocalTdzInit(fctx, localName);
+  finishPatternCaptureStore(fctx, captureStore, isDecl ? localName : undefined);
 }
 
 /**
@@ -1739,7 +1720,8 @@ export function destructureParamObject(
     if (!fctx.localMap.has(localName)) {
       allocLocal(fctx, localName, fieldType);
     }
-    const localIdx = fctx.localMap.get(localName)!;
+    const captureStore = planPatternCaptureStore(fctx, localName, fctx.localMap.get(localName)!);
+    const localIdx = captureStore.valueLocal;
     fctx.body.push({ op: "local.get", index: paramIdx });
     fctx.body.push({ op: "struct.get", typeIdx: structTypeIdx, fieldIdx });
 
@@ -1750,7 +1732,6 @@ export function destructureParamObject(
       // Object-property semantics (§13.3.3.7): JS `null` here must NOT fire the
       // default — only `undefined` does. (#1550)
       emitDefaultValueCheck(ctx, fctx, fieldType, localIdx, element.initializer, undefined, true);
-      if (isDecl) emitLocalTdzInit(fctx, localName);
     } else {
       // Coerce struct field type to local's declared type if they differ (#658)
       const objLocalType = getLocalType(fctx, localIdx);
@@ -1765,8 +1746,8 @@ export function destructureParamObject(
         coerceType(ctx, fctx, undefinedPreservingBindingSourceType(element, fieldType), objLocalType);
       }
       fctx.body.push({ op: "local.set", index: localIdx });
-      if (isDecl) emitLocalTdzInit(fctx, localName);
     }
+    finishPatternCaptureStore(fctx, captureStore, isDecl ? localName : undefined);
   }
 
   // Close null guard — throw TypeError when null (JS spec: destructuring null/undefined is TypeError).
