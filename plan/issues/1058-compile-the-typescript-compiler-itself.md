@@ -14052,4 +14052,26 @@ membership and rejects duplicate exports, missing entry files, empty manifests,
 unexpected paths/shapes, and a registered suite missing from upstream's manifest.
 No helper file or basename collision can silently inflate the covered entries.
 
+### Main synchronization and resumed validation (2026-09-28)
+
+Fetched `loopdive/js2` main at **422dbf01a07b58cceefc64846444485eb549d9a5**
+and merged it without conflicts as **18814c98a2**, after committing the tested
+entry-manifest changes as **210cb3873c**. No manual stash or dependency install.
+Post-merge focused validation passes **64/64** across four files: source-unit
+adapter (24), native generator switch (17), upstream any-receiver residuals
+(11), and upstream class-receiver Promise combinators (12).
+Evidence: `.tmp/main-422db-typescript-focused.log`. Type-checking and source
+ratchets pass (`.tmp/main-422db-typescript-gates.log`); dead-export preservation
+is **6/6 full + 6/6 cut**, while the graph remains **OPEN**, strict modeled
+closure **FAIL**, and deletion is **not certified**.
+
+Pre-merge JSON-recovery session 71288 is terminal: its original native callbacks
+pass **5/5**, but standalone compilation timed out at **1,200,000 ms**, without
+a binary or executed Wasm callbacks. Preserved exact report:
+`.tmp/json-parser-recovery-pre-422db-timeout.json`. A post-merge diagnostic retry
+keeps the same deadline and assertions, adding `JS2WASM_PROFILE=1`;
+log `.tmp/json-parser-recovery-main-422db-profile.log`. Do not count it as passed
+while pending. The pre-merge full-checker session 78532 remains active; its
+result will describe compiler revision 8c16af6892, not the merged tree.
+
 "js2wasm compiles 60% of test262" is a percentage. "js2wasm compiles the TypeScript compiler itself" is a story. Landing even Tier 3 is the single strongest artifact for conversations with potential maintainers or funders — it demonstrates the compiler has enough depth to handle production TypeScript, not just hand-picked benchmark inputs. The gap between "a toy subset compiles" and "the real compiler compiles" is exactly what separates a proof-of-concept from a usable tool.
