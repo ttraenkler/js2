@@ -5,6 +5,16 @@ import { compile } from "../src/index.js";
 import { readStandaloneException } from "./dogfood/upstream-suite-worker-protocol.mjs";
 const cases = [
   [
+    "object pattern after caught early read",
+    `export function run():number{let caught=0;try{read();}catch(e){caught=e instanceof ReferenceError?1:0;}const {later}={later:7};return caught*10+read();function read(){return later;}}`,
+    17,
+  ],
+  [
+    "array pattern after caught early read",
+    `export function run():number{let caught=0;try{read();}catch(e){caught=e instanceof ReferenceError?1:0;}const [later]=[7];return caught*10+read();function read(){return later;}}`,
+    17,
+  ],
+  [
     "callback read before and after init",
     `export function run():number{const read=create();let caught=0;try{read();}catch(e){caught=e instanceof ReferenceError?1:0;}const later=7;return caught*10+read();function create(){return ()=>later;}}`,
     17,

@@ -4255,6 +4255,9 @@ function compileBoundIdentifierCall(
             emitLocalTdzCheck(ctx, fctx, cap.name, capTdzIdx);
           } else if (capTdzResult === "throw") {
             emitStaticTdzThrow(ctx, fctx, cap.name);
+            // No later capture initialization can execute. In particular, do
+            // not publish flag-cell locals that remain null after this throw is caught.
+            return getWasmFuncReturnType(ctx, funcIdx) ?? VOID_RESULT;
           }
           // "skip" — call site is after declaration, no check needed
         }

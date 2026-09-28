@@ -15061,4 +15061,51 @@ Live session **1826**, log `.tmp/checker-deferred-capture-diagnostic.log`;
 do not restart on an observation timeout. The generator checkpoint is
 98a18d328f; the capture candidate is the immediately following source diff.
 
+### Block-scope follow-up while full checker b6ed46c2f1 runs
+
+Full checker session 1826 is confirmed live; source snapshot is signed commit
+**b6ed46c2f1**. No restarts. The remaining return-before-declaration failure
+has a wider block-scope matrix: baseline **0/8** (both IR settings), covering
+early return, before/after initialization, outer shadowing, and per-iteration
+function identity/captures (`.tmp/checker-block-tdz-baseline.log`).
+`preallocateBlockScopedSlots` explicitly bypasses blocks with a direct
+function declaration (#5271). Read-only removal of that bypass improves only
+**2/8**: early return now throws correctly, before/after changes to a null
+trap, and shadowing/iteration still return wrong values
+(`.tmp/checker-block-tdz-experiment.log`). It is NOT a shippable fix.
+Further hypothesis: a statically throwing call still compiles subsequent
+capture flag boxing and updates frame metadata, although that initialization
+can never execute; a caught early read then leaves the later initializer
+using a null flag cell. Test this separately before changing production code.
+
+Stopping after the static throw improves the bypass-removal experiment to
+**4/8**; shadowing and per-iteration cases remain wrong. The combined
+experiment preserves **90/90** existing controls, but it is not retained:
+restoring block slots alone does not establish correct binding lifetime.
+An independent function-body pattern reproduction isolates the bookkeeping
+defect: object and array destructuring after a caught early read trap on
+**4/4** checks on **b6ed46c2f1**, while the experiment passes **4/4**
+(`.tmp/checker-pattern-tdz-baseline.log`,
+`.tmp/checker-pattern-tdz-experiment.log`). Production now stops call emission
+immediately after an unconditional TDZ throw, returning the callee result
+type for unreachable-stack bookkeeping. This avoids publishing flag cells
+whose construction cannot run. The block-preallocation bypass is unchanged.
+Tracked pattern tests added to the deferred-capture matrix; production
+controls are in flight. The full checker session still uses **b6ed46c2f1**,
+not this subsequent change.
+
+Production-only stop-after-throw fix (no block bypass change) passes
+**102 tests + 1 pre-existing todo** across five files
+(`.tmp/checker-tdz-terminal-call-controls.log`, session 63718 exit 0).
+The expanded deferred-capture suite is **16/16**, including the four
+formerly-trapping pattern cases. Typecheck, format/lint, LOC/function budgets,
+coercion and oracle gates pass, no allowances changed
+(`.tmp/checker-tdz-terminal-call-gates.log`, session 9313 exit 0).
+Dead-export gate exits 0: preservation **6/6 full + 6/6 cut** PASS; retain
+the existing graph OPEN, strict closure FAIL, moved-runtime FAIL and
+retirement NOT CERTIFIED caveats
+(`.tmp/checker-tdz-terminal-call-dead-exports.log`, session 86965).
+The full TypeScript acceptance denominator is unchanged; none of these
+focused checks certifies the upstream unit inventory.
+
 "js2wasm compiles 60% of test262" is a percentage. "js2wasm compiles the TypeScript compiler itself" is a story. Landing even Tier 3 is the single strongest artifact for conversations with potential maintainers or funders — it demonstrates the compiler has enough depth to handle production TypeScript, not just hand-picked benchmark inputs. The gap between "a toy subset compiles" and "the real compiler compiles" is exactly what separates a proof-of-concept from a usable tool.
