@@ -276,25 +276,41 @@ it("inventories nested unsupported files without counting them as tested callbac
       "jsonParserRecovery",
     ];
     for (const name of names) writeFileSync(join(units, `${name}.ts`), "");
+    const manifestPath = join(root, "src/testRunner/tests.ts");
+    const manifest = names.map((name) => `export * from "./unittests/${name}.js";`).join("\n");
+    writeFileSync(manifestPath, manifest);
     writeFileSync(join(units, "helpers/factory.ts"), "");
     writeFileSync(join(units, "constructor.ts"), "");
     const inventory = sourceUnitInventory(root);
     expect(inventory.sourceFiles).toBe(15);
+    expect(inventory.entryFiles).toBe(13);
+    expect(inventory.supportFiles).toBe(2);
     expect(inventory.runnableFiles).toBe(13);
     expect(inventory.files.find((file: { name: string }) => file.name === "factory")).toEqual({
       name: "factory",
+      entry: true,
       expectedTests: 3,
       runnable: true,
     });
     for (const name of ["helpers/factory", "constructor"]) {
       expect(inventory.files.find((file: { name: string }) => file.name === name)).toEqual({
         name,
+        entry: false,
         expectedTests: null,
         runnable: false,
       });
     }
     rmSync(join(units, "factory.ts"));
-    expect(() => sourceUnitInventory(root)).toThrow("Upstream source unit file missing: factory");
+    expect(() => sourceUnitInventory(root)).toThrow("Upstream test entry is missing: factory");
+    writeFileSync(join(units, "factory.ts"), "");
+    writeFileSync(manifestPath, manifest + '\nexport * from "./unittests/factory.js";');
+    expect(() => sourceUnitInventory(root)).toThrow("Duplicate upstream test entry: factory");
+    writeFileSync(manifestPath, "");
+    expect(() => sourceUnitInventory(root)).toThrow("Upstream test-entry manifest is empty");
+    writeFileSync(manifestPath, 'export * from "./unittests/../outside.js";');
+    expect(() => sourceUnitInventory(root)).toThrow("unexpected path");
+    writeFileSync(manifestPath, 'import "./unittests/factory.js";');
+    expect(() => sourceUnitInventory(root)).toThrow("manifest shape changed");
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

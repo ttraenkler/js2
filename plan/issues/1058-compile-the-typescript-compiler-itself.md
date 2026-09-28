@@ -14040,4 +14040,16 @@ Shared node_modules and pinned reference files were not modified. Source
 ratchets and adapter lint pass; the dead-export preservation/open-graph caveat
 continues to apply. All generated reports and scratch dependencies remain local.
 
+### Exact upstream unit entry coverage (2026-09-28)
+
+The authoritative entry list is upstream `src/testRunner/tests.ts`, not a
+recursive filename count. Its parsed export declarations identify **232 test
+entry files** and **24 support files** within the 256-file source inventory.
+The adapter registers **13/232 entries**, leaving **219 entry files** not yet
+covered by this source runner. This is a file denominator, not a callback/pass
+count (`.tmp/typescript-exact-unit-entries.log`). Inventory now records entry
+membership and rejects duplicate exports, missing entry files, empty manifests,
+unexpected paths/shapes, and a registered suite missing from upstream's manifest.
+No helper file or basename collision can silently inflate the covered entries.
+
 "js2wasm compiles 60% of test262" is a percentage. "js2wasm compiles the TypeScript compiler itself" is a story. Landing even Tier 3 is the single strongest artifact for conversations with potential maintainers or funders — it demonstrates the compiler has enough depth to handle production TypeScript, not just hand-picked benchmark inputs. The gap between "a toy subset compiles" and "the real compiler compiles" is exactly what separates a proof-of-concept from a usable tool.

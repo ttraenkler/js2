@@ -4,6 +4,7 @@ import { mkdirSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { build } from "esbuild";
+import ts from "typescript";
 import { setupTypescriptUpstreamSuite } from "./setup-typescript-upstream-suite.mjs";
 import { typescriptHarnessAugmentation } from "./typescript-harness-augmentation.mjs";
 import { TYPESCRIPT_SOURCE_ASSERT } from "./typescript-source-assert.mjs";
@@ -37,6 +38,29 @@ const FILES = {
 /** Unit-directory files are an inventory, not a count of registered callbacks. */
 export function sourceUnitInventory(root) {
   const directory = join(root, "src/testRunner/unittests");
+  const entryPath = join(root, "src/testRunner/tests.ts");
+  const entrySource = ts.createSourceFile(entryPath, readFileSync(entryPath, "utf8"), ts.ScriptTarget.Latest, true);
+  if (entrySource.parseDiagnostics.length) throw new Error("Upstream test-entry manifest does not parse");
+  const entries = new Set();
+  for (const statement of entrySource.statements) {
+    if (
+      !ts.isExportDeclaration(statement) ||
+      statement.exportClause ||
+      statement.isTypeOnly ||
+      !statement.moduleSpecifier ||
+      !ts.isStringLiteral(statement.moduleSpecifier)
+    ) {
+      throw new Error("Upstream test-entry manifest shape changed");
+    }
+    const match = statement.moduleSpecifier.text.match(/^\.\/unittests\/(.+)\.js$/);
+    const name = match?.[1];
+    if (!name || name.split("/").some((part) => !part || part === "." || part === "..")) {
+      throw new Error("Upstream test-entry manifest contains an unexpected path");
+    }
+    if (entries.has(name)) throw new Error(`Duplicate upstream test entry: ${name}`);
+    entries.add(name);
+  }
+  if (entries.size === 0) throw new Error("Upstream test-entry manifest is empty");
   const files = [];
   function visit(path) {
     for (const entry of readdirSync(path, { withFileTypes: true })) {
@@ -46,6 +70,7 @@ export function sourceUnitInventory(root) {
         const name = relative(directory, child).replace(/\\/g, "/").replace(/\.ts$/, "");
         files.push({
           name,
+          entry: entries.has(name),
           expectedTests: Object.hasOwn(FILES, name) ? FILES[name] : null,
           runnable: Object.hasOwn(FILES, name),
         });
@@ -55,10 +80,20 @@ export function sourceUnitInventory(root) {
   visit(directory);
   files.sort((a, b) => a.name.localeCompare(b.name));
   if (files.length === 0) throw new Error("Upstream source unit inventory is empty");
+  for (const name of entries) {
+    if (!files.some((file) => file.name === name)) throw new Error(`Upstream test entry is missing: ${name}`);
+  }
   for (const name of Object.keys(FILES)) {
     if (!files.some((file) => file.name === name)) throw new Error(`Upstream source unit file missing: ${name}`);
+    if (!entries.has(name)) throw new Error(`Registered source unit is not an upstream test entry: ${name}`);
   }
-  return { files, sourceFiles: files.length, runnableFiles: files.filter((file) => file.runnable).length };
+  return {
+    files,
+    sourceFiles: files.length,
+    entryFiles: entries.size,
+    supportFiles: files.length - entries.size,
+    runnableFiles: files.filter((file) => file.runnable).length,
+  };
 }
 
 export const SOURCE_UNIT_DIAGNOSTIC_EXPORTS = String.raw`
