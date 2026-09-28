@@ -480,7 +480,11 @@ export function analyzeTdzAccess(ctx: CodegenContext, id: ts.Identifier): "skip"
     // so any invocation of the closure is guaranteed to see the initialized value.
     if (accessFunc && !ts.isFunctionDeclaration(accessFunc) && !ts.isSourceFile(accessFunc)) {
       const closureStart = accessFunc.getStart();
-      if (closureStart >= declEnd && !isInsideLoopContaining(accessFunc as ts.Node, decl)) {
+      if (
+        getContainingFunction(accessFunc) === declFunc &&
+        closureStart >= declEnd &&
+        !isInsideLoopContaining(accessFunc as ts.Node, decl)
+      ) {
         return "skip";
       }
     }

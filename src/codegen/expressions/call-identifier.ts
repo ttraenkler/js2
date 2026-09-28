@@ -4246,7 +4246,10 @@ function compileBoundIdentifierCall(
         // can still be called while the outer let-decl is in TDZ if a
         // closure that captured the flag invokes the callee transitively.
         const capTdzIdx = fctx.tdzFlagLocals?.get(cap.name);
-        if (capTdzIdx !== undefined) {
+        // Passing a lexical cell is not a read of its contents. Its lifted
+        // body checks the forwarded flag when it actually reads the binding;
+        // a factory may merely return a callback for use after initialization.
+        if (capTdzIdx !== undefined && !(cap.mutable && cap.hasTdzFlag)) {
           const capTdzResult = analyzeTdzAccessByPos(ctx, cap.name, expr);
           if (capTdzResult === "check") {
             emitLocalTdzCheck(ctx, fctx, cap.name, capTdzIdx);

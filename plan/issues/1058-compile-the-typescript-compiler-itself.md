@@ -14983,4 +14983,82 @@ PASS; moved-runtime gate remains **FAIL** because two nonliteral dynamic
 imports leave production-rooted evidence incomplete. Terminal report:
 `.tmp/generator-owned-dead-exports.log`. Issue check also exited 0.
 
+### Checker continuation after generator checkpoint 98a18d328f
+
+Saved-binary replay reproduces the full checker trap without rebuilding:
+`.tmp/checker-alias-fixed-trace.log`. Exact offset **0x9de5f0** is
+`ref.as_non_null` over **global 32531**, in a discarded capture operand
+after option reads. The selected `createTypeChecker` body also ends in
+a static ReferenceError before it ever calls `createCheckBinaryExpression`.
+Export-only diagnostic decoding of its message global **23052** yields
+**`ReferenceError: checker is not defined`**
+(`.tmp/checker-static-error-message.log`); this modifies no code or initializers.
+`checker` is the later `const` at upstream checker.ts:1595. This is evidence
+of premature capture evaluation, not proof that the null global and static
+throw have one root cause. Preserve both failure sites.
+
+Focused scratch matrix on 98a18d328f: **2/12 pass** (initialized controls),
+**10/12 fail**: deferred const/let/object capture creation fails 6/6, an
+immediate-read control with reachable initialization traps 2/2, and the
+return-before-declaration control returns the wrong result 2/2. Native
+oracles pass all 12. `.tmp/checker-forward-capture-expanded.log` uses both
+IR settings and requires zero imports. Experimental read-only loader is
+testing lexical ref cells plus deferred TDZ checking; no production change
+yet. Do not broadly remove call-site checks or force-box all flagged values:
+the existing #1205 comment records destructuring/for-await regressions from
+blanket boxing. Any candidate needs positive early-read/late-read controls
+and the existing TDZ/destructuring suites before a full checker rerun.
+
+Read-only experiment improves the scratch matrix from **2/12 to 10/12**;
+the return-before-declaration control still fails in both settings. Narrowing
+cell planning to same-block simple lexical declarations preserves that result,
+and existing TDZ/eager-box suites add **25/25 passing + 1 todo**
+(`.tmp/checker-forward-capture-narrow-controls.log`). Production candidate now
+uses a pure frontend lifetime predicate, the existing mutable-cell ABI, and
+defers the call-boundary TDZ check only when both a value cell and forwarded
+TDZ flag are present. Actual callee reads still check the flag. This does not
+change loop-head/destructuring capture planning. Shared metadata audit:
+writers are nested declaration registration/pre-registration and existing
+name-scope/runtime snapshot restore/delete; readers include direct calls,
+closure materializers, function signatures, async spill planning, constructor
+identity, string tags, arguments.callee and function-value identifier paths.
+No new context state or ABI fields. Final production controls remain pending.
+
+The additional callback-before-and-after-initialization test rejected the
+first candidate: **67 passed, 2 failed, 1 todo**. The callback incorrectly
+skipped its early TDZ error. `closureProvablyAfterLetDecl` treated reaching
+any enclosing function boundary as proof of initialization, even when the
+binding belongs to an outer function. Its only consumer is arrow capture
+planning. Candidate now requires the binding to belong to that function
+before using textual order as proof. Cell planning is restricted to simple
+function-body lexical bindings (not loop/block-per-iteration environments).
+Retain the return-before-declaration failure as an open, separately reduced
+scope/pre-hoist issue; it must not disappear from full-goal acceptance.
+
+Both proof sites required correction: arrow capture planning and identifier
+TDZ-read elision independently used cross-function textual order. With both
+corrected, **69 tests PASS + 1 pre-existing todo** in six files
+(`.tmp/checker-deferred-capture-both-proofs.log`). The new tracked regression
+contributes **12/12** zero-import standalone checks in both IR settings,
+including invoking the same escaped callback before **and** after the
+captured initializer. Existing tests contribute **57/57** (including 28
+generator-helper checks and four for-await controls). This is not broad
+test262 or full TypeScript unit-suite certification. Typecheck, formatting,
+lint, LOC/function, coercion and oracle ratchets pass without new grants
+(`.tmp/checker-deferred-capture-final-gates.log`). Exact tracked-test baseline
+comparison on **98a18d328f** passes **2/12**, fails **10/12** with the same
+standalone harness and both IR settings (read-only source loader;
+`.tmp/checker-deferred-capture-tracked-baseline.log`). Dead-export gate exits
+0 with **6/6 full + 6/6 cut** preservation witnesses; the OPEN graph, strict
+closure FAIL, moved-runtime FAIL, and retirement NOT CERTIFIED caveats above
+are unchanged (`.tmp/checker-deferred-capture-dead-exports.log`).
+A full unchanged 3-case
+checker run has been launched with the candidate, saving
+`.tmp/checker-deferred-capture.wasm`, its source map, and compiler metadata
+for any further capture diagnosis. Diagnostic loader anchors were verified
+before launch; it writes artifacts only, not source or emitted instructions.
+Live session **1826**, log `.tmp/checker-deferred-capture-diagnostic.log`;
+do not restart on an observation timeout. The generator checkpoint is
+98a18d328f; the capture candidate is the immediately following source diff.
+
 "js2wasm compiles 60% of test262" is a percentage. "js2wasm compiles the TypeScript compiler itself" is a story. Landing even Tier 3 is the single strongest artifact for conversations with potential maintainers or funders — it demonstrates the compiler has enough depth to handle production TypeScript, not just hand-picked benchmark inputs. The gap between "a toy subset compiles" and "the real compiler compiles" is exactly what separates a proof-of-concept from a usable tool.

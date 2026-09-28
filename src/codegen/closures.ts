@@ -1873,8 +1873,9 @@ export function closureProvablyAfterLetDecl(
       ts.isMethodDeclaration(cur) ||
       ts.isSourceFile(cur)
     ) {
-      // Reached function boundary without finding a wrapping loop.
-      return true;
+      // Textual order cannot prove initialization across a function boundary:
+      // a hoisted factory may create this closure before its outer binding initializes.
+      return isNodeDescendantOf(decl, cur);
     }
     if (
       ts.isForStatement(cur) ||

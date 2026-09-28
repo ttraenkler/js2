@@ -22,6 +22,7 @@ import {
   promoteAccessorCapturesToGlobals,
 } from "../closures.js";
 import { addFunctionOwnLocals } from "../../ir/analysis/binding-info.js"; // (#2103) memoized own-locals oracle
+import { sameBlockLexicalCapture } from "../../frontend/ts/lexical-capture-lifetime.js";
 import { condenseDirectedGraph } from "../analysis/strongly-connected-components.js";
 import { functionReturnsThroughWithScope } from "../declarations.js";
 import { widenAsyncThenableResult } from "../async-thenable-return.js"; // (#5371)
@@ -1725,6 +1726,7 @@ function compileNestedFunctionDeclarationInScope(
     // the destructure-assign path to be box-aware. Both are out of scope
     // for this PR; the test is marked `.todo` until that follow-up lands.
     const isMutable =
+      (hasTdzFlag && sameBlockLexicalCapture(capturedDecl, stmt)) ||
       writtenInBody.has(name) ||
       mutatedInSiblingScope.has(name) ||
       writtenAfterDeclaration.has(name) ||
