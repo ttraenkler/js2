@@ -15751,4 +15751,92 @@ alone does NOT reproduce the original harness error. Log
 `.tmp/error-stack-limit-required.log`; wait for the original-source probe
 instead of treating this hypothesis as established.
 
+Generator snapshot change committed signed as `8d66d18322`, clean state
+verified. Original I/O-error probe **35749** terminated exit 1 after **129175 ms**
+(compiler **127401 ms**), **0 bytes**, no runtime invocation. It reproduces
+exactly the `__get_builtin` error at vfsUtil.ts **1377:34**, without the JSON
+generator graph: **29 input/source files**, 33 program files. Artifacts
+`.tmp/vfs-io-error-errors.json` and log `.tmp/vfs-io-error-diagnostic.log`.
+Next read-only replay traces the late-import request stack while retaining
+the original source and the same oracle; no guard suppression or host import
+allowlisting is authorized by this evidence.
+
+Read-only late-import trace replay **5434** is live; log
+`.tmp/vfs-io-error-trace-diagnostic.log`, loader
+`.tmp/vfs-io-error-trace-loader.mjs`. It logs `__get_builtin` requests through
+the shared registration delegate without changing emission. Poll this handle
+and full checker **45308** before launching further original-source builds.
+
+### 2026-09-28 — untyped builtin method receiver
+
+Trace replays **5434**, **78565** terminated with the same original error but
+did not emit the intended request-stack logging. Treat that instrumentation
+as unproven, not evidence of absent requests. Instance `code` mutation controls
+**75951** compiled but null-trapped **0/4** with an extended Error interface;
+this different failure does not reproduce the original compilation error.
+
+Discriminating reduced test **76135** does reproduce it: omitting the ambient
+ErrorConstructor hook signature fails compilation in both IR modes, while
+declaring the hook passes (**2/4** total). Read-only native-receiver routing
+**67079** passes **4/4** with import-free execution. Logs
+`.tmp/error-untyped-hook.log`, `.tmp/error-untyped-hook-native.log`.
+The original harness uses minimal ambient libs, which is why the earlier
+explicitly typed optional/required hook controls missed this path.
+
+Production candidate changes `isHostResolvedBuiltinReceiver` to leave all
+standalone receivers on ordinary identifier lowering (native builtin values
+or proper unavailable-global ReferenceErrors). JS-host/WASI behavior stays
+unchanged. Its only consumer is the generic receiver-method emitter; no
+registry contents or lifecycles change. Added 10 tracked native/standalone
+checks for typed/untyped optional hooks, missing-method argument evaluation,
+native Math dispatch and shadowed Error receivers. Full original-source
+I/O-error probe will verify this beyond the reduced test.
+
+Native-receiver candidate **19556** passes **41/41** (10 new checks, Buffer
+receiver and static-builtin spread controls); baseline **60031** on
+`8d66d18322` passes **2/10**, fails **8/10** in the new suite. Logs
+`.tmp/native-builtin-method-controls.log`, `.tmp/native-builtin-method-baseline.log`.
+Original I/O helper candidate **41869** is live, log
+`.tmp/vfs-io-error-native-diagnostic.log`; same source/oracle as **35749**.
+Gates **60195** are running; hold production source unchanged until completion.
+
+Full checker **45308** on `d032617fb7` terminated exit 1 after **1492702 ms**:
+**60,814,095 bytes**, valid Wasm, **zero imports**, no error-severity compiler
+diagnostics, but **0/3** original invocations match. It now reaches
+`createNodeBuilder`, function **8316**, null-trap offset **25774191**
+(`0x189486f`), called from checker function 2203 offset `0xa36633`.
+The previous `createCheckBinaryExpression` argument trap is bypassed, not
+full runtime completion. Artifacts `.tmp/checker-var-cell.wasm`, `-metadata.json`,
+`-errors.json`; source maps were not enabled in this invocation, so do not
+invent a source attribution. Next build must set
+`JS2WASM_TYPESCRIPT_PROBE_SOURCE_MAP=1` before launch. Read-only selected-body
+WAT inspection targets 8316; original binary remains the runtime evidence.
+
+Original I/O helper candidate **41869** terminated exit 1 after **125297 ms**:
+compiler success, **9,339,529 bytes**, valid Wasm, zero error-severity
+diagnostics. The `__get_builtin` refusal is gone, but **0/1** runtime cases
+execute because **9 host generator imports** remain: `__gen_create_buffer`,
+`__gen_push_ref`, `__gen_set_return`, `__create_generator`, `__gen_next`,
+`__gen_return`, `__gen_throw`, `__gen_result_value`, `__gen_result_done`.
+Do not claim import-free execution or suppress the import check. Artifacts
+`.tmp/vfs-io-error-native.wasm`, `-errors.json`; log
+`.tmp/vfs-io-error-native-diagnostic.log`. Next harness investigation should
+trace these retained generator dependencies / native admission, then rerun the
+unchanged original JSON callbacks and baselines.
+
+Receiver gates **60195** terminated exit 0: typecheck, format/lint,
+LOC/function, coercion/oracle checks pass, no new grants. Dead-export
+preservation **6/6 full + 6/6 cut** only; graph OPEN, strict closure FAIL,
+retirement NOT CERTIFIED remain. Log `.tmp/native-builtin-method-gates.log`.
+
+Checker selected-body inspection **67523** completed. Binary offset
+**25774191** is `ref.as_non_null(global.get 25074)`, global
+**`__captured_couldContainTypeVariables`**, while building
+`__fn_tramp_isStringNamed_3107` in `createNodeBuilder`.
+Metadata lists `couldContainTypeVariables` as capture **64** of that frame
+(declaring-frame outer slot 435). Inspect whether the closure's global-fallback
+guard ignores a valid `liftedCaptureSlots` entry when `localMap` is absent;
+do not assume a name registry proves binding identity. Diagnostic WAT
+`.tmp/checker-var-cell-nodebuilder.wat` is not an executable test module.
+
 "js2wasm compiles 60% of test262" is a percentage. "js2wasm compiles the TypeScript compiler itself" is a story. Landing even Tier 3 is the single strongest artifact for conversations with potential maintainers or funders — it demonstrates the compiler has enough depth to handle production TypeScript, not just hand-picked benchmark inputs. The gap between "a toy subset compiles" and "the real compiler compiles" is exactly what separates a proof-of-concept from a usable tool.
