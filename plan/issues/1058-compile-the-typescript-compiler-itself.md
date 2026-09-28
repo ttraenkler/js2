@@ -15108,4 +15108,107 @@ retirement NOT CERTIFIED caveats
 The full TypeScript acceptance denominator is unchanged; none of these
 focused checks certifies the upstream unit inventory.
 
+### Error-baseline generator callback follow-up on 664bf6104e
+
+While checker session 1826 continues, a reduced `iterateErrorBaseline`
+shape exposes a remaining runtime defect. Native execution passes; standalone
+compiles with zero imports but fails **2/2** checks (both IR settings).
+The generator yields a summary, calls `messages.forEach(outputErrorText)`,
+then yields accumulated text/count; the nested helper updates generator-owned
+state and calls another helper for newline state. Two generator instances are
+interleaved. Row-wise bitmask is **67**, expected **127**: initial summary
+counts and the final direct-call count pass, but callback output/count and
+newline continuation fail (`.tmp/harness-error-generator-rows.log`).
+
+A four-shape matrix across both IR settings passes **4/8**: replacing only
+the outer `messages.forEach(outputErrorText)` with a direct `for...of` call
+passes **4/4**; keeping that named callback fails **4/4**, whether the inner
+line-output loop is an arrow callback or direct iteration
+(`.tmp/harness-error-generator-matrix.log`, session 85802 exit 1).
+This is a reduction, not acceptance of the full upstream harness. No source
+fix yet; investigate named-callback capture forwarding in generator resumes.
+Scratch source/config: `.tmp/harness-error-generator.test.ts` and
+`.tmp/harness-error-generator.config.mts`. The unchanged full checker run
+still uses b6ed46c2f1, not 664bf6104e, and has progressed past checker bodies
+into the workload's module-init pass without a terminal result yet.
+
+The extended callback matrix passes **8/12**: all four arrow-wrapper cases
+also pass (`.tmp/harness-error-generator-arrow.log`). A simpler numeric
+generator with a named `forEach` callback passes **4/4**, with/without a prior
+yield and in both IR settings (`.tmp/generator-named-callback.log`). Thus
+neither all named callbacks nor suspension alone explains the failing shape.
+
+Full checker **b6ed46c2f1** has now terminated: session **1826 exit 1**,
+**1,379,467 ms**, compile **false**, binary **0 bytes**, no invocations.
+The result reports 46 diagnostics, but only the first 20 are retained in the
+summary; do not classify the entire set from that truncated list. The first
+error is `createSystemWatchFunctions` at `sys.ts:990:1`: nested
+`watchDirectory` changed capture `fsSupportsRecursiveFsWatch`'s physical ABI
+after reservation. This is a new compile blocker relative to the prior
+37f264c440 full run that produced valid Wasm but failed 3/3 invocations.
+No conclusion about the deferred-checker runtime fix can be drawn yet.
+Log: `.tmp/checker-deferred-capture-diagnostic.log`. No checker process is
+left running. Next: isolate the capture reservation mismatch before launching
+another full run; 664bf6104e is not yet full-checker validated either.
+
+The watcher-only upstream build reproduces the mismatch in **188,010 ms**
+(`.tmp/watch-system-diagnostic.log`, session 76446): the parameter was reserved
+as immutable externref (local 10), then observed as a ref-cell (local 41) with
+boolean i32 contents. Diagnostic-only loader changes the error text, not code.
+It reports 24 diagnostics, of which 20 are retained. Investigate the unexpected
+boxing/source-frame identity rather than weakening the reservation guard.
+
+The harness runtime reduction now points away from generator lifetime:
+numeric-array named callbacks pass **8/8**, string-array counterparts fail
+**8/8** (actual 1, expected 34), and an ordinary non-generator string-array
+case fails **2/2** named callbacks while arrow wrappers pass **2/2**.
+Logs: `.tmp/generator-named-callback-param.log`,
+`.tmp/generator-named-callback-string.log`, `.tmp/string-named-callback.log`.
+`refElemHofCallbackIsClosure` inspects `closureInfoByTypeIdx` AFTER the type
+probe rolls back its speculative registrations; a newly minted closure type
+can consequently be misclassified. Test moving the boolean classification
+inside the same transaction, retaining rollback of all emitted state.
+
+That rollback hypothesis is **disproved**: types/closure registrations remain
+available after the probe, and moving the predicate inside changes none of
+the failures (**14 fail / 10 pass**, `.tmp/ref-callback-probe-experiment.log`).
+The actual mismatch is admission versus emission: ordinary identifier lowering
+reads the hoisted lexical binding as externref, whereas `setupArrayCallback`
+materializes the source-owned typed closure. Admission must use that same path.
+Shared `emitHoistedArrayCallback` now serves both sites; speculative rollback
+is unchanged. The factoring reduces the existing array-methods driver rather
+than adding a growth grant. No new legacy-only dispatch mechanism is added.
+
+Exact tracked regression on **664bf6104e**: **4/12 pass, 8/12 fail**
+(`.tmp/ref-callback-tracked-baseline.log`, read-only baseline source loader,
+both IR settings). Cases cover string/object named callbacks, generator
+callbacks, the interleaved error-baseline helper graph, numeric and arrow
+controls. Initial production candidate passes **56/56** across these 12 and
+the prior generator/deferred-capture suites; another five callback-control
+files pass **80 tests**, with **6 skipped** explicitly excluded from the
+passing denominator. Logs: `.tmp/ref-callback-tracked-controls.log` and
+`.tmp/ref-callback-existing-controls.log`. Final factored candidate validation
+is in flight; no full upstream JSON unit rerun yet.
+
+A second watcher-only run (session **15519**, log
+`.tmp/watch-system-eager-diagnostic.log`) adds diagnostic-only eager-box
+provenance logging. Do not restart while live. It uses the earlier inline
+callback fix, not the subsequent equivalent helper extraction.
+
+Final factored callback candidate: **136 passed, 6 skipped**, eight files
+(`.tmp/ref-callback-final-controls.log`, session 52438 exit 0). New suite
+passes **12/12** with native oracles and zero Wasm imports. Formatting,
+typecheck, lint, LOC/function, coercion and oracle gates pass; no grants or
+baselines changed (`.tmp/ref-callback-final-gates.log`). Dead-export gate
+exits 0 with preservation **6/6 full + 6/6 cut**; graph OPEN, strict closure
+FAIL, moved-runtime FAIL and retirement NOT CERTIFIED remain unchanged.
+The final source edit after tests was formatting only.
+
+Watcher provenance run 15519 is terminal **exit 1**, **210,442 ms**, same
+capture-layout error (24 diagnostics, first 20 retained). No matching
+`WATCH-EAGER-BOX` row was emitted by the instrumented eager-box setter; do not
+attribute the unexpected boolean cell to that setter. Next investigate the
+other capture-cell publishers/forwarders and same-name binding identity.
+No full-checker or watcher probe remains running at this checkpoint.
+
 "js2wasm compiles 60% of test262" is a percentage. "js2wasm compiles the TypeScript compiler itself" is a story. Landing even Tier 3 is the single strongest artifact for conversations with potential maintainers or funders — it demonstrates the compiler has enough depth to handle production TypeScript, not just hand-picked benchmark inputs. The gap between "a toy subset compiles" and "the real compiler compiles" is exactly what separates a proof-of-concept from a usable tool.

@@ -134,7 +134,7 @@ const {
   ensureElementToLocaleStringInvoke,
   isLocalizedJoin,
 } = tls;
-import { emitFuncRefAsClosure } from "./closures/funcref-as-closure.js";
+import { emitHoistedArrayCallback } from "./array-callback-value.js";
 import { emitSymbolOperandCoercionThrow } from "./tonumber-symbol-throw.js"; // (#3481)
 import { buildSpreadArgList, hasSpreadArgument } from "./spread-arg-list.js"; // (#5361)
 import { canBuildSpreadArgList, isTupleStructType } from "./spread-arg-list.js"; // (#5361)
@@ -411,7 +411,11 @@ function refElemHofCallbackIsClosure(ctx: CodegenContext, fctx: FunctionContext,
   const cbArg = callExpr.arguments[0]!;
   if (isKnownNonCallable(ctx, cbArg)) return true; // typed impl emits the spec TypeError
   if (ts.isArrowFunction(cbArg) || ts.isFunctionExpression(cbArg)) return true;
-  const probed = probeCompiledType(ctx, fctx, () => compileExpression(ctx, fctx, cbArg));
+  const probed = probeCompiledType(
+    ctx,
+    fctx,
+    () => emitHoistedArrayCallback(ctx, fctx, cbArg) ?? compileExpression(ctx, fctx, cbArg),
+  );
   return (
     probed !== null &&
     probed !== undefined &&
@@ -6722,13 +6726,7 @@ function setupArrayCallback(
   elemParamIndex = 0,
 ): ArrayCallbackSetup | null {
   const cbArg = callExpr.arguments[0]!;
-  const hoistedCallback =
-    ts.isIdentifier(cbArg) && fctx.hoistedFunctionValueBindings?.has(cbArg.text)
-      ? (() => {
-          const funcIdx = ctx.funcMap.get(cbArg.text);
-          return funcIdx === undefined ? undefined : emitFuncRefAsClosure(ctx, fctx, cbArg.text, funcIdx);
-        })()
-      : undefined;
+  const hoistedCallback = emitHoistedArrayCallback(ctx, fctx, cbArg);
   // (#6602) Window the receiver's real element type over the callback compile.
   // `nullableElemParamOverrideFor` yields a value only for a `ref_null` element
   // type, and the consumer only honours it against the exact non-null twin, so
