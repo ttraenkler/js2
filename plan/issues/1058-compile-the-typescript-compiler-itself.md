@@ -15670,4 +15670,85 @@ binary, source map, metadata and errors; it does not alter compiler behavior.
 Log `.tmp/checker-var-cell-diagnostic.log`, artifacts `.tmp/checker-var-cell*`.
 Poll this handle rather than starting a replacement after an observation timeout.
 
+Cell-lifetime change committed signed as `d032617fb7`; clean state verified.
+While full checker **45308** remains live, isolated the original
+`iterateErrorBaseline` planner admission using its unmodified pinned source
+and a real TypeScript program/checker. Scratch **27128** rejects the single
+original generator (**0/1** admitted), reproducing the JSON harness blocker
+without compiling the whole harness. Files `.tmp/json-generator-plan.test.ts`,
+`.tmp/json-generator-plan.config.mts`, log `.tmp/json-generator-plan.log`.
+Next diagnostic adds read-only planner rejection logging; no production
+generator changes or removed baseline calls.
+
+Read-only trace **74535** pins the planner refusal to
+`generators-native.ts:2523`: generic-iterator fallback rejects the array
+subject because the source-loop route already rejected a captured loop binding.
+`forOfBindingIsFrameSafe` forbids any nested callback referencing `inputFile`;
+the original harness's `diagnostics.filter` and nested line callbacks do so.
+Trace log `.tmp/json-generator-plan-trace-fail.log`. Testing a read-only guard
+removal against filter, escaped closures, two suspensions, mutable let and
+object bindings (both IR modes) before changing production. This is a
+diagnostic admission experiment, not a claim that the guard can be removed.
+
+Admission experiment **64218** admits the exact original generator (**1/1**),
+log `.tmp/json-generator-plan-loop.log`. Runtime matrix **77644** passes
+**8/18**: const captures stored externally (numeric/object), across two
+suspensions, and synchronous filter callbacks pass in both IR modes. Mutable
+let fails Wasm validation in `__gen_resume_g` (f64 written into a cell field).
+Eight function-yield/Array.from cases fail separately in `run` (externref into
+f64 array); do not attribute those to capture lifetime alone. Logs
+`.tmp/generator-loop-captures-experiment.log` and
+`.tmp/generator-loop-captures-stored.log`.
+
+Additional shape test **12499**: plain function-expression snapshots pass
+**2/2**, named block-local helpers fail **0/2** at runtime (18 other matrix
+checks intentionally unselected), log `.tmp/generator-loop-captures-functions.log`.
+Thus blanket guard deletion is disproven. Next safe production step: recognize
+immutable `const` snapshots captured by arrow/function expressions while
+retaining refusals for mutable captures, named helper environments, methods,
+and name-shadowing ambiguity. Add tracked snapshot/unsafe-boundary tests,
+then verify original generator admission and actual baseline compilation.
+Do not treat this planned admission as full generator support: mutable loop
+cells and named helper per-iteration environments remain required follow-ups.
+Production source is unchanged from `d032617fb7`; only this issue record is dirty.
+
+Production candidate now allows `const` loop values captured by arrow/function
+expressions while retaining the measured unsafe mutable/named/method and
+name-shadowing exclusions. Only `forOfBindingIsFrameSafe` changes; its two
+planner callers and frame emitter stay unchanged, and no context registry is
+added. Tracked `issue-1058-generator-loop-snapshots.test.ts` checks retained
+numeric/object closures, two suspensions, plain function expressions and the
+original filter-callback shape in both IR modes, plus explicit refusals for
+the two experimentally broken environment shapes. Original-source planner
+admission and runtime controls are being rechecked without diagnostic overrides.
+
+Candidate **15001** passes **23/23** tracked checks (14 new snapshot/boundary
+checks, 3 suspension controls, 6 source-loop fallback controls). Baseline
+**70409** on `d032617fb7` passes **4/14**, fails **10/14** in the new suite.
+Original pinned generator planner **1894** now passes **1/1** without source
+overrides. Logs `.tmp/generator-loop-snapshots-controls.log`,
+`.tmp/generator-loop-snapshots-baseline.log`,
+`.tmp/json-generator-plan-production.log`. Gates **18582** terminated exit 0:
+typecheck, format/lint, LOC/function, coercion and oracle checks pass, no new
+grants. Dead-export preservation **6/6 full + 6/6 cut**; graph OPEN, strict
+closure FAIL, retirement NOT CERTIFIED remain. Planner admission is not yet
+an original JSON test execution result.
+
+Isolated original `createIOError` dependency probe **35749** is live, using
+`.tmp/vfs-io-error-workload.ts` and the real pinned `vfsUtil.ts`, oracle
+`ENOENT: no such file or directory probe` (export returns 1), standalone,
+consumer-driven barrels, one-hour deadline/8 GiB heap. Log
+`.tmp/vfs-io-error-diagnostic.log`; binary/errors artifacts `.tmp/vfs-io-error*`.
+Full checker **45308** remains live on the preceding var-cell source snapshot
+(`d032617fb7`), not this generator-admission change. Do not restart either
+run on observation timeout. A small optional-vs-required ErrorConstructor
+hook declaration check is also running (**39674**) to test whether declaration
+truthiness explains why the prior reduced optional-hook controls passed.
+
+Hook declaration control **39674** terminated **4/4 pass** with import-free
+standalone execution in both IR modes; required vs optional method typing
+alone does NOT reproduce the original harness error. Log
+`.tmp/error-stack-limit-required.log`; wait for the original-source probe
+instead of treating this hypothesis as established.
+
 "js2wasm compiles 60% of test262" is a percentage. "js2wasm compiles the TypeScript compiler itself" is a story. Landing even Tier 3 is the single strongest artifact for conversations with potential maintainers or funders — it demonstrates the compiler has enough depth to handle production TypeScript, not just hand-picked benchmark inputs. The gap between "a toy subset compiles" and "the real compiler compiles" is exactly what separates a proof-of-concept from a usable tool.

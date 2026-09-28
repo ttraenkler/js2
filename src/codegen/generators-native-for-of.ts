@@ -14,20 +14,32 @@ export type NativeForOfTerminator =
   | { kind: "iterator-step"; iterator: string; binding: string; bodyState: number; doneState: number }
   | { kind: "iterator-close"; iterator: string; next: number };
 
-/** A frame slot cannot yet model per-iteration captured lexical environments. */
+/** Immutable expression closures snapshot a loop value; shared loop cells need more machinery. */
 export function forOfBindingIsFrameSafe(body: ts.Node, binding: ts.Identifier): boolean {
+  const declaration = binding.parent;
+  const snapshot =
+    ts.isVariableDeclaration(declaration) &&
+    ts.isVariableDeclarationList(declaration.parent) &&
+    (declaration.parent.flags & ts.NodeFlags.Const) !== 0;
   let safe = true;
-  const visit = (node: ts.Node, inFunction: boolean): void => {
+  const visit = (node: ts.Node, inFunction: boolean, sharedEnvironment: boolean): void => {
     const nested = inFunction || ts.isFunctionLike(node);
+    // Named helpers and methods do not use the expression-closure snapshot
+    // path. Their memoized environments cannot yet be refreshed per iteration.
+    const shared =
+      sharedEnvironment || (ts.isFunctionLike(node) && !ts.isArrowFunction(node) && !ts.isFunctionExpression(node));
     if (ts.isIdentifier(node) && node.text === binding.text && node !== binding) {
       const parent = node.parent;
-      if (nested || (parent && (ts.isVariableDeclaration(parent) || ts.isParameter(parent)) && parent.name === node)) {
+      if (
+        (nested && (!snapshot || shared)) ||
+        (parent && (ts.isVariableDeclaration(parent) || ts.isParameter(parent)) && parent.name === node)
+      ) {
         safe = false;
       }
     }
-    ts.forEachChild(node, (child) => visit(child, nested));
+    ts.forEachChild(node, (child) => visit(child, nested, shared));
   };
-  visit(body, false);
+  visit(body, false, false);
   return safe;
 }
 
