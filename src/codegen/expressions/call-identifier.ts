@@ -326,7 +326,7 @@ function bindingIsGenericCallableFactoryResult(ctx: CodegenContext, identifier: 
 }
 
 /**
- * True for a cross-source stable callable snapshot taken from an object
+ * True for a stable callable snapshot taken from an object
  * property:
  *
  *   export const getTarget: (o: Options) => number = table.target.computeValue;
@@ -351,12 +351,9 @@ function bindingIsImmutablePropertyCallableAlias(ctx: CodegenContext, identifier
     declaration = ctx.importBindingTargets?.get(declaration) ?? declaration;
   }
   if (!declaration || !ts.isVariableDeclaration(declaration) || !declaration.initializer) return false;
-  // Same-source aliases compile after their initializer's closure metadata is
-  // available and stay on the smaller typed path. The deferred driver is for
-  // linked/imported aliases whose implementation source can register later;
-  // this also avoids pulling the ObjVec/apply runtime into ordinary standalone
-  // property aliases.
-  if (declaration.getSourceFile() === identifier.getSourceFile()) return false;
+  // Same-source aliases also need the finalized implementation signatures:
+  // a generic table initializer can register its erased closure ABI after a
+  // function body has already emitted calls through the annotated alias.
   // Genuine host-function property aliases already have a dedicated fallback
   // later in this dispatcher. A module with no compiled closures may not emit
   // `__call_fn_method_N` at all, so claiming `Math.max` here would turn the

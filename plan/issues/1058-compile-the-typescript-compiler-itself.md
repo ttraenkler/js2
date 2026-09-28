@@ -14793,4 +14793,70 @@ passes **2/2** standalone IR-on/off controls, with no imports; log
 `.tmp/error-stack-limit.test.ts`. Thus that mutation alone is not the missing
 reproduction. No speculative host-builtin dispatch change has been made.
 
+Final merged IR rerun **4758** completed exit 0: **43/43** tests across
+**5/5** files pass (`.tmp/main-3eb7-ir-final.log`). Next checker investigation
+replays the preserved `189abffe3d` artifact with V8 call tracing, without
+recompiling or changing its bytes, to map the shared `9316:65` null-property
+failure. Diagnostic script/log: `.tmp/checker-parser-fixed-trace.mjs` and
+`.tmp/checker-parser-fixed-trace.log`. This is failure localization, not a new
+acceptance result for current HEAD.
+
+Tracing localizes `9316:65` to utilities' `getEmitStandardClassFields`, at
+its same-source call to the extracted `getEmitScriptTarget`. The diagnostic
+WAT has both a null guard and an exhausted callable-signature ladder throwing
+the same misleading property-access error. Export-only inspection of the
+stored callback (global 295) proves it stays identical across failure and
+the module's predicates return function=1, undefined=0, nullish=0. Thus do not
+attribute this to absent options/callback storage. Imported calls use the
+finalize-filled closure driver; the same-source alias is explicitly excluded
+by `bindingIsImmutablePropertyCallableAlias` and uses a body-time ladder.
+This remains a hypothesis about the failing arm, not a validated fix.
+
+Minimal mapped-options controls pass **2/2**, both with normal ordering and
+the calling declaration hoisted before the table; logs
+`.tmp/checker-computed-options-baseline.log` and
+`.tmp/checker-computed-options-hoist.log`. Actual upstream utilities are now
+building on merged HEAD in **35288**, log `.tmp/checker-options-upstream.log`,
+entry `.tmp/checker-options-upstream.ts`, artifact prefix of the same name.
+Native exact-source bundled oracles are `runTarget=99`, `runDefine=1`,
+`runStandard=1`. No source expression replacement or expected-value weakening.
+
+The actual upstream-helper probe completed exit 1 on merged `1c61f8e49a`:
+**113,140 ms**, valid **8,817,263-byte** standalone binary with zero imports.
+Imported `runTarget=99` and `runDefine=1` match; same-source `runStandard`
+throws the exact `9316:65` failure (**2/3** matches). Candidate removes the
+same-source exclusion from the existing immutable property-alias dispatch;
+same-source generic table callbacks can also register implementation ABIs
+after their callers are emitted. Const-snapshot and host-function exclusions
+remain. This reuses existing dispatch rather than adding a legacy-only path.
+
+Candidate exact-upstream probe **39153** completed exit 0: **3/3** native
+oracles now match, compile **122,107 ms**, valid **8,806,409-byte** binary,
+zero imports, standalone target. Same five IR demotion warnings as baseline;
+no new error substitution or source rewrite. Log:
+`.tmp/checker-options-upstream-candidate.log`. Baseline binary/map retained
+under `.tmp/checker-options-upstream-baseline`; candidate under
+`.tmp/checker-options-upstream`. Added tracked regression entry
+`tests/dogfood/fixtures/typescript-options-standalone-workload.ts`; its direct
+build is active in **71412**, log `.tmp/checker-options-tracked-candidate.log`.
+
+Neighbor controls **49/49** pass across the barrel alias, method extraction,
+and incomplete-host assertion suites (`.tmp/same-source-alias-controls.log`).
+The new same-source assertion in the barrel test also passes on original
+`1c61f8e49a` code via read-only loader (**1/1**, seven excluded); it is a
+preservation control, not the positive defect reproduction. The actual
+upstream helpers provide the measured **2/3 → 3/3** attribution.
+Typecheck, formatting/lint, LOC/function, coercion, and oracle gates pass
+without new allowances. Dead-export preservation **6/6 full + 6/6 cut**;
+graph OPEN / strict modeled closure FAIL / retirement NOT CERTIFIED unchanged.
+
+Reproduce the tracked upstream helper acceptance with the usual pinned root,
+`--mode source --target standalone --prepare-pinned-typescript
+--entry ../../fixtures/typescript-options-standalone-workload.ts
+--consumer-driven-barrels --heap-mb 8192 --timeout-ms 3600000
+--require-invocations 3 --invoke-zero-case runTarget=99
+--invoke-zero-case runDefine=1 --invoke-zero-case runStandard=1`.
+Full checker still requires a fresh run; do not infer full-checker acceptance
+from the isolated helper result.
+
 "js2wasm compiles 60% of test262" is a percentage. "js2wasm compiles the TypeScript compiler itself" is a story. Landing even Tier 3 is the single strongest artifact for conversations with potential maintainers or funders — it demonstrates the compiler has enough depth to handle production TypeScript, not just hand-picked benchmark inputs. The gap between "a toy subset compiles" and "the real compiler compiles" is exactly what separates a proof-of-concept from a usable tool.

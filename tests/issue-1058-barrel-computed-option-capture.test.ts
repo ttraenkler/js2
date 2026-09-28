@@ -13,6 +13,7 @@ describe("#1058 barrel-reexported computed option callbacks", () => {
             computedOptions,
             createBinder,
             getAllowImportingTsExtensions,
+            sameSourceTarget,
           } from "./barrel.js";
 
           const bindSourceFile = createBinder();
@@ -26,6 +27,9 @@ describe("#1058 barrel-reexported computed option callbacks", () => {
 
           export function precedingAliasTest(): number {
             return getAllowImportingTsExtensions({ allowImportingTsExtensions: true }) ? 1 : 0;
+          }
+          export function sameSourceTest(): number {
+            return sameSourceTarget({ target: 2 });
           }
         `,
         "./binder.ts": `
@@ -216,6 +220,9 @@ describe("#1058 barrel-reexported computed option callbacks", () => {
             _computedOptions.allowImportingTsExtensions.computeValue;
           export const getEmitScriptTarget: (options: CompilerOptions) => ScriptTarget =
             _computedOptions.target.computeValue;
+          export function sameSourceTarget(options: CompilerOptions): number {
+            return getEmitScriptTarget(options);
+          }
           export const getEmitModuleKind: (options: CompilerOptions) => ModuleKind =
             _computedOptions.module.computeValue;
           export const getAllowJs: (options: CompilerOptions) => boolean =
@@ -249,6 +256,7 @@ describe("#1058 barrel-reexported computed option callbacks", () => {
     const exports = wrapExports(instance, { signatures: result.exportSignatures });
     expect(exports.surfaceTest()).toBe(1);
     expect(exports.precedingAliasTest()).toBe(1);
+    expect(exports.sameSourceTest()).toBe(2);
     expect(exports.test()).toBe(2);
   });
 
