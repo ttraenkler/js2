@@ -387,7 +387,7 @@ import {
 } from "./source-scan-predicates.js"; // (#3104) whole-program AST pre-scan predicates
 // Re-exported for existing external consumers (e.g. tests/issue-1719-s1.test.ts).
 export { sourceOverridesArrayIterator } from "./source-scan-predicates.js";
-import { parameterNeedsAccessorCarrier } from "./accessor-parameter-carrier.js";
+import { parameterNeedsOpenObjectCarrier } from "./open-object-parameter-carrier.js";
 import {
   fillApplyClosure,
   fillBindDynHelper,
@@ -2871,7 +2871,7 @@ function resolveIrOverrideParamType(
   classShapes: IrClassShapeLookup,
   resolveImplicitParamType: ReturnType<typeof makeIrImplicitParamTypeResolver>,
 ): IrType {
-  if (parameterNeedsAccessorCarrier(ctx, parameter) || parameterObservesNullishSwitch(parameter, ctx.oracle))
+  if (parameterNeedsOpenObjectCarrier(ctx, parameter) || parameterObservesNullishSwitch(parameter, ctx.oracle))
     return irDynamic();
   const projected = resolveImplicitParamType(parameter);
   // Keep the established numeric parity-withdrawal path (#3551): lattice f64

@@ -106,7 +106,10 @@ import { needsImplicitArgumentsObject } from "./helpers/body-uses-arguments.js";
 import { readsAmbientThisGlobal } from "./helpers/body-references-own-this.js";
 import { mappedFormalNeedsExternref } from "./mapped-arguments-formal-widening.js";
 import { markIdentityPreservingStructuralParam } from "./identity-preserving-structural-param.js";
-import { parameterNeedsAccessorCarrier, prepareAccessorParameterCarriers } from "./accessor-parameter-carrier.js";
+import {
+  parameterNeedsOpenObjectCarrier,
+  prepareOpenObjectParameterCarriers,
+} from "./open-object-parameter-carrier.js";
 import { hasRuntimeEnumObject, prepareRuntimeEnumObjects } from "./runtime-enum-object.js";
 import {
   prepareReadonlyModuleClassBindings,
@@ -527,7 +530,7 @@ export function prepareIdentityPreservingStructuralParams(
   ctx: CodegenContext,
   sourceFiles: readonly ts.SourceFile[],
 ): void {
-  prepareAccessorParameterCarriers(ctx, sourceFiles);
+  prepareOpenObjectParameterCarriers(ctx, sourceFiles);
   prepareRuntimeEnumObjects(ctx, sourceFiles);
   prepareRuntimeNamespaceObjects(ctx, sourceFiles);
   prepareReadonlyModuleClassBindings(ctx, sourceFiles);
@@ -1485,7 +1488,7 @@ function lowerParamType(
   if (nativeParam === null) {
     wasmType = widenUndefinedDefaultParamSlot(param, wasmType);
     wasmType = preserveIdentityForStructuralParam(ctx, param, index, stmt, wasmType, paramType);
-    if (parameterNeedsAccessorCarrier(ctx, param)) {
+    if (parameterNeedsOpenObjectCarrier(ctx, param)) {
       markIdentityPreservingStructuralParam(ctx, param);
       wasmType = { kind: "externref" };
     }

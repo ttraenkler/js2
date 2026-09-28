@@ -2,10 +2,11 @@
 import { ts } from "../ts-api.js";
 import type { CodegenContext } from "./context/types.js";
 import { nativeTypeOfDeclaration } from "./native-type-annotations.js";
+import { collectOptionalObjectForwarding } from "../frontend/ts/optional-object-forwarding.js";
 
 // Shared source ABI evidence, keyed by declarations rather than binding names.
-// An accessor literal uses the open object carrier, even under an interface
-// annotation. A nominal parameter cast would discard that runtime value.
+// Accessor literals and forwarded optional objects use the open carrier even
+// under an interface annotation. A nominal cast would discard those values.
 const parametersByContext = new WeakMap<CodegenContext, ReadonlySet<ts.ParameterDeclaration>>();
 
 function unwrap(expression: ts.Expression): ts.Expression {
@@ -30,8 +31,14 @@ function isAccessorArgument(ctx: CodegenContext, expression: ts.Expression): boo
   return ts.isObjectLiteralExpression(value) && value.properties.some(ts.isAccessor);
 }
 
-export function prepareAccessorParameterCarriers(ctx: CodegenContext, sourceFiles: readonly ts.SourceFile[]): void {
-  const parameters = new Set<ts.ParameterDeclaration>();
+export function prepareOpenObjectParameterCarriers(ctx: CodegenContext, sourceFiles: readonly ts.SourceFile[]): void {
+  const parameters = new Set(
+    collectOptionalObjectForwarding(
+      ctx.oracle,
+      sourceFiles,
+      (parameter) => nativeTypeOfDeclaration(ctx.oracle, parameter) === null,
+    ),
+  );
   const pending: ts.Node[] = [...sourceFiles];
   while (pending.length) {
     const node = pending.pop()!;
@@ -64,6 +71,6 @@ export function prepareAccessorParameterCarriers(ctx: CodegenContext, sourceFile
   parametersByContext.set(ctx, parameters);
 }
 
-export function parameterNeedsAccessorCarrier(ctx: CodegenContext, parameter: ts.ParameterDeclaration): boolean {
+export function parameterNeedsOpenObjectCarrier(ctx: CodegenContext, parameter: ts.ParameterDeclaration): boolean {
   return parametersByContext.get(ctx)?.has(parameter) === true;
 }

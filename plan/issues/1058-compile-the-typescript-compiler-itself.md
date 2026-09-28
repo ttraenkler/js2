@@ -13701,4 +13701,70 @@ aliases, namespace-binding reassignment, and broader conditional return/value
 shapes. The checkpoint is the tested publication implementation, not a claim
 that every TypeScript namespace form or the entire compiler is complete.
 
+### Valid checker binary and remaining standalone boundary (2026-09-28)
+
+Namespace checkpoint is signed commit `b067c2d5cc`. Full checker session 65274
+has now terminated: **compileSuccess=true, validates=true**, **68,850,217 bytes**,
+**1,387,013 ms** worker elapsed. This is the first verified valid full-checker
+binary in this continuation; the prior constructor and mixed-closure validation
+failures are absent. It is **not standalone-executable yet**: ten imports remain,
+and all **0/3** workload invocations were blocked at instantiation without host
+shims. Evidence: `.tmp/checker-tagged-return-diagnostic.log` and retained
+`.tmp/checker-tagged-return.wasm`. Input provenance remains the tagged-return
+fix plus namespace candidate, before the later generic optional-result fix.
+
+Remaining imports are `__gen_create_buffer`, `__gen_push_ref`,
+`__create_generator`, `__get_filename`, `__get_process_cwd`,
+`__get_process_platform`, `__get_dirname`, `__get_process_argv`,
+`__get_process_stdout`, and `__process_exit`. Trace actual reachability/native
+provider ownership; do not satisfy the oracle by supplying JavaScript shims.
+A post-hoc Binaryen remove-unused-module-elements diagnostic produced an
+invalid derived binary (`type 5: invalid supertype 110`), so no DCE success or
+invocation result is claimed. Original valid bytes are preserved separately.
+Artifacts: `.tmp/checker-import-dce-audit.log`,
+`.tmp/checker-tagged-return-dce.wasm` (invalid diagnostic only).
+
+Deprecation diagnosis is now independent of optimization and test order:
+the saved O1 repeat remains **3/6**, 7,951,576 bytes, 155,873 ms; O0 also remains
+**3/6**, 10,062,235 bytes, 114,316 ms. Original callbacks/assertions are unchanged.
+Fresh-instance runs of cases 0, 4, and 5 and reversed ordering reproduce the
+same failures. Evidence: `.tmp/debug-deprecation-saved-binary-o1.log`,
+`.tmp/debug-deprecation-saved-binary-o0.log`, `.tmp/deprecation-instance-replay.log`;
+binaries `.tmp/deprecation-current.wasm` and `.tmp/deprecation-unoptimized.wasm`.
+Optimized binary function names are stripped, so named-function extraction
+returned an empty list; that is an instrument limitation, not absent functions.
+
+The cross-module reduction now isolates optional Options forwarding. With
+`deprecate(func, options?: Options)` forwarding to defaulted
+`select(name, options: Options = {})`, standalone returns **120 instead of 11**:
+silent/error cases both take the warning path. Saved WAT shows `deprecate`'s
+externref option being guarded-cast to select's nominal Options struct; the
+open-object argument fails that cast and becomes null, activating `{}` instead.
+Changing only the wrapper annotation to REQUIRED Options (all these test calls
+already supply it) improves **0/4 → 4/4**, across IR on/off and direct versus
+matcher calls. This is a causal reduction, **not a compiler fix**: retain optional
+undefined semantics and preserve the forwarded object's representation/identity.
+The earlier raw reduction run stopped on a strict apply/IArguments semantic
+diagnostic; runtime comparisons use skipSemanticDiagnostics like the upstream
+source workload. Evidence: `.tmp/deprecation-wrapped-modules-runtime.log`,
+`.tmp/deprecation-wrapped-stage.log`, `.tmp/deprecation-required-options-control.log`,
+and `.tmp/deprecation-wrapped-false-false.wat` (the last scratch run overwrites
+the WAT for its current required-parameter control). The scratch source currently
+has required Options; restore `options?` before testing a real compiler fix.
+
+### Optional-object forwarding checkpoint before main sync (2026-09-28)
+
+Restored optional Options in the reduction. The shared parameter-carrier
+preparation now follows exact declaration-owned forwarding edges, retaining an
+open object carrier for structural receiving parameters in both IR and legacy
+lowering. The original debugDeprecation source suite passed **6/6 native and
+6/6 standalone**, with valid Wasm and **zero imports** (7,953,440 bytes,
+136,176 ms, O1; `.tmp/debug-deprecation-optional-forwarding-o1.log`).
+
+The subsequent cleanup consumes oracle facts instead of reopening ctx.checker;
+the existing throwing-checker regression is retained. This checkpoint is not a
+claim that all optional-object semantics or all TypeScript suites pass. Complete
+the focused regression matrix after merging main, then revisit the full checker's
+ten host imports. The saved full-checker binary remains valid but not standalone.
+
 "js2wasm compiles 60% of test262" is a percentage. "js2wasm compiles the TypeScript compiler itself" is a story. Landing even Tier 3 is the single strongest artifact for conversations with potential maintainers or funders — it demonstrates the compiler has enough depth to handle production TypeScript, not just hand-picked benchmark inputs. The gap between "a toy subset compiles" and "the real compiler compiles" is exactly what separates a proof-of-concept from a usable tool.

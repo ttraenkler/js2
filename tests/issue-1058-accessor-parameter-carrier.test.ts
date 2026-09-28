@@ -3,9 +3,9 @@ import { expect, it } from "vitest";
 import { analyzeSource } from "../src/checker/index.js";
 import { createCodegenContext } from "../src/codegen/context/create-context.js";
 import {
-  parameterNeedsAccessorCarrier,
-  prepareAccessorParameterCarriers,
-} from "../src/codegen/accessor-parameter-carrier.js";
+  parameterNeedsOpenObjectCarrier,
+  prepareOpenObjectParameterCarriers,
+} from "../src/codegen/open-object-parameter-carrier.js";
 import { createEmptyModule } from "../src/ir/types.js";
 import { ts } from "../src/ts-api.js";
 import { compile } from "../src/index.js";
@@ -35,11 +35,11 @@ it("records exact accessor arguments without widening ordinary or shadowed bindi
       throw new Error("Accessor parameter preparation bypassed the oracle");
     },
   });
-  prepareAccessorParameterCarriers(ctx, [ast.sourceFile]);
+  prepareOpenObjectParameterCarriers(ctx, [ast.sourceFile]);
   const results: [string, boolean][] = [];
   const visit = (node: ts.Node): void => {
     if (ts.isFunctionDeclaration(node) && node.parameters.length) {
-      results.push([node.name!.text, parameterNeedsAccessorCarrier(ctx, node.parameters[0]!)]);
+      results.push([node.name!.text, parameterNeedsOpenObjectCarrier(ctx, node.parameters[0]!)]);
     }
     ts.forEachChild(node, visit);
   };
@@ -51,9 +51,9 @@ it("records exact accessor arguments without widening ordinary or shadowed bindi
     ["native", false],
     ["receive", false],
   ]);
-  prepareAccessorParameterCarriers(ctx, []);
+  prepareOpenObjectParameterCarriers(ctx, []);
   const first = ast.sourceFile.statements.find(ts.isFunctionDeclaration)!;
-  expect(parameterNeedsAccessorCarrier(ctx, first.parameters[0]!)).toBe(false);
+  expect(parameterNeedsOpenObjectCarrier(ctx, first.parameters[0]!)).toBe(false);
 });
 
 it("preserves an accessor argument through an IR-emitted typed reader", async () => {
