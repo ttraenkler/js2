@@ -15839,4 +15839,55 @@ guard ignores a valid `liftedCaptureSlots` entry when `localMap` is absent;
 do not assume a name registry proves binding identity. Diagnostic WAT
 `.tmp/checker-var-cell-nodebuilder.wat` is not an executable test module.
 
+### 2026-09-28 — transported capture versus promoted global
+
+Receiver fix committed signed as `5c8f39f73e7`; clean state verified. Added
+public-emitter regression `issue-1058-transported-capture-global.test.ts`:
+baseline **24485** passes **3/4**, failing exactly the hidden transported
+capture with absent ordinary name lookup. The global-fallback control and
+visible-local controls pass. Log `.tmp/transported-capture-global-baseline.log`.
+`recordLiftedCaptureSlots` derives declaration captures directly from leading
+parameter indices; source-binding isolation intentionally leaves those slots
+available even after removing ordinary name entries. The closure fallback
+consulted only `localMap`, bypassing that explicit forwarding source.
+
+Production candidate now requires both the ordinary local and the recorded
+lifted slot to be absent before using a promoted global. No registry writes,
+new identities, blanket localMap precedence or declaration-name inference
+are introduced. Verify focused controls and then rerun the full original
+checker with source maps enabled; this emitter test alone is not evidence
+that the checker now executes successfully.
+
+Candidate **96238** passes **52/52** (new global-fallback cases plus resolved
+cells, reference-array callbacks, deferred lexical reads and var lifetime).
+Gates **4911** exit 0: typecheck, format/lint, LOC/function, coercion/oracle
+checks pass, no new grants. Dead-export preservation **6/6 full + 6/6 cut**;
+graph OPEN, strict closure FAIL, retirement NOT CERTIFIED remain. Logs
+`.tmp/transported-capture-global-controls.log`,
+`.tmp/transported-capture-global-gates.log`. Full checker **23428** is live
+on `5c8f39f73e7` plus this closure correction, with original three oracles,
+source maps enabled, one-hour deadline and 8 GiB heap. Log/artifacts prefix
+`.tmp/checker-transported-global`; do not restart on observation timeout.
+
+Read-only import-call inspection **68630** of the original I/O helper binary
+finds real references, not just dead registration: **SortedMap_entries**
+(function **267**) calls `__gen_create_buffer`, `__gen_push_ref`,
+`__gen_set_return`, `__create_generator`. Iterator dispatch helpers retain
+the other five generator imports. Log `.tmp/vfs-generator-import-callers.log`.
+Do not erase/allowlist these imports without replacing their callers.
+
+Original SortedMap method planner **13355** admits **0/1**, rejecting it at the source
+for-of binding safety gate (then generic-iterator refusal, line 2523).
+Read-only diagnostic **70016** renames only the second loop's `i` to `j` in
+the TypeScript program's virtual source: **1/1** admitted. No pinned source
+file was edited. The two bindings are in opposite `if(indices)` branches;
+the current whole-generator name scan treats them as a conflict. Tests/logs:
+`.tmp/sorted-map-generator-plan.test.ts`,
+`.tmp/sorted-map-generator-plan.log`,
+`.tmp/sorted-map-generator-plan-disjoint.log` (env `RENAME_DISJOINT_LOOP=1`).
+Next: fix compiler binding/frame scope handling for disjoint loop bindings,
+with overlapping-scope and captured-cell controls; do not rename original
+upstream test code as the production solution. Planner success still requires
+real method execution and an import-free original I/O/JSON harness rerun.
+
 "js2wasm compiles 60% of test262" is a percentage. "js2wasm compiles the TypeScript compiler itself" is a story. Landing even Tier 3 is the single strongest artifact for conversations with potential maintainers or funders — it demonstrates the compiler has enough depth to handle production TypeScript, not just hand-picked benchmark inputs. The gap between "a toy subset compiles" and "the real compiler compiles" is exactly what separates a proof-of-concept from a usable tool.

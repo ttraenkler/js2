@@ -205,11 +205,13 @@ function emitMemoizedNestedFnClosure(
     // local. `promoteAccessorCapturesToGlobals` promotes such captures to
     // module globals (shared ref-cell box for mutable, value global for
     // immutable); prefer those whenever the current fctx cannot resolve the
-    // name itself. Guarded on localMap-absence so owner-fctx behavior is
+    // name itself. A hidden lifted capture remains available after source
+    // scope isolation removes its ordinary name lookup. Guard on both sources
+    // being absent so owner-fctx behavior is
     // unchanged (see the #1177 revert note in calls.ts for why a blanket
     // localMap-first lookup is NOT safe).
     const liveBoxLocalIdx = fctx.localMap.get(cap.name);
-    const capUnresolvedHere = liveBoxLocalIdx === undefined;
+    const capUnresolvedHere = liveBoxLocalIdx === undefined && !fctx.liftedCaptureSlots?.has(cap.name);
     const liveBox = fctx.boxedCaptures?.get(cap.name);
     const liveBoxType = liveBoxLocalIdx === undefined ? undefined : getLocalType(fctx, liveBoxLocalIdx);
     const selectedSlotType = getLocalType(fctx, captureSourceSlot(fctx, cap));
