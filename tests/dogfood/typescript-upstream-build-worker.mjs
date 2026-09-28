@@ -2,6 +2,7 @@ import { parentPort, workerData } from "node:worker_threads";
 import { setFlagsFromString } from "node:v8";
 
 import { register } from "tsx/esm/api";
+import { readStandaloneException } from "./upstream-suite-worker-protocol.mjs";
 
 import {
   assertTypescriptBuildProbeInvocationSupported,
@@ -49,8 +50,8 @@ function sourceAtWasmOffset(sourceMapJson, wasmOffset) {
   return best;
 }
 
-function runtimeErrorDetails(error, sourceMapJson) {
-  const message = error instanceof Error ? error.message : String(error);
+function runtimeErrorDetails(error, sourceMapJson, exports) {
+  const message = readStandaloneException(error, exports) || (error instanceof Error ? error.message : String(error));
   const stack = error instanceof Error ? error.stack : undefined;
   const stackOffsetMatch = stack?.match(/:0x([\da-f]+)\)?/i);
   const validationOffsetMatch = message.match(/@\+(\d+)/);
@@ -175,7 +176,7 @@ try {
               matches: typescriptInvocationMatches(actual, expected, requireSafeInteger),
             };
           } catch (error) {
-            const details = runtimeErrorDetails(error, result.sourceMap);
+            const details = runtimeErrorDetails(error, result.sourceMap, instance.exports);
             return {
               name,
               exportName,

@@ -14269,4 +14269,23 @@ The narrowed full-checker successor is live in session **68244**, log
 `.tmp/checker-literal-carrier.wasm` plus source map. JSON session **12127**
 remains on its earlier classifier snapshot; do not label it a narrowed-source run.
 
+### Preserve readable guest failures in the checker probe (2026-09-28)
+
+The completed host-carrier build reported only `[object WebAssembly.Exception]`
+for all three failures, although replaying the saved binary exposed the real
+TypeError through the existing exception-rendering exports. The build worker
+now uses that same renderer when an invocation throws, with the original error
+text as fallback. Failure verdicts, runtime inputs, import policy, binary, and
+source-map offset handling are unchanged. Instantiation failures without an
+instance still retain their original diagnostics.
+
+A real-worker regression compiles a zero-import fixture with a throwing export,
+a passing export, and a missing export, checking readable guest text and strict
+rejection alongside the passing control. It and the existing verdict controls
+pass **19/19**, log `.tmp/typescript-probe-guest-errors-final.log`. The initial
+regression setup used a Node engine flag in Worker.execArgv, which Node rejects;
+removing the override correctly inherits the parent engine configuration.
+Existing long-running workers already loaded their worker code and are not
+restarted for this change.
+
 "js2wasm compiles 60% of test262" is a percentage. "js2wasm compiles the TypeScript compiler itself" is a story. Landing even Tier 3 is the single strongest artifact for conversations with potential maintainers or funders — it demonstrates the compiler has enough depth to handle production TypeScript, not just hand-picked benchmark inputs. The gap between "a toy subset compiles" and "the real compiler compiles" is exactly what separates a proof-of-concept from a usable tool.
