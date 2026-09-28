@@ -1872,7 +1872,7 @@ export function tryGlobalThisAndProcessRead(
   // These are JS host imports that read from the live Node process at runtime.
   // The local `process` identifier must not be shadowed by a local variable.
   // In WASI mode, `process.env` is handled separately via WASI environ (#1482),
-  // so this path is gated on !ctx.wasi.
+  // so that path stays separate; only the env fallback below serves standalone.
   if (!ctx.wasi && ts.isIdentifier(expr.expression) && expr.expression.text === "process") {
     const isShadowed = fctx.localMap.has("process") || (fctx.boxedCaptures?.has("process") ?? false);
     if (!isShadowed) {
@@ -1898,7 +1898,7 @@ export function tryGlobalThisAndProcessRead(
         else fctx.body.push({ op: "ref.null.extern" });
         return { kind: "externref" };
       }
-      if (hostImport !== undefined) {
+      if (hostImport !== undefined && !ctx.standalone) {
         const idx = ensureLateImport(ctx, hostImport, [], [{ kind: "externref" }]);
         flushLateImportShifts(ctx, fctx);
         if (idx !== undefined) {

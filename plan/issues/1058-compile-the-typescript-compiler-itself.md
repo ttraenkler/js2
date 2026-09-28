@@ -13804,4 +13804,36 @@ non-standalone; module filename/directory imports are in
 `src/codegen/expressions/identifiers.ts`. These are candidate producer sites,
 not yet attribution of each saved binary call or proof of reachability.
 
+### Node-process import isolation candidate (2026-09-28)
+
+A four-case reduction (IR on/off, optimization on/off) retained process cwd,
+platform and argv imports even behind an absent-capability guard: **0/4**
+(`.tmp/checker-platform-guard.log`). Gating the dedicated Node intrinsic paths
+to the JS-host lane removed the imports but exposed a second defect: an explicit
+`declare const process: any` did not use the native global-environment reader,
+so the capability guard threw. Treating standalone process as a capability even
+with that annotation gives **4/4**, valid zero-import Wasm returning the guarded
+fallback (`.tmp/checker-platform-guard-native-process.log`). Permanent absent,
+supplied and shadowed-capability controls pass **8/8**; the expanded four-file
+run passes **31/31**, including Node-host process behavior, existing capability
+presence cases and standalone process.env require folding
+(`.tmp/checker-process-isolation-focused.log`). The existing standalone
+process.env compatibility path is unchanged.
+
+The saved full-checker import caller audit first exhausted the default stack
+while printing a large body (`.tmp/checker-import-callers.log`); its larger-stack
+retry is still being observed, so neither complete caller attribution nor the
+named-feature DCE experiment is yet evidence of success. The original binary
+remains untouched; this is not a new full-checker measurement.
+
+Full checker rebuild session **18694** has now started with the merged main,
+optional-forwarding fix and this process-isolation candidate. It runs all three
+existing zero-argument oracles with their unchanged expectations (67858, 0,
+133394), consumer-driven barrels, 8192 MiB heap and one-hour ceiling. Its unique
+log is `.tmp/checker-process-isolation-diagnostic.log`; the diagnostic loader
+saves `.tmp/checker-process-isolation.wasm`. No validation, import-count or
+runtime result is claimed until terminal. Do not restart it on an observation
+timeout. The separate import audit is session **28490**, using the older saved
+binary and `.tmp/checker-import-callers-large-stack.log`.
+
 "js2wasm compiles 60% of test262" is a percentage. "js2wasm compiles the TypeScript compiler itself" is a story. Landing even Tier 3 is the single strongest artifact for conversations with potential maintainers or funders — it demonstrates the compiler has enough depth to handle production TypeScript, not just hand-picked benchmark inputs. The gap between "a toy subset compiles" and "the real compiler compiles" is exactly what separates a proof-of-concept from a usable tool.

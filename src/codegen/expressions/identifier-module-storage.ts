@@ -45,9 +45,9 @@ export function identifierHasOnlyAmbientDeclarations(ctx: CodegenContext, id: ts
  *
  * Import preprocessing also emits ambient variable stubs, but its value stubs
  * are deliberately `any` (and Node class stubs use `typeof ...`).  Excluding
- * those two synthetic shapes keeps an imported binding from being reinterpreted
- * as a same-named property of globalThis. Declaration-file globals continue to
- * use `collectDeclaredGlobals`, except standalone's host-owned `process` value.
+ * those synthetic shapes keeps imports from becoming globalThis reads, except
+ * standalone's process capability (including an explicit `any` declaration).
+ * Registered capability thunks still take precedence over the global lookup.
  */
 export function identifierHasExplicitHostAmbientValueDeclaration(ctx: CodegenContext, id: ts.Identifier): boolean {
   // Standalone has a native global environment too. A declaration describes
@@ -66,7 +66,8 @@ export function identifierHasExplicitHostAmbientValueDeclaration(ctx: CodegenCon
     if (!ts.isVariableDeclarationList(list) || !ts.isVariableStatement(list.parent)) return false;
     if (!hasDeclareModifier(list.parent)) return false;
     const type = declaration.type;
-    return type !== undefined && type.kind !== ts.SyntaxKind.AnyKeyword && !ts.isTypeQueryNode(type);
+    const nativeProcess = ctx.standalone && id.text === "process";
+    return type !== undefined && (nativeProcess || type.kind !== ts.SyntaxKind.AnyKeyword) && !ts.isTypeQueryNode(type);
   });
 }
 

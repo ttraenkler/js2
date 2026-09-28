@@ -9683,10 +9683,9 @@ function compileCallExpression(
       return compileConsoleCall(ctx, fctx, expr, propAccess.name.text);
     }
 
-    // (#1490) Non-WASI Node.js host mode: process.exit(code) and process.cwd().
-    // process.exit routes to the __process_exit host import (calls real process.exit
-    // when running under Node). process.cwd() returns a string via __get_process_cwd.
-    if (!ctx.wasi && ts.isIdentifier(propAccess.expression) && propAccess.expression.text === "process") {
+    // (#1058) Node process intrinsics require a JS host, not merely non-WASI.
+    const nodeProcessHost = !ctx.wasi && !ctx.standalone;
+    if (nodeProcessHost && ts.isIdentifier(propAccess.expression) && propAccess.expression.text === "process") {
       const isShadowed = fctx.localMap.has("process") || (fctx.boxedCaptures?.has("process") ?? false);
       if (!isShadowed) {
         const procMethod = propAccess.name.text;
