@@ -13767,4 +13767,41 @@ claim that all optional-object semantics or all TypeScript suites pass. Complete
 the focused regression matrix after merging main, then revisit the full checker's
 ten host imports. The saved full-checker binary remains valid but not standalone.
 
+### Main sync and optional forwarding verification (2026-09-28)
+
+Fetched loopdive/js2 main at `f2e06e122439bc5b4c5629abc6f9d76e5a23c432`
+and merged it cleanly in signed merge `002f2b4bb3`, after preserving the
+optional-forwarding fix in signed commit `34398c405e`. No stash, rebase or
+force-push was used; the unrelated original checkout remains untouched.
+
+Post-merge evidence:
+
+- **38/38** focused tests across optional forwarding, accessor carriers,
+  generic optional result order, mixed closure return tags, and main's newly
+  merged iterator-step and undefined-global-index controls:
+  `.tmp/sync-main-focused.log`.
+- Added permanent multi-hop forwarding checks for omitted/undefined defaults,
+  explicit null, mutation and object identity in both IR modes. The expanded
+  optional/accessor files pass **6/6**:
+  `.tmp/sync-main-permanent-nullish.log`.
+- Original debugDeprecation source suite: **6/6 native, 6/6 standalone**,
+  valid Wasm, zero imports, O1, 7,953,326 bytes, 146,574 ms:
+  `.tmp/debug-deprecation-main-f2e06e-o1.log`. The earlier oracle-cleanup rerun
+  also passed 6/6, before this main merge.
+- Type-checking passes. LOC/function/coercion/oracle gates pass against the
+  fetched main tip. Preservation checks pass (6/6 full and 6/6 cut witnesses),
+  with the existing graph OPEN / strict modeled closure FAIL caveat retained:
+  `.tmp/sync-main-ratchets.log`. This is not a retirement certificate.
+
+Next: investigate the saved full-checker binary's ten host imports without
+supplying JavaScript shims or claiming the full TypeScript goal is complete.
+Source inspection locates generator fallback admission in
+`src/codegen/declarations/import-collector.ts` and `src/codegen/closures.ts`,
+with registration in `src/codegen/registry/imports.ts`. Node process property
+and call paths in `src/codegen/property-access-dispatch.ts` and
+`src/codegen/expressions/calls.ts` gate on non-WASI, not universally on
+non-standalone; module filename/directory imports are in
+`src/codegen/expressions/identifiers.ts`. These are candidate producer sites,
+not yet attribution of each saved binary call or proof of reachability.
+
 "js2wasm compiles 60% of test262" is a percentage. "js2wasm compiles the TypeScript compiler itself" is a story. Landing even Tier 3 is the single strongest artifact for conversations with potential maintainers or funders — it demonstrates the compiler has enough depth to handle production TypeScript, not just hand-picked benchmark inputs. The gap between "a toy subset compiles" and "the real compiler compiles" is exactly what separates a proof-of-concept from a usable tool.
