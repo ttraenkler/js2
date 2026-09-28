@@ -13836,4 +13836,52 @@ runtime result is claimed until terminal. Do not restart it on an observation
 timeout. The separate import audit is session **28490**, using the older saved
 binary and `.tmp/checker-import-callers-large-stack.log`.
 
+### Generator import attribution and truthiness candidate (2026-09-28)
+
+The text-rendering audit **terminated with JavaScript heap exhaustion** (session
+28490, exit 134). It produced no complete caller map or DCE result. Binaryen's
+dedicated print-call-graph pass succeeded after enabling input features; it
+emitted no rewritten binary. `.tmp/checker-direct-call-graph-features.log`
+identifies the three exact callers of the generator host-import family:
+`generateJsxChildren`, `generateLimitedTupleElements`, and
+`generateObjectLiteralElements`. The separate filename import is called by
+`isFileSystemCaseSensitive`. A call graph is not dynamic reachability proof.
+
+An isolated native-planner probe over the original checker source confirms
+**1/4 admitted**: `generateJsxAttributes` is the positive control, while the
+same three imported generators are rejected. Instrumentation confined to the
+test loader identifies the first rejects: numeric-only lowerIf conditions for
+JSX children/object elements, and unsupported loop continue for tuple elements.
+Evidence: `.tmp/checker-generator-plan-fail.log`.
+
+An isolated source-transform A/B at c0e3c73b68 uses the existing canonical
+condition emitter for yield-free generator if conditions. Four standalone
+reductions improve **0/4 → 4/4**, in both IR modes, covering eleven truthiness
+values and checking creation laziness / exactly-once condition side effects.
+Logs: `.tmp/generator-object-condition-baseline.log` and
+`.tmp/generator-object-condition-candidate.log`. The production candidate now
+routes those conditions through the same emitter; yields inside a condition
+remain rejected rather than being evaluated eagerly. Permanent regressions and
+the original four-declaration planner probe are being checked next.
+
+Full checker session 18694 started **before this generator change**, with the
+process-isolation code at c0e3c73b68. Its result must not be attributed to this
+later candidate, and it must not be restarted while live.
+
+The updated original-source planner probe admits **2/4** declarations:
+generateJsxChildren now joins the previously accepted generateJsxAttributes.
+generateLimitedTupleElements still rejects continue; generateObjectLiteralElements
+now gets past its truthiness condition and rejects the yielding switch.
+`.tmp/checker-generator-plan-truthy.log` records these rows. Permanent runtime
+coverage passes **6/6**, including a capturing checker-shaped loop yielding
+objects across suspensions (`.tmp/generator-truthy-loop-focused.log`).
+
+The broader candidate run is **23/24**, not all green:
+`.tmp/generator-truthy-focused.log`. Its only failure is the existing
+`host lane: capturing method drain unchanged (control)` case. Restoring the
+pre-change lowerIf and branch flag in an isolated transform reproduces the
+identical host failure at the same Wasm function/offset, **10/11** in that file
+(`.tmp/generator-truthy-method-baseline.log`). No baseline was changed or test
+disabled. This does not establish full generator or full TypeScript coverage.
+
 "js2wasm compiles 60% of test262" is a percentage. "js2wasm compiles the TypeScript compiler itself" is a story. Landing even Tier 3 is the single strongest artifact for conversations with potential maintainers or funders — it demonstrates the compiler has enough depth to handle production TypeScript, not just hand-picked benchmark inputs. The gap between "a toy subset compiles" and "the real compiler compiles" is exactly what separates a proof-of-concept from a usable tool.

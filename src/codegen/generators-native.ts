@@ -2154,7 +2154,7 @@ function buildNativeGeneratorPlan(ctx: CodegenContext, decl: GeneratorDecl): Nat
 
   /** if (cond) thenBlock [else elseBlock] — at least one branch yields. */
   function lowerIf(stmt: ts.IfStatement, unwind: readonly UnwindEntry[]): boolean {
-    if (!isNumericExpression(ctx, stmt.expression)) return fail();
+    if (nodeContainsYield(stmt.expression)) return fail();
     collectSpillsIn(stmt.expression);
     // Close current state with a branch terminator. Reserve the join state and
     // the branch entry states.
@@ -2172,6 +2172,7 @@ function buildNativeGeneratorPlan(ctx: CodegenContext, decl: GeneratorDecl): Nat
       negate: false,
       thenState: thenEntry,
       elseState: hasElse ? elseEntry : joinId,
+      canonical: true,
     });
 
     // Lower then-branch starting at thenEntry.
