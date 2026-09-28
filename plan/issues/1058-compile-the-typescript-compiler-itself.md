@@ -14782,4 +14782,15 @@ FAIL, retirement/deletion NOT CERTIFIED. Focused merged tests are still active
 in **28353** (`.tmp/main-3eb7-focused.log`) and final IR controls in **4758**
 (`.tmp/main-3eb7-ir-final.log`); do not treat unfinished runs as passes.
 
+Synchronization completed in signed merge **`460fd83fb2`**, with fetched main
+`3eb7ae5da3` verified as an ancestor. Focused run **28353** completed exit 0:
+**107/107** tests across **10/10** files pass, including branch carrier/array/
+ReadonlyMap controls and upstream descriptor/closure controls. Final IR rerun
+**4758** remains active. Resumed the Error-hook investigation on the merged
+tree: adding the upstream `Error.stackTraceLimit = 100` assignment still
+passes **2/2** standalone IR-on/off controls, with no imports; log
+`.tmp/error-stack-limit-main-baseline.log`, scratch test
+`.tmp/error-stack-limit.test.ts`. Thus that mutation alone is not the missing
+reproduction. No speculative host-builtin dispatch change has been made.
+
 "js2wasm compiles 60% of test262" is a percentage. "js2wasm compiles the TypeScript compiler itself" is a story. Landing even Tier 3 is the single strongest artifact for conversations with potential maintainers or funders — it demonstrates the compiler has enough depth to handle production TypeScript, not just hand-picked benchmark inputs. The gap between "a toy subset compiles" and "the real compiler compiles" is exactly what separates a proof-of-concept from a usable tool.
