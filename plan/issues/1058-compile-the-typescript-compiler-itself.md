@@ -14534,4 +14534,17 @@ retains its open-graph/non-certification caveat (`.tmp/open-constructor-gates.lo
 Full parser rebuild **98532** is running; distinct artifact prefix
 `.tmp/parser-open-constructor`, log `.tmp/parser-open-constructor-diagnostic.log`.
 
+The full run reports **193,306 ms**, **14,593,125 bytes**, valid zero-import
+standalone Wasm, **0/3** acceptance. Identifier allocation is no longer the
+stopping point: Performance throws a null/undefined TypeError at **632:13**;
+Builder returns **13372708312843 vs 13386537220945**; Core returns **-1 vs
+40098163538143**. These wrong results are not passes. Next reduce Core's
+sentinel guard and decode Builder's fingerprint fields; retain the unchanged
+native oracles. The dispatch fix is committed as `b56c1d7f24`.
+Decoding Builder's packed result: both have **3 statements**, but Wasm visits
+**41 nodes vs native 44** (hash 2475120395 vs 3419126609). Core's -1 specifically
+means **one parse diagnostic**, not a generic sentinel: `runCase` returns the
+negative diagnostics length after walking the AST. These narrow the next
+investigation to missing child traversal and an unexpected parser diagnostic.
+
 "js2wasm compiles 60% of test262" is a percentage. "js2wasm compiles the TypeScript compiler itself" is a story. Landing even Tier 3 is the single strongest artifact for conversations with potential maintainers or funders — it demonstrates the compiler has enough depth to handle production TypeScript, not just hand-picked benchmark inputs. The gap between "a toy subset compiles" and "the real compiler compiles" is exactly what separates a proof-of-concept from a usable tool.
