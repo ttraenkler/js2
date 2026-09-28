@@ -14068,10 +14068,69 @@ closure **FAIL**, and deletion is **not certified**.
 Pre-merge JSON-recovery session 71288 is terminal: its original native callbacks
 pass **5/5**, but standalone compilation timed out at **1,200,000 ms**, without
 a binary or executed Wasm callbacks. Preserved exact report:
-`.tmp/json-parser-recovery-pre-422db-timeout.json`. A post-merge diagnostic retry
-keeps the same deadline and assertions, adding `JS2WASM_PROFILE=1`;
-log `.tmp/json-parser-recovery-main-422db-profile.log`. Do not count it as passed
-while pending. The pre-merge full-checker session 78532 remains active; its
+`.tmp/json-parser-recovery-pre-422db-timeout.json`. A post-merge retry keeps the
+same deadline and assertions; log `.tmp/json-parser-recovery-main-422db-profile.log`.
+Correction: its `JS2WASM_PROFILE=1` setting is not recognized by the compiler,
+so the filename does **not** establish profiling. The actual setting is
+`JS2WASM_COMPILE_PROFILE=stream`. Keep live session **83629** intact; it still
+measures the merged compiler. Any subsequent timed-out retry must use the
+recognized setting. Do not count it as passed while pending. The pre-merge
+full-checker session 78532 remains active; its probe explicitly sets the correct
+streaming profile setting. Its
 result will describe compiler revision 8c16af6892, not the merged tree.
+
+Harness preflight independently confirms an initialization dependency, not a
+completed Wasm failure: the original bundled harness initializes with Node's
+`ts.sys` (`.tmp/json-harness-system-control.log`), but clearing it through
+upstream `setSys(undefined)` before loading the same harness throws in
+`createNodeIO` while reading `getAccessibleFileSystemEntries`
+(`.tmp/json-harness-system-preflight.log`). Both cases seed the same cached
+workspace root to isolate the System dependency from root discovery. Scratch
+reproducer: `.tmp/json-harness-system-preflight.mjs`, control flag
+`--retain-system`. Standalone needs a genuine in-memory System initialized
+before Harness, with pinned reference contents and preserved output operations;
+do not replace baseline comparisons or assertions with success stubs. This
+preflight does not establish the pending Wasm build's eventual failure mode.
+
+### Zero-import checker and next runtime failure (2026-09-28)
+
+Full-checker session **78532** is terminal (exit 1). Compiler revision
+**8c16af6892** emitted a **69,081,121-byte valid module with zero imports** in
+**1,525,118 ms**. All **0/3** runtime oracles fail, each with a null dereference
+in `runCase`, function 2212, offset **9436901 / 0x8ffee5**. Saved unmodified
+binary: `.tmp/checker-native-switch.wasm`; report:
+`.tmp/checker-native-switch-diagnostic.log`. This establishes host-free
+compilation, not a working checker or self-hosting acceptance.
+
+Re-execution of that exact binary (`.tmp/checker-native-switch-runtime-trace.log`)
+reaches parsing and the three source-file field assignments but never enters
+`createTypeChecker`. The fault byte is `0xd4` (`ref.as_non_null`). Diagnostic-only
+function extraction (`.tmp/checker-native-switch-runCase.wat`) identifies the
+checker-host argument conversion: its newly constructed record fails a target
+heap-type test, becomes null, then is asserted non-null. A small absent-method
+host assertion reproduction is running in both IR modes, session **50748**,
+log `.tmp/checker-host-cast-focused-baseline.log`. The first launch, session
+**37000**, accidentally merged the default test include list into its scratch
+configuration and started a broader suite. That run is not evidence for this
+reduction; permission to stop only that unintended run has been requested.
+The corrected configuration overrides the include list and the invocation
+also names the exact test file. Session 50748 is now terminal: **0/2 pass**.
+IR enabled produces an invalid return in `makeHost` (expected `(ref null 45)`,
+got `(ref 142)`); IR disabled reproduces the null dereference. The reduction
+returns `{ getValue: () => value } as unknown as Host`, where `Host` also
+declares an unused method; calling the existing method must still return 17.
+Erased assertions cannot discard the object or require its unrelated methods
+to exist. Preserve identity and missing-property behavior when fixing the shared
+representation/IR path; merely copying default fields is not a general fix.
+
+For the separate JSON harness, upstream's own `fakes.System` and `vfs.FileSystem`
+can supply the platform contract without replacing original callbacks. Scratch
+native preflight `.tmp/json-harness-virtual-preflight.mjs` passes **5/5**, then
+proves that incorrect output for an existing reference is rejected and written
+to virtual local-output storage (`.tmp/json-harness-virtual-preflight.log`).
+It seeds the five pinned reference files, stages System initialization before
+the cyclic Harness import, then replaces only Node-specific IO operations with
+the upstream virtual equivalents. No pinned references or physical local-output
+files are changed. This is not wired into the durable runner or proven in Wasm.
 
 "js2wasm compiles 60% of test262" is a percentage. "js2wasm compiles the TypeScript compiler itself" is a story. Landing even Tier 3 is the single strongest artifact for conversations with potential maintainers or funders — it demonstrates the compiler has enough depth to handle production TypeScript, not just hand-picked benchmark inputs. The gap between "a toy subset compiles" and "the real compiler compiles" is exactly what separates a proof-of-concept from a usable tool.
