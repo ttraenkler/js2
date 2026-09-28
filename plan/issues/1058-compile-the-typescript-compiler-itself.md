@@ -15890,4 +15890,31 @@ with overlapping-scope and captured-cell controls; do not rename original
 upstream test code as the production solution. Planner success still requires
 real method execution and an import-free original I/O/JSON harness rerun.
 
+Transport/global fix committed signed as `4641a4e2c97`; clean state verified.
+Reduced SortedMap runtime matrix **37462** passes **2/8** on that commit:
+distinct loop names + direct for-of consumers pass both IR modes (native
+oracle **1243**, tuple values in both traversal orders, finally clears busy
+flag). Reused loop names retain host imports in both consumer shapes.
+Distinct names + Array.from still produce invalid Wasm (externref element
+written into an f64 array), matching the independently observed tuple/function
+yield collection defect. Keep all eight cases in the diagnostic matrix;
+do not claim renaming/planner acceptance fixes that separate consumer bug.
+Files `.tmp/sorted-map-disjoint-loop.test.ts`,
+`.tmp/sorted-map-disjoint-loop.config.mts`, log
+`.tmp/sorted-map-disjoint-loop-consumers.log`. Earlier Array.from-only
+**71164** was **0/4**; log `.tmp/sorted-map-disjoint-loop.log`.
+Full checker **23428** remains live, with no restart and unchanged oracles.
+
+Before the requested upstream synchronization on 2026-09-28, the read-only
+duplicate-name-guard removal experiment completed **4/10** passing checks.
+Direct for-of consumers passed all four disjoint-loop variants, but both
+overlapping-scope controls returned **122 instead of 129**. All four Array.from
+variants still emitted invalid Wasm. Thus blanket duplicate-name admission is
+unsound; preserve the guard until lexical lifetime and frame representation
+are proven compatible. Evidence: `.tmp/generator-loop-name-experiment.log` and
+`.tmp/generator-loop-overlap.test.ts`; production source remains unchanged.
+Fetched upstream main `e16ace7ca09da0e5150e0be34b27e7891a37afe8` for the requested
+merge. The ongoing checker run predates this synchronization; its results must
+remain attributed to `4641a4e2c97`, not the merged tree.
+
 "js2wasm compiles 60% of test262" is a percentage. "js2wasm compiles the TypeScript compiler itself" is a story. Landing even Tier 3 is the single strongest artifact for conversations with potential maintainers or funders — it demonstrates the compiler has enough depth to handle production TypeScript, not just hand-picked benchmark inputs. The gap between "a toy subset compiles" and "the real compiler compiles" is exactly what separates a proof-of-concept from a usable tool.
