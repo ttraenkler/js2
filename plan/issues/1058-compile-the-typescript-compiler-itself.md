@@ -13608,4 +13608,61 @@ not certification of all namespace forms. Namespace changes and the new
 closure candidate remain uncommitted; full TypeScript units and self-hosting
 remain open.
 
+### Generic optional-result declaration order (2026-09-28)
+
+The previous turn made progress: signed merge `df2025778d` and signed fix
+`90510b717f` preserve mixed primitive concise-closure results, with the measured
+0/12 → 12/12 improvement above. The remaining Map callback reduction returned
+**3 instead of 73** only when the predicate declaration came first: the predicate
+was correct, but the object result lost its usable identity/property carrier.
+
+Saved WAT showed `forEachEntry<K,V,U>(...): U | undefined` adopting its first
+caller's physical result: externref when the object caller came first, AnyValue
+when the primitive-union caller came first. The latter then wrapped the later
+object as a legacy tag-5 value; the general projection deliberately preserves
+that wrapper for round-trip correctness. Do not loosen the global tag-5
+projection to hide the declaration-planning defect.
+
+The candidate instead recognizes a function-owned unconstrained result type
+parameter, optionally unioned with null/undefined/void, and retains an erased
+externref result for the one shared generic body. The semantic predicate is in
+`src/frontend/ts/erased-generic-result.ts`; the existing declaration planner
+consumes it before first-call specialization. It adds no name-specific
+TypeScript exception, callback-pattern restriction, or alternate legacy-only
+implementation. The earlier broad coercion-adapter experiment stays removed.
+
+Standalone controlled A/B at `90510b717f` plus the preserved namespace work,
+disabling only the new declaration-result selection: **4/8 → 8/8** in the
+new Map regression matrix (both declaration orders, IR settings, and optimizer
+settings). Each instance checks object identity and flags, false predicates,
+zero flags, and empty maps against a native oracle. Broader generic/callback
+controls pass **116/116**. Type checking and targeted lint pass. Evidence:
+`.tmp/ts5-generic-optional-result-baseline.log`,
+`.tmp/ts5-generic-optional-result-focused.log`,
+`.tmp/ts5-generic-optional-result-typecheck.log`, and
+`.tmp/ts5-generic-optional-result-lint.log`. Additional direct nullish-result
+controls also pass **14/14**. The size gate initially rejected six added lines
+in the oversized parameter-inference module. The generic call-site resolver
+was extracted intact into `src/codegen/declarations/generic-call-site-types.ts`,
+retaining its public export and async/overload/omitted-parameter behavior. No
+allowance or baseline was changed. After extraction, the expanded controlled
+baseline is **6/14**, with eight failures: four declaration-order cases and four
+direct undefined/void cases. The extracted candidate passes **14/14**, and the
+expanded five-file control run passes **122/122**. Final type checking, lint,
+LOC/function/coercion/oracle ratchets pass. Dead-export checking reports
+preservation-only 6/6 full plus 6/6 cut witnesses; its graph remains OPEN and
+strict modeled closure FAIL, so it does not certify retirement or deletion.
+Final evidence: `.tmp/ts5-generic-result-extracted-focused.log`,
+`.tmp/ts5-generic-result-extracted-baseline.log`, and the corresponding
+`.tmp/ts5-generic-result-extracted-` typecheck/lint/ratchet logs. This fixes the
+reduced order-dependent defect, not the entire TypeScript checker or unit suite.
+
+Full checker rebuild session **65274** is live, using the committed tagged-return
+fix plus the previously tested namespace candidate, **before** this generic
+result change. Log: `.tmp/checker-tagged-return-diagnostic.log`; its loader saves
+`.tmp/checker-tagged-return.wasm` without overwriting the prior invalid binary.
+No validation or invocation outcome is claimed while live. Do not restart this
+process merely because its current module stage is slow. Full TypeScript unit
+coverage, checker invocations, and self-hosting remain unverified.
+
 "js2wasm compiles 60% of test262" is a percentage. "js2wasm compiles the TypeScript compiler itself" is a story. Landing even Tier 3 is the single strongest artifact for conversations with potential maintainers or funders — it demonstrates the compiler has enough depth to handle production TypeScript, not just hand-picked benchmark inputs. The gap between "a toy subset compiles" and "the real compiler compiles" is exactly what separates a proof-of-concept from a usable tool.
