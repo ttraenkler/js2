@@ -33,6 +33,8 @@ import {
  */
 import { ts } from "../ts-api.js";
 import { sourceLoopContinues } from "../frontend/ts/loop-continues.js";
+import { sourceSwitchBreaks } from "../frontend/ts/switch-breaks.js";
+import { emitNativeSwitchTerminator, type NativeSwitchTerminator } from "./generators-native-switch.js";
 import { emitVecDelegationAbrupt } from "./generator-vec-abrupt.js";
 import { getVecInfo } from "./type-coercion.js";
 import { resolveComputedKeyExpression } from "./literals.js";
@@ -138,6 +140,7 @@ const MAX_NATIVE_GENERATOR_STATES = 256;
  */
 type StateTerminator =
   | NativeForOfTerminator
+  | NativeSwitchTerminator
   | { kind: "yield"; expr: ts.Expression | undefined; next: number }
   | { kind: "return"; expr: ts.Expression | undefined; unwind?: readonly UnwindEntry[] }
   | { kind: "done" }
@@ -783,8 +786,11 @@ function buildNativeGeneratorPlan(ctx: CodegenContext, decl: GeneratorDecl): Nat
     closeEntry: (entry) => ({ kind: "dstr-close", ...entry }),
   };
 
-  const continueTargets = new Map<ts.ContinueStatement, { next: number; unwind: readonly UnwindEntry[] }>();
-  const continueContainers = new Set<ts.Node>();
+  const jumpTargets = new Map<
+    ts.ContinueStatement | ts.BreakStatement,
+    { next: number; unwind: readonly UnwindEntry[] }
+  >();
+  const jumpContainers = new Set<ts.Node>();
 
   /**
    * Lower a list of statements into the state graph, threading the "current
@@ -806,8 +812,8 @@ function buildNativeGeneratorPlan(ctx: CodegenContext, decl: GeneratorDecl): Nat
     for (const stmt of statements) {
       if (!ok) return false;
       if (stmt.kind === ts.SyntaxKind.EmptyStatement) continue;
-      if (ts.isContinueStatement(stmt)) {
-        const target = continueTargets.get(stmt);
+      if (ts.isContinueStatement(stmt) || ts.isBreakStatement(stmt)) {
+        const target = jumpTargets.get(stmt);
         // Crossing a finally/close region needs completion routing, not a jump.
         if (
           !target ||
@@ -865,7 +871,7 @@ function buildNativeGeneratorPlan(ctx: CodegenContext, decl: GeneratorDecl): Nat
 
       // Straight-line statement (no yield, no nested return): append to the
       // current state's prelude and let compileStatement emit it verbatim.
-      if (!continueContainers.has(stmt) && !statementNeedsStructuralLowering(stmt)) {
+      if (!jumpContainers.has(stmt) && !statementNeedsStructuralLowering(stmt)) {
         collectSpillsIn(stmt);
         curStatements.push(stmt);
         continue;
@@ -1002,6 +1008,10 @@ function buildNativeGeneratorPlan(ctx: CodegenContext, decl: GeneratorDecl): Nat
       }
       if (ts.isForOfStatement(stmt)) {
         if (!lowerForOf(stmt, unwind)) return false;
+        continue;
+      }
+      if (ts.isSwitchStatement(stmt)) {
+        if (!lowerSwitch(stmt, unwind)) return false;
         continue;
       }
 
@@ -2152,6 +2162,33 @@ function buildNativeGeneratorPlan(ctx: CodegenContext, decl: GeneratorDecl): Nat
     return "not-applicable";
   }
 
+  function lowerSwitch(stmt: ts.SwitchStatement, unwind: readonly UnwindEntry[]): boolean {
+    const breaks = sourceSwitchBreaks(stmt);
+    if (
+      !breaks ||
+      containsAnyYield(stmt.expression) ||
+      stmt.caseBlock.clauses.some((clause) => ts.isCaseClause(clause) && containsAnyYield(clause.expression))
+    )
+      return fail();
+    collectSpillsIn(stmt.expression);
+    const entries = stmt.caseBlock.clauses.map(() => reserveState());
+    const exit = reserveState();
+    for (const jump of breaks) {
+      jumpTargets.set(jump, { next: exit, unwind });
+      for (let node: ts.Node = jump; node !== stmt; node = node.parent) jumpContainers.add(node);
+    }
+    finishState(curId, { kind: "switch", statement: stmt, entries, exit });
+    for (let index = 0; index < entries.length; index++) {
+      const clause = stmt.caseBlock.clauses[index]!;
+      if (ts.isCaseClause(clause)) collectSpillsIn(clause.expression);
+      resetCursor(entries[index]!);
+      if (!lowerStatements(clause.statements, unwind, false)) return false;
+      finishState(curId, { kind: "jump", next: entries[index + 1] ?? exit });
+    }
+    resetCursor(exit);
+    return ok;
+  }
+
   /** if (cond) thenBlock [else elseBlock] — at least one branch yields. */
   function lowerIf(stmt: ts.IfStatement, unwind: readonly UnwindEntry[]): boolean {
     if (nodeContainsYield(stmt.expression)) return fail();
@@ -2303,8 +2340,8 @@ function buildNativeGeneratorPlan(ctx: CodegenContext, decl: GeneratorDecl): Nat
     resetCursor(bodyEntry);
     const bodyUnwind: readonly UnwindEntry[] = [...unwind, { kind: "finally", region }];
     for (const jump of continues) {
-      continueTargets.set(jump, { next: header, unwind: bodyUnwind });
-      for (let node: ts.Node = jump; node !== stmt; node = node.parent) continueContainers.add(node);
+      jumpTargets.set(jump, { next: header, unwind: bodyUnwind });
+      for (let node: ts.Node = jump; node !== stmt; node = node.parent) jumpContainers.add(node);
     }
     const bodyOk = lowerStatements(thenBody(stmt.statement), bodyUnwind, false);
     curThrowRoute = outerRoute;
@@ -2328,7 +2365,8 @@ function buildNativeGeneratorPlan(ctx: CodegenContext, decl: GeneratorDecl): Nat
 
   /** for (init; cond; update) body — body yields. */
   function lowerFor(stmt: ts.ForStatement, unwind: readonly UnwindEntry[]): boolean {
-    const continues = loopBodyHasUnsupportedJump(stmt.statement) ? sourceLoopContinues(stmt.statement) : [];
+    const continues =
+      sourceLoopContinues(stmt.statement) ?? (loopBodyHasUnsupportedJump(stmt.statement) ? undefined : []);
     if (!continues) return fail();
     // init: a yield-free var-decl list or expression; append to current state.
     if (stmt.initializer) {
@@ -2369,8 +2407,8 @@ function buildNativeGeneratorPlan(ctx: CodegenContext, decl: GeneratorDecl): Nat
 
     // A continue owned by this loop must still execute its update expression.
     for (const jump of continues) {
-      continueTargets.set(jump, { next: updateId, unwind });
-      for (let node: ts.Node = jump; node !== stmt; node = node.parent) continueContainers.add(node);
+      jumpTargets.set(jump, { next: updateId, unwind });
+      for (let node: ts.Node = jump; node !== stmt; node = node.parent) jumpContainers.add(node);
     }
     // body → update
     curId = bodyEntry;
@@ -5097,6 +5135,9 @@ function compileState(
 
   const term = state.terminator;
   switch (term.kind) {
+    case "switch":
+      emitNativeSwitchTerminator(ctx, fctx, info, term, selfLocal, loopDepth);
+      break;
     case "iterator-init":
     case "iterator-step":
     case "iterator-close":

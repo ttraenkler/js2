@@ -13955,4 +13955,38 @@ Typecheck, lint (two existing any warnings), LOC/function/coercion/oracle gates
 pass. Dead-export preservation remains 6/6 full and 6/6 cut; graph OPEN and
 strict modeled closure FAIL do not certify deletion. No baseline/grant changes.
 
+### Yielding switch work in progress (2026-09-28)
+
+Full-checker rebuild session 82526 is running at ae10b516a5, before this switch
+candidate, with log `.tmp/checker-filename-isolation-diagnostic.log` and saved
+artifact `.tmp/checker-filename-isolation.wasm`. Do not restart while live.
+The next original checker rejection is generateObjectLiteralElements' switch.
+The candidate reuses ordinary switch selection via a transient selector whose
+case bodies only set a destination state and break. Original clause expressions
+are retained, while real clause bodies become resumable states with fall-through
+edges and source-owned break targets. No second equality implementation.
+CaseBlock lexical environments and breaks crossing unwind regions remain
+unadmitted until their frame/completion semantics are modeled. The first expanded
+run caught a continue-registration gap for switches nested in for loops, and a
+selector-yield root missed by a descendant-only scan. The final candidate uses
+the existing root-aware yield detector and records source-owned continues even
+inside switches, retaining the older nested-label compatibility fallback.
+
+Measured results: the initial reduction improves **0/2 → 2/2** (both IR modes);
+the four original checker declarations are now **4/4** admitted, not merely
+reconstructed copies (`.tmp/checker-generator-plan-switch-final.log`). Runtime
+and rejection checks pass **53/53** in five files
+(`.tmp/generator-switch-final-focused.log`), followed by **17/17** in the expanded
+switch file including checker-shaped for-of/object yields
+(`.tmp/generator-switch-object-controls.log`). These overlap, not 70 distinct tests.
+Typecheck, lint, LOC/function/coercion/oracle gates pass; dead-export preservation
+passes with the same open-graph/deletion caveat as above.
+
+Both new modules are classified in compiler-boundaries.json. The ownership scan
+is frontend-only; native switch emission remains explicit mixed-layer migration
+debt and shares ordinary selector code rather than duplicating equality logic.
+The complete architecture detector remains **invalid-inventory, 341 error rows**,
+none naming either new module (`.tmp/generator-switch-boundaries-final.log`).
+This is not a claim of architectural completion or full standalone TS success.
+
 "js2wasm compiles 60% of test262" is a percentage. "js2wasm compiles the TypeScript compiler itself" is a story. Landing even Tier 3 is the single strongest artifact for conversations with potential maintainers or funders — it demonstrates the compiler has enough depth to handle production TypeScript, not just hand-picked benchmark inputs. The gap between "a toy subset compiles" and "the real compiler compiles" is exactly what separates a proof-of-concept from a usable tool.
