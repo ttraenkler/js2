@@ -19,6 +19,55 @@ it("erases only the receiver annotation and retains exact runtime parameter node
 });
 
 for (const experimentalIR of [false, true]) {
+  for (const optimize of [false, true]) {
+    it(`cached NodeLinks construction IR=${experimentalIR} optimize=${optimize}`, async () => {
+      const types = `export const enum NodeCheckFlags { None=0, TypeChecked=1 }
+        export interface NodeLinks { flags: NodeCheckFlags; resolvedType?: Type; }
+        export interface Type { flags: number; symbol?: Symbol; }
+        export interface Symbol { name: string; links?: NodeLinks; }
+        export interface Node { id: number; }`;
+      const checker = `function NodeLinks(this: NodeLinks) { this.flags = NodeCheckFlags.None; }
+        export function createTypeChecker() {
+          const nodeLinks: NodeLinks[] = [];
+          function getNodeId(node: Node): number { return node.id; }
+          function getNodeLinks(node: Node): NodeLinks {
+            const nodeId = getNodeId(node);
+            return nodeLinks[nodeId] || (nodeLinks[nodeId] = new (NodeLinks as any)());
+          }
+          return { check(node: Node) {
+            const links = getNodeLinks(node);
+            const old = links.flags;
+            links.flags = NodeCheckFlags.TypeChecked;
+            return old;
+          } };
+        }`;
+      const entry = `export function run(): number {
+        const checker = createTypeChecker(); const other = createTypeChecker();
+        return checker.check({id:2}) + checker.check({id:2})*10 + other.check({id:2})*100;
+      }`;
+      const native: { run?: () => number } = {};
+      new Function(
+        "exports",
+        ts.transpileModule(`${types}\n${checker}\n${entry}`, {
+          compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
+        }).outputText,
+      )(native);
+      expect(native.run!()).toBe(10);
+      const result = await compileMulti(
+        {
+          "./types.ts": types,
+          "./checker.ts": `import {NodeLinks,NodeCheckFlags,Node} from './types.js';\n${checker}`,
+          "./entry.ts": `import {createTypeChecker} from './checker.js';\n${entry}`,
+        },
+        "./entry.ts",
+        { target: "standalone", experimentalIR, optimize },
+      );
+      expect(result.success, JSON.stringify(result.errors)).toBe(true);
+      const module = new WebAssembly.Module(result.binary);
+      expect(WebAssembly.Module.imports(module)).toEqual([]);
+      expect((new WebAssembly.Instance(module).exports.run as () => number)()).toBe(10);
+    });
+  }
   for (const captured of [false, true]) {
     it(`imported receiver annotation IR=${experimentalIR} captured=${captured}`, async () => {
       const result = await compileMulti(

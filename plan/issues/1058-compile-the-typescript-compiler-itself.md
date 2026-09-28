@@ -13349,6 +13349,27 @@ and strict IR closure remain open.
 
 ### Namespace publication planning and sync checkpoint (2026-09-28)
 
+Upstream `e2f26c85a2` was merged cleanly as `520449b081`. Post-merge focused
+checks passed **45/45** across eight files, including all five incoming
+standalone regression files; type checking passed. Logs:
+`.tmp/sync-e2f26-focused.log`, `.tmp/sync-e2f26-tsc.log`.
+
+Original debugDeprecation on that merged revision remains **0/6** standalone
+versus **6/6** native: valid zero-import Wasm, 7,564,093 bytes, 158,000 ms at O1.
+All errors still report the null/undefined namespace receiver in teardown
+(generated line 837:9); teardown can mask the original body error. Upstream's
+new standalone fixes did not resolve this namespace-object blocker.
+Evidence: `.tmp/debug-deprecation-after-e2f26-o1.log`.
+
+A closer reduced NodeLinks check now covers the checker's indexed cache idiom
+(`cache[id] || (cache[id] = new NodeLinks())`), recursive interface references,
+and two independent checker activations. Native control returns 10; standalone
+passes **4/4** across both IR settings and optimization on/off. This rules out
+that shape alone as a reproduction, not the full checker error. The diagnostic
+full build on `520449b081` remains in flight, with targeted constructor WAT and
+the invalid binary retained under `.tmp/checker-node-links-*` on completion.
+Do not restart it merely because it is quiet; its live session is 26263.
+
 Shared IR namespace groups now retain immutable, source-ordered publication
 steps with exact binding identities. Exported variables are property-backed;
 uninitialized declarations create no own property. Functions/classes retain
