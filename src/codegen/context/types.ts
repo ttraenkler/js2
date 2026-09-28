@@ -519,6 +519,10 @@ export interface NativeGeneratorInfo {
    * string / typed-struct locals survive across a `yield` (historically f64).
    */
   spillTypes: ValType[];
+  /** Generator-owned bindings shared with nested declarations across resumes. */
+  ownedCells?: Map<string, { refCellTypeIdx: number; valType: ValType; tdzCellTypeIdx?: number }>;
+  /** Per-activation nested function identity caches, appended after fixed frame fields. */
+  closureMemoTypes?: number[];
   /** Field index where spilled locals start in the state struct. */
   spillFieldOffset: number;
   /**

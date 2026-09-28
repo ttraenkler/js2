@@ -14909,4 +14909,78 @@ parameter captures; TDZ; abrupt completion; and existing helper-free generator
 behavior. Reuse shared frame/IR facilities where possible. Do not accept the
 four passing noncapturing cases as proof of complete generator support.
 
+Follow-up candidate uses async's existing persistent-ref-cell discipline:
+resolve generator-owned references inside named helper declarations in the
+frontend by declaration identity; select cell carriers before frame fields
+are emitted; initialize cells in the factory; restore their metadata before
+hoisting helpers in the resume context. New optional `NativeGeneratorInfo`
+metadata is written only by registration and read by factory initialization
+and resume setup. Existing consumers inspected: generator consumer/for-of/
+factory identity and shared frame stores; none consumes this new metadata or
+mutates its map. Existing late spill reconciliation remains a reader/mutator
+of spill carrier types and must agree with the preselected cell representation.
+No new checker queries in codegen. Initial test log:
+`.tmp/generator-owned-cells-candidate.log`; capture/identity/TDZ controls still
+required before retaining this candidate.
+
+The full checker run on **37f264c440** has now terminated (session 58684,
+exit 1): **1,349,901 ms**, compile success, valid **59,187,812-byte** Wasm,
+zero imports, **0/3** original checker invocations. All three now trap
+`dereferencing a null pointer` in `createTypeChecker`, Wasm function 2203,
+offset 10348016; nearest source-map location is `checker.ts:1534:5`
+(`var emitResolver = createResolver()`). This is not yet exact attribution
+of the faulty operand. The previous `getEmitStandardClassFields` call-site
+failure no longer appears. Saved `.tmp/checker-alias-fixed.wasm` and map;
+terminal evidence `.tmp/checker-alias-fixed-diagnostic.log`. Do not rerun
+the full checker before reducing this next trap from the saved artifact.
+
+Generator edge matrix initially passed **4/8** (parameter and readonly
+captures), failing TDZ and escaped helper identity in both IR settings.
+Persistent boxed initialization flags now give **6/8**; identity still
+fails (`.tmp/generator-owned-tdz-edges.log`). The identity path already
+uses `FunctionContext.nestedFnClosureMemos`, but these are resume-call
+locals rather than generator-activation state. Candidate appends memo
+fields after the fixed frame layout, restores them on resume and saves
+them at the trampoline tail. Audited map writers/readers: closure materializer,
+local snapshot/rollback, inline-IIFE scope save/restore. New generator
+metadata is constructor-only initialization data. Candidate not yet ready;
+full matrix and broader generator controls remain required.
+
+Subsequent generator validation: **63/63** tracked tests PASS across five
+files (`.tmp/generator-owned-final-controls.log`, session 44701 exit 0).
+The new `tests/issue-1058-generator-owned-helpers.test.ts` contributes
+**28/28**: **26** zero-import runtime checks with native Node oracles and
+**2** explicit conservative refusals for shadowed captured slots. These
+cover the harness output loop, parameter/readonly/mutable cells, two
+interleaved activations, helper identity (including capture-free helpers),
+TDZ before and after suspension, declaration order, `.return()` and
+`.throw()` cleanup. Other generator controls contribute **35/35**.
+The earlier 9 argument tests are skipped by their own guards; they are
+not included in this denominator.
+
+Shadowing is a pre-existing frame-name defect, not fixed here: the inline
+helper-free control on **c8d0a97a5d** also fails **0/2** runtime checks,
+using a read-only baseline loader (`.tmp/generator-shadow-baseline.log`).
+The new frontend admission guard rejects captured shadowing rather than
+silently accepting a wrong result. Follow-up needs declaration-identity
+frame slots / preserved lexical scopes; do not weaken that refusal without
+positive scope controls. Full JSON harness has not been rerun.
+
+Capture-free helper values now have activation-owned cached locals and
+frame fields too. These already-initialized bindings are removed from the
+ordinary lazy-publication set so later reads do not overwrite them with
+module singletons. Audited consumers of that set: identifier publication,
+function-declaration observation/hoisting, closure/arrow capture planning,
+array callbacks and typeof/delete. Spill reload uses the existing shared
+`frame-core.initializeSpillLocals`, used by async and generator lowering;
+the new tests run both IR settings. No new growth grants or baseline changes.
+Typecheck, formatting, lint, LOC/function budgets, coercion-site and oracle
+ratchets pass (`.tmp/generator-owned-final-gates.log`, session 20502 exit 0).
+Dead-export preservation gate exited 0: **6/6 full + 6/6 cut** witnesses
+PASS, but graph **OPEN**, strict modeled closure **FAIL**, retirement/deletion
+**NOT CERTIFIED**. Core-node **12/12** and core-type **10/10 full + 10/10 cut**
+PASS; moved-runtime gate remains **FAIL** because two nonliteral dynamic
+imports leave production-rooted evidence incomplete. Terminal report:
+`.tmp/generator-owned-dead-exports.log`. Issue check also exited 0.
+
 "js2wasm compiles 60% of test262" is a percentage. "js2wasm compiles the TypeScript compiler itself" is a story. Landing even Tier 3 is the single strongest artifact for conversations with potential maintainers or funders — it demonstrates the compiler has enough depth to handle production TypeScript, not just hand-picked benchmark inputs. The gap between "a toy subset compiles" and "the real compiler compiles" is exactly what separates a proof-of-concept from a usable tool.

@@ -113,6 +113,7 @@ function statementContainsReturn(stmt: ts.Statement): boolean {
 
 /** Statement needs structural state-graph lowering (vs straight-line prelude). */
 export function statementNeedsStructuralLowering(stmt: ts.Statement): boolean {
+  if (ts.isFunctionDeclaration(stmt)) return false;
   if (statementContainsYield(stmt)) return true;
   // A bare/top-level `return` is handled by the caller's `return` terminator;
   // but a `return` nested inside control flow needs structural lowering so it

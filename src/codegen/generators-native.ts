@@ -32,6 +32,16 @@ import {
  *     (try/finally without catch is, as in Phase 1).
  */
 import { ts } from "../ts-api.js";
+import { generatorHasCapturedShadowing } from "../frontend/ts/generator-owned-captures.js";
+import { hoistFunctionDeclarations } from "./statements/nested-declarations.js";
+import {
+  planGeneratorOwnedCells,
+  restoreGeneratorOwnedTdz,
+  persistGeneratorClosureMemos,
+  initializeGeneratorHelperValues,
+  generatorOwnedTdzFields,
+  generatorParameterFields,
+} from "./generator-owned-cells.js";
 import { sourceLoopContinues } from "../frontend/ts/loop-continues.js";
 import { sourceSwitchBreaks } from "../frontend/ts/switch-breaks.js";
 import { emitNativeSwitchTerminator, type NativeSwitchTerminator } from "./generators-native-switch.js";
@@ -95,6 +105,7 @@ import {
   setStateInstrs,
   setModeInstrs,
   storeSpills,
+  initializeSpillLocals,
 } from "./frame-core.js";
 // (#3271) Pure AST-scan predicate primitives now live in
 // generators-native-ast-scan.ts; imported back for the planner + candidacy gates.
@@ -3611,6 +3622,7 @@ function hostLaneGeneratorUsesAreSafe(ctx: CodegenContext, decl: GeneratorDecl):
 }
 
 export function isNativeGeneratorCandidate(ctx: CodegenContext, decl: GeneratorDecl): boolean {
+  if (decl.body && generatorHasCapturedShadowing(decl.body, ctx.oracle)) return false;
   if (!noJsHostTarget(ctx)) {
     // (#3050 → #3032 W6) JS-HOST lane: the eager-buffer lowering evaluates the
     // whole body at creation, which violates §27.5 EvaluateGeneratorBody
@@ -4216,25 +4228,23 @@ export function registerNativeGenerator(
   const stateParamTypes = paramTypes.map((t, i) =>
     (paramNames[i] ?? "").startsWith("__genarg") ? ({ kind: "externref" } as ValType) : t,
   );
-  for (let i = 0; i < stateParamTypes.length; i++) {
-    stateFields.push({
-      name: `param_${paramNames[i] ?? i}`,
-      type: stateParamTypes[i]!,
-      mutable: false,
-    });
-  }
+  const paramNameSet = new Set(paramNames);
+  const bodySpills = plan.spills.filter((s) => !paramNameSet.has(s));
+  const spillTypes: ValType[] = bodySpills.map((s) => plan.spillTypes.get(s) ?? { kind: "f64" });
+  const ownedCells = planGeneratorOwnedCells(ctx, decl, [
+    { names: paramNames, types: stateParamTypes },
+    { names: bodySpills, types: spillTypes },
+  ]);
+  stateFields.push(...generatorParameterFields(paramNames, stateParamTypes));
   const paramFieldOffset =
     PARAM_FIELD_OFFSET + (argumentsFieldIdx === undefined ? 0 : 1) + (capturesDynamicThis ? 1 : 0);
   const spillFieldOffset = paramFieldOffset + paramTypes.length;
   // Params that are also reassigned in the body need a mutable spill slot too;
   // but params already live in the struct. Spills cover body-declared locals.
-  const paramNameSet = new Set(paramNames);
-  const bodySpills = plan.spills.filter((s) => !paramNameSet.has(s));
   // (#2864 F1b) Spill field at the local's actual ValType (object → ref_null
   // struct, string → native-string ref, number → f64), aligned 1:1 with
   // `bodySpills` so the resume-load local, store/load, and struct-init default
   // all agree. `plan.spillTypes` is guaranteed to hold an entry for each spill.
-  const spillTypes: ValType[] = bodySpills.map((s) => plan.spillTypes.get(s) ?? { kind: "f64" });
   for (let i = 0; i < bodySpills.length; i++) {
     stateFields.push({
       name: `spill_${bodySpills[i]}`,
@@ -4242,6 +4252,8 @@ export function registerNativeGenerator(
       mutable: true,
     });
   }
+
+  stateFields.push(...generatorOwnedTdzFields(ownedCells));
 
   // (#2170) `yield*` delegation slots — appended AFTER spills so the f64
   // spillFieldOffset indexing is unaffected. Each holds the inner generator's
@@ -4398,6 +4410,7 @@ export function registerNativeGenerator(
     abruptFieldIdx: ABRUPT_FIELD,
     spillNames: bodySpills,
     spillTypes,
+    ownedCells,
     spillFieldOffset,
     // (#3386) Pattern-param binding names (values packed from the emit site's
     // eagerly-destructured factory locals at struct.new) + the undef-widened
@@ -6388,12 +6401,7 @@ export function ensureNativeGeneratorResumeFunction(ctx: CodegenContext, info: N
   // body's var-declaration reuses this exact slot (it is already in `localMap`),
   // and because the resume fctx carries no analysis caches, its computed type
   // equals `resolveSpillLocalValType` → no slot re-type, no mismatch.
-  for (let i = 0; i < info.spillNames.length; i++) {
-    const localIdx = allocLocal(resumeFctx, info.spillNames[i]!, info.spillTypes[i]!);
-    resumeFctx.body.push({ op: "local.get", index: 0 });
-    resumeFctx.body.push({ op: "struct.get", typeIdx: info.stateTypeIdx, fieldIdx: info.spillFieldOffset + i });
-    resumeFctx.body.push({ op: "local.set", index: localIdx });
-  }
+  initializeSpillLocals(info, resumeFctx, 0, true);
 
   // (#2920/#3386) Pattern-param bindings need NO state-0 re-destructure here:
   // parameter destructuring is EAGER (call time, §10.2.11
@@ -6417,6 +6425,7 @@ export function ensureNativeGeneratorResumeFunction(ctx: CodegenContext, info: N
   }
 
   // Result holding local (the trampoline writes it; the tail reads it).
+  restoreGeneratorOwnedTdz(info, resumeFctx, 0);
   const resultLocal = allocLocal(resumeFctx, "__gen_result", { kind: "ref", typeIdx: info.resultTypeIdx });
 
   const plan = buildNativeGeneratorPlan(ctx, info.decl);
@@ -6427,6 +6436,8 @@ export function ensureNativeGeneratorResumeFunction(ctx: CodegenContext, info: N
     const savedFunc = ctx.currentFunc;
     ctx.currentFunc = resumeFctx;
     try {
+      if (info.decl.body) hoistFunctionDeclarations(ctx, resumeFctx, info.decl.body.statements);
+      initializeGeneratorHelperValues(ctx, info, resumeFctx);
       // (#3050) Throw-route wraps in HOST mode recover foreign JS exceptions
       // via `__get_caught_exception` (mirrors exceptions.ts; dead in
       // standalone/wasi, #1473 — wasm traps aren't catchable and every native
@@ -6521,6 +6532,7 @@ export function ensureNativeGeneratorResumeFunction(ctx: CodegenContext, info: N
 
   // Fill the reserved placeholder in place — its index (funcIdx) stayed stable
   // while body compilation appended any helper functions after it.
+  persistGeneratorClosureMemos(ctx, info, resumeFctx);
   placeholder.locals = resumeFctx.locals;
   placeholder.body = resumeFctx.body;
   return funcIdx;
@@ -6591,6 +6603,8 @@ export function compileNativeGeneratorFunction(
   // the two are equal, so this is byte-identical there.
   for (let i = 0; i < info.paramTypes.length; i++) {
     fctx.body.push({ op: "local.get", index: i });
+    const cell = info.ownedCells?.get(info.paramNames[i]!);
+    if (cell) fctx.body.push({ op: "struct.new", typeIdx: cell.refCellTypeIdx });
   }
   // (#2864 F1b) Spill slots start at their type's inert default — `f64 NaN`
   // (numeric, unchanged), `i32`/`i64` 0, a null ref for object/string spills, or
@@ -6607,7 +6621,8 @@ export function compileNativeGeneratorFunction(
   // (defensive) keeps the inert default.
   for (let i = 0; i < info.spillNames.length; i++) {
     const spillName = info.spillNames[i]!;
-    const spillType = info.spillTypes[i]!;
+    const cell = info.ownedCells?.get(spillName);
+    const spillType = cell?.valType ?? info.spillTypes[i]!;
     const bindLocal = info.patternParamBindings?.has(spillName) ? fctx.localMap.get(spillName) : undefined;
     if (bindLocal !== undefined) {
       // (#6651 SC1) Read through the ref cell when a parameter-list closure boxed
@@ -6626,6 +6641,12 @@ export function compileNativeGeneratorFunction(
       }
     } else {
       fctx.body.push(defaultSpillInstr(spillType));
+    }
+    if (cell) fctx.body.push({ op: "struct.new", typeIdx: cell.refCellTypeIdx });
+  }
+  for (const cell of info.ownedCells?.values() ?? []) {
+    if (cell.tdzCellTypeIdx !== undefined) {
+      fctx.body.push({ op: "i32.const", value: 0 }, { op: "struct.new", typeIdx: cell.tdzCellTypeIdx });
     }
   }
   // (#2170) `yield*` delegation slots start null — the inner generator is
@@ -6660,6 +6681,7 @@ export function compileNativeGeneratorFunction(
     fctx.body.push({ op: "i32.const", value: 0 });
   }
   if (info.executingFieldIdx !== undefined) fctx.body.push({ op: "i32.const", value: 0 });
+  for (const typeIdx of info.closureMemoTypes ?? []) fctx.body.push({ op: "ref.null", typeIdx });
   fctx.body.push({ op: "struct.new", typeIdx: info.stateTypeIdx });
   // The factory-prototype bridge can only recover a factory identity for the
   // declaration/expression closures cached in `ctx.funcMap`. A method factory
