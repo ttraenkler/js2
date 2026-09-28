@@ -13400,6 +13400,58 @@ Next: merge upstream main, rerun focused controls, then capture the constructor
 WAT rather than rerunning the unchanged checker without diagnostic evidence.
 Full checker, namespace objects, all upstream units and self-hosting remain open.
 
+### Runtime namespace and checker diagnosis continuation (2026-09-28)
+
+The requested upstream merge is committed as `520449b081` (main
+`e2f26c85a2`); constructor activation controls are committed as `424c93a52d`.
+The full checker diagnostic on the clean merge has now finished: compilation
+succeeds in 1,459,552 ms, producing 68,570,464 bytes, but validation still fails
+in `__fnctor_NodeLinks_new` (expected nullable reference, got f64). None of the
+three requested invocations execute. Its retained WAT shows **15 constructor
+operands for nine fields**; final stack cleanup drops the intended result and
+leaves an excess f64. This is a construction-arity defect, not evidence that
+the typed-this or cached-activation fixes failed their reduced controls.
+Evidence: `.tmp/checker-node-links-diagnostic.log`,
+`.tmp/checker-node-links-body.wat`, `.tmp/checker-node-links-invalid.wasm`.
+
+Both logical and arithmetic compound field-growth sites call two overlapping
+constructor padding walkers. The second walker revisits bodies already padded
+by `patchStructNewForAddedField`. A reduced NodeLinks/optional-field matrix
+passes **0/6** before removing that redundant call and **6/6** afterward, with
+the same reference-versus-f64 validation error in every baseline case. Exporting
+the construction function is essential: it forces construction to compile before
+the later field update, unlike the earlier inconclusive reductions. The permanent
+matrix covers `|=`, `||=`, and `+=` with both IR and optimization settings; it
+and adjacent constructor/padding controls pass **38/38**. The obsolete second
+walker and its unused imports/exports are removed rather than retained as a
+parallel mechanism. Evidence: `.tmp/node-links-compound-export-{baseline,candidate}.log`
+and `.tmp/compound-field-arity-focused.log`.
+
+The full checker rerun with single padding and the current namespace candidate
+is in flight (session 68705, `.tmp/checker-single-pad-diagnostic.log`). Its
+diagnostic output uses new filenames, preserving the baseline binary and WAT.
+Do not claim the full checker fixed until it validates and all three real
+invocations execute correctly; do not restart a quiet live build.
+
+Uncommitted namespace work now consumes the shared IR publication plan in the
+physical emitter. New namespace semantics controls and existing class controls
+pass **120/120** across nine files after correcting dynamic member-call routing and undefined return
+representation. The original debugDeprecation suite improves from **0/6** to
+**3/6** standalone (native **6/6**) in two full candidate runs; the second output
+is valid zero-import Wasm, 7,946,883 bytes, 158,128 ms. Remaining failures are
+silent deprecation and both error-deprecation cases, not the three warning cases.
+Evidence: `.tmp/namespace-object-final-adjacent.log` and
+`.tmp/debug-deprecation-namespace-object-second-o1.log`.
+
+Namespace work is not yet ready to commit: additional edge
+cases remain, including dotted/type-only groups, exported aliases and binding
+patterns, class/enum augmentation, and computed/spread member calls. The first
+adjacent A/B had equal **88/96** totals but different failing rows; those eight
+candidate class regressions were subsequently fixed; the complete adjacent
+matrix now passes (96 existing tests plus 24 new tests). Do not
+describe equal totals as regression-free. Full checker, all original unit suites, strict IR closure,
+and self-hosting remain open.
+
 ### ESM namespace identity continuation (2026-09-27)
 
 The initialization hypothesis above is now confirmed and fixed: the shared IR

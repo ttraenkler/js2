@@ -100,7 +100,7 @@ import { compileStringLiteral, emitBoolToString } from "../string-ops.js";
 import { compileProtoArg } from "./calls.js";
 import { ensureObjectProtoProtoSetNative } from "../object-proto-proto-accessor.js"; // (#5268 step 1)
 import { hasExplicitNullObjectPrototype } from "../object-proto-name-in.js"; // (#5268 review F4)
-import { findExternInfoForMember, patchStructNewForDynamicField } from "./extern.js";
+import { findExternInfoForMember } from "./extern.js";
 import { tryCompileFnctorPrototypeAssign } from "./fnctor-prototype.js";
 import { targetReceiverIsPrototypeAccess } from "../class-proto-toplevel-write.js";
 import { reserveAccessorSetDriver } from "../accessor-driver.js";

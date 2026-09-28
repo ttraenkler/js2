@@ -62,7 +62,6 @@ import {
 import { coerceType, compileExpression, VOID_RESULT } from "../shared.js";
 import { emitBoolToAnyStr, rhsStringForcesConcatLane } from "../string-compound-lane.js";
 import { compileStringLiteral, emitBoolToString } from "../string-ops.js";
-import { patchStructNewForDynamicField } from "./extern.js";
 import {
   classifyPrivateMember,
   emitSuperUninitializedThisGuard,
@@ -590,8 +589,6 @@ function compilePropertyLogicalAssignmentExternref(
               if (typeDef?.kind === "struct" && typeDef.fields !== fields) {
                 typeDef.fields.push(newField);
               }
-              // Patch existing struct.new instructions to include the new field
-              patchStructNewForDynamicField(ctx, typeIdx, propWasmType);
               fieldIdx = fields.length - 1;
             }
           }
@@ -2852,7 +2849,6 @@ function resolveOrAddCompoundPropertyField(
   patchStructNewForAddedField(ctx, fctx, typeIdx, propWasmType);
   const typeDef = ctx.mod.types[typeIdx];
   if (typeDef?.kind === "struct" && typeDef.fields !== fields) typeDef.fields.push(newField);
-  patchStructNewForDynamicField(ctx, typeIdx, propWasmType);
   fieldIdx = fields.length - 1;
   return { fields, fieldIdx };
 }

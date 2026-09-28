@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Loopdive GmbH. Licensed under Apache-2.0 WITH LLVM-exception.
 /**
  * Extern class helpers, spread call args, lazy prototype initialization,
- * and dynamic struct patching.
+ * and spread argument lowering.
  */
 import { ts } from "../../ts-api.js";
 import type { Instr, ValType } from "../../ir/types.js";
@@ -856,85 +856,6 @@ export function emitRegisterDynamicClassParent(
 }
 
 /**
- * After dynamically adding a field to a struct type, patch all existing
- * struct.new instructions in compiled function bodies so they push a default
- * value for the new field. Without this, struct.new expects N values on the
- * stack but the constructor only pushed N-1.
- */
-function patchStructNewForDynamicField(ctx: CodegenContext, structTypeIdx: number, newFieldType: ValType): void {
-  // Walk all compiled function bodies and patch struct.new instructions
-  for (const func of ctx.mod.functions) {
-    if (!func.body || func.body.length === 0) continue;
-    patchStructNewInBody(func.body, structTypeIdx, newFieldType);
-  }
-  // Also patch the current function being compiled (if any)
-  if (ctx.currentFunc) {
-    patchStructNewInBody(ctx.currentFunc.body, structTypeIdx, newFieldType);
-    // Also patch saved bodies (from pushBody/popBody pattern)
-    if (ctx.currentFunc.savedBodies) {
-      for (const savedBody of ctx.currentFunc.savedBodies) {
-        patchStructNewInBody(savedBody, structTypeIdx, newFieldType);
-      }
-    }
-  }
-}
-
-/** Recursively patch struct.new instructions in a body (handles nested if/block/loop). */
-function patchStructNewInBody(body: Instr[], structTypeIdx: number, newFieldType: ValType): void {
-  for (let i = 0; i < body.length; i++) {
-    const instr = body[i]!;
-    if (instr.op === "struct.new" && (instr as any).typeIdx === structTypeIdx) {
-      // Insert default value instruction before this struct.new
-      const defaultInstr = defaultValueInstrForType(newFieldType);
-      body.splice(i, 0, ...defaultInstr);
-      i += defaultInstr.length; // skip past inserted instructions
-    }
-    // Recurse into nested blocks
-    if ((instr as any).then) patchStructNewInBody((instr as any).then, structTypeIdx, newFieldType);
-    if ((instr as any).else) patchStructNewInBody((instr as any).else, structTypeIdx, newFieldType);
-    if ((instr as any).body) {
-      // block, loop, try instructions
-      const nestedBody = (instr as any).body;
-      if (Array.isArray(nestedBody)) patchStructNewInBody(nestedBody, structTypeIdx, newFieldType);
-    }
-    if ((instr as any).instrs) {
-      const nestedInstrs = (instr as any).instrs;
-      if (Array.isArray(nestedInstrs)) patchStructNewInBody(nestedInstrs, structTypeIdx, newFieldType);
-    }
-    // try/catch blocks
-    if ((instr as any).catches) {
-      for (const c of (instr as any).catches) {
-        if (Array.isArray(c.body)) patchStructNewInBody(c.body, structTypeIdx, newFieldType);
-      }
-    }
-    if ((instr as any).catchAll) {
-      if (Array.isArray((instr as any).catchAll))
-        patchStructNewInBody((instr as any).catchAll, structTypeIdx, newFieldType);
-    }
-  }
-}
-
-/** Return instructions that produce a default value for a given type. */
-function defaultValueInstrForType(type: ValType): Instr[] {
-  switch (type.kind) {
-    case "f64":
-      return [{ op: "f64.const", value: 0 }];
-    case "i32":
-      return [{ op: "i32.const", value: 0 }];
-    case "externref":
-      return [{ op: "ref.null.extern" }];
-    case "ref_null":
-      return [{ op: "ref.null", typeIdx: type.typeIdx }];
-    case "ref":
-      return [{ op: "ref.null", typeIdx: type.typeIdx }, { op: "ref.as_non_null" }];
-    case "eqref":
-      return [{ op: "ref.null.eq" }];
-    default:
-      return [{ op: "i32.const", value: 0 }];
-  }
-}
-
-/**
  * Emit a null-guarded struct.get: if the object ref on the stack is null (e.g.
  * from a failed ref.cast that returned ref.null), produce a default value
  * instead of trapping. This handles wrong-type-but-not-truly-null cases. If the
@@ -1174,10 +1095,4 @@ function compileSpreadCallArgs(
   }
 }
 
-export {
-  compileExternMethodCall,
-  compileSpreadCallArgs,
-  defaultValueInstrForType,
-  patchStructNewForDynamicField,
-  patchStructNewInBody,
-};
+export { compileExternMethodCall, compileSpreadCallArgs };
