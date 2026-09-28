@@ -16058,4 +16058,14 @@ or termination was performed. The next owner must inspect this same run/report
 before launching another. All checker and constructor experiments listed above
 are terminal; do not treat stale log paths as live processes.
 
+Publication check: PR #5753 remains OPEN at remote head `11b39957841`, with
+35 remote-only commits (including IR integration and regression evidence).
+A non-mutating working-tree merge preview reported **27 conflicted files**;
+no merge was started, no remote changes discarded, and no force-push attempted.
+Preview `.tmp/pr5753-merge-preview.log`. Reconciling this substantial compiler/IR
+divergence is a separate follow-up, not safe last-minute wrap-up work. Publish
+this handoff checkpoint under `codex/1058-standalone-handoff-20260928` and link
+it from the existing PR; do not imply the PR head contains this checkpoint
+until an explicitly reviewed reconciliation lands.
+
 "js2wasm compiles 60% of test262" is a percentage. "js2wasm compiles the TypeScript compiler itself" is a story. Landing even Tier 3 is the single strongest artifact for conversations with potential maintainers or funders — it demonstrates the compiler has enough depth to handle production TypeScript, not just hand-picked benchmark inputs. The gap between "a toy subset compiles" and "the real compiler compiles" is exactly what separates a proof-of-concept from a usable tool.
