@@ -13884,4 +13884,35 @@ identical host failure at the same Wasm function/offset, **10/11** in that file
 (`.tmp/generator-truthy-method-baseline.log`). No baseline was changed or test
 disabled. This does not establish full generator or full TypeScript coverage.
 
+### Tuple-generator continue candidate (2026-09-28)
+
+At 2161c6070a, the tuple generator's next rejected operation is an unlabelled
+continue in a yielding for loop. The existing sourceLoopContinues ownership
+scan and native continue target map already serve for-of. An isolated transform
+uses those same facts for ordinary for loops, pointing continue at the update
+state rather than the condition state. Four runtime reductions improve
+**0/4 → 4/4**, covering both IR modes, captured counters, laziness, skips before
+and after yield, exactly-once updates, and nested-loop continue ownership.
+The original checker planner now admits **3/4**: generateLimitedTupleElements
+joins the two accepted JSX generators; generateObjectLiteralElements still
+rejects its yielding switch. Evidence: `.tmp/generator-for-continue-baseline.log`
+and `.tmp/generator-for-continue-candidate.log` (the latter also includes the
+four-declaration planner probe).
+
+The production candidate shares that same continue map/ownership scan. Existing
+unwind-chain checks remain in force: this is not permission to skip finally or
+iterator-close handling. The ownership scan is only applied to bodies rejected
+by the prior jump gate: applying it unconditionally regressed a nested labeled
+loop. The corrected implementation preserves that route with a permanent
+runtime control. The focused production run passes **29/29** across four files
+(`.tmp/generator-for-continue-final.log`).
+
+The full checker run at c0e3c73b68 completed, before both generator changes:
+five host imports remain, down from ten in the earlier saved artifact. They are
+`__gen_create_buffer`, `__gen_push_ref`, `__create_generator`, `__get_filename`,
+and `__get_dirname`. Standalone execution remains blocked, not a pass of the
+three invocation cases. Evidence: `.tmp/checker-process-isolation-diagnostic.log`.
+The requested main sync targets fetched main 5bfc069422c7cece3e7f19f84e7ce3e51be2269c;
+pending work is being committed before merging, without a manual stash.
+
 "js2wasm compiles 60% of test262" is a percentage. "js2wasm compiles the TypeScript compiler itself" is a story. Landing even Tier 3 is the single strongest artifact for conversations with potential maintainers or funders — it demonstrates the compiler has enough depth to handle production TypeScript, not just hand-picked benchmark inputs. The gap between "a toy subset compiles" and "the real compiler compiles" is exactly what separates a proof-of-concept from a usable tool.

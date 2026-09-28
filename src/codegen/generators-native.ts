@@ -2328,7 +2328,8 @@ function buildNativeGeneratorPlan(ctx: CodegenContext, decl: GeneratorDecl): Nat
 
   /** for (init; cond; update) body — body yields. */
   function lowerFor(stmt: ts.ForStatement, unwind: readonly UnwindEntry[]): boolean {
-    if (loopBodyHasUnsupportedJump(stmt.statement)) return fail();
+    const continues = loopBodyHasUnsupportedJump(stmt.statement) ? sourceLoopContinues(stmt.statement) : [];
+    if (!continues) return fail();
     // init: a yield-free var-decl list or expression; append to current state.
     if (stmt.initializer) {
       if (ts.isVariableDeclarationList(stmt.initializer)) {
@@ -2366,6 +2367,11 @@ function buildNativeGeneratorPlan(ctx: CodegenContext, decl: GeneratorDecl): Nat
         : { kind: "jump", next: bodyEntry },
     };
 
+    // A continue owned by this loop must still execute its update expression.
+    for (const jump of continues) {
+      continueTargets.set(jump, { next: updateId, unwind });
+      for (let node: ts.Node = jump; node !== stmt; node = node.parent) continueContainers.add(node);
+    }
     // body → update
     curId = bodyEntry;
     curStatements = [];
