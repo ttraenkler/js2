@@ -14859,4 +14859,54 @@ Reproduce the tracked upstream helper acceptance with the usual pinned root,
 Full checker still requires a fresh run; do not infer full-checker acceptance
 from the isolated helper result.
 
+Committed signed fix **`37f264c440`**. Tracked fixture run **71412** completed
+exit 0: **3/3** original native oracles match, **114,518 ms**, valid
+**8,806,196-byte** standalone binary, zero imports. Full original checker
+rerun started on this commit in **58684**, confirmed live; log
+`.tmp/checker-alias-fixed-diagnostic.log`, saved artifact prefix
+`.tmp/checker-alias-fixed`. Keep polling that handle; do not restart on an
+observation timeout. Checker acceptance, the full unit inventory, and the
+previous JSON harness generator/transform failures remain open.
+
+While full checker **58684** remains live, reducing the JSON harness's
+`iterateOutputs` generator refusal at `harnessIO.ts:1077`. Scratch control
+`.tmp/harness-output-generator.test.ts` retains its iterable-to-array copy,
+discarded sorted copy, nested filename helper, duplicate-name Map state,
+and tuple yields. Native oracle checks the complete three-output text before
+running both IR settings; log `.tmp/harness-output-generator-baseline.log`.
+
+Generator reduction results on `37f264c440`: original nested helper refuses
+**0/2** in both IR settings with the exact native-generator diagnostic.
+Moving only the noncapturing `cleanName` declaration outside the generator
+passes **2/2** (`.tmp/harness-output-generator-matrix.log`). The planner's
+`statementNeedsStructuralLowering` scans the children of a FunctionDeclaration
+root, so its helper-body `return` is misattributed to the generator. Merely
+excluding that declaration fixes admission but leaves runtime exceptions:
+the detached resume context never hoists nested helper declarations.
+
+Experimental reuse of `hoistFunctionDeclarations` in the resume context fixes
+the output-generator reduction (**4/4**, internal/external helper × both IR
+settings), but a required capture control fails **0/2**, returning NaN rather
+than **1122**. The control interleaves two generators, each with `let n=0`,
+two `yield next()` statements and nested `function next(){return ++n;}`.
+Inlining only `++n` passes **2/2**, proving the caller/iterator oracle is viable.
+Use an explicitly numeric exported result: an initially inferred externref
+result showed a boxed object and was not an interpretable numeric comparison.
+Logs: `.tmp/harness-output-generator-hoist-typed.log` and
+`.tmp/harness-generator-capture-inline.log`. Neither the scope-only nor the
+hoist experiment is retained in `src/`; the unsafe patch is preserved only at
+`.tmp/generator-nested-hoist-experiment.patch` for further diagnosis.
+
+Next implementation must preserve generator-owned helper bindings and their
+capture cells across resumes, not rebuild ordinary function-top capture boxes
+on every `.next()`. Existing `storeSpills` reads `localMap`, while eager
+hoisting redirects captured names to cell locals; late spill-field type
+reconciliation alone does not repair the earlier raw-value reload prologue.
+Audit readers/mutators before changing the shared frame or context model.
+Required controls: helpers called before their textual declaration; captured
+state across yields; two interleaved instances; escaped helper identity/cells;
+parameter captures; TDZ; abrupt completion; and existing helper-free generator
+behavior. Reuse shared frame/IR facilities where possible. Do not accept the
+four passing noncapturing cases as proof of complete generator support.
+
 "js2wasm compiles 60% of test262" is a percentage. "js2wasm compiles the TypeScript compiler itself" is a story. Landing even Tier 3 is the single strongest artifact for conversations with potential maintainers or funders — it demonstrates the compiler has enough depth to handle production TypeScript, not just hand-picked benchmark inputs. The gap between "a toy subset compiles" and "the real compiler compiles" is exactly what separates a proof-of-concept from a usable tool.
