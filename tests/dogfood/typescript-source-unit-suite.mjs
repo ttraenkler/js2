@@ -150,8 +150,11 @@ export function redirectSourceUnitImports(name, original, root, generatedPath) {
   return { transformed, needsServices };
 }
 
-export async function runSourceUnitFile(name) {
+export async function runSourceUnitFile(name, { timeoutMs = 1_200_000 } = {}) {
   if (!Object.hasOwn(FILES, name)) throw new Error(`Unsupported source unit file: ${name}`);
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0 || timeoutMs > 2_147_483_647) {
+    throw new Error("Source unit timeoutMs must be a positive timer-safe integer");
+  }
   const suite = setupTypescriptUpstreamSuite();
   const originalPath = join(suite.root, "src/testRunner/unittests", `${name}.ts`);
   const generatedPath = resolve(HERE, "../../.typescript-upstream-suite-generated/source-modules", `${name}.ts`);
@@ -195,7 +198,7 @@ export async function runSourceUnitFile(name) {
     generatedPath,
     source,
     nativeSource: nativeBundle.outputFiles[0].text,
-    timeoutMs: 1_200_000,
+    timeoutMs,
     workerEnv: {
       DOGFOOD_TARGET: "standalone",
       DOGFOOD_CONSUMER_DRIVEN_BARRELS: "1",
@@ -205,7 +208,13 @@ export async function runSourceUnitFile(name) {
       DOGFOOD_INSTALL_JSDOM: undefined,
     },
   });
-  return { file: suite.relativePath(originalPath), pin: suite.pin.commit, expectedTests: FILES[name], ...result };
+  return {
+    file: suite.relativePath(originalPath),
+    pin: suite.pin.commit,
+    expectedTests: FILES[name],
+    timeoutMs,
+    ...result,
+  };
 }
 
 export function sourceUnitFileSucceeded(result) {

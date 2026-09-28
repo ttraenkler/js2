@@ -14288,4 +14288,26 @@ removing the override correctly inherits the parent engine configuration.
 Existing long-running workers already loaded their worker code and are not
 restarted for this change.
 
+### JSON virtual-System compile deadline evidence (2026-09-28)
+
+Session **12127** is terminal (exit 1): native **5/5**, compile timeout at
+**1,200,000 ms**, no reported binary and no Wasm execution. The captured profile
+now proves it passed parser/binder generation and was inside checker body
+generation at the watchdog deadline. The first module-init pass took 271.94 s,
+lib-globals scan 69.51 s, parser bodies 10.82 s. The init label is nested under
+corePublic, but `compileModuleInitBody` processes the shared initialization
+population; do not attribute the time merely to that file's two version strings.
+Full evidence remains in `.tmp/json-parser-recovery-virtual-system.log`.
+
+`runSourceUnitFile` now accepts a validated `timeoutMs` option and records it in
+the result. The default remains 20 minutes, invalid/overflowing timer values
+fail before setup, and all acceptance checks are unchanged. Adapter controls
+pass **31/31** (`.tmp/json-extended-timeout-controls.log`). After the previous
+worker terminated, started a **one-hour** compile allowance with an 8 GiB Node
+heap, profiling enabled, and the narrowed classifier source snapshot. Session
+**22861** is live, command driver `.tmp/json-virtual-extended-run.mjs`, log
+`.tmp/json-virtual-extended-run.log`, eventual report
+`.tmp/json-virtual-extended-result.json`. The checker session **68244** remains
+independently live. Neither pending run counts as acceptance.
+
 "js2wasm compiles 60% of test262" is a percentage. "js2wasm compiles the TypeScript compiler itself" is a story. Landing even Tier 3 is the single strongest artifact for conversations with potential maintainers or funders — it demonstrates the compiler has enough depth to handle production TypeScript, not just hand-picked benchmark inputs. The gap between "a toy subset compiles" and "the real compiler compiles" is exactly what separates a proof-of-concept from a usable tool.

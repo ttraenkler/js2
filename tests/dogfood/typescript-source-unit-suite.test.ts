@@ -16,6 +16,7 @@ import {
   sourceUnitFileSucceeded,
   redirectSourceUnitImports,
   sourceUnitInventory,
+  runSourceUnitFile,
 } from "./typescript-source-unit-suite.mjs";
 // @ts-expect-error — .mjs dogfood helpers have no declaration files
 import { readStandaloneGuestError } from "./upstream-suite-worker-protocol.mjs";
@@ -38,6 +39,10 @@ function passingResult() {
     },
   };
 }
+
+it.each([0, -1, NaN, Infinity, 1.5, 2_147_483_648])("rejects unsafe source unit timeouts (%s)", async (timeoutMs) => {
+  await expect(runSourceUnitFile("factory", { timeoutMs })).rejects.toThrow("positive timer-safe integer");
+});
 
 it("accepts a complete zero-import source unit result", () => {
   expect(sourceUnitFileSucceeded(passingResult())).toBe(true);
