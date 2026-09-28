@@ -14180,4 +14180,22 @@ canonical frontend namespace; do not label it an exact final-commit rebuild.
 JSON session **83629** is terminal: again native **5/5**, standalone compile
 timeout at **1,200,000 ms**, no binary. No additional JSON run has been started.
 
+### Main 732d9f75e6 integration (2026-09-28)
+
+Saved the incomplete-interface carrier fix as **3ff5369596**, then fetched
+`loopdive/js2` main at **732d9f75e671237c3cdf3abf6ba848bedada9185**.
+The single conflict was `callablePropertyRefBridge`: retained this branch's
+bidirectional generic reference conversion and main's new missing-string
+argument handling at dispatch reads. Main's standalone argument conversion is
+already covered by the broader bridge; restoring its early return would lose
+the generic return conversion needed by TypeScript.
+
+Post-merge focused controls pass **41/41** across seven files: incomplete host
+assertion (11), generic identity return (4), generator switch (17), main's
+optional callable property (2), apply fallback (1), non-wrapper callable (1),
+and collection prototype/descriptor (5). Evidence:
+`.tmp/main-732d9-typescript-focused.log`. TypeScript 7 type-checking passes
+(`.tmp/main-732d9-typecheck.log`). The full checker session **56344** remains
+active on its pre-merge source snapshot; it is not a post-merge acceptance run.
+
 "js2wasm compiles 60% of test262" is a percentage. "js2wasm compiles the TypeScript compiler itself" is a story. Landing even Tier 3 is the single strongest artifact for conversations with potential maintainers or funders — it demonstrates the compiler has enough depth to handle production TypeScript, not just hand-picked benchmark inputs. The gap between "a toy subset compiles" and "the real compiler compiles" is exactly what separates a proof-of-concept from a usable tool.
