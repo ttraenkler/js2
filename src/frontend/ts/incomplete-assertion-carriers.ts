@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Loopdive GmbH. Licensed under Apache-2.0 WITH LLVM-exception.
 import { ts } from "../typescript.js";
+import { readonlyErasureMappedAliasTarget } from "./readonly-erasure-mapped-type.js";
 
 /** Erased structural assertions must not impose the asserted record's heap layout. */
 export function incompleteAssertionCarrierTypes(
@@ -73,11 +74,19 @@ export function incompleteAssertionCarrierPlan(checker: ts.TypeChecker, sources:
     }
   }
   if (types.size) {
-    const observed: { node: ts.Expression; type: ts.Type }[] = [];
+    const observed: { node: ts.Expression; type: ts.Type; view: ts.Type }[] = [];
     const visit = (node: ts.Node): void => {
       if (ts.isExpression(node)) {
-        const type = checker.getTypeAtLocation(node);
-        observed.push({ node, type });
+        const view = checker.getTypeAtLocation(node);
+        let type = view;
+        const seen = new Set<ts.Type>();
+        while (!seen.has(type)) {
+          seen.add(type);
+          const target = readonlyErasureMappedAliasTarget(type);
+          if (!target) break;
+          type = target;
+        }
+        observed.push({ node, type, view });
         const symbol = type.getSymbol();
         // getBaseTypes exposes declared generic bases (Base<T>), not always
         // their concrete view. Select observed assignable instantiations only.
@@ -92,7 +101,7 @@ export function incompleteAssertionCarrierPlan(checker: ts.TypeChecker, sources:
     };
     for (const source of sources) visit(source);
     const baseViews = [...types];
-    for (const { node, type } of observed) {
+    for (const { node, type, view } of observed) {
       if (!types.has(type) && type.getSymbol()?.declarations?.some(ts.isInterfaceDeclaration)) {
         const family = familyOf(type);
         // A refined interface cannot introduce a new heap layout for an
@@ -102,7 +111,10 @@ export function incompleteAssertionCarrierPlan(checker: ts.TypeChecker, sources:
           types.add(type);
         }
       }
-      if (types.has(type)) witnesses.push(node);
+      if (types.has(type)) {
+        types.add(view);
+        witnesses.push(node);
+      }
     }
   }
   return { types, witnesses };

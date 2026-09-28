@@ -37,6 +37,15 @@ it("selects exact incomplete interface types without treating unknown shapes as 
     declare const textual: GenericBase<string>;
     const nr = numbered;
     const tr = textual;
+    type Optionalized<T> = { -readonly [K in keyof T]?: T[K] };
+    type Stringified<T> = { -readonly [K in keyof T]: string };
+    type Remapped<T> = { -readonly [K in keyof T as "renamed"]: T[K] };
+    declare const optionalized: Optionalized<GenericDerived<number>>;
+    declare const stringified: Stringified<GenericDerived<number>>;
+    declare const remapped: Remapped<GenericDerived<number>>;
+    const optionalView = optionalized;
+    const stringView = stringified;
+    const remappedView = remapped;
   `,
     ts.ScriptTarget.Latest,
     true,
@@ -54,6 +63,25 @@ it("selects exact incomplete interface types without treating unknown shapes as 
 });
 
 const cases = [
+  {
+    name: "preserves a generic token observed only through a mutable mapped view",
+    body: `
+      interface Node { flags: number; kind: number; }
+      interface SourceFile extends Node { text: string; }
+      interface Token<K extends number> extends Node { kind: K; }
+      type Mutable<T> = { -readonly [P in keyof T]: T[P] };
+      function incomplete(): SourceFile { return { text: "x" } as unknown as SourceFile; }
+      function base(kind: number): Node { return { flags: 0, kind }; }
+      function createBase<T extends Node>(kind: T["kind"]) { return base(kind) as Mutable<T>; }
+      function token<K extends number>(kind: K) {
+        const node = createBase<Token<K>>(kind);
+        node.flags |= 8;
+        return node;
+      }
+      export function run(): number { return token(3).flags + incomplete().text.length; }
+    `,
+    expected: 9,
+  },
   {
     name: "preserves a derived node built through a generic base factory",
     body: `

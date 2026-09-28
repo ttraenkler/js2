@@ -74,6 +74,7 @@
         "src/frontend/ts/loop-continues.ts",
         "src/frontend/ts/switch-breaks.ts",
         "src/frontend/ts/incomplete-assertion-carriers.ts",
+        "src/frontend/ts/readonly-erasure-mapped-type.ts",
         "src/frontend/typescript.ts"
       ],
       "required": true,
@@ -8217,9 +8218,9 @@
       "path": "src/codegen/readonly-erasure-mapped-type.ts",
       "state": "unmigrated",
       "layer": "mixed-needs-split",
-      "destination": "backend-wasmgc",
-      "owner": "3518-coordinator",
-      "nextBoundary": "Separate AST/context-driven generation, physical resources and generated native runtime."
+      "destination": "frontend-ts",
+      "owner": "1058-typescript-standalone",
+      "nextBoundary": "Compatibility re-export only; classifier ownership is frontend-ts. Retire this path after backend callers consume prepared representation facts."
     },
     {
       "path": "src/codegen/realm-global-element-write.ts",
@@ -13407,6 +13408,11 @@
     },
     {
       "path": "src/frontend/ts/incomplete-assertion-carriers.ts",
+      "state": "clean",
+      "layer": "frontend-ts"
+    },
+    {
+      "path": "src/frontend/ts/readonly-erasure-mapped-type.ts",
       "state": "clean",
       "layer": "frontend-ts"
     },

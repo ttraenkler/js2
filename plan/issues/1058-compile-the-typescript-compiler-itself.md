@@ -14455,4 +14455,48 @@ full parser acceptance. Inspect those returned-node carriers next, especially
 generic token constraints and allocator function results; do not launch the
 full checker until parser behavior is restored.
 
+### Generic mapped-view token follow-up (2026-09-28)
+
+The full artifact's `createToken` disassembly proves an erased generic
+`createBaseToken<Token<TKind>>` result is still tested against a separate
+struct and replaced with null before its flags write. The frontend plan
+observes `Mutable<Token<TKind>>`, not its underlying interface, so the
+descendant-family selection misses this representation-bearing type.
+Added a matching generic/mapped-view reduction before changing the planner.
+Next: reuse the exact readonly-erasure classifier in the frontend (move its
+ownership there, retaining backend compatibility), collect canonical views
+before layout publication, and preserve exclusions for non-erasure mappings.
+Diagnostic-only disassembly: `.tmp/parser-descendant-token.wat`.
+
+The new generic token reduction fails **0/2** before the change and passes
+**2/2** after frontend planning unwraps exact readonly-erasure aliases.
+Both canonical interface types and observed mapped views are registered
+before layout publication; expression witnesses retain their original oracle
+keys. Optionality-changing, value-transforming and key-remapping controls
+remain excluded. The classifier implementation moved from codegen to
+`src/frontend/ts/readonly-erasure-mapped-type.ts`; its old module is only a
+compatibility re-export, not a claim of completed backend migration.
+
+Focused carrier/class/service controls pass **38/38**. Extended factory
+controls pass **31/32**; the sole failure (`generic-factory-finish-node-flags`,
+null access at 66:14) reproduces using the exact `be20b6ebc6` planner loaded by
+a read-only Vite plugin. That same baseline also fails both new token tests,
+confirming the instrument changes the intended source. Logs:
+`.tmp/mutable-generic-token-candidate.log`,
+`.tmp/mutable-generic-token-final-controls.log`,
+`.tmp/mutable-generic-token-verified-baseline.log`.
+Typecheck and source gates pass (`.tmp/mutable-generic-token-gates.log`), with
+the existing dead-export open-graph caveat. Architecture inventory still has
+**341 errors**, none naming the mapped classifier or incomplete-carrier
+planner (`.tmp/mutable-generic-token-boundaries.log`); architecture is not done.
+Full parser session **19765** is running with a distinct saved artifact prefix
+`.tmp/parser-mapped-carrier` and log `.tmp/parser-mapped-carrier-diagnostic.log`.
+
+That full parser run now reports **177,257 ms**, **14,598,077 bytes**, valid
+standalone Wasm with zero imports, still **0/3**. Core no longer stops at
+createToken 1513; all three workloads now fail at createIdentifier **1338:13**.
+This is a changed failure frontier, not parser acceptance. Next inspect the
+createBaseIdentifier result conversion and shared allocator return ABI in
+`.tmp/parser-mapped-carrier.wasm` before another full build.
+
 "js2wasm compiles 60% of test262" is a percentage. "js2wasm compiles the TypeScript compiler itself" is a story. Landing even Tier 3 is the single strongest artifact for conversations with potential maintainers or funders — it demonstrates the compiler has enough depth to handle production TypeScript, not just hand-picked benchmark inputs. The gap between "a toy subset compiles" and "the real compiler compiles" is exactly what separates a proof-of-concept from a usable tool.
