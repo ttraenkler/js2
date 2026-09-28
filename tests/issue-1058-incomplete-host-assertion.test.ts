@@ -55,6 +55,26 @@ it("selects exact incomplete interface types without treating unknown shapes as 
 
 const cases = [
   {
+    name: "preserves a derived node built through a generic base factory",
+    body: `
+      interface Node { flags: number; }
+      interface SourceFile extends Node { text: string; }
+      interface Token extends Node { name: string; }
+      type Mutable<T> = { -readonly [P in keyof T]: T[P] };
+      function incomplete(): SourceFile { return { text: "x" } as unknown as SourceFile; }
+      function base(): Node { return { flags: 0 }; }
+      function createBase<T extends Node>(): Mutable<T> { return base() as Mutable<T>; }
+      function token(): Token {
+        const node = createBase<Token>();
+        node.name = "value";
+        node.flags |= 8;
+        return node;
+      }
+      export function run(): number { const node = token(); return node.flags + node.name.length + incomplete().text.length; }
+    `,
+    expected: 14,
+  },
+  {
     name: "keeps incomplete derived objects valid through their base interface",
     body: `
       interface Base { value: number; }

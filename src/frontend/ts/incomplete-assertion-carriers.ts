@@ -44,31 +44,40 @@ export function incompleteAssertionCarrierTypes(
   return result;
 }
 
-/** Interface inheritance preserves the same runtime value across base views. */
+/** Interface inheritance and erased refinements preserve the same runtime value. */
 export function incompleteAssertionCarrierPlan(checker: ts.TypeChecker, sources: readonly ts.SourceFile[]) {
   const types = new Set<ts.Type>();
   const witnesses: ts.Expression[] = [];
   const roots: { target: ts.Type; family: Set<ts.Symbol> }[] = [];
+  const families = new Map<ts.Symbol, Set<ts.Symbol>>();
+  const familyOf = (type: ts.Type): Set<ts.Symbol> => {
+    const symbol = type.getSymbol();
+    if (symbol && families.has(symbol)) return families.get(symbol)!;
+    const family = new Set<ts.Symbol>();
+    const add = (current: ts.Type): void => {
+      const currentSymbol = current.getSymbol();
+      if (!currentSymbol?.declarations?.some(ts.isInterfaceDeclaration) || family.has(currentSymbol)) return;
+      family.add(currentSymbol);
+      const declarationType = (current as ts.TypeReference).target ?? current;
+      for (const base of declarationType.getBaseTypes() ?? []) add(base);
+    };
+    add(type);
+    if (symbol) families.set(symbol, family);
+    return family;
+  };
   for (const source of sources) {
     for (const target of incompleteAssertionCarrierTypes(checker, source).keys()) {
       if (types.has(target)) continue;
       types.add(target);
-      const family = new Set<ts.Symbol>();
-      const add = (type: ts.Type): void => {
-        const symbol = type.getSymbol();
-        if (!symbol?.declarations?.some(ts.isInterfaceDeclaration) || family.has(symbol)) return;
-        family.add(symbol);
-        const declarationType = (type as ts.TypeReference).target ?? type;
-        for (const base of declarationType.getBaseTypes() ?? []) add(base);
-      };
-      add(target);
-      roots.push({ target, family });
+      roots.push({ target, family: familyOf(target) });
     }
   }
   if (types.size) {
+    const observed: { node: ts.Expression; type: ts.Type }[] = [];
     const visit = (node: ts.Node): void => {
       if (ts.isExpression(node)) {
         const type = checker.getTypeAtLocation(node);
+        observed.push({ node, type });
         const symbol = type.getSymbol();
         // getBaseTypes exposes declared generic bases (Base<T>), not always
         // their concrete view. Select observed assignable instantiations only.
@@ -77,12 +86,24 @@ export function incompleteAssertionCarrierPlan(checker: ts.TypeChecker, sources:
           (symbol && roots.some(({ target, family }) => family.has(symbol) && checker.isTypeAssignableTo(target, type)))
         ) {
           types.add(type);
-          witnesses.push(node);
         }
       }
       ts.forEachChild(node, visit);
     };
     for (const source of sources) visit(source);
+    const baseViews = [...types];
+    for (const { node, type } of observed) {
+      if (!types.has(type) && type.getSymbol()?.declarations?.some(ts.isInterfaceDeclaration)) {
+        const family = familyOf(type);
+        // A refined interface cannot introduce a new heap layout for an
+        // existing open base value. Require both declared inheritance and
+        // compatible concrete type arguments, not structural similarity alone.
+        if (baseViews.some((base) => family.has(base.getSymbol()!) && checker.isTypeAssignableTo(type, base))) {
+          types.add(type);
+        }
+      }
+      if (types.has(type)) witnesses.push(node);
+    }
   }
   return { types, witnesses };
 }

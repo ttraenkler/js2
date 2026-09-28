@@ -125,9 +125,8 @@ function untombstoneInstrs(
       { op: "call", funcIdx: resurrectIdx },
     ];
   }
-  // Preserve the pre-#4504 arm byte-for-byte in flag-clear modules.  There is
-  // no inherited descriptor walk there, so recursively clearing the marker
-  // through the bag remains the established behaviour.
+  // Compatibility fallback for contexts without the instance-props helper.
+  // Normal standalone modules reserve the marker-only helper above.
   const lookupIdx = ctx.funcMap.get("__closure_bag_lookup");
   if (lookupIdx === undefined || externSetIdx === undefined) return [];
   return [
@@ -209,12 +208,9 @@ export function fillClosedStructExternSetArms(ctx: CodegenContext): void {
   const flattenIdx = ctx.nativeStrHelpers.get("__str_flatten");
   const equalsIdx = ctx.nativeStrHelpers.get("__str_equals");
   if (!fn || flattenIdx === undefined || equalsIdx === undefined) return;
-  // Keep the pre-#4504 inline tombstone-clear path byte-identical in flag-clear
-  // modules. The direct helper is selected only while inherited [[Set]] is
-  // active, because only then would recursive __extern_set re-enter the new
-  // descriptor decision.
-  const resurrectIdx =
-    ctx.standalone && inheritedSetAnyDirty(ctx) ? ctx.funcMap.get(INSTANCE_FIELD_RESURRECT) : undefined;
+  // Clear only an actual tombstone. Writing null into an existing expando
+  // bag creates a shadow property even when no deletion ever occurred.
+  const resurrectIdx = ctx.funcMap.get(INSTANCE_FIELD_RESURRECT);
   const externSetIdx = ctx.funcMap.get("__extern_set");
   const setResultGlobalIdx = ctx.externSetResultGlobalIdx;
   const setDecideIdx = ctx.funcMap.get("__extern_set_decide");

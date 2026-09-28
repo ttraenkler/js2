@@ -14392,4 +14392,67 @@ Artifacts: `.tmp/incomplete-derived-factory-candidate.log`,
 The unintended broad run is now terminal (exit 1); it is not current-source
 acceptance evidence. Extended JSON session **22861** remains live.
 
+### Descendant carriers and marker-only cleanup (2026-09-28)
+
+Main synchronization is committed as `c05d85314e`; verified main ancestry
+and SSH signature. Typecheck, LOC/function/coercion/oracle checks passed.
+Dead-export preservation passed **6/6 full + 6/6 cut**, but its graph is OPEN,
+strict modeled closure FAIL, and deletion remains NOT CERTIFIED.
+
+Resumed the frontend descendant plan: select observed interface descendants
+only when declared inheritance and concrete assignability both match an open
+base view. Named class shapes and incompatible generic instantiations remain
+excluded. Both compiler paths consume this predeclaration plan.
+
+Confirmed the lost-write cause: physical flags storage receives 8, but old
+cleanup subsequently inserts a null shadow in the side bag. The shared Wasm
+runtime emitter now selects the already-reserved marker-only resurrection
+helper even when inherited-set handling is inactive. No new helper, state,
+checker query, or growth allowance was introduced. The helper is reserved
+before emission and filled once; it deletes only an actual tombstone.
+
+Incomplete-interface controls pass **19/19** with this pair of changes.
+Removing only the cleanup change returns the new two tests to **6 vs 14**.
+The wider candidate run collected **73: 46 pass, 15 fail, 12 skip**. All 15
+failures reproduced with old cleanup: 12 missing `test262/harness/assert.js`
+errors; `computedWriteCtorField` returns 1 vs 11; the declared-physical-field
+side-bag case throws; the present-fnctor-flow-slot case returns 6 vs 7.
+Therefore the wider suite is **not green**, but those failures were not
+introduced by the cleanup change. Logs: `.tmp/descendant-marker-only-controls.log`
+and `.tmp/descendant-marker-old-controls.log` (old cleanup: 17 failed, 29 passed,
+12 skipped / 58; includes the two newly failing descendant controls).
+
+Started a fresh full parser source build after restoring marker-only cleanup:
+session **87994**, `.tmp/parser-descendant-carrier-diagnostic.log`, saved artifact
+prefix `.tmp/parser-descendant-carrier`. All three original native fingerprints
+remain the acceptance oracles. This pending run is not a pass; full checker
+and 232-entry upstream unit acceptance remain open.
+
+Final focused checks pass **53/53** across six files: 36 incomplete-interface,
+staged-System, expando and inherited-set controls, plus 17 class-backed/service
+controls (`.tmp/descendant-marker-final-controls.log`,
+`.tmp/descendant-marker-class-controls.log`). Typecheck, source ratchets and
+lint pass (`.tmp/descendant-marker-final-gates.log`); dead-export preservation
+has the same open-graph/non-certification caveat as above.
+
+The extended JSON run **22861** is now terminal, exit 1 after **2,137,608 ms**
+(not a timeout). Native **5/5**; no binary and no Wasm test execution. Its older
+literal-only snapshot reports eight compile errors: JSON.stringify shapes in
+commandLineParser 3304/3305 and sourceMapRecorder 79; vfsUtil destructuring 999
+and unsupported builtin access 1377; harnessIO generator shapes 555/1077; and
+transformBundle referencing local 54 with only 4 parameters + 26 locals.
+It also reports fs/path/builtin host-import leak warnings, not verified binary
+imports because no binary was emitted. Report:
+`.tmp/json-virtual-extended-result.json`. Do not repeat the expensive build
+until those source reductions or reachability cuts are addressed.
+
+Full parser **87994** published its result: **171,366 ms** total,
+**14,598,730 bytes**, valid standalone Wasm with **zero imports**, but **0/3**
+runtime fingerprints. Performance/Builder fail at nodeFactory **1338:13**
+(`createIdentifier`); Core null-traps at **1513:9** (`createToken`, function
+3634, Wasm offset 10606514). The reduced fix therefore does not establish
+full parser acceptance. Inspect those returned-node carriers next, especially
+generic token constraints and allocator function results; do not launch the
+full checker until parser behavior is restored.
+
 "js2wasm compiles 60% of test262" is a percentage. "js2wasm compiles the TypeScript compiler itself" is a story. Landing even Tier 3 is the single strongest artifact for conversations with potential maintainers or funders — it demonstrates the compiler has enough depth to handle production TypeScript, not just hand-picked benchmark inputs. The gap between "a toy subset compiles" and "the real compiler compiles" is exactly what separates a proof-of-concept from a usable tool.
