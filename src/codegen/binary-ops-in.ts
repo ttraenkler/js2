@@ -10,6 +10,7 @@
  * change (prove-emit-identity IDENTICAL across gc/standalone/wasi).
  */
 import { ts } from "../ts-api.js";
+import { receiverHasIncompleteAssertionCarrier } from "./incomplete-assertion-carriers.js";
 import { f64HolesActive } from "./vec-f64-hole-presence.js"; // (#4491 T11)
 import { getArrTypeIdxFromVec } from "./registry/types.js"; // (#4491 T11)
 import type { FieldDef, Instr, ValType } from "../ir/types.js";
@@ -454,8 +455,8 @@ export function compileInOperator(ctx: CodegenContext, fctx: FunctionContext, ex
   // struct-field check (closed structs, where presence is physical).
   const nonOptionalProp = (prop: ts.Symbol | undefined): boolean =>
     prop !== undefined && (prop.flags & ts.SymbolFlags.Optional) === 0;
-  if (staticKey !== null) {
-    // Check direct properties on the TypeScript type
+  if (staticKey !== null && !receiverHasIncompleteAssertionCarrier(ctx, expr.right)) {
+    // Check direct properties only when the source type is evidence of presence.
     if (nonOptionalProp(rightType.getProperty(staticKey))) {
       tsTypeHasProperty = true;
     }

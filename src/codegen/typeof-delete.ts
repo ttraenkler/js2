@@ -4,6 +4,7 @@
  * Extracted from expressions.ts (issue #688 step 5).
  */
 import { ts } from "../ts-api.js";
+import { propertyReadHasIncompleteAssertionCarrier } from "./incomplete-assertion-carriers.js";
 import { parameterNeedsRuntimeTypeof } from "../frontend/ts/assigned-callable-parameter.js";
 import { chainRootIsGrowable, isNumericIndexExpression, runtimeAccessorDescriptorKey } from "./property-access.js";
 import { emitHostEqualityFromStack } from "./coercion-engine.js";
@@ -1903,7 +1904,7 @@ export function compileTypeofExpression(
   // `compileExpression(operand)` emits the boxed TDZ check. This fires for a
   // closure built inside a `for (let x in …)` head's receiver that captures the
   // never-initialized head binding (scope-head/​body-lex-open/close).
-  let forceRuntimeTypeof = false;
+  let forceRuntimeTypeof = propertyReadHasIncompleteAssertionCarrier(ctx, operand);
   // A folded direct-eval body carries its caller's strictness through the
   // explicit context flag because the foreign AST has no enclosing function.
   // TypeScript nevertheless types its `this` as the ordinary global receiver,
@@ -1913,15 +1914,7 @@ export function compileTypeofExpression(
     forceRuntimeTypeof = true;
   }
   {
-    let bareTdz: ts.Expression = operand;
-    while (
-      ts.isParenthesizedExpression(bareTdz) ||
-      ts.isAsExpression(bareTdz) ||
-      ts.isTypeAssertionExpression(bareTdz) ||
-      ts.isNonNullExpression(bareTdz)
-    ) {
-      bareTdz = (bareTdz as ts.ParenthesizedExpression | ts.AsExpression).expression;
-    }
+    const bareTdz = skipTransparentExpressions(operand);
     if (ts.isIdentifier(bareTdz) && fctx.boxedTdzFlags?.has(bareTdz.text)) {
       forceRuntimeTypeof = true;
     }
@@ -2197,15 +2190,7 @@ export function compileTypeofComparison(
   // Static resolution: if the typeof result is known at compile time,
   // emit a constant comparison result without any runtime call.
   const operand = typeofExpr.expression;
-  let guardOperand: ts.Expression = operand;
-  while (
-    ts.isParenthesizedExpression(guardOperand) ||
-    ts.isAsExpression(guardOperand) ||
-    ts.isTypeAssertionExpression(guardOperand) ||
-    ts.isNonNullExpression(guardOperand)
-  ) {
-    guardOperand = (guardOperand as ts.ParenthesizedExpression | ts.AsExpression).expression;
-  }
+  const guardOperand = skipTransparentExpressions(operand);
 
   const staticFoldComparison = tf.tryCompileStaticTypeofComparisonFold(ctx, fctx, operand, stringLiteral, isEq);
   if (staticFoldComparison !== undefined) return staticFoldComparison;
@@ -2322,7 +2307,10 @@ export function compileTypeofComparison(
   } else {
     staticTypeof = tf.staticFunctionPrototypeTypeof(ctx, fctx, operand) ?? staticTypeofForType(ctx, tsType);
   }
-  if (staticTypeof !== null && runtimeEvalMayRebindIdentifier(ctx, fctx, operand)) {
+  if (
+    staticTypeof !== null &&
+    (runtimeEvalMayRebindIdentifier(ctx, fctx, operand) || propertyReadHasIncompleteAssertionCarrier(ctx, operand))
+  ) {
     staticTypeof = null;
   }
   if (

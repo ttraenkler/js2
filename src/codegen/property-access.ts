@@ -9,6 +9,7 @@ import { emitRuntimeNamespacePropertyRead } from "./runtime-namespace-object.js"
  */
 
 import { ts } from "../ts-api.js";
+import { propertyReadHasIncompleteAssertionCarrier } from "./incomplete-assertion-carriers.js";
 import { isNamespaceQualifier } from "./static-enum-receiver.js";
 import { carrierNameForAccess } from "./carrier-name-fallback.js"; // (#5187)
 import { isAccessorReceiver } from "./accessor-object-literal.js";
@@ -3513,7 +3514,8 @@ function tryOpenObjectDynamicGet(
   expr: ts.PropertyAccessExpression,
   propName: string,
 ): ValType | null | undefined {
-  const irWithTarget = isIrWithOpenObjectTargetReceiver(ctx, expr.expression);
+  const irWithTarget =
+    isIrWithOpenObjectTargetReceiver(ctx, expr.expression) || propertyReadHasIncompleteAssertionCarrier(ctx, expr);
   if (!irWithTarget && !ctx.standalone) return undefined;
   if (!irWithTarget && !chainRootIsGrowable(ctx, expr.expression)) return undefined;
   if (

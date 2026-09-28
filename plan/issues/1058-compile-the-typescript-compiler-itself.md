@@ -14133,4 +14133,51 @@ the cyclic Harness import, then replaces only Node-specific IO operations with
 the upstream virtual equivalents. No pinned references or physical local-output
 files are changed. This is not wired into the durable runner or proven in Wasm.
 
+### Incomplete interface assertion carrier candidate (2026-09-28)
+
+Frontend analysis now identifies exact interface instantiations asserted from
+known object shapes that lack a required property. Unknown/union/collection/
+callable sources and class targets are not evidence for this plan. A shared
+pre-declaration adapter selects the existing open-object carrier before either
+IR-enabled or direct compilation reserves callable signatures. It does not copy
+the object or synthesize the missing members. Exact oracle type keys also route
+reads, `typeof`, equality/storage, and `in` presence checks through runtime value
+semantics; trusting the asserted property types in those consumers was unsound.
+
+The original reduction was **0/2**: IR invalid return, direct null trap.
+Candidate reduction is **2/2**; permanent controls now pass **11/11**, covering
+both compiler paths, closure capture, object identity, mutation through both
+views, absent fields/methods, computed reads, inferred storage, catchable missing
+method calls, a complete implementation of the same interface, and classifier
+exclusions (`.tmp/checker-host-carrier-final-controls.log`). Intermediate **8/10**
+runs exposed the unsound `typeof` and `in` folds; neither was accepted.
+
+Related controls pass **41/42** across eight files
+(`.tmp/checker-host-carrier-related.log`). The failing existing Proxy-delete
+case returns 0 instead of 1 both with this candidate and with the five modified
+compiler modules loaded from **bbe9bb7c66**, without rewriting the live tree
+(`.tmp/checker-host-carrier-proxy-candidate.log`,
+`.tmp/checker-host-carrier-proxy-verified-baseline.log`). This does not make the
+broader suite green. Boundary inventory still reports **341 errors**, none for
+the two new modules. The source-only analyzer uses the canonical frontend
+namespace; its codegen adapter is explicitly mixed migration debt, not claimed
+as completed IR migration.
+
+Before extending shared carrier state, inspected all consumers/mutators of
+`objectHashConsumerTypes`: declaration/widening/accessor scans populate it;
+type resolution, struct registration, property dispatch, and fnctor escape
+analysis read it. The new per-context oracle-key set is append-only in the
+pre-declaration adapter and read by property/observation guards. Existing
+indexed-property widening state is not mutated. No new growth allowance or
+baseline reset is part of this candidate.
+
+The successor full-checker build is live in session **56344**, log
+`.tmp/checker-host-carrier-diagnostic.log`, with source maps and unchanged three
+runtime oracles. Intended artifacts: `.tmp/checker-host-carrier.wasm` and
+`.tmp/checker-host-carrier.wasm.map`. It started with the candidate before the
+analyzer's equivalent import/traversal switch from the legacy TS shim to the
+canonical frontend namespace; do not label it an exact final-commit rebuild.
+JSON session **83629** is terminal: again native **5/5**, standalone compile
+timeout at **1,200,000 ms**, no binary. No additional JSON run has been started.
+
 "js2wasm compiles 60% of test262" is a percentage. "js2wasm compiles the TypeScript compiler itself" is a story. Landing even Tier 3 is the single strongest artifact for conversations with potential maintainers or funders — it demonstrates the compiler has enough depth to handle production TypeScript, not just hand-picked benchmark inputs. The gap between "a toy subset compiles" and "the real compiler compiles" is exactly what separates a proof-of-concept from a usable tool.

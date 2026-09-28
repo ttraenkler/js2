@@ -73,6 +73,7 @@
         "src/frontend/ts/assigned-callable-parameter.ts",
         "src/frontend/ts/loop-continues.ts",
         "src/frontend/ts/switch-breaks.ts",
+        "src/frontend/ts/incomplete-assertion-carriers.ts",
         "src/frontend/typescript.ts"
       ],
       "required": true,
@@ -13387,6 +13388,19 @@
       "path": "src/frontend/ts/switch-breaks.ts",
       "state": "clean",
       "layer": "frontend-ts"
+    },
+    {
+      "path": "src/frontend/ts/incomplete-assertion-carriers.ts",
+      "state": "clean",
+      "layer": "frontend-ts"
+    },
+    {
+      "path": "src/codegen/incomplete-assertion-carriers.ts",
+      "state": "unmigrated",
+      "layer": "mixed-needs-split",
+      "destination": "frontend-ts",
+      "owner": "1058-typescript-standalone",
+      "nextBoundary": "Move the frontend assertion evidence into prepared IR representation ownership; this adapter still bridges codegen carrier storage and shared runtime-fold guards."
     },
     {
       "path": "src/ir/program/native-promise-inventory.ts",

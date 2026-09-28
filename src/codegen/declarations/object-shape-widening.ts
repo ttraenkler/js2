@@ -24,6 +24,7 @@ import {
 } from "./dynamic-with-shape.js";
 import { collectRedeclarationWidenedModuleVarNames } from "./redeclared-var-widening.js";
 import { sourceContainsWithStatement } from "../source-scan-predicates.js"; // (#5313)
+import { collectIncompleteAssertionCarriers } from "../incomplete-assertion-carriers.js";
 
 function isUnboxedPrimitiveCarrier(type: ValType): boolean {
   return ["f64", "f32", "i64", "i32", "i16", "i8"].includes(type.kind);
@@ -232,10 +233,8 @@ export function collectObjectLiteralAssignedPropertyNames(ctx: CodegenContext, s
 }
 
 /**
- * Early, type-table-neutral carrier scan for functions that return an empty
- * object populated through computed keys. Fnctor structs are reserved before
- * the full widening pass, so their RHS field inference must already know that
- * calls such as `getOptions(options)` return the open externref `$Object`.
+ * Select open carriers before either path reserves fnctor structs or callable ABIs.
+ * Computed-key returns and incomplete assertions cannot adopt a closed checker layout.
  */
 export function collectDynamicObjectReturnCarrierTypes(
   ctx: CodegenContext,
@@ -243,6 +242,7 @@ export function collectDynamicObjectReturnCarrierTypes(
   sourceFile: ts.SourceFile,
 ): void {
   const dynamicFunctionNames = new Set<string>();
+  collectIncompleteAssertionCarriers(ctx, checker, sourceFile);
   const inspect = (fn: ts.FunctionDeclaration): void => {
     if (!fn.body) return;
     const emptyVars = new Set<string>();

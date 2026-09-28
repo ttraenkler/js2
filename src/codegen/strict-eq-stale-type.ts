@@ -5,6 +5,7 @@
  * output consumers must preserve that value until the actual JS operation.
  */
 import { ts } from "../ts-api.js";
+import { propertyReadHasIncompleteAssertionCarrier } from "./incomplete-assertion-carriers.js";
 import { moduleGlobalIsDynamicButStaticallyPrimitive } from "./declarations/heterogeneous-scalar-var-widening.js";
 import { paramReadIsJsDefaultGuess } from "./js-default-param-type-guess.js";
 import type { CodegenContext, FunctionContext } from "./context/types.js";
@@ -26,6 +27,7 @@ export function expressionHasWidenedPropertyType(
   expr: ts.Expression,
   seen?: Set<ts.Node>,
 ): boolean {
+  if (propertyReadHasIncompleteAssertionCarrier(ctx, expr)) return true;
   if (!indexedStaleProperties.get(ctx)?.size) return false;
   seen ??= new Set<ts.Node>();
   if (seen.has(expr)) return false;
