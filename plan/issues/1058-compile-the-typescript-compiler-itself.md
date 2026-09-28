@@ -13989,4 +13989,55 @@ The complete architecture detector remains **invalid-inventory, 341 error rows**
 none naming either new module (`.tmp/generator-switch-boundaries-final.log`).
 This is not a claim of architectural completion or full standalone TS success.
 
+### Expanding original source unit coverage (2026-09-28)
+
+Added an explicit recursive source-file inventory; the pinned checkout has 256
+unit-directory files (including helpers), not 256 test callbacks. The source
+adapter now registers JSON parser recovery as its thirteenth suite with a floor
+of five original callbacks. All baseline assertions and tree-coverage checks
+are retained; it imports the original harness implementation namespace, not
+the test-driver barrel that starts a second entire test run as an import side
+effect. Unsupported files remain explicit inventory rows with unknown counts.
+The success predicate now rejects nested basename collisions such as
+helpers/factory.ts instead of attributing them to factory.ts's callback floor.
+
+Initial JSON recovery runs are not passes: the full test-driver barrel lacked
+Mocha; Mocha 10.8.2 was installed only in this worktree's scratch directory, not
+shared node_modules. With the original harness namespace, initialization exposed
+a native reference banner collision: bundled `var dirname` shadows the banner
+import and throws before registration. The banner now uses distinct imported
+names. Evidence:
+`.tmp/source-unit-inventory.log`, `.tmp/json-parser-recovery-harness.log`,
+`.tmp/json-parser-native-stack.log`, `.tmp/json-parser-recovery-banner.log`.
+
+The banner fix is verified by a native load test with conflicting upstream
+dirname/createRequire/fileURLToPath declarations. Adapter controls pass **24/24**
+(`.tmp/source-unit-expansion-final-24.log`), including a control that reference
+reads use pinned data while write/delete operations remain unchanged. JSON recovery then registered all
+five callbacks, but initially read reference baselines relative to the compiler
+worktree. Reference-only reads now resolve to the pinned checkout; original IO
+and baseline comparison remain intact. All **5/5** original callbacks pass in
+the native bundle (`.tmp/json-parser-recovery-native-baselines.log`). Standalone
+session **71288** is still running from the first pinned-baseline mapping;
+log `.tmp/json-parser-recovery-pinned-baselines.log`. An earlier attempt omitted
+`--import tsx` and failed to load the compiler: that is a launcher error, not a
+TypeScript compile result. Do not restart session 71288 while live.
+
+Full-checker session 82526 is terminal: at ae10b516a5 it emitted a valid
+**68,990,373-byte** binary in **1,435,871 ms** with **three** imports, all generator
+fallbacks (`__gen_create_buffer`, `__gen_push_ref`, `__create_generator`). The
+filename imports are gone. **0/3** invocation checks reach execution because
+the import policy rejects instantiation. Saved artifact:
+`.tmp/checker-filename-isolation.wasm`. The successor build at compiler revision
+**8c16af6892**, including the yielding-switch fix, is live in session **78532**;
+log `.tmp/checker-native-switch-diagnostic.log`, intended saved artifact
+`.tmp/checker-native-switch.wasm`. Neither the full checker nor all units are
+proven standalone yet.
+
+Generated baseline output from the initial wrong-root run was preserved, not
+accepted as references, under `.tmp/json-parser-recovery-native-output-20260928`.
+Shared node_modules and pinned reference files were not modified. Source
+ratchets and adapter lint pass; the dead-export preservation/open-graph caveat
+continues to apply. All generated reports and scratch dependencies remain local.
+
 "js2wasm compiles 60% of test262" is a percentage. "js2wasm compiles the TypeScript compiler itself" is a story. Landing even Tier 3 is the single strongest artifact for conversations with potential maintainers or funders — it demonstrates the compiler has enough depth to handle production TypeScript, not just hand-picked benchmark inputs. The gap between "a toy subset compiles" and "the real compiler compiles" is exactly what separates a proof-of-concept from a usable tool.

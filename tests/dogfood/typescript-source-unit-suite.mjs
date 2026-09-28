@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Loopdive GmbH. Licensed under Apache-2.0 WITH LLVM-exception.
 // Original upstream unit callbacks against complete source modules, not projections.
-import { mkdirSync, readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { build } from "esbuild";
@@ -16,6 +16,8 @@ import {
 } from "./upstream-suite-runner.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
+export const SOURCE_UNIT_NATIVE_BANNER =
+  'import { createRequire as __sourceUnitCreateRequire } from "node:module"; import { fileURLToPath as __sourceUnitFileURLToPath } from "node:url"; import { dirname as __sourceUnitDirname } from "node:path"; const require = __sourceUnitCreateRequire(import.meta.url); const __filename = __sourceUnitFileURLToPath(import.meta.url); const __dirname = __sourceUnitDirname(__filename);';
 const FILES = {
   factory: 3,
   diagnosticCollection: 5,
@@ -29,7 +31,35 @@ const FILES = {
   incrementalParser: 153,
   semver: 692,
   debugDeprecation: 6,
+  jsonParserRecovery: 5,
 };
+
+/** Unit-directory files are an inventory, not a count of registered callbacks. */
+export function sourceUnitInventory(root) {
+  const directory = join(root, "src/testRunner/unittests");
+  const files = [];
+  function visit(path) {
+    for (const entry of readdirSync(path, { withFileTypes: true })) {
+      const child = join(path, entry.name);
+      if (entry.isDirectory()) visit(child);
+      else if (entry.isFile() && entry.name.endsWith(".ts")) {
+        const name = relative(directory, child).replace(/\\/g, "/").replace(/\.ts$/, "");
+        files.push({
+          name,
+          expectedTests: Object.hasOwn(FILES, name) ? FILES[name] : null,
+          runnable: Object.hasOwn(FILES, name),
+        });
+      }
+    }
+  }
+  visit(directory);
+  files.sort((a, b) => a.name.localeCompare(b.name));
+  if (files.length === 0) throw new Error("Upstream source unit inventory is empty");
+  for (const name of Object.keys(FILES)) {
+    if (!files.some((file) => file.name === name)) throw new Error(`Upstream source unit file missing: ${name}`);
+  }
+  return { files, sourceFiles: files.length, runnableFiles: files.filter((file) => file.runnable).length };
+}
 
 export const SOURCE_UNIT_DIAGNOSTIC_EXPORTS = String.raw`
 let __sourceUnitError = "";
@@ -46,7 +76,8 @@ export function upstreamStandaloneErrorCodeUnit(index: number): number { return 
 `;
 
 export function redirectSourceUnitImports(name, original, root, generatedPath) {
-  const needsServices = name === "regExpScannerRecovery" || name === "incrementalParser";
+  const needsServices =
+    name === "regExpScannerRecovery" || name === "incrementalParser" || name === "jsonParserRecovery";
   const namespace = relative(
     dirname(generatedPath),
     join(root, `src/${needsServices ? "services" : "compiler"}/_namespaces/ts.js`),
@@ -57,6 +88,14 @@ export function redirectSourceUnitImports(name, original, root, generatedPath) {
   // Parser suites also use language-service source files and snapshots.
   // All original declarations and assertions remain unchanged.
   let transformed = original.replace(importPattern, `import * as ts from ${JSON.stringify(`./${namespace}`)};`);
+  if (name === "jsonParserRecovery") {
+    const harnessPattern = /^import \* as Harness from "\.\.\/_namespaces\/Harness\.js";/m;
+    if (!harnessPattern.test(transformed)) throw new Error("Upstream Harness import changed");
+    // Use the original baseline/diagnostic implementation namespace, not the
+    // testRunner barrel whose side effect starts a second complete test run.
+    const harness = relative(dirname(generatedPath), join(root, "src/harness/_namespaces/Harness.js"));
+    transformed = transformed.replace(harnessPattern, `import * as Harness from ${JSON.stringify(`./${harness}`)};`);
+  }
   if (name === "debugDeprecation") {
     const deprecationPattern = /^import \{ deprecate \} from "\.\.\/\.\.\/deprecatedCompat\/deprecate\.js";/m;
     if (!deprecationPattern.test(transformed)) throw new Error("Upstream deprecation import changed");
@@ -73,6 +112,20 @@ export function redirectSourceUnitImports(name, original, root, generatedPath) {
     transformed = transformed.replace(utilsPattern, `import * as Utils from ${JSON.stringify(`./${utils}`)};`);
   }
   return { transformed, needsServices };
+}
+
+export function sourceUnitHarnessBootstrap(name, root) {
+  if (name !== "jsonParserRecovery") return "";
+  // Baseline reads belong to the pinned checkout, not the compiler worktree.
+  // Preserve the original IO methods and comparison; never regenerate references.
+  return `
+    const sourceUnitIO = Harness.IO;
+    const sourceUnitRoot = ${JSON.stringify(root.replace(/\\/g, "/") + "/")};
+    Harness.setHarnessIO({ ...sourceUnitIO,
+      fileExists: (path: string) => sourceUnitIO.fileExists(path.startsWith("tests/baselines/reference/") ? sourceUnitRoot + path : path),
+      readFile: (path: string) => sourceUnitIO.readFile(path.startsWith("tests/baselines/reference/") ? sourceUnitRoot + path : path),
+    });
+  `;
 }
 
 export async function runSourceUnitFile(name) {
@@ -97,7 +150,8 @@ export async function runSourceUnitFile(name) {
     needsServices || name === "semver" ? TYPESCRIPT_SOURCE_ASSERT : "const assert = __qunitAssert;";
   if (name === "incrementalParser" || name === "semver") assertionBootstrap += "\nglobalThis.assert = assert;";
   if (name === "semver") assertionBootstrap += "\nglobalThis.it = it; globalThis.describe = describe;";
-  const source = `${UPSTREAM_TEST_SHIM}\n${assertionBootstrap}\n${augmentation}\n${transformed}\n${UPSTREAM_TEST_EXPORTS}\n${testBody}\n${SOURCE_UNIT_DIAGNOSTIC_EXPORTS}`;
+  const harnessBootstrap = sourceUnitHarnessBootstrap(name, suite.root);
+  const source = `${UPSTREAM_TEST_SHIM}\n${assertionBootstrap}\n${augmentation}\n${harnessBootstrap}\n${transformed}\n${UPSTREAM_TEST_EXPORTS}\n${testBody}\n${SOURCE_UNIT_DIAGNOSTIC_EXPORTS}`;
   // Upstream's cyclic namespace graph relies on bundled initialization and
   // const-enum folding. Use the same source for the native reference, bundled
   // independently; Wasm still compiles the original source module graph.
@@ -111,7 +165,7 @@ export async function runSourceUnitFile(name) {
     // upstream/root node_modules resolution still runs first; no stubs are used.
     nodePaths: [resolve(HERE, "../../node_modules/.pnpm/node_modules")],
     banner: {
-      js: 'import { createRequire } from "node:module"; import { fileURLToPath } from "node:url"; import { dirname } from "node:path"; const require = createRequire(import.meta.url); const __filename = fileURLToPath(import.meta.url); const __dirname = dirname(__filename);',
+      js: SOURCE_UNIT_NATIVE_BANNER,
     },
   });
   const result = await compileAndRunUpstreamModule({
@@ -132,7 +186,8 @@ export async function runSourceUnitFile(name) {
 }
 
 export function sourceUnitFileSucceeded(result) {
-  const expected = FILES[result?.file?.split("/").pop()?.replace(/\.ts$/, "")];
+  const name = result?.file?.match(/^src\/testRunner\/unittests\/(.+)\.ts$/)?.[1];
+  const expected = Object.hasOwn(FILES, name) ? FILES[name] : undefined;
   if (!expected || result.expectedTests !== expected) return false;
   const passes = (run) =>
     !run?.fatal &&
@@ -161,8 +216,14 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
   // Guest callbacks must not turn an unfinished run into an implicit exit 0.
   process.exitCode = 1;
   const name = process.argv[2] ?? "factory";
-  const result = await runSourceUnitFile(name);
-  writeUpstreamReport(join(HERE, "report", `typescript-source-unit-${name}.json`), result);
-  console.log(JSON.stringify(result));
-  process.exitCode = sourceUnitFileSucceeded(result) ? 0 : 1;
+  if (name === "--inventory") {
+    const suite = setupTypescriptUpstreamSuite();
+    console.log(JSON.stringify({ pin: suite.pin.commit, ...sourceUnitInventory(suite.root) }));
+    process.exitCode = 0; // Inventory completion is not test-suite success.
+  } else {
+    const result = await runSourceUnitFile(name);
+    writeUpstreamReport(join(HERE, "report", `typescript-source-unit-${name}.json`), result);
+    console.log(JSON.stringify(result));
+    process.exitCode = sourceUnitFileSucceeded(result) ? 0 : 1;
+  }
 }
