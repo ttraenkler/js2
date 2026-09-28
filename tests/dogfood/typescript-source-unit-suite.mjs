@@ -1,12 +1,13 @@
 // Copyright (c) 2026 Loopdive GmbH. Licensed under Apache-2.0 WITH LLVM-exception.
 // Original upstream unit callbacks against complete source modules, not projections.
-import { mkdirSync, readFileSync, readdirSync } from "node:fs";
+import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { build } from "esbuild";
 import ts from "typescript";
 import { setupTypescriptUpstreamSuite } from "./setup-typescript-upstream-suite.mjs";
 import { typescriptHarnessAugmentation } from "./typescript-harness-augmentation.mjs";
+import { sourceUnitVirtualHarness } from "./typescript-virtual-harness.mjs";
 import { TYPESCRIPT_SOURCE_ASSERT } from "./typescript-source-assert.mjs";
 import { TYPESCRIPT_STANDALONE_TEST_EXPORTS } from "./typescript-upstream-suite.mjs";
 import {
@@ -149,20 +150,6 @@ export function redirectSourceUnitImports(name, original, root, generatedPath) {
   return { transformed, needsServices };
 }
 
-export function sourceUnitHarnessBootstrap(name, root) {
-  if (name !== "jsonParserRecovery") return "";
-  // Baseline reads belong to the pinned checkout, not the compiler worktree.
-  // Preserve the original IO methods and comparison; never regenerate references.
-  return `
-    const sourceUnitIO = Harness.IO;
-    const sourceUnitRoot = ${JSON.stringify(root.replace(/\\/g, "/") + "/")};
-    Harness.setHarnessIO({ ...sourceUnitIO,
-      fileExists: (path: string) => sourceUnitIO.fileExists(path.startsWith("tests/baselines/reference/") ? sourceUnitRoot + path : path),
-      readFile: (path: string) => sourceUnitIO.readFile(path.startsWith("tests/baselines/reference/") ? sourceUnitRoot + path : path),
-    });
-  `;
-}
-
 export async function runSourceUnitFile(name) {
   if (!Object.hasOwn(FILES, name)) throw new Error(`Unsupported source unit file: ${name}`);
   const suite = setupTypescriptUpstreamSuite();
@@ -185,8 +172,9 @@ export async function runSourceUnitFile(name) {
     needsServices || name === "semver" ? TYPESCRIPT_SOURCE_ASSERT : "const assert = __qunitAssert;";
   if (name === "incrementalParser" || name === "semver") assertionBootstrap += "\nglobalThis.assert = assert;";
   if (name === "semver") assertionBootstrap += "\nglobalThis.it = it; globalThis.describe = describe;";
-  const harnessBootstrap = sourceUnitHarnessBootstrap(name, suite.root);
-  const source = `${UPSTREAM_TEST_SHIM}\n${assertionBootstrap}\n${augmentation}\n${harnessBootstrap}\n${transformed}\n${UPSTREAM_TEST_EXPORTS}\n${testBody}\n${SOURCE_UNIT_DIAGNOSTIC_EXPORTS}`;
+  const virtualHarness = sourceUnitVirtualHarness(name, suite.root, generatedPath);
+  for (const [path, contents] of virtualHarness.modules) writeFileSync(path, contents);
+  const source = `${virtualHarness.importSource}${UPSTREAM_TEST_SHIM}\n${assertionBootstrap}\n${augmentation}\n${transformed}\n${UPSTREAM_TEST_EXPORTS}\n${testBody}\n${SOURCE_UNIT_DIAGNOSTIC_EXPORTS}`;
   // Upstream's cyclic namespace graph relies on bundled initialization and
   // const-enum folding. Use the same source for the native reference, bundled
   // independently; Wasm still compiles the original source module graph.

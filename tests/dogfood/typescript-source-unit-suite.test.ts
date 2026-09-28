@@ -4,7 +4,6 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { runInNewContext } from "node:vm";
 import { build as bundle } from "esbuild";
 import ts from "typescript";
 import { compile } from "../../src/index.js";
@@ -17,7 +16,6 @@ import {
   sourceUnitFileSucceeded,
   redirectSourceUnitImports,
   sourceUnitInventory,
-  sourceUnitHarnessBootstrap,
 } from "./typescript-source-unit-suite.mjs";
 // @ts-expect-error — .mjs dogfood helpers have no declaration files
 import { readStandaloneGuestError } from "./upstream-suite-worker-protocol.mjs";
@@ -214,45 +212,6 @@ it("preserves JSON recovery baseline assertions and original harness implementat
       "/generated/unit.ts",
     ),
   ).toThrow("Upstream Harness import changed");
-});
-
-it("reads pinned reference baselines without redirecting or replacing output operations", () => {
-  const reads: string[] = [];
-  const original = {
-    fileExists: (path: string) => {
-      reads.push(path);
-      return path === "/suite/tests/baselines/reference/a.txt";
-    },
-    readFile: (path: string) => {
-      reads.push(path);
-      return path === "/suite/tests/baselines/reference/a.txt" ? "original baseline" : undefined;
-    },
-    writeFile: () => {},
-    deleteFile: () => {},
-  };
-  const Harness = {
-    IO: original,
-    setHarnessIO(io: typeof original) {
-      this.IO = io;
-    },
-  };
-  const source = ts.transpileModule(sourceUnitHarnessBootstrap("jsonParserRecovery", "/suite"), {
-    compilerOptions: { target: ts.ScriptTarget.ES2022 },
-  }).outputText;
-  runInNewContext(source, { Harness });
-  expect(Harness.IO.fileExists("tests/baselines/reference/a.txt")).toBe(true);
-  expect(Harness.IO.readFile("tests/baselines/reference/a.txt")).toBe("original baseline");
-  expect(Harness.IO.fileExists("tests/baselines/local/a.txt")).toBe(false);
-  expect(Harness.IO.readFile("/absolute/other.txt")).toBeUndefined();
-  expect(reads).toEqual([
-    "/suite/tests/baselines/reference/a.txt",
-    "/suite/tests/baselines/reference/a.txt",
-    "tests/baselines/local/a.txt",
-    "/absolute/other.txt",
-  ]);
-  expect(Harness.IO.writeFile).toBe(original.writeFile);
-  expect(Harness.IO.deleteFile).toBe(original.deleteFile);
-  expect(sourceUnitHarnessBootstrap("factory", "/suite")).toBe("");
 });
 
 it("inventories nested unsupported files without counting them as tested callbacks", () => {

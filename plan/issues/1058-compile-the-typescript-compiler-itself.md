@@ -14198,4 +14198,33 @@ and collection prototype/descriptor (5). Evidence:
 (`.tmp/main-732d9-typecheck.log`). The full checker session **56344** remains
 active on its pre-merge source snapshot; it is not a post-merge acceptance run.
 
+### Static virtual filesystem for original JSON recovery units (2026-09-28)
+
+The durable source-unit runner now seeds upstream's own `vfs.FileSystem` and
+`fakes.System` with the five pinned JSON references under `/typescript`.
+A separate statically imported prelude runs before the cyclic Harness imports:
+it supplies the eagerly-read System surface, fails loudly on premature reads,
+and then delegates to the real upstream System. No dynamic-import workaround,
+baseline assertion replacement, regenerated reference, or physical output write
+is part of guest execution. Original callbacks and baseline comparison remain
+unchanged. Removed the superseded host-path-only bootstrap and its obsolete
+test; new controls cover reference completeness and initialization ordering.
+
+Static native preflight passes **5/5 original callbacks**, rejects deliberately
+incorrect output for an existing reference, and verifies the mismatch was
+written into the virtual filesystem
+(`.tmp/json-harness-static-final-preflight.log`). This is native evidence, not
+Wasm acceptance. The actual source runner is live in session **12127**, using
+`JS2WASM_COMPILE_PROFILE=stream`; log:
+`.tmp/json-parser-recovery-virtual-system.log`. Its compile watchdog is still
+20 minutes; preserve the live session rather than restarting on observation
+timeouts. The checker build remains independently live in session **56344**.
+Adapter controls pass **25/25** (23 existing source-runner controls plus two
+virtual-harness controls), after replacing the superseded host-path test.
+Type-checking and formatting pass; Biome checks the two TypeScript test files
+without errors (the `.mjs` files are outside its configured include set).
+Evidence: `.tmp/json-virtual-harness-final-controls.log`,
+`.tmp/json-virtual-harness-final-typecheck.log`,
+`.tmp/json-virtual-harness-final-lint.log`.
+
 "js2wasm compiles 60% of test262" is a percentage. "js2wasm compiles the TypeScript compiler itself" is a story. Landing even Tier 3 is the single strongest artifact for conversations with potential maintainers or funders — it demonstrates the compiler has enough depth to handle production TypeScript, not just hand-picked benchmark inputs. The gap between "a toy subset compiles" and "the real compiler compiles" is exactly what separates a proof-of-concept from a usable tool.
