@@ -14615,4 +14615,58 @@ The pre-merge wrong fingerprints decode to Builder **41 vs 44 nodes** and
 Performance **290 vs 295**, with matching statement counts (3 and 11).
 Inspect individual rows next: count differences alone do not identify the bug.
 
+### Remaining parser node comparison (2026-09-28)
+
+Rebuilding the diagnostic-only field probe on `bfc3c8df6a` in session **47521**,
+log `.tmp/parser-overload-field-diagnostic.log`. An initial invocation failed
+before compilation because its relative entry path was one directory short;
+the corrected invocation uses `../../../../.tmp/parser-current-field-probe.ts`.
+Type inspection finds both ImportSpecifier and ExportSpecifier selected as
+open carriers, but not their ImportOrExportSpecifier union. Added a two-path
+reduction to test whether the union conversion explains the malformed import
+node; this is a hypothesis, not yet an attributed defect.
+
+The union reduction passes **2/2**; the complete control file passes **29/29**.
+The field probe shows all Builder node kind/position/end/flags now agree except
+the import-specifier segment: an array-shaped value (8–53, non-finite kind and
+flags) replaces two specifiers and their identifiers. Core has zero diagnostics.
+Trace `.tmp/parser-overload-field-trace.log` shows both import specifiers are
+created and parent traversal reaches them, but the user traversal's array
+callback receives a nested argument array. This shifts investigation from node
+construction to callback dispatch.
+
+The shared variadic-builtin apply arm discriminates only on Wasm shape, so an
+ordinary array callback with an externref result can be repacked like a builtin.
+Initial void-result callback controls passed; an explicit `any` result exposes
+the collision: **0/2**, NaN vs 7 (`.tmp/variadic-extern-callback-baseline.log`).
+The candidate checks existing builtin metadata family **and immutable id** for
+Math.max, Math.min and String.fromCharCode before packing arguments, on both
+apply and method-call runtime arms. No new context state or checker query:
+`ensureBuiltinFnMetaType` is the metadata map's sole writer; both arms are
+read-only consumers. This is shared runtime code used by IR and legacy paths.
+
+Candidate controls: **33/33** incomplete-carrier/array-callback tests and
+**11/11** existing any-receiver controls. Read-only Vite source replacement
+with `bfc3c8df6a` restores all **4/4** new call/apply failures, while candidate
+passes them (`.tmp/variadic-identity-verified-baseline.log`,
+`.tmp/variadic-identity-final-controls.log`, `.tmp/variadic-identity-candidate.log`).
+Typecheck, LOC/function budgets, coercion/oracle gates, lint and formatting
+pass without new allowances. Dead-export preservation remains **6/6 + 6/6**,
+graph OPEN, strict modeled closure FAIL, deletion NOT CERTIFIED.
+Full unchanged parser acceptance completed in **175,174 ms**, valid
+**14,588,922-byte** zero-import Wasm, **3/3** exact native fingerprints:
+Performance **49645738923599**, Builder **13386537220945**, Core
+**40098163538143** (`.tmp/parser-variadic-identity-diagnostic.log`, exit 0).
+This verifies these three parser workloads, not all parser behavior or the
+full compiler/unit-suite goal. Registered upstream entries remain **13/232**.
+
+Adjacent rest/math controls are **8/9**: nullable method/default-rest host
+dispatch returns **10 vs 17** at test line 98. The exact failure also occurs
+with original `bfc3c8df6a` runtime source loaded by the same verified Vite
+replacement (`.tmp/variadic-identity-rest-baseline.log`), so it is not introduced
+by this patch. Candidate: `.tmp/variadic-identity-rest-controls.log`.
+Next: rerun the registered parser-focused upstream suites against this source,
+then the full-checker acceptance workload; the long JSON harness compile
+failures and 219 unregistered upstream entries remain unaddressed.
+
 "js2wasm compiles 60% of test262" is a percentage. "js2wasm compiles the TypeScript compiler itself" is a story. Landing even Tier 3 is the single strongest artifact for conversations with potential maintainers or funders — it demonstrates the compiler has enough depth to handle production TypeScript, not just hand-picked benchmark inputs. The gap between "a toy subset compiles" and "the real compiler compiles" is exactly what separates a proof-of-concept from a usable tool.

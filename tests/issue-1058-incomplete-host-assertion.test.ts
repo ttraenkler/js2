@@ -76,6 +76,52 @@ it("selects exact incomplete interface types without treating unknown shapes as 
 
 const cases = [
   {
+    name: "keeps ordinary array callback call arguments unpacked",
+    body: `
+      function invoke(callback: any, nodes: any[]): any { return callback.call(null, nodes); }
+      export function run(): number {
+        const fromCharCode: any = String.fromCharCode;
+        let count = 0;
+        invoke((nodes: any[]): any => { for (const node of nodes) count += node.value; return undefined; }, [{ value: 2 }, { value: 3 }]);
+        return count + fromCharCode.call(null, 65, 66).length;
+      }
+    `,
+    expected: 7,
+  },
+  {
+    name: "does not repack ordinary array callbacks as variadic builtins",
+    body: `
+      function invoke(callback: any, nodes: any[]): any { return callback.apply(null, [nodes]); }
+      export function run(): number {
+        const fromCharCode: any = String.fromCharCode;
+        let count = 0;
+        invoke((nodes: any[]): any => { for (const node of nodes) count += node.value; return undefined; }, [{ value: 2 }, { value: 3 }]);
+        return count + fromCharCode.apply(null, [65, 66]).length;
+      }
+    `,
+    expected: 7,
+  },
+  {
+    name: "preserves open nodes through an import export union",
+    body: `
+      interface Node { flags: number; kind: number; }
+      interface SourceFile extends Node { text: string; }
+      interface Import extends Node { kind: 1; name: string; }
+      interface Export extends Node { kind: 2; name: string; }
+      type Specifier = Import | Export;
+      function incomplete(): SourceFile { return { text: "x" } as unknown as SourceFile; }
+      function base(kind: number): Node { return { flags: 8, kind }; }
+      function makeImport(): Import { const node = base(1) as Import; node.name = "ab"; return node; }
+      function makeExport(): Export { const node = base(2) as Export; node.name = "cde"; return node; }
+      function parse(kind: number): Specifier { return kind === 1 ? makeImport() : makeExport(); }
+      export function run(): number {
+        const a = parse(1) as Import; const b = parse(2) as Export;
+        return a.flags + b.flags + a.name.length + b.name.length + incomplete().text.length;
+      }
+    `,
+    expected: 22,
+  },
+  {
     name: "preserves open results through an overloaded factory callable",
     body: `
       interface Node { flags: number; kind: number; }
