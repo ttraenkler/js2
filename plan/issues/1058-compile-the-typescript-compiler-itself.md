@@ -15984,4 +15984,78 @@ Prefix `.tmp/checker-transported-global`, including source map. The prior
 transported-capture correction moved the runtime blocker but did not produce
 a checker pass. Next inspect the exact createSymbol instruction/capture.
 
+Generator fix committed signed as `c24e0c0d82b`; clean state verified.
+Read-only checker function inspection **19169 exit 0** saved
+`.tmp/checker-transported-global-createSymbol.wat`. The original createSymbol
+body increments symbolCount, then emits `ref.as_non_null(ref.null none)` for
+the symbol object before assigning links. This is not yet evidence of another
+transported capture bug: trace constructor resolution for the local
+`var Symbol = objectAllocator.getSymbolConstructor()` first. Reduced typed vs
+inferred allocator and direct vs nested construction matrix is running from
+`.tmp/checker-symbol-constructor.test.ts`; original checker artifact remains
+attributed to `4641a4e2c97` and is never replaced by the diagnostic stub module.
+
+### 2026-09-28 — requested stop / PR handoff
+
+Implementation stops at signed `c24e0c0d82b` (upstream main through
+`e16ace7ca09`, merge `394f0edc2f50`). Existing upstream PR is
+https://github.com/loopdive/js2/pull/5753; update it rather than opening a duplicate.
+The goal remains **TypeScript 5 plus its original unit tests in standalone**:
+the inventory is 232 upstream unit entries, not the 13 currently registered.
+No full-suite completion or self-hosting claim is justified.
+
+Latest diagnosis, **not implemented**: constructor variables initialized by
+an allocator call are excluded by
+`resolvesToLateAssignedConstructSignatureValue` in
+`src/codegen/expressions/new-super.ts`. Read-only experiment removed only its
+initializer/type-annotation exclusions. On `c24e0c0d82b`, baseline **29105**
+passes **0/16**, experiment **16293** passes **8/16**: every typed allocator
+variant now returns expected **254**, both direct/nested and `Symbol`/`Ctor`
+names, in both IR modes. Untyped `any` allocator variants still throw. This
+supports initialized construct-signature dispatch, not a name-collision fix.
+Logs `.tmp/checker-symbol-constructor-names-baseline.log` and
+`.tmp/checker-symbol-constructor-admit.log`; scratch sources/configs share
+the `.tmp/checker-symbol-constructor` prefix and are local diagnostic artifacts,
+not tracked regression tests.
+
+Portable core reproducer (expected 254; test both IR settings):
+
+```ts
+interface Sym { flags: number; name: string; links?: { checkFlags: number }; }
+function RuntimeSymbol(this: Sym, flags: number, name: string): void {
+  this.flags = flags; this.name = name; this.links = undefined;
+}
+interface Allocator { getSymbolConstructor(): new(flags: number, name: string) => Sym; }
+const allocator: Allocator = { getSymbolConstructor: () => RuntimeSymbol as any };
+export function run(): number {
+  var Symbol = allocator.getSymbolConstructor();
+  var count = 0;
+  function make() {
+    count++;
+    const s = new Symbol(2, "hello");
+    s.links = { checkFlags: 3 };
+    return s;
+  }
+  const s = make();
+  return s.flags * 100 + s.name.length * 10 + s.links!.checkFlags + count;
+}
+```
+
+Next implement the declaration/constructor-value proof in the frontend/shared
+path, preserving existing class/fnctor handling, and add tracked tests including
+reassignment/side effects. Do not blindly broaden all initialized aliases.
+Re-run the full checker with unchanged **67858 / 0 / 133394** oracles and
+source maps; valid Wasm alone is not acceptance. Also retain the insertion-order
+SortedMap **0/2413** and Array.from tuple-carrier failures above.
+
+The original `jsonParserRecovery` run was resumed before the stop request,
+session **39569**, `.tmp/json-disjoint-run.mjs`, log
+`.tmp/json-disjoint-units.log`, eventual report `.tmp/json-disjoint-result.json`.
+It uses unchanged upstream callbacks and the original native denominator **5**,
+one-hour timeout, source maps enabled, source snapshot `c24e0c0d82b` (no compiler
+edits since launch). It was confirmed live after the stop request; no restart
+or termination was performed. The next owner must inspect this same run/report
+before launching another. All checker and constructor experiments listed above
+are terminal; do not treat stale log paths as live processes.
+
 "js2wasm compiles 60% of test262" is a percentage. "js2wasm compiles the TypeScript compiler itself" is a story. Landing even Tier 3 is the single strongest artifact for conversations with potential maintainers or funders — it demonstrates the compiler has enough depth to handle production TypeScript, not just hand-picked benchmark inputs. The gap between "a toy subset compiles" and "the real compiler compiles" is exactly what separates a proof-of-concept from a usable tool.
