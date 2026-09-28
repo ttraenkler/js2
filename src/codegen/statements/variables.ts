@@ -1,4 +1,5 @@
 // Copyright (c) 2026 Loopdive GmbH. Licensed under Apache-2.0 WITH LLVM-exception.
+import { emitRuntimeNamespaceVariableInitializer } from "../runtime-namespace-object.js";
 /**
  * Variable declaration statement lowering.
  */
@@ -1291,6 +1292,7 @@ export function compileVariableStatement(ctx: CodegenContext, fctx: FunctionCont
   // substitutions and buffer representations are withdrawn.
   const chunkedModuleInit = isModuleInitChunkFunctionContext(fctx);
   for (const decl of stmt.declarationList.declarations) {
+    if (emitRuntimeNamespaceVariableInitializer(ctx, fctx, decl)) continue;
     if (ts.isObjectBindingPattern(decl.name)) {
       compileObjectDestructuring(ctx, fctx, decl);
       continue;

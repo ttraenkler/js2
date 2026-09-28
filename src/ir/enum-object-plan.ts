@@ -17,7 +17,7 @@ export interface EnumObjectPlan {
 /**
  * Source-owned constant enum contents, independent of a physical object layout.
  * This is not permission to hoist initialization or to snapshot a live binding.
- * Runtime-valued initializers and merged declarations need ordered evaluation
+ * Runtime-valued initializers and multiple enum declarations need ordered evaluation
  * and therefore decline this static plan rather than silently dropping effects.
  */
 export function planEnumObject(
@@ -28,7 +28,13 @@ export function planEnumObject(
     "declarationsOf" in checker
       ? checker.declarationsOf(declaration.name)
       : checker.getSymbolAtLocation(declaration.name)?.declarations;
-  if (declarations?.length !== 1 || declarations[0] !== declaration) return undefined;
+  // A namespace augmentation executes separately and reuses the enum object;
+  // it does not add enum members to this source-owned initialization plan.
+  if (
+    !declarations?.includes(declaration) ||
+    declarations.some((other) => other !== declaration && !ts.isModuleDeclaration(other))
+  )
+    return undefined;
   if (declaration.getSourceFile().isDeclarationFile) return undefined;
   for (let node: ts.Node | undefined = declaration; node; node = node.parent) {
     if (

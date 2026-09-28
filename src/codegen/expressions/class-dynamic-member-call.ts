@@ -58,6 +58,8 @@ import { standaloneClassProtoObjectApplies } from "../class-proto-object.js";
 import { elemAccessReceiverClassName } from "./calls.js";
 import { addStringConstantGlobal } from "../registry/imports.js";
 import { stringConstantExternrefInstrs } from "../native-strings.js";
+import { hasRuntimeNamespaceObject } from "../runtime-namespace-object.js";
+import { emitNullCheckThrow } from "../property-access.js";
 
 const EXTERNREF: ValType = { kind: "externref" };
 
@@ -274,6 +276,9 @@ export function tryEmitClassDynamicMemberCall(
     fctx.body.push({ op: "local.set", index: recvLocal });
   } else {
     if (!pushExtern(elemAccess.expression)) return undefined;
+    if (hasRuntimeNamespaceObject(ctx, elemAccess.expression)) {
+      emitNullCheckThrow(ctx, fctx, EXTERNREF, elemAccess, undefined, ctx.funcMap.get("__extern_is_undefined"));
+    }
     fctx.body.push({ op: "local.tee", index: recvLocal });
     fctx.body.push({ op: "local.set", index: lookupLocal });
   }

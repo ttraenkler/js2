@@ -78,6 +78,14 @@ it("declines merged and ambient enum initialization", () => {
   expect(plans(`declare namespace External { enum Kind { A = 1 } }`)).toEqual([undefined]);
 });
 
+it("keeps enum writes source-owned when a namespace augments its runtime object", () => {
+  const [plan] = plans(`enum Kind { A = 7 } namespace Kind { export const next = 3; }`);
+  expect(plan?.writes).toEqual([
+    { key: "A", value: 7 },
+    { key: "7", value: "A" },
+  ]);
+});
+
 it("keeps separate same-named enums attached to their declarations", () => {
   const [left, right] = plans(
     `namespace Left { export enum Kind { A = 1 } } namespace Right { export enum Kind { A = 2 } }`,

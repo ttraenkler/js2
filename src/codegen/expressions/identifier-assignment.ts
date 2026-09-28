@@ -1,4 +1,5 @@
 // Copyright (c) 2026 Loopdive GmbH. Licensed under Apache-2.0 WITH LLVM-exception.
+import { emitRuntimeNamespaceVariableWrite } from "../runtime-namespace-object.js";
 /** Resolved identifier writes and their module-lexical TDZ guard. */
 import { ts } from "../../ts-api.js";
 import type { ValType } from "../../ir/types.js";
@@ -192,6 +193,7 @@ export function emitResolvedIdentifierWriteFromStack(
   moduleGlobalIdx: number | undefined,
   allowUnresolvedTopLevelVariable = false,
 ): boolean {
+  if (emitRuntimeNamespaceVariableWrite(ctx, fctx, id, valueType)) return true;
   // A provider or string constant settled while evaluating the value may have
   // inserted an import global. Treat the caller's index as target identity
   // only; re-read the graph-global name map before inspecting its type.

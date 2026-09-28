@@ -13665,4 +13665,40 @@ No validation or invocation outcome is claimed while live. Do not restart this
 process merely because its current module stage is slow. Full TypeScript unit
 coverage, checker invocations, and self-hosting remain unverified.
 
+### Namespace publication checkpoint (2026-09-28)
+
+At `26cf9e1173`, the complete pending namespace candidate was compared against
+that commit's versions of the nine existing integration files (Vitest source
+transform; no checkout/stash/reset). Same three files and 74 tests: **28/74
+baseline → 74/74 candidate**, fixing 46 rows without losing any baseline pass.
+The namespace-value tests execute native oracles. Coverage includes declaration
+order, merged/dotted namespaces, late writes, exported binding patterns,
+function/class/enum augmentation, alias replacement, and logging-host save and
+restore through direct/barrel imports. Separate class controls pass **16/16**.
+Evidence: `.tmp/namespace-current-final-baseline.log`,
+`.tmp/namespace-current-final-focused.log`, `.tmp/namespace-final-class-controls.log`.
+
+The alias-position exception is now restricted to TypeScript source syntax;
+JavaScript and JSX controls still reject nested imports. Type checking, lint
+(30 existing warnings), LOC/function/coercion/oracle checks pass. Dead-export
+preservation remains 6/6 + 6/6, graph OPEN/strict modeled closure FAIL; no
+retirement certification is claimed. No new growth allowance was introduced.
+These changes consume the shared IR namespace initialization plan and exact
+declaration ownership; they are not a separate legacy name-based namespace plan.
+
+Fresh original TypeScript `debugDeprecation.ts` after the generic-return fix:
+native **6/6**, standalone **3/6**, statuses `[false,true,true,true,false,false]`.
+Valid, zero-import O1 Wasm: **7,951,576 bytes**, **147,419 ms**. The silent case
+throws `Error`; both error cases fail `expected matching throw`. Namespace
+publication alone does not close these failures. Evidence:
+`.tmp/debug-deprecation-current-namespace-o1.log`. A diagnostic repeat (session
+64621) saves `.tmp/deprecation-current.wasm` for fresh-instance case replay,
+without altering the original callbacks/assertions. Its log is
+`.tmp/debug-deprecation-saved-binary-o1.log`; no outcome is claimed while live.
+
+Remaining namespace risks include recursive type-only erasure, non-exported
+aliases, namespace-binding reassignment, and broader conditional return/value
+shapes. The checkpoint is the tested publication implementation, not a claim
+that every TypeScript namespace form or the entire compiler is complete.
+
 "js2wasm compiles 60% of test262" is a percentage. "js2wasm compiles the TypeScript compiler itself" is a story. Landing even Tier 3 is the single strongest artifact for conversations with potential maintainers or funders — it demonstrates the compiler has enough depth to handle production TypeScript, not just hand-picked benchmark inputs. The gap between "a toy subset compiles" and "the real compiler compiles" is exactly what separates a proof-of-concept from a usable tool.

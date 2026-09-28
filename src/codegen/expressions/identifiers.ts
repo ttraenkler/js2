@@ -1,4 +1,5 @@
 // Copyright (c) 2026 Loopdive GmbH. Licensed under Apache-2.0 WITH LLVM-exception.
+import { emitRuntimeNamespaceVariableRead, emitRuntimeNamespaceObjectRead } from "../runtime-namespace-object.js";
 /**
  * Identifier resolution, TDZ analysis, and instanceof handling.
  */
@@ -1466,6 +1467,10 @@ function compileIdentifierCore(
     if (valueType) return valueType;
   }
 
+  const namespaceVariable = emitRuntimeNamespaceVariableRead(ctx, fctx, id);
+  if (namespaceVariable) return namespaceVariable;
+  const ownedNamespaceObject = emitRuntimeNamespaceObjectRead(ctx, fctx, id);
+  if (ownedNamespaceObject) return ownedNamespaceObject;
   const enumObject = emitRuntimeEnumObjectRead(ctx, fctx, id);
   if (enumObject) return enumObject;
   const namespaceObject = tryEmitCompiledModuleNamespaceObject(ctx, fctx, id);

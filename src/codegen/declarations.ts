@@ -8,6 +8,13 @@
 import { isTopLevelClassPrototypeWrite } from "./class-proto-toplevel-write.js";
 import { parameterObservesNullishSwitch } from "../frontend/ts/nullish-switch-parameter.js";
 import { runtimeModuleDeclarationGroups, type RuntimeModuleDeclarationGroup } from "../ir/runtime-namespace-plan.js";
+import {
+  prepareRuntimeNamespaceObjects,
+  runtimeNamespaceObjectGroups,
+  emitRuntimeNamespaceObjectInit,
+  emitRuntimeNamespaceLocalPublication,
+  functionReturnsRuntimeNamespaceValue,
+} from "./runtime-namespace-object.js";
 import { widenJsDefaultGuessSlot } from "./js-default-param-type-guess.js";
 import { collectScopeLocalDeclNames } from "./scope-local-decl-names.js";
 import { widenUndefinedDefaultParamSlot } from "./destructuring-params.js";
@@ -522,6 +529,7 @@ export function prepareIdentityPreservingStructuralParams(
 ): void {
   prepareAccessorParameterCarriers(ctx, sourceFiles);
   prepareRuntimeEnumObjects(ctx, sourceFiles);
+  prepareRuntimeNamespaceObjects(ctx, sourceFiles);
   prepareReadonlyModuleClassBindings(ctx, sourceFiles);
   const candidates = new Map<ts.FunctionDeclaration, Set<number>>();
   const directFunctionDeclaration = (identifier: ts.Identifier): ts.FunctionDeclaration | undefined => {
@@ -1921,7 +1929,10 @@ function registerBodylessFunctionDeclaration(
     }
     const rUnwrapped = isAsync ? unwrapPromiseType(retType, ctx.checker) : retType;
     const isImplicitAnyReturn = (rUnwrapped.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown)) !== 0;
-    const dynamicReturn = functionReturnsThroughWithScope(ctx, stmt) || functionReturnsWidenedProperty(ctx, stmt);
+    const dynamicReturn =
+      functionReturnsThroughWithScope(ctx, stmt) ||
+      functionReturnsWidenedProperty(ctx, stmt) ||
+      functionReturnsRuntimeNamespaceValue(ctx, stmt);
     const inferredNumericRet = dynamicReturn
       ? null
       : inferredNumericResultType(ctx, name, isAsync, isImplicitAnyReturn, params, stmt);
@@ -2999,7 +3010,10 @@ export function collectDeclarations(ctx: CodegenContext, sourceFile: ts.SourceFi
         // return type if every param is numeric and the body is a pure
         // numeric kernel (catches e.g. recursive `function fib(n) {...}`).
         const isImplicitAnyReturn = (rUnwrapped.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown)) !== 0;
-        const dynamicReturn = functionReturnsThroughWithScope(ctx, stmt) || functionReturnsWidenedProperty(ctx, stmt);
+        const dynamicReturn =
+          functionReturnsThroughWithScope(ctx, stmt) ||
+          functionReturnsWidenedProperty(ctx, stmt) ||
+          functionReturnsRuntimeNamespaceValue(ctx, stmt);
         const preInitVarReturn = functionReturnsPreInitVarValue(ctx, stmt);
         const inferredNumericRet = dynamicReturn
           ? null
@@ -4745,6 +4759,16 @@ type ModuleStaticInitEntry = CodegenContext["staticInitExprs"][number];
 
 /** One complete source-order unit of synchronous module evaluation. */
 type OrderedModuleInitEntry =
+  | {
+      readonly kind: "namespace-start";
+      readonly node: ts.ModuleDeclaration;
+      readonly group: RuntimeModuleDeclarationGroup;
+    }
+  | {
+      readonly kind: "namespace-publish";
+      readonly node: ts.FunctionDeclaration | ts.ClassDeclaration | ts.EnumDeclaration | ts.ImportEqualsDeclaration;
+      readonly group: RuntimeModuleDeclarationGroup;
+    }
   | { readonly kind: "class-ready"; readonly node: ts.ClassDeclaration }
   | { readonly kind: "static"; readonly node: ts.Node; readonly entry: ModuleStaticInitEntry }
   | { readonly kind: "statement"; readonly node: ts.Statement; readonly statement: ts.Statement };
@@ -5885,7 +5909,10 @@ export function compileDeclarations(
   // so a read before the reassignment still yields the function.
   const hasLiveFuncSeeds = (ctx.liveFuncBindingGlobals?.size ?? 0) > 0;
   const hasModuleInits =
-    ctx.moduleInitStatements.length > 0 || hasLiveFuncSeeds || readonlyModuleClassDeclarations(ctx).length > 0;
+    ctx.moduleInitStatements.length > 0 ||
+    hasLiveFuncSeeds ||
+    readonlyModuleClassDeclarations(ctx).length > 0 ||
+    runtimeNamespaceObjectGroups(ctx).length > 0;
   const hasStaticInits = ctx.staticInitExprs.length > 0;
   const hasAsyncGraphInit =
     ctx.standalone === true &&
@@ -5998,6 +6025,13 @@ export function compileDeclarations(
    */
   function orderedModuleInitEntries(): OrderedModuleInitEntry[] {
     const orderedInitEntries: OrderedModuleInitEntry[] = [];
+    for (const group of runtimeNamespaceObjectGroups(ctx)) {
+      orderedInitEntries.push({ kind: "namespace-start", node: group.declaration, group });
+      for (const step of group.initialization)
+        if ((step.kind === "publish-local" && !step.requiresRuntimeResolution) || step.kind === "export-alias") {
+          orderedInitEntries.push({ kind: "namespace-publish", node: step.declaration, group });
+        }
+    }
     for (const node of readonlyModuleClassDeclarations(ctx)) orderedInitEntries.push({ kind: "class-ready", node });
     for (const entry of ctx.staticInitExprs) {
       if (!isGraphTimelineStaticEntry(entry)) continue;
@@ -6013,8 +6047,8 @@ export function compileDeclarations(
         moduleInitSourceOrdinal(ctx, right.node.getSourceFile());
       if (sourceDelta !== 0) return sourceDelta;
       const positionDelta =
-        (left.kind === "class-ready" ? left.node.end : left.node.pos) -
-        (right.kind === "class-ready" ? right.node.end : right.node.pos);
+        (left.kind === "class-ready" || left.kind === "namespace-publish" ? left.node.end : left.node.pos) -
+        (right.kind === "class-ready" || right.kind === "namespace-publish" ? right.node.end : right.node.pos);
       if (positionDelta !== 0) return positionDelta;
       if (left.kind === right.kind) return 0;
       if (left.kind === "class-ready" || right.kind === "class-ready") return left.kind === "class-ready" ? -1 : 1;
@@ -6045,6 +6079,14 @@ export function compileDeclarations(
 
   /** Compile one complete top-level entry without changing its source order. */
   function compileOrderedModuleInitEntry(fctx: FunctionContext, initEntry: OrderedModuleInitEntry): void {
+    if (initEntry.kind === "namespace-start" || initEntry.kind === "namespace-publish") {
+      projectModuleBindings(ctx, initEntry.node.getSourceFile());
+      withRuntimeModuleBindings(ctx, initEntry.group, exactRuntimeModuleFunctionEntries(ctx, initEntry.group), () => {
+        if (initEntry.kind === "namespace-start") emitRuntimeNamespaceObjectInit(ctx, fctx, initEntry.group);
+        else emitRuntimeNamespaceLocalPublication(ctx, fctx, initEntry.group, initEntry.node);
+      });
+      return;
+    }
     if (initEntry.kind === "class-ready") {
       emitReadonlyModuleClassInitialized(ctx, fctx, initEntry.node);
       return;

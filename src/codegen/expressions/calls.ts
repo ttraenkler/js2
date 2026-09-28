@@ -1,4 +1,6 @@
 // Copyright (c) 2026 Loopdive GmbH. Licensed under Apache-2.0 WITH LLVM-exception.
+import { hasRuntimeNamespaceObject } from "../runtime-namespace-object.js";
+import { tryEmitClassDynamicMemberCall } from "./class-dynamic-member-call.js";
 /**
  * Call expression compilation: direct calls, optional calls, closure calls,
  * property method calls, IIFEs, and conditional callees.
@@ -3630,6 +3632,11 @@ function tryRuntimeNamespaceMemberCall(
   if (!ts.isPropertyAccessExpression(expr.expression)) return undefined;
   const access = expr.expression;
   if (ts.isPrivateIdentifier(access.name)) return undefined;
+  if (hasRuntimeNamespaceObject(ctx, access.expression)) {
+    // Namespace properties are mutable ordinary properties, not class methods
+    // or immutable aliases of their initial source declarations.
+    return tryEmitClassDynamicMemberCall(ctx, fctx, expr, access);
+  }
   if (!isRuntimeNamespaceReceiver(ctx, access.expression)) return undefined;
   // TypeScript nominates the first signature as valueDeclaration for an
   // overloaded exported function. Resolve the one body-bearing declaration;

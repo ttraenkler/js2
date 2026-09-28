@@ -1,4 +1,5 @@
 // Copyright (c) 2026 Loopdive GmbH. Licensed under Apache-2.0 WITH LLVM-exception.
+import { emitRuntimeNamespacePropertyRead } from "./runtime-namespace-object.js";
 /**
  * Property access and element access codegen.
  *
@@ -3991,6 +3992,8 @@ export function compilePropertyAccess(
     return { kind: "externref" };
   }
 
+  const namespaceProperty = emitRuntimeNamespacePropertyRead(ctx, fctx, expr);
+  if (namespaceProperty) return namespaceProperty;
   const namespaceFunctionValue = tryEmitRuntimeNamespaceFunctionValue(ctx, fctx, expr);
   if (namespaceFunctionValue !== undefined) return namespaceFunctionValue;
 

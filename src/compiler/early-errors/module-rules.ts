@@ -469,6 +469,15 @@ export function checkModuleItemPosition(ctx: EarlyErrorContext): void {
       ts.isExportAssignment(node)
     ) {
       if (node.parent && !ts.isSourceFile(node.parent)) {
+        // TypeScript's internal aliases are namespace statements, not ESM
+        // imports. External require aliases and nested ESM imports still fail.
+        if (
+          (sourceFile.flags & ts.NodeFlags.JavaScriptFile) === 0 &&
+          ts.isImportEqualsDeclaration(node) &&
+          ts.isModuleBlock(node.parent) &&
+          !ts.isExternalModuleReference(node.moduleReference)
+        )
+          return;
         const kind = ts.isImportDeclaration(node) || ts.isImportEqualsDeclaration(node) ? "import" : "export";
         ctx.addError(node, `${kind} declarations may only appear at the top level of a module`);
         return;
