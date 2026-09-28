@@ -14369,4 +14369,27 @@ remaining descendant/interface refinement representation mismatch before
 another full checker build. Extended JSON session **22861** remains live on
 its earlier literal-only source snapshot.
 
+### Main synchronization and descendant-factory reduction (2026-09-28)
+
+Fetched `loopdive/js2` main at `27d215fb9e52c28c2ea7bc38d1fc27c63fe7a227`
+and merged without conflicts. Preserved the uncommitted descendant-carrier
+experiment in worktree-local `.tmp/pre-main-sync-*` files before the merge;
+it is not part of the merge's validated source snapshot. Scoped merge controls:
+**21 passed, 3 skipped / 24 collected**, comprising the 17 incomplete-interface
+controls and upstream RegExp replacement controls. The skipped cases are not
+passes (`.tmp/main-27d215-sync-tests.log`).
+
+The new generic base-factory reduction fails **0/2** on the prior committed
+planner with a Wasm exception. Extending frontend planning to compatible
+declared descendants removes the exception, but returns **6 instead of 14**
+in both paths: **36/38** focused controls pass, so this is not an accepted fix.
+Saved disassembly and trace show the physical flags setter receives 8, then
+the old tombstone-clear path writes null into the side bag under the same key.
+Next: verify whether that bag entry shadows the physical field; use the
+existing marker-only resurrection helper if the reduced control proves it.
+Artifacts: `.tmp/incomplete-derived-factory-candidate.log`,
+`.tmp/derived-factory.wat`, `.tmp/derived-factory-trace.log`.
+The unintended broad run is now terminal (exit 1); it is not current-source
+acceptance evidence. Extended JSON session **22861** remains live.
+
 "js2wasm compiles 60% of test262" is a percentage. "js2wasm compiles the TypeScript compiler itself" is a story. Landing even Tier 3 is the single strongest artifact for conversations with potential maintainers or funders — it demonstrates the compiler has enough depth to handle production TypeScript, not just hand-picked benchmark inputs. The gap between "a toy subset compiles" and "the real compiler compiles" is exactly what separates a proof-of-concept from a usable tool.
