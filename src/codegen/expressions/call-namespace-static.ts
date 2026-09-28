@@ -63,7 +63,7 @@ import {
 } from "../json-standalone.js";
 import { canonicalUndefinedExternInstrs, ensureExternStrictEqHelper } from "../any-helpers.js";
 import { compileObjectLiteralAsExternref, materializeStructAsDynamicObject } from "../literals.js";
-import { emitJsonRecordArray, isJsonRecordArrayCandidate } from "../json-record-array.js";
+import { emitJsonRecordArray, isJsonRecordArrayCandidate, isJsonScalarArrayCandidate } from "../json-record-array.js";
 import { noteReflectSetReceiverCall } from "../object-runtime-ordinary-set.js"; // (#6651 E6)
 import { compileInternalCallArgument } from "./internal-call-argument.js";
 import { emitCollectionIteratorVec } from "../map-runtime.js";
@@ -3598,12 +3598,9 @@ export function compileNamespaceStaticCall(
             replacerArg === undefined ||
             replacerArg.kind === ts.SyntaxKind.NullKeyword ||
             (ts.isIdentifier(replacerArg) && replacerArg.text === "undefined");
-          // PR-A serialises `$Object` graphs only. Arrays (closed typed-vec
-          // structs `number[]` etc.) and tuples are a separate sub-slice
-          // (PR-A2) — they are NOT `$ObjVec`, so routing them to the codec
-          // directly would emit wrong output. Flat record arrays use the
-          // explicit materialization path below. Detect an array/tuple type via the
-          // checker and keep it on the refusal path below.
+          // The codec normalizes native scalar vecs through indexed reads.
+          // Flat record arrays still need explicit field materialization;
+          // other array/tuple shapes retain the refusal below.
           const arg0Type = ctx.checker.getTypeAtLocation(expr.arguments[0]!);
           const checkerArr = ctx.checker as unknown as {
             isArrayType?: (t: unknown) => boolean;
@@ -3645,6 +3642,7 @@ export function compileNamespaceStaticCall(
             (!isArrayLike ||
               arrayLiteralForCodec !== undefined ||
               proxyShapedValue ||
+              isJsonScalarArrayCandidate(ctx, expr.arguments[0]!) ||
               isJsonRecordArrayCandidate(ctx, expr.arguments[0]!))
           ) {
             if (

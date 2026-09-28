@@ -14699,4 +14699,41 @@ lint has no errors (five pre-existing explicit-any warnings in loops.ts).
 The larger JSON harness has not been rebuilt yet: this verifies the isolated
 compile failure, not completion of its five upstream callbacks.
 
+### JSON configuration-array refusal reduction (2026-09-28)
+
+Checker **10792** and incrementalParser **1924** confirmed live again.
+Reduced commandLineParser.ts 3304/3305 to JSON.stringify over an optional
+readonly string array with an empty-array fallback: **0/2** compile failures
+in both paths (`.tmp/json-harness-arrays-baseline.log`). The codec already
+normalizes native vecs through indexed reads, but the namespace dispatch
+still refuses nonliteral typed arrays. Candidate uses existing oracle array
+and scalar-element facts to admit this route without new backend checker
+queries; unsupported object/class element shapes remain excluded.
+
+Incremental parser completed on `189abffe3d`: native **153/153**, standalone
+**153/153**, valid **37,278,652-byte** binary with **zero total module imports**,
+compile **421,652 ms**, driver exit 0 (`.tmp/incremental-parser-fixed-units.log`).
+This is the original callback denominator for that one entry file, not all
+232 upstream entries. Checker session **10792** is still live.
+The optional-array reduction now passes **2/2**; expanding runtime scalar and
+nullable-source-map controls before recording the fix as verified.
+
+Expanded controls exposed boolean tag loss through generic vec indexed reads
+(**21/23**, both boolean cases wrong). The shared array materializer now boxes
+proven boolean elements with their existing boolean-tag coercion, rather than
+serializing numeric 1/0. Other scalar vecs use the existing runtime normalization;
+flat records retain their existing field materialization. Candidate controls
+then pass **23/23**, with final nullable-boolean/empty-array expansion **12/12**
+in the new file (overlapping counts, not additive). Logs:
+`.tmp/json-harness-array-controls.log`,
+`.tmp/json-harness-array-boolean-controls.log`,
+`.tmp/json-harness-array-final-controls.log`.
+The original JSON harness has not yet been rerun; remaining generator and
+Error.captureStackTrace compile failures still need reductions.
+
+Final typecheck, LOC/function budgets, coercion/oracle gates, lint, formatting
+and issue checks pass without new allowances. Dead-export preservation passes
+**6/6 full + 6/6 cut**, but graph OPEN / strict modeled closure FAIL and
+retirement/deletion NOT CERTIFIED remain unchanged.
+
 "js2wasm compiles 60% of test262" is a percentage. "js2wasm compiles the TypeScript compiler itself" is a story. Landing even Tier 3 is the single strongest artifact for conversations with potential maintainers or funders — it demonstrates the compiler has enough depth to handle production TypeScript, not just hand-picked benchmark inputs. The gap between "a toy subset compiles" and "the real compiler compiles" is exactly what separates a proof-of-concept from a usable tool.

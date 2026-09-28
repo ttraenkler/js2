@@ -32,8 +32,20 @@ function scalarJsonFact(fact: TypeFact): boolean {
   );
 }
 
+/** The native codec already normalizes scalar vecs through indexed reads. */
+export function isJsonScalarArrayCandidate(ctx: CodegenContext, value: ts.Expression): boolean {
+  const fact = ctx.oracle.typeFactOf(value);
+  return fact.kind === "array" && scalarJsonFact(fact.element);
+}
+
+function isBooleanArray(ctx: CodegenContext, value: ts.Expression): boolean {
+  const fact = ctx.oracle.typeFactOf(value);
+  return fact.kind === "array" && fact.element.kind === "boolean";
+}
+
 /** Source-only eligibility; actual storage is checked after compiling the value. */
 export function isJsonRecordArrayCandidate(ctx: CodegenContext, value: ts.Expression): boolean {
+  if (isBooleanArray(ctx, value)) return true;
   const shape = recordElementShape(ctx, value);
   return (
     !!shape?.props.length &&
@@ -43,10 +55,13 @@ export function isJsonRecordArrayCandidate(ctx: CodegenContext, value: ts.Expres
   );
 }
 
-/** The compact JSON route can safely snapshot flat, data-only record fields. */
+/** Snapshot flat records or boolean vecs whose indexed boxing would erase the tag. */
 function jsonRecordArrayLayout(ctx: CodegenContext, value: ts.Expression, type: ValType) {
   if (type.kind !== "ref" && type.kind !== "ref_null") return undefined;
   const vec = getVecInfo(ctx, type.typeIdx);
+  if (vec?.elemType.kind === "i32" && isBooleanArray(ctx, value)) {
+    return { type, arrTypeIdx: vec.arrTypeIdx, elementType: vec.elemType, undefinedStringFields: [] };
+  }
   if (!vec || (vec.elemType.kind !== "ref" && vec.elemType.kind !== "ref_null")) return undefined;
   const name = ctx.typeIdxToStructName.get(vec.elemType.typeIdx);
   if (name !== undefined && ctx.classSet.has(name)) return undefined;
@@ -86,7 +101,7 @@ function jsonRecordArrayLayout(ctx: CodegenContext, value: ts.Expression, type: 
   return { type, arrTypeIdx: vec.arrTypeIdx, elementType: vec.elemType, undefinedStringFields };
 }
 
-/** Leave an ObjVec of open records on the stack; evaluate the array only once. */
+/** Leave an ObjVec of records or boxed booleans; evaluate the array only once. */
 export function emitJsonRecordArray(
   ctx: CodegenContext,
   fctx: FunctionContext,
@@ -138,7 +153,11 @@ function emitCompiledJsonRecordArray(
       { op: "local.get", index },
       { op: "array.get", typeIdx: layout.arrTypeIdx },
     );
-    emitNullableRecord(ctx, fctx, layout.elementType.typeIdx, layout.undefinedStringFields);
+    if (layout.elementType.kind === "i32") {
+      coerceType(ctx, fctx, { kind: "i32", boolean: true }, { kind: "externref" });
+    } else {
+      emitNullableRecord(ctx, fctx, layout.elementType.typeIdx, layout.undefinedStringFields);
+    }
     fctx.body.push(
       { op: "call", funcIdx: ctx.funcMap.get("__objvec_push")! },
       { op: "local.get", index },
