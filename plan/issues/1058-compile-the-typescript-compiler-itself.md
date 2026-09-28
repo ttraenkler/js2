@@ -15211,4 +15211,79 @@ attribute the unexpected boolean cell to that setter. Next investigate the
 other capture-cell publishers/forwarders and same-name binding identity.
 No full-checker or watcher probe remains running at this checkpoint.
 
+### Watcher capture provenance after 7f5a7849b9
+
+Callback fix committed as **7f5a7849b9**. A diagnostic-only watcher run is
+now tracing Map publications for the exact `fsSupportsRecursiveFsWatch`
+capture-cell key, preserving all original Map writes and recording stacks.
+Session **69493**, `.tmp/watch-system-cell-publish.log`; do not restart on a
+timeout. The previous eager-box-only instrument did not identify the writer.
+In parallel, `.tmp/watch-capture-collision.test.ts` checks a two-factory,
+same-spelled nested-function/boolean-binding reduction, in both source orders
+and both IR settings. No production watcher fix is being assumed yet.
+
+Run 69493 terminated with the same compile failure. Its flushed stack trace
+identifies `promoteAccessorCapturesToGlobals` (`closures.ts:996`) as the
+boolean-cell publisher during `sys.ts` compilation, called by nested-function
+transitive promotion (`nested-declarations.ts:2415`). Earlier boolean cells
+belong to `getNodeSystem`'s `fsWatchWorker`, not the destructured parameter in
+`createSystemWatchFunctions`. Eager-box provenance is visible for that earlier
+frame in this run; absence of an unflushed log is not proof of absence.
+
+Simple same-name factories, callable-parameter shadowing, module-init IIFE,
+and a three-file graph all preserve their native result (4/4 for each
+single-source matrix, 2/2 graph checks); they are controls, not reproductions.
+A read-only loader experiment adds lexical-owner rejection to the existing
+foreign-capture classifier. Anchors were verified by importing the modified
+module before launch. Actual upstream watcher build is running as session
+**21093**, `.tmp/watch-system-owner-experiment.log`. This is NOT a production
+fix and may be insufficient for transitive worklist edges. Next reduction adds
+a delegating sibling: promotion currently follows a capture as a function by
+bare name before checking whether that value is already a lifted capture.
+
+Lexical-owner root-classifier experiment **21093 exit 1**, **189,740 ms**,
+same watcher error: insufficient; not retained in production. Delegating-sibling
+and runtime-computed-boolean reductions still pass **6/6** each, so neither is
+a reproducer (`.tmp/watch-capture-transitive-worker.log`,
+`.tmp/watch-capture-runtime-boolean.log`). The next read-only experiment checks
+`transitiveOnly.excludeNames` BEFORE recursively following a capture as a
+function; the current order follows bare-name function metadata first.
+Loader anchors verified on `closures.ts`. New actual-source log:
+`.tmp/watch-system-exclude-experiment.log`, session **66801**; it also records exact worklist
+roots/exclusions for any remaining boolean-cell promotion. No production
+source changes in this diagnostic checkpoint.
+
+Capture-exclusion experiment **66801 exit 0**: actual upstream watcher build
+now compiles, **18,439,098 bytes**, validates, **zero imports**, **194,045 ms**.
+The reported diagnostic count is 23 (the summary retains 20 warnings); no
+invocations, so this is compilation evidence ONLY, not watcher runtime proof.
+The production correction moves the existing exclusion check before the
+bare-name function traversal; it introduces no new registry or codegen lane.
+The root-classifier experiment is not part of the production change.
+
+New traversal regression has a positive non-excluded control: baseline
+**7f5a7849b9** passes **1/2**, fails the transported-function exclusion case
+(`.tmp/watch-exclude-tracked-baseline.log`). Candidate passes **62/62** across
+five files, including transitive nested/getter captures and existing deferred
+lexical/reference-array cases (`.tmp/watch-exclude-focused-controls.log`).
+The scratch nested-callback/ternary reductions compile but still fail at
+runtime **6/6**, both before and with the exclusion experiment; they are NOT
+reproductions or claimed fixes for this compile blocker. Logs:
+`.tmp/watch-capture-nested-worker.log`,
+`.tmp/watch-capture-separate-condition.log`,
+`.tmp/watch-capture-separate-exclude.log`. Keep that residual separate.
+
+Candidate typecheck, formatting/lint, LOC/function, coercion and oracle gates
+pass with no new grants (`.tmp/watch-exclude-gates.log`, session 66632 exit 0).
+Dead-export preservation **6/6 full + 6/6 cut** passes; retain graph OPEN,
+strict closure FAIL, moved-runtime FAIL and retirement NOT CERTIFIED caveats.
+A new unchanged full checker run is launched against this source candidate,
+with the original three oracles **67858 / 0 / 133394**. Diagnostic loader
+`.tmp/checker-excluded-capture-loader.mjs` saves the Wasm, source map, compiler
+metadata and now the COMPLETE diagnostic list (not just the first 20) under
+`.tmp/checker-excluded-capture*`. It changes artifact writing only, not source
+or emitted instructions. Session **47834**, log `.tmp/checker-excluded-capture-diagnostic.log`;
+do not restart on an observation timeout. Full TypeScript acceptance remains
+unproven until this and the actual upstream unit inventory are satisfied.
+
 "js2wasm compiles 60% of test262" is a percentage. "js2wasm compiles the TypeScript compiler itself" is a story. Landing even Tier 3 is the single strongest artifact for conversations with potential maintainers or funders — it demonstrates the compiler has enough depth to handle production TypeScript, not just hand-picked benchmark inputs. The gap between "a toy subset compiles" and "the real compiler compiles" is exactly what separates a proof-of-concept from a usable tool.

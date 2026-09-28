@@ -943,15 +943,14 @@ export function promoteAccessorCapturesToGlobals(
       const caps = ctx.nestedFuncCaptures.get(fnName);
       if (!caps) continue;
       for (const cap of caps) {
+        // Lifted parameters already transport this binding. Check before
+        // following a same-named function from another scope's registry entry.
+        if (transitiveOnly?.excludeNames.has(cap.name)) continue;
         // A capture can itself be a nested function name — follow it.
         if (ctx.funcMap.has(cap.name) && ctx.nestedFuncCaptures.has(cap.name)) {
           fnWorklist.push(cap.name);
           continue;
         }
-        // (#5148 checkpoint) transitive-only mode: a capture the lifted
-        // function itself carries arrives as a leading param — no promotion
-        // needed, and promoting would only mint an unused global.
-        if (transitiveOnly?.excludeNames.has(cap.name)) continue;
         if (transitiveOnly && !fctx.localMap.has(cap.name)) {
           const recorded =
             cap.outerLocalIdx < fctx.params.length
