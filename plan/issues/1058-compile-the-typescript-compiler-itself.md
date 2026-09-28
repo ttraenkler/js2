@@ -14310,4 +14310,63 @@ heap, profiling enabled, and the narrowed classifier source snapshot. Session
 `.tmp/json-virtual-extended-result.json`. The checker session **68244** remains
 independently live. Neither pending run counts as acceptance.
 
+### Independent parser revalidation after classifier narrowing (2026-09-28)
+
+Rebundled the original parser workload against the pinned upstream sources and
+reconfirmed all **3/3 native fingerprints**: Performance 49645738923599,
+Builder 13386537220945, Core 40098163538143
+(`.tmp/parser-current-native.log`). Started the unchanged numeric oracles in a
+separate full standalone source build, session **1112**, with the narrowed
+classifier and readable guest-error worker. Log:
+`.tmp/parser-literal-carrier-diagnostic.log`; intended saved binary/source map:
+`.tmp/parser-literal-carrier.wasm`. This measures whether parser acceptance
+survives the new assertion-carrier logic independently of checker execution.
+The checker **68244** and extended JSON **22861** sessions remain live; none
+of these pending Wasm runs has been counted as passing.
+
+### Preserve incomplete carriers across base-interface views (2026-09-28)
+
+Parser session **1112** completed: valid **16,131,345-byte** zero-import Wasm,
+**0/3** fingerprints, all trapping at nodeFactory `createSourceFile`, line
+6049 (`node.flags |= flags`). The saved binary is
+`.tmp/parser-literal-carrier.wasm`; isolated diagnostic disassembly of function
+4044 is `.tmp/parser-literal-sourcefile.wat` (other bodies are stubbed for
+inspection only, never an executable acceptance artifact). Checker session
+**68244** also completed: valid **68,395,392-byte** zero-import Wasm, **0/3**,
+the same line/operation, after **1,799,771 ms**. Thus narrowing literal evidence
+alone did not restore parser or checker acceptance.
+
+A Mutable-view factory reduction passes **2/2** and is not a reproduction of
+that trap. A related inherited-interface reduction genuinely fails **0/2**:
+an incomplete `Derived` value observed through `Base` returns 0 instead of 1
+for its missing property's runtime `typeof`. The frontend now plans over the
+whole source graph once, before signature/layout publication, carrying the
+same runtime representation through observed base-interface views. Exact
+oracle keys come from actual source expressions; the backend consumes this
+plan without new checker queries. The existing shared-state reader/mutator
+audit still applies: only the predeclaration collector appends carrier types
+and keys, and no post-publication mutation or baseline grant was added.
+
+Generic inheritance exposed a second control failure: declared `Base<T>` is
+not the concrete `Base<number>` view. Walk canonical interface declarations to
+collect the inheritance family, then select observed concrete views using
+assignability. Never call getBaseTypes on an instantiated generic reference
+and contaminate its resolution cache with an uninstantiated base. The exact
+type control excludes `GenericBase<string>` while admitting the numeric view.
+Final focused controls pass **36/36** across four files, including both compiler
+paths, generic inheritance across modules, and prior class/service controls:
+`.tmp/incomplete-base-carrier-canonical-controls.log`. Earlier generic attempts
+failed and are preserved in `.tmp/incomplete-base-carrier-generic-final.log`
+and `.tmp/incomplete-base-carrier-exclusions.log`.
+
+Full parser session **34709**, started with the initial nongeneric inheritance
+candidate, is terminal: valid **15,957,874-byte** zero-import Wasm, still **0/3**.
+Performance/Builder now report a guest TypeError at **4897:9**; Core traps at
+nodeFactory **1513:9**. This is not a final-generic-candidate rebuild or a pass.
+Log/artifact: `.tmp/parser-base-carrier-diagnostic.log`,
+`.tmp/parser-base-carrier.wasm`. Next: inspect those failures and reduce any
+remaining descendant/interface refinement representation mismatch before
+another full checker build. Extended JSON session **22861** remains live on
+its earlier literal-only source snapshot.
+
 "js2wasm compiles 60% of test262" is a percentage. "js2wasm compiles the TypeScript compiler itself" is a story. Landing even Tier 3 is the single strongest artifact for conversations with potential maintainers or funders — it demonstrates the compiler has enough depth to handle production TypeScript, not just hand-picked benchmark inputs. The gap between "a toy subset compiles" and "the real compiler compiles" is exactly what separates a proof-of-concept from a usable tool.

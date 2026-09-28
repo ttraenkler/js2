@@ -1,8 +1,11 @@
 // Copyright (c) 2026 Loopdive GmbH. Licensed under Apache-2.0 WITH LLVM-exception.
 import { expect, it } from "vitest";
-import { compile } from "../src/index.js";
+import { compile, compileMulti } from "../src/index.js";
 import ts from "typescript";
-import { incompleteAssertionCarrierTypes } from "../src/frontend/ts/incomplete-assertion-carriers.js";
+import {
+  incompleteAssertionCarrierTypes,
+  incompleteAssertionCarrierPlan,
+} from "../src/frontend/ts/incomplete-assertion-carriers.js";
 
 it("selects exact incomplete interface types without treating unknown shapes as evidence", () => {
   const filename = "/incomplete-assertion-plan.ts";
@@ -27,6 +30,13 @@ it("selects exact incomplete interface types without treating unknown shapes as 
     const g = node as RefinedNode;
     class PartialClass { value = 1; }
     const h = new PartialClass() as unknown as Incomplete<boolean>;
+    interface GenericBase<T> { item: T; }
+    interface GenericDerived<T> extends GenericBase<T> { tail: number; }
+    const missing = {} as GenericDerived<number>;
+    declare const numbered: GenericBase<number>;
+    declare const textual: GenericBase<string>;
+    const nr = numbered;
+    const tr = textual;
   `,
     ts.ScriptTarget.Latest,
     true,
@@ -37,10 +47,42 @@ it("selects exact incomplete interface types without treating unknown shapes as 
   const checker = ts.createProgram([filename], options, host).getTypeChecker();
   expect(
     [...incompleteAssertionCarrierTypes(checker, source).keys()].map((type) => checker.typeToString(type)),
-  ).toEqual(["Incomplete<number>"]);
+  ).toEqual(["Incomplete<number>", "GenericDerived<number>"]);
+  expect(
+    [...incompleteAssertionCarrierPlan(checker, [source]).types].map((type) => checker.typeToString(type)).sort(),
+  ).toEqual(["GenericBase<number>", "GenericDerived<number>", "Incomplete<number>"]);
 });
 
 const cases = [
+  {
+    name: "keeps incomplete derived objects valid through their base interface",
+    body: `
+      interface Base { value: number; }
+      interface Derived extends Base { text: string; }
+      function make(): Derived { return { text: "x" } as unknown as Derived; }
+      function read(base: Base): number { return typeof base.value === "undefined" ? 1 : 0; }
+      export function run(): number { return read(make()); }
+    `,
+    expected: 1,
+  },
+  {
+    name: "preserves a mutable view of an incomplete interface through a factory",
+    body: `
+      interface Node { flags: number; }
+      interface SourceFile extends Node { readonly text: string; unused(): number; }
+      type Mutable<T> = { -readonly [P in keyof T]: T[P] };
+      function base(): Node { return { flags: 0 }; }
+      function incomplete(): SourceFile { return { text: "x" } as unknown as SourceFile; }
+      function create(): SourceFile {
+        const node = base() as Mutable<SourceFile>;
+        node.flags |= 1;
+        node.text = "value";
+        return node;
+      }
+      export function run(): number { const node = create(); return node.flags + node.text.length + incomplete().text.length; }
+    `,
+    expected: 7,
+  },
   {
     name: "keeps a captured method through a returned host assertion",
     body: `
@@ -114,6 +156,26 @@ const cases = [
 ];
 
 for (const experimentalIR of [true, false]) {
+  it(`preserves a generic base view across source modules (IR=${experimentalIR})`, async () => {
+    const result = await compileMulti(
+      {
+        "./base.ts": `export interface Base<T> { value: T; }
+        export function read(base: Base<number>): number { return typeof base.value === "undefined" ? 1 : 0; }`,
+        "./derived.ts": `import { type Base } from './base.js';
+        export interface Derived<T> extends Base<T> { text: string; }`,
+        "./factory.ts": `import { type Derived } from './derived.js';
+        export function make(): Derived<number> { return { text: "x" } as unknown as Derived<number>; }`,
+        "./entry.ts": `import { read } from './base.js'; import { make } from './factory.js';
+        export function run(): number { return read(make()); }`,
+      },
+      "./entry.ts",
+      { target: "standalone", experimentalIR },
+    );
+    expect(result.success, JSON.stringify(result.errors)).toBe(true);
+    const module = new WebAssembly.Module(result.binary);
+    expect(WebAssembly.Module.imports(module)).toEqual([]);
+    expect((new WebAssembly.Instance(module).exports.run as () => number)()).toBe(1);
+  });
   for (const test of cases) {
     it(`${test.name} (IR=${experimentalIR})`, async () => {
       const result = await compile(test.body, { target: "standalone", experimentalIR });
