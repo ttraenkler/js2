@@ -14736,4 +14736,21 @@ and issue checks pass without new allowances. Dead-export preservation passes
 **6/6 full + 6/6 cut**, but graph OPEN / strict modeled closure FAIL and
 retirement/deletion NOT CERTIFIED remain unchanged.
 
+Post-commit `4a22206317`, original regExpScannerRecovery **984** callbacks
+started in session **28999**, log `.tmp/regexp-recovery-parser-fixed-units.log`.
+Checker **10792** remains confirmed live on its earlier `189abffe3d` snapshot.
+
+### Main synchronization and optional Error hook checkpoint (2026-09-28)
+
+Fetched requested `loopdive/js2` main at
+`3eb7ae5da3951641b97c1af2e9fc27a0c7c41435`; checkpointing pending work before
+merging, without stashing. The optional Error hook regression controls pass
+**4/4** on `4a22206317` (IR enabled and disabled): absent guarded hook and
+user-installed hook both compile with zero imports and return the expected
+value. Log: `.tmp/error-stack-installed-baseline.log`. These controls do not
+reproduce the full JSON harness's `__get_builtin` failure. Next reduction:
+include the harness's preceding `Error.stackTraceLimit` mutation. Full checker
+and regex recovery runs remain in progress on their recorded pre-merge source
+snapshots; their results must not be attributed to the merged tree.
+
 "js2wasm compiles 60% of test262" is a percentage. "js2wasm compiles the TypeScript compiler itself" is a story. Landing even Tier 3 is the single strongest artifact for conversations with potential maintainers or funders — it demonstrates the compiler has enough depth to handle production TypeScript, not just hand-picked benchmark inputs. The gap between "a toy subset compiles" and "the real compiler compiles" is exactly what separates a proof-of-concept from a usable tool.
