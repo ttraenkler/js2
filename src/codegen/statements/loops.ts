@@ -25,6 +25,7 @@ import {
   addIteratorImports,
   ensureI32Condition,
   ensureNativeStringHelpers,
+  hostMapCarrierClassName,
   nativeStringType,
   resolveWasmType,
 } from "../index.js";
@@ -1154,10 +1155,10 @@ function compileForOfNativeCollection(
     explicitKind = m;
   }
 
-  // The receiver must be a native Map/Set (its TS type symbol is Map/Set).
+  // Include readonly/refining Map interfaces using the shared carrier proof.
   const recvTsType = ctx.checker.getTypeAtLocation(receiver);
   const symName = recvTsType.getSymbol()?.getName() ?? recvTsType.aliasSymbol?.name;
-  const isMap = symName === "Map";
+  const isMap = symName === "Map" || hostMapCarrierClassName(ctx, recvTsType) === "Map";
   const isSet = symName === "Set";
   if (!isMap && !isSet) return false;
 

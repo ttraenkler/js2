@@ -14669,4 +14669,34 @@ Next: rerun the registered parser-focused upstream suites against this source,
 then the full-checker acceptance workload; the long JSON harness compile
 failures and 219 unregistered upstream entries remain unaddressed.
 
+### Post-parser full-source verification (2026-09-28)
+
+On signed `189abffe3d`, full checker acceptance is rebuilding in session
+**10792** with unchanged 3-case oracles, log
+`.tmp/checker-parser-fixed-diagnostic.log`, distinct artifact prefix
+`.tmp/checker-parser-fixed`. Original incrementalParser **153** callbacks are
+running in session **1924**, log `.tmp/incremental-parser-fixed-units.log`.
+Neither is a pass until its terminal report and complete denominator verify.
+While those run, reducing the prior JSON harness compile failure at
+vfsUtil.ts 999 (`ReadonlyMap<string, Inode>` entry destructuring), without
+changing compiler production source under the two builds.
+
+The reduction reproduces the exact compile error **0/2**
+(`.tmp/readonly-map-iteration-baseline.log`). Loop dispatch checked only the
+name Map, while the shared carrier resolver already recognizes ReadonlyMap
+and ambient-library refining interfaces. Reusing `hostMapCarrierClassName`
+at that existing dispatch point gives **2/2**; native-representation checks
+remain in place, and no new classifier or checker query was introduced.
+Expanded controls include direct and explicit-entry iteration through both
+ReadonlyMap and an inherited view, with IR enabled and disabled.
+The two long builds above retain the pre-loop-fix compiler snapshot; do not
+attribute their results to this later loop change.
+
+Expanded readonly/inherited-view and existing collection controls pass
+**24/24 across 3 files** (`.tmp/readonly-map-expanded-controls.log`).
+Typecheck, LOC/function budgets, coercion/oracle gates and formatting pass;
+lint has no errors (five pre-existing explicit-any warnings in loops.ts).
+The larger JSON harness has not been rebuilt yet: this verifies the isolated
+compile failure, not completion of its five upstream callbacks.
+
 "js2wasm compiles 60% of test262" is a percentage. "js2wasm compiles the TypeScript compiler itself" is a story. Landing even Tier 3 is the single strongest artifact for conversations with potential maintainers or funders — it demonstrates the compiler has enough depth to handle production TypeScript, not just hand-picked benchmark inputs. The gap between "a toy subset compiles" and "the real compiler compiles" is exactly what separates a proof-of-concept from a usable tool.
