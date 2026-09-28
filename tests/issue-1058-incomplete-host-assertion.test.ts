@@ -64,6 +64,41 @@ it("selects exact incomplete interface types without treating unknown shapes as 
 
 const cases = [
   {
+    name: "constructs a class value through an open interface result",
+    body: `
+      interface Node { flags: number; }
+      interface SourceFile extends Node { text: string; }
+      function incomplete(): SourceFile { return { text: "x" } as unknown as SourceFile; }
+      class Concrete implements Node { constructor(public flags: number) {} }
+      let Constructor: new (flags: number) => Node;
+      export function run(): number {
+        Constructor = Concrete;
+        return new Constructor(8).flags + incomplete().text.length;
+      }
+    `,
+    expected: 9,
+  },
+  {
+    name: "constructs an open interface from a late assigned function with class candidates",
+    body: `
+      interface Node { flags: number; }
+      interface SourceFile extends Node { text: string; }
+      function incomplete(): SourceFile { return { text: "x" } as unknown as SourceFile; }
+      function RuntimeNode(this: Node, flags: number): void { this.flags = flags; }
+      const allocator = { getConstructor: () => RuntimeNode as any };
+      let Constructor: new (flags: number) => Node;
+      class Other { value = 2; }
+      let OtherConstructor: new () => Other;
+      export function run(): number {
+        OtherConstructor = Other;
+        Constructor = allocator.getConstructor();
+        const node = new Constructor(8);
+        return node.flags + incomplete().text.length + new OtherConstructor().value;
+      }
+    `,
+    expected: 11,
+  },
+  {
     name: "preserves a generic token observed only through a mutable mapped view",
     body: `
       interface Node { flags: number; kind: number; }

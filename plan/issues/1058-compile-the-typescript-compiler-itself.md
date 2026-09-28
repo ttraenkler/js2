@@ -14499,4 +14499,39 @@ This is a changed failure frontier, not parser acceptance. Next inspect the
 createBaseIdentifier result conversion and shared allocator return ABI in
 `.tmp/parser-mapped-carrier.wasm` before another full build.
 
+### Open-interface constructor dispatch follow-up (2026-09-28)
+
+Replaying the saved full artifact shows `initializeState` receives the ordinary
+Identifier function closure and stores it in the expected global. The parser
+allocator then enters class-tag dispatch; no class matches the function, and
+its TypedArray-only no-match helper returns null. This is upstream of all
+identifier field reads. Typed-result construction no longer owns the site
+because its declared interface has correctly become an open carrier.
+Added a two-path reduction combining a late-assigned ordinary constructor,
+an open interface, and an unrelated class descriptor before changing dispatch.
+Trace: `.tmp/parser-mapped-runtime-trace.log`; diagnostic disassemblies:
+`.tmp/parser-mapped-identifier-allocator.wat`,
+`.tmp/parser-mapped-identifier-getter.wat`, `.tmp/parser-mapped-initialize.wat`.
+
+The reduction fails **0/2**, NaN vs 11. The class-only dispatch now declines
+host-free identifier callees whose late-assigned result uses externref, letting
+the existing shared native construct driver own the call. No new constructor
+implementation or checker query was added; the same runtime serves both paths.
+Added a class-value/open-result control to verify the native driver retains
+class descriptor construction as well as ordinary closures.
+
+Final incomplete-interface controls pass **25/25**, identifier-constructor
+controls **6/6**, class-backed controls **12/12**. Shared constructor/service
+controls pass **18/19**: prototype lookup still returns a boxed object vs 11.
+That exact failure reproduces with original `9a389ec77f` new-super source
+loaded by a read-only Vite plugin; the same plugin restores both new regression
+failures. Logs: `.tmp/open-constructor-final-controls.log`,
+`.tmp/open-constructor-candidate.log`, `.tmp/open-constructor-runtime-controls.log`,
+`.tmp/open-constructor-prototype-baseline.log`,
+`.tmp/open-constructor-verified-baseline.log`.
+Typecheck, source gates, lint and formatting pass; dead-export preservation
+retains its open-graph/non-certification caveat (`.tmp/open-constructor-gates.log`).
+Full parser rebuild **98532** is running; distinct artifact prefix
+`.tmp/parser-open-constructor`, log `.tmp/parser-open-constructor-diagnostic.log`.
+
 "js2wasm compiles 60% of test262" is a percentage. "js2wasm compiles the TypeScript compiler itself" is a story. Landing even Tier 3 is the single strongest artifact for conversations with potential maintainers or funders — it demonstrates the compiler has enough depth to handle production TypeScript, not just hand-picked benchmark inputs. The gap between "a toy subset compiles" and "the real compiler compiles" is exactly what separates a proof-of-concept from a usable tool.

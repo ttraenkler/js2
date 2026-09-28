@@ -4491,6 +4491,9 @@ function emitDynamicNewFallback(
     lateAssignedResultType && (!lateAssignedResultSymbolName || !ctx.classSet.has(lateAssignedResultSymbolName))
       ? resolveWasmType(ctx, lateAssignedResultType)
       : undefined;
+  // Open results need ordinary value construction, not the class-only
+  // no-match base. The shared native driver also handles class descriptors.
+  if (noJsHost(ctx) && ts.isIdentifier(calleeExpr) && lateAssignedResultWasmType?.kind === "externref") return false;
 
   // Candidate classes: those with a class-object descriptor singleton and a
   // WasmGC struct (externref-backed builtin subclasses are excluded — they have
