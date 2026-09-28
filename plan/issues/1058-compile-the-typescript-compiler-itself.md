@@ -15595,4 +15595,79 @@ investigate scope/capture provenance before changing global-vs-local priority.
 Use `.tmp/checker-resolved-createchecker.wat` only for inspection (other
 bodies were stubbed), and `.tmp/checker-resolved-box.wasm` for runtime evidence.
 
+Resolved-slot fix committed as `6dc11ac366`. JSON recovery **43930** on
+`f6be8231a2` now terminated exit 1 after **2164315 ms**: native **5/5**,
+compilation fails, **0 bytes**, no Wasm tests run. Two error-severity rows
+remain: dynamic builtin access at vfsUtil.ts **1377:34** (optional
+`Error.captureStackTrace`) and unsupported native generator lowering at
+harnessIO.ts **555:5** (`iterateErrorBaseline`). Report
+`.tmp/json-virtual-transported-result.json`; log
+`.tmp/json-virtual-transported-units.log`. This source snapshot predates the
+pattern-cell fix and resolved-slot correction; do not attribute the result
+to the newest candidate. Original callbacks, baselines and five-test
+denominator remain unchanged.
+
+Checker source confirms `createCheckBinaryExpression()` runs at **1534**,
+before `var undefinedSymbol = createSymbol(...)` at **1544**. This is another
+delayed-binding case, but a `var` binding without lexical TDZ. A six-case
+scratch control (var/let/const, both IR settings, two factory activations)
+is being measured before choosing a correction.
+
+Scratch **7061** on `6dc11ac366` passes **4/6**, failing both `var` cases
+with null dereferences while matching both lexical controls. Native oracle
+is **37**, combining two distinct factory activations. Source
+`.tmp/checker-var-forward.test.ts`, log `.tmp/checker-var-forward.log`.
+A read-only experiment extends the same-function-body cell admission to
+`var` (no TDZ required), without changing production source yet. This reduced
+result does not establish that the full checker runtime will pass.
+
+Read-only experiment **20549** passes **6/6** including both failing `var`
+cases; log `.tmp/checker-var-forward-cell.log`. Next: make the function-body
+binding rule explicit rather than leaving a lexical-named helper with broader
+semantics, add tracked controls for reads before initialization and var
+redeclarations/shadowing, then run the closure controls and gates before a
+new full-checker attempt. Production still remains at `6dc11ac366`; only this
+issue file is dirty. JSON recovery **43930** and all capture-cell checks are
+terminal. Accidental broad test run **37326** was not killed; its results
+cannot be attributed to the final source snapshot.
+
+### 2026-09-28 — function-body var capture lifetime
+
+Expanded scratch matrix on `6dc11ac366`: baseline **5126** passes **4/16**,
+read-only cell experiment **39966** passes **12/16**. The four remaining
+failures are actual reads before initialization (object null-trap, numeric
+result 7 instead of 17), in both IR modes; these fail on the baseline too.
+Logs `.tmp/checker-var-forward-expanded-baseline.log` and
+`.tmp/checker-var-forward-cell-expanded.log`. Keep this separate undefined
+representation defect open; cell lifetime alone is not its solution.
+
+Production now names the shared frontend predicate `sameFunctionBodyCapture`
+and admits direct body `var` bindings without requiring lexical TDZ metadata.
+Its only consumer is nested-declaration capture planning. The declaration must
+still belong to the exact same function-body block, excluding block/loop
+lexical bindings and parameters. No context registry is added or moved.
+Tracked `issue-1058-var-capture-lifetime.test.ts` covers 12 native/standalone
+checks: factory activation isolation, lexical controls, redeclarations,
+parameter shadowing and var patterns. The four still-failing pre-initialization
+read cases remain in the scratch matrix above, not claimed as fixed.
+
+Tracked baseline **96838** on `6dc11ac366` passes **4/12**, fails **8/12**;
+candidate **57765** passes **62/62** across the new suite and pattern/cell/array
+capture controls. Additional **15570** passes **44/44** deferred-lexical and
+generator-owned-helper checks. Logs `.tmp/var-capture-lifetime-tracked-baseline.log`,
+`.tmp/var-capture-lifetime-controls.log`,
+`.tmp/var-capture-lifetime-extra-controls.log`. Gates **20992** terminated
+exit 0: typecheck, formatting/lint, LOC/function, coercion and oracle checks
+pass without new grants. Dead-export preservation **6/6 full + 6/6 cut**;
+graph OPEN, strict closure FAIL and retirement NOT CERTIFIED remain unchanged.
+Log `.tmp/var-capture-lifetime-gates.log`.
+
+Full original checker build **45308** is live against `6dc11ac366` plus the
+two production cell-lifetime edits (same sources as the focused tests), with
+unchanged zero-argument oracles **67858 / 0 / 133394**, standalone target,
+one-hour deadline and 8 GiB worker heap. Diagnostic loader only saves the
+binary, source map, metadata and errors; it does not alter compiler behavior.
+Log `.tmp/checker-var-cell-diagnostic.log`, artifacts `.tmp/checker-var-cell*`.
+Poll this handle rather than starting a replacement after an observation timeout.
+
 "js2wasm compiles 60% of test262" is a percentage. "js2wasm compiles the TypeScript compiler itself" is a story. Landing even Tier 3 is the single strongest artifact for conversations with potential maintainers or funders — it demonstrates the compiler has enough depth to handle production TypeScript, not just hand-picked benchmark inputs. The gap between "a toy subset compiles" and "the real compiler compiles" is exactly what separates a proof-of-concept from a usable tool.
