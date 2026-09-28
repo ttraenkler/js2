@@ -15286,4 +15286,88 @@ or emitted instructions. Session **47834**, log `.tmp/checker-excluded-capture-d
 do not restart on an observation timeout. Full TypeScript acceptance remains
 unproven until this and the actual upstream unit inventory are satisfied.
 
+### 2026-09-28 — transformer blocker remeasured after capture fixes
+
+Merge `460fd83fb2` includes upstream main `3eb7ae5da3951641b97c1af2e9fc27a0c7c41435`;
+ancestry rechecked at `0c16c43373`. The real TypeScript transformer-only
+compile (session **39327**, `.tmp/transform-bundle-current.log`) terminated
+exit 1 after **171530 ms**, with **0 binary bytes** and no runtime invocations.
+Its complete diagnostics (`.tmp/transform-bundle-current-errors.json`) contain
+one error and 17 warnings: `transformSourceFileOrBundle` references local
+**74**, but declares only **12 parameters + 28 locals**. The invalid read
+appears in the inlined `transformBundle` body while constructing the
+`transformSourceFile` callback for `node.sourceFiles.map(...)`. This is still
+a compile blocker, not evidence of transformer runtime correctness. The thin
+entry `.tmp/transform-bundle-workload.ts` imports the unchanged upstream
+`transformTypeScript`; the diagnostic loader only saves artifacts.
+Full checker session **47834** remains running; do not restart it.
+
+Diagnostic replay **89833** also exited 1. `.tmp/transform-slot-current.log`
+identifies `visitSourceFile`'s declaring-frame slot **54** being read while
+`transformBundle` has only four parameters and two locals. Its lifted slot 1
+already carries `transformSourceFile`. The stack leads through
+`emitHoistedArrayCallback` → `emitFuncRefAsClosure`: it rebuilds that transported
+callback instead of reading it. Investigate callback admission/materialization
+at that boundary; do not widen capture-slot guessing or weaken validation.
+Scratch reduction `.tmp/transform-capture.test.ts` checks this graph with two
+factory activations, both IR settings, native expected value **1324**.
+The first launch (**37326**, `.tmp/transform-capture.log`) accidentally merged
+the base include list and started the broader suite; it is NOT a focused
+result. Permission to stop that run was requested. The corrected configuration
+overwrites include and the command supplies the exact test path; focused run
+**78818**, `.tmp/transform-capture-only.log`, exited 1: **0/2** runtime
+checks pass despite successful compilation and native **1324**. This is not
+yet a reduction of the invalid-local compile failure.
+
+A read-only loader experiment declines hoisted-callback rematerialization
+when `liftedCaptureSlots` already transports the callback; ordinary expression
+emission then reads that value. No production source change yet. Actual
+transformer replay **91718**, `.tmp/transform-reuse-current.log`, and focused
+reduction experiment **22899**, `.tmp/transform-capture-reuse.log`, are pending.
+Loader `.tmp/transform-slot-loader.mjs` enables this only with
+`TRANSFORM_REUSE_CAPTURE=1`; the Vite experiment uses
+`.tmp/transform-capture-reuse.config.mts`. Keep compile and runtime claims
+separate when the results arrive.
+
+Focused experiment **22899** has now exited 1: **0/2** pass, both lanes return
+**304** instead of native **1324** (baseline threw). Thus reusing the transported
+callback alone does not establish correct capture semantics. Do not land it
+on a compile-only improvement. Transformer experiment **91718** is still live.
+
+### 2026-09-28 — reuse transported callbacks; isolate destructured residual
+
+Transformer experiment **91718** completed exit 0 after **202780 ms**:
+**17,085,833 bytes**, validates, **zero imports**, no errors, no runtime
+invocations. Same unchanged upstream transformer entry as baseline **39327**;
+the only behavior experiment declines `emitHoistedArrayCallback` when the
+frame's frozen `liftedCaptureSlots` already supplies that callback. This is
+ABI transport evidence, not a name-only registry guess. No shared registry is
+changed. Production now carries this narrow guard in the common array callback
+helper used by admission and emission; it does not introduce a legacy-only path.
+
+Expanded scratch matrix distinguishes binding forms: baseline **22683** fails
+**6/6** at runtime; experiment **57163** passes **4/6** (ordinary member
+initializer and parameter, both IR settings). Destructuring alone still returns
+**304**, not **1324**, in both lanes. Therefore retain that residual explicitly;
+do not call the transformer runtime or destructured capture semantics fixed.
+The passing shapes exercise two independent factory activations and are now
+tracked in `tests/issue-1058-reference-array-callback.test.ts` (four added checks).
+Production candidate **99006** passes **18/18** across that file and transitive
+capture exclusion (`.tmp/transported-callback-controls.log`). Tracked baseline
+**45752**, lifetime controls **25060**, and gates **57936** are pending.
+Full checker **47834** remains on snapshot `0c16c43373` (before this callback
+guard), and the accidentally broad test run **37326** is still live; its
+results must not be attributed to this changing candidate.
+
+Tracked baseline **45752** at `0c16c43373` completed: **12/16 pass**, the four
+new transported-callback tests throw Wasm exceptions. Candidate lifetime
+controls **25060** pass **44/44**; together with **99006**, **62/62** pass across
+four files. Gates **57936** pass typecheck, formatting/lint, LOC/function,
+coercion and oracle checks without new growth grants. Dead-export preservation
+passes **6/6 full + 6/6 cut**, but graph remains OPEN, strict modeled closure
+FAIL, moved-runtime unknown-import closure FAIL, retirement NOT CERTIFIED.
+Logs: `.tmp/transported-callback-baseline.log`,
+`.tmp/transported-callback-lifetime-controls.log`,
+`.tmp/transported-callback-gates.log`.
+
 "js2wasm compiles 60% of test262" is a percentage. "js2wasm compiles the TypeScript compiler itself" is a story. Landing even Tier 3 is the single strongest artifact for conversations with potential maintainers or funders — it demonstrates the compiler has enough depth to handle production TypeScript, not just hand-picked benchmark inputs. The gap between "a toy subset compiles" and "the real compiler compiles" is exactly what separates a proof-of-concept from a usable tool.

@@ -51,6 +51,45 @@ export function run():number {
   1,
 ]);
 
+for (const binding of ["member", "parameter"])
+  cases.push([
+    `transported transform callback ${binding}`,
+    `
+interface Item {value:number;items:Item[];kind:number}
+function transform(${binding === "member" ? "context:{bias:number}" : "bias:number"}) {
+ ${binding === "member" ? "const bias=context.bias;" : ""}
+ let current:Item;
+ let scope=0;
+ return dispatch;
+ function dispatch(node:Item):Item {
+  if(node.kind===1)return bundle(node);
+  return file(node);
+ }
+ function bundle(node:Item):Item {
+  return {value:node.value,kind:1,items:node.items.map(file)};
+ }
+ function file(node:Item):Item {
+  current=node;
+  const visited=save(node,visit);
+  current=undefined!;
+  return visited;
+ }
+ function save(node:Item,f:(n:Item)=>Item):Item {
+  const old=scope;scope++;
+  const result=f(node);scope=old;return result;
+ }
+ function visit(node:Item):Item {
+  return {value:current.value+bias+scope,kind:0,items:[]};
+ }
+}
+export function run():number {
+ const a=transform(${binding === "member" ? "{bias:10}" : "10"}),b=transform(${binding === "member" ? "{bias:20}" : "20"});
+ const node={value:0,kind:1,items:[{value:2,kind:0,items:[]},{value:3,kind:0,items:[]}]};
+ return a(node).items[0].value*100+b(node).items[1].value;
+}`,
+    1324,
+  ]);
+
 for (const [name, source, expected] of cases)
   for (const experimentalIR of [true, false])
     it(`${name} IR=${experimentalIR}`, async () => {
