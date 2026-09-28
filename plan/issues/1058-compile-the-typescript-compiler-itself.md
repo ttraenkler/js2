@@ -15544,4 +15544,55 @@ preservation **6/6 full + 6/6 cut** passes; graph OPEN, strict modeled closure
 FAIL, moved-runtime incomplete and retirement NOT CERTIFIED remain unchanged.
 Issue-format/schema check **21405** also exited 0 before this terminal note.
 
+### 2026-09-28 — checker box experiment validates; initialization still fails
+
+Pattern-cell implementation committed signed as `1ea263e2a1`; clean worktree
+verified after the commit. Full checker experiment **13636** (older
+`f6be8231a2` plus read-only resolved-slot comparison, NOT the new pattern cells)
+terminated exit 1 after **1678369 ms**: **60,214,990 bytes**, Wasm validates,
+**zero imports**, no compiler errors, but **0/3** original invocations match.
+All three now enter execution and null-trap in `createTypeChecker`, function
+**2203**, offset **10329577** (`0x9d9de9`), nearest source checker.ts **1534:5**
+at `createCheckBinaryExpression()` initialization. Keep the original oracles.
+
+The two `NODEBUILDER-BOX-SOURCE` records confirm the hypothesis exactly:
+`isStringNamed` and `symbolToDeclarations` both expect the strictNullChecks
+cell, recorded/live slot **395** (type **1922** in this pre-emission snapshot),
+while `captureSourceSlot` selects raw boolean parameter **60**. Comparing the
+actual selected slot lets the existing live-cell path satisfy the ABI.
+Artifacts `.tmp/checker-resolved-box.wasm`, `.wasm.map`, `-metadata.json`,
+`-errors.json`; log `.tmp/checker-resolved-box-diagnostic.log`. The emitter
+correction is still only a read-only experiment and needs a production change
+with tracked coverage. JSON recovery **43930** remains pending on `f6be8231a2`.
+
+Production follow-up: `funcref-as-closure.ts` now checks the type at
+`captureSourceSlot(fctx, cap)` before choosing the live immutable cell, matching
+the slot actually emitted. No new registry or broad local-name override is
+introduced. Added `issue-1058-resolved-capture-cell.test.ts`: public-emitter
+coverage of transported/owner frames and cell/value ABIs. The scratch public
+emitter baseline reproduced the transported-cell error (1/2 passes); tracked
+four-case baseline and focused runtime controls are being measured. This is
+shared closure emission, not a new legacy-only codegen route.
+
+Tracked baseline **19980** on `1ea263e2a1` passes **3/4**, failing only the
+transported-cell case. Candidate **28078** passes **50/50** across the new
+four emitter checks, 30 pattern-capture checks and 16 reference-array callback
+checks. Logs `.tmp/resolved-capture-cell-baseline.log` and
+`.tmp/resolved-capture-cell-controls.log`. Gates **83712** terminated exit 0:
+typecheck, format/lint, LOC/function, coercion and oracle checks pass with no
+new grants. Dead-export preservation is **6/6 full + 6/6 cut**; graph OPEN,
+strict closure FAIL and retirement NOT CERTIFIED still apply. Gate log:
+`.tmp/resolved-capture-cell-gates.log`.
+
+Next runtime failure is now instruction-attributed, not merely source-mapped:
+original binary byte **10329577** is `ref.as_non_null` after `global.get
+32423`, the third argument to `createCheckBinaryExpression`. Metadata names
+that global **`__captured_undefinedSymbol`**. The checker frame contains an
+`undefinedSymbol` local, but this call reads the null promoted global instead.
+The diagnostic WAT contains no store to that global in `createTypeChecker`.
+This identifies the failing operand, NOT yet why the owner binding was lost;
+investigate scope/capture provenance before changing global-vs-local priority.
+Use `.tmp/checker-resolved-createchecker.wat` only for inspection (other
+bodies were stubbed), and `.tmp/checker-resolved-box.wasm` for runtime evidence.
+
 "js2wasm compiles 60% of test262" is a percentage. "js2wasm compiles the TypeScript compiler itself" is a story. Landing even Tier 3 is the single strongest artifact for conversations with potential maintainers or funders — it demonstrates the compiler has enough depth to handle production TypeScript, not just hand-picked benchmark inputs. The gap between "a toy subset compiles" and "the real compiler compiles" is exactly what separates a proof-of-concept from a usable tool.

@@ -212,19 +212,21 @@ function emitMemoizedNestedFnClosure(
     const capUnresolvedHere = liveBoxLocalIdx === undefined;
     const liveBox = fctx.boxedCaptures?.get(cap.name);
     const liveBoxType = liveBoxLocalIdx === undefined ? undefined : getLocalType(fctx, liveBoxLocalIdx);
-    const recordedSlotType = getLocalType(fctx, cap.outerLocalIdx);
-    const recordedSlotHasLiveBoxType =
+    const selectedSlotType = getLocalType(fctx, captureSourceSlot(fctx, cap));
+    const selectedSlotHasLiveBoxType =
       liveBox !== undefined &&
-      (recordedSlotType?.kind === "ref" || recordedSlotType?.kind === "ref_null") &&
-      recordedSlotType.typeIdx === liveBox.refCellTypeIdx;
+      (selectedSlotType?.kind === "ref" || selectedSlotType?.kind === "ref_null") &&
+      selectedSlotType.typeIdx === liveBox.refCellTypeIdx;
     // A source function expression can be emitted into more than one Wasm
     // frame (for example, once as a stored closure and again through a direct
     // call). Nested-function metadata is source-name keyed, so an immutable
     // capture can retain the first frame's slot while the second frame has
     // re-boxed the same binding at a different slot. Select the live cell only
     // when the capture's expected type, boxed-capture registry, and current
-    // local all identify the same ref-cell type, and the recorded slot no
-    // longer has that representation. This is intentionally narrower than
+    // local all identify the same ref-cell type, and the selected slot lacks
+    // that representation. Lifted capture slots can override the recorded
+    // slot, so admission must check the slot emission will actually read.
+    // This is intentionally narrower than
     // #1177's reverted blanket localMap-first lookup.
     const useLiveImmutableBox =
       !cap.mutable &&
@@ -235,7 +237,7 @@ function emitMemoizedNestedFnClosure(
       cap.valType.typeIdx === liveBox.refCellTypeIdx &&
       (liveBoxType?.kind === "ref" || liveBoxType?.kind === "ref_null") &&
       liveBoxType.typeIdx === liveBox.refCellTypeIdx &&
-      !recordedSlotHasLiveBoxType;
+      !selectedSlotHasLiveBoxType;
     // (#5303) The closure ABI wants the box's inner VALUE — asked directly
     // rather than through the old non-reference proxy, which mis-answered for a
     // read-only capture whose own value type is a GC reference and forwarded the
