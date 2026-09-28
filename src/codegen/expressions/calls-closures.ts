@@ -7,6 +7,7 @@
  * - compileCallablePropertyCall — call to a callable struct field
  * - tryExternClassMethodOnAny — resolve method call on any-typed receiver via extern classes
  */
+import { guardedExternRefResultBridge } from "./dispatch-extern-result-bridge.js";
 import { ts } from "../../ts-api.js";
 import { preserveOptionalDeclarationParameter } from "../optional-declaration-parameter.js";
 import { widenJsDefaultGuessSymbolSlot } from "../js-default-param-type-guess.js";
@@ -538,8 +539,10 @@ function emitRootFuncrefDispatch(
       coerceType(ctx, fctx, fc.returnType!, expectedReturn!);
       fctx.body = saved;
     } else if (matchedDispatch && !valTypesMatch(fc.returnType!, expectedReturn!)) {
-      fcCallBody.push({ op: "drop" });
-      fcCallBody.push(...defaultValueInstrs(expectedReturn!));
+      // (#6684) A live externref result survives a guarded downcast (no-host).
+      const guarded = guardedExternRefResultBridge(ctx, fctx, fc.returnType!, expectedReturn!);
+      if (guarded !== null) fcCallBody.push(...guarded);
+      else fcCallBody.push({ op: "drop" }, ...defaultValueInstrs(expectedReturn!));
     }
 
     funcDispatch = [
