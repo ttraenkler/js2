@@ -14599,4 +14599,20 @@ fingerprints are failures. Logs: `.tmp/open-overload-candidate.log`,
 Next: merge freshly fetched loopdive/js2 main, recheck focused controls, then
 compare remaining Builder/Performance node fields against native TypeScript.
 
+### Main synchronization and resumed parser verification (2026-09-28)
+
+Committed the overload fix as `a01e6a5489`, then merged loopdive/js2 main
+`13099016cad6846a5ed698bf6a2e18381e82af2d` without conflicts in signed merge
+`512e9f6846`. Post-merge typecheck passes. Focused frontend and upstream regex
+controls pass **316/316 across 3 files** (`.tmp/main-130990-sync-controls.log`);
+this is not the upstream TypeScript unit-suite denominator.
+The unchanged three-workload parser acceptance completed from the merged
+tree (`.tmp/parser-main-130990-diagnostic.log`) in **174,565 ms**: valid
+**14,588,065-byte**, zero-import Wasm, **1/3** matches, with exactly the same
+three numeric results as before merging. The merge preserves the Core fix
+but does not fix Builder or Performance.
+The pre-merge wrong fingerprints decode to Builder **41 vs 44 nodes** and
+Performance **290 vs 295**, with matching statement counts (3 and 11).
+Inspect individual rows next: count differences alone do not identify the bug.
+
 "js2wasm compiles 60% of test262" is a percentage. "js2wasm compiles the TypeScript compiler itself" is a story. Landing even Tier 3 is the single strongest artifact for conversations with potential maintainers or funders — it demonstrates the compiler has enough depth to handle production TypeScript, not just hand-picked benchmark inputs. The gap between "a toy subset compiles" and "the real compiler compiles" is exactly what separates a proof-of-concept from a usable tool.
