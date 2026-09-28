@@ -13922,4 +13922,37 @@ Node filename/dirname host-import path from standalone identifier reads without
 breaking host loader values or lexical shadows. The current import producer is
 `src/codegen/expressions/identifiers.ts`; original uses are in TypeScript's sys.ts.
 
+### Node filename isolation (2026-09-28, after main sync)
+
+At b998eda686, a checker-style Node-system guard with `any` ambient filename
+declarations retains both filename imports: **0/2** standalone runtime tests
+pass (`.tmp/filename-any-baseline.log`). String-typed source declarations already
+pass **2/2**, so that first reduction was not evidence for the defect. Restricting
+the loader intrinsics to host builds removes the imports (**2/2**), but the full
+fix must also preserve supplied native values. An isolated candidate extends
+the existing ambient global-environment read to these two Node values; its six
+guard/supplied-value tests pass (`.tmp/filename-env-candidate.log`).
+
+The production change shares the existing declaration-identity and runtime
+typeof handling, including lexical-shadow exclusion and registered capability
+precedence. Added runtime controls cover absent and supplied `any`/`string`
+declarations and shadows in both IR modes. The first production run exposed
+three host-loader failures; an isolated restoration of pre-change behavior
+reproduced all three (**4/7**, `.tmp/filename-host-baseline.log`). The generic
+ambient read had intercepted module-loader values as realm-global values.
+Excluding host filename bindings from that generic read restores the existing
+loader contract. Final focused result: **27/27**, including **12/12** new native
+filename controls, **8/8** process controls, and **7/7** original host-loader
+controls (`.tmp/filename-production-final.log`). The full checker has not yet
+been rebuilt with this change.
+
+Broader ambient controls are **31/32**, not all green: the host test
+`resolves a supplied ambient object during top-level initialization despite a dead local collision`
+throws a WebAssembly.Exception. Removing both filename changes in an isolated
+baseline transform reproduces that same row (**7/8** in its file). Logs:
+`.tmp/filename-ambient-controls.log` and `.tmp/filename-ambient-baseline.log`.
+Typecheck, lint (two existing any warnings), LOC/function/coercion/oracle gates
+pass. Dead-export preservation remains 6/6 full and 6/6 cut; graph OPEN and
+strict modeled closure FAIL do not certify deletion. No baseline/grant changes.
+
 "js2wasm compiles 60% of test262" is a percentage. "js2wasm compiles the TypeScript compiler itself" is a story. Landing even Tier 3 is the single strongest artifact for conversations with potential maintainers or funders — it demonstrates the compiler has enough depth to handle production TypeScript, not just hand-picked benchmark inputs. The gap between "a toy subset compiles" and "the real compiler compiles" is exactly what separates a proof-of-concept from a usable tool.

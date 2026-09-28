@@ -2010,7 +2010,7 @@ function compileIdentifierCore(
   // them even when the source has no `@types/node` shim so plain `.ts` modules
   // compile cleanly. The host import returns the loader-injected value
   // (typed externref / string).
-  if (name === "__dirname" || name === "__filename") {
+  if (!ctx.standalone && !ctx.wasi && (name === "__dirname" || name === "__filename")) {
     const importName = name === "__dirname" ? "__get_dirname" : "__get_filename";
     let funcIdx = ctx.funcMap.get(importName);
     if (funcIdx === undefined) {

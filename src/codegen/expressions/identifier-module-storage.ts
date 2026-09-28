@@ -46,28 +46,33 @@ export function identifierHasOnlyAmbientDeclarations(ctx: CodegenContext, id: ts
  * Import preprocessing also emits ambient variable stubs, but its value stubs
  * are deliberately `any` (and Node class stubs use `typeof ...`).  Excluding
  * those synthetic shapes keeps imports from becoming globalThis reads, except
- * standalone's process capability (including an explicit `any` declaration).
+ * standalone's Node environment values (including an explicit `any` declaration).
  * Registered capability thunks still take precedence over the global lookup.
  */
 export function identifierHasExplicitHostAmbientValueDeclaration(ctx: CodegenContext, id: ts.Identifier): boolean {
   // Standalone has a native global environment too. A declaration describes
   // a capability; it does not prove that capability exists at runtime.
   if (!ctx.standalone && (ctx.wasi || ctx.strictNoHostImports)) return false;
+  // Host filenames belong to the module loader, not the realm's global object.
+  if (!ctx.standalone && (id.text === "__filename" || id.text === "__dirname")) return false;
   const declarations = identifierValueDeclarations(ctx, id);
   if (declarations.length === 0 || !identifierHasOnlyAmbientDeclarations(ctx, id)) return false;
+  const nativeNodeValue =
+    ctx.standalone && (id.text === "process" || id.text === "__filename" || id.text === "__dirname");
   return declarations.some((declaration) => {
     if (!ts.isVariableDeclaration(declaration)) return false;
     // Node ambient types can be injected by an unrelated node: import (or
-    // type-only hint). They do not supply a process object to standalone.
+    // type-only hint). They do not supply Node environment values to standalone.
     // Resolve its actual value from the native global environment, including
     // an explicitly installed value, rather than folding its declared type.
-    if (declaration.getSourceFile().isDeclarationFile && !(ctx.standalone && id.text === "process")) return false;
+    if (declaration.getSourceFile().isDeclarationFile && !nativeNodeValue) return false;
     const list = declaration.parent;
     if (!ts.isVariableDeclarationList(list) || !ts.isVariableStatement(list.parent)) return false;
     if (!hasDeclareModifier(list.parent)) return false;
     const type = declaration.type;
-    const nativeProcess = ctx.standalone && id.text === "process";
-    return type !== undefined && (nativeProcess || type.kind !== ts.SyntaxKind.AnyKeyword) && !ts.isTypeQueryNode(type);
+    return (
+      type !== undefined && (nativeNodeValue || type.kind !== ts.SyntaxKind.AnyKeyword) && !ts.isTypeQueryNode(type)
+    );
   });
 }
 
