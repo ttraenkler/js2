@@ -13347,6 +13347,38 @@ oracle and coercion ratchets pass; no new size allowance was added. Accessor
 replacement, namespace materialization, full checker compilation, self-hosting
 and strict IR closure remain open.
 
+### Namespace publication planning and sync checkpoint (2026-09-28)
+
+Shared IR namespace groups now retain immutable, source-ordered publication
+steps with exact binding identities. Exported variables are property-backed;
+uninitialized declarations create no own property. Functions/classes retain
+locals before publication, and exported import aliases remain property-backed.
+Const-enum and alias runtime resolution are explicit outstanding obligations.
+This is preparatory metadata only: the physical emitter is not wired to these
+steps, and the original debugDeprecation suite remains unresolved.
+
+Focused planning tests pass **14/14**; type checking, targeted lint, LOC and
+function budgets pass. Dead-export preservation passes **6/6 + 6/6**, but its
+graph remains OPEN and strict modeled closure FAIL; this is not retirement
+certification. Evidence: `.tmp/namespace-publication-plan-*.log`.
+
+Completed original-suite runs on the slice-receiver fix `b0e8b61b96`, before
+this checkpoint and the requested upstream merge: incrementalParser **153/153**
+native and **153/153** standalone (23,929,440 bytes, 613,005 ms), semver
+**692/692** native and **692/692** standalone (7,072,218 bytes, 168,356 ms).
+Both use O1, validate with zero imports, and use the existing TypeScript 5.9.3
+pin `c63de15a992d37f0d6cec03ac7631872838602cb`. Logs:
+`.tmp/parser-slice-receiver-o1.log`, `.tmp/semver-slice-receiver-o1.log`.
+
+Full checker on `e6e47ff1cf` still fails validation in
+`__fnctor_NodeLinks_new`: fallthrough expected a nullable reference, got f64.
+It produces 68,532,293 bytes in 1,587,452 ms, but executes **0/3** requested
+invocations because instantiation fails. The typed-this fix did not resolve
+this full-build error. Evidence: `.tmp/checker-erased-this-full.log`.
+Next: merge upstream main, rerun focused controls, then capture the constructor
+WAT rather than rerunning the unchanged checker without diagnostic evidence.
+Full checker, namespace objects, all upstream units and self-hosting remain open.
+
 ### ESM namespace identity continuation (2026-09-27)
 
 The initialization hypothesis above is now confirmed and fixed: the shared IR

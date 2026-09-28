@@ -1,5 +1,9 @@
 // Copyright (c) 2026 Loopdive GmbH. Licensed under Apache-2.0 WITH LLVM-exception.
 import { ts } from "../ts-api.js";
+import {
+  planRuntimeNamespaceInitialization,
+  type RuntimeNamespaceInitializationStep,
+} from "./runtime-namespace-initialization.js";
 
 export interface RuntimeModuleDeclarationGroup {
   readonly declaration: ts.ModuleDeclaration;
@@ -9,6 +13,8 @@ export interface RuntimeModuleDeclarationGroup {
   readonly functions: readonly ts.FunctionDeclaration[];
   /** Ordered runtime declarations/statements, including function and enum exports. */
   readonly initializers: readonly ts.Statement[];
+  /** Publication intent; physical namespace-object emission is a separate stage. */
+  readonly initialization: readonly RuntimeNamespaceInitializationStep[];
   readonly parent: RuntimeModuleDeclarationGroup | undefined;
 }
 
@@ -63,12 +69,14 @@ export function runtimeModuleDeclarationGroups(sourceFile: ts.SourceFile): reado
         lastImplementation.set(statement.name.text, statement);
       }
     }
+    const initializers = Object.freeze(body.statements.filter(initializer));
     const group: RuntimeModuleDeclarationGroup = Object.freeze({
       declaration,
       path,
       block: body,
       functions: Object.freeze([...lastImplementation.values()]),
-      initializers: Object.freeze(body.statements.filter(initializer)),
+      initializers,
+      initialization: planRuntimeNamespaceInitialization(initializers),
       parent,
     });
     groups.push(group);

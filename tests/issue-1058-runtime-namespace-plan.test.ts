@@ -77,3 +77,97 @@ it.each([
 it("does not allocate runtime ownership in declaration files", () => {
   expect(runtimeModuleDeclarationGroups(parse("namespace N {function f():void;}", "namespace.d.ts"))).toEqual([]);
 });
+
+it("plans exported variable initialization in declarator order without publishing missing initializers", () => {
+  const group = runtimeModuleDeclarationGroups(
+    parse(`namespace N {
+    export let missing:number, first=1, second=first+1;
+    let privateValue=3;
+  }`),
+  )[0]!;
+  const steps = group.initialization;
+  expect(steps.map((step) => step.kind)).toEqual(["variable", "variable", "variable", "variable"]);
+  expect(steps.map((step) => step.kind === "variable" && step.declaration.name.getText())).toEqual([
+    "missing",
+    "first",
+    "second",
+    "privateValue",
+  ]);
+  expect(steps.map((step) => step.kind === "variable" && step.publishes)).toEqual([false, true, true, false]);
+  expect(steps.map((step) => step.kind === "variable" && step.properties.map((binding) => binding.name.text))).toEqual([
+    ["missing"],
+    ["first"],
+    ["second"],
+    [],
+  ]);
+  expect(Object.isFrozen(steps)).toBe(true);
+  expect(Object.isFrozen(steps[0])).toBe(true);
+});
+
+it("retains exact destructuring binding identities, including renames, holes and rest", () => {
+  const group = runtimeModuleDeclarationGroups(
+    parse(`namespace N {
+    export const {original: renamed, nested: {leaf}, ...rest} = input;
+    export let [head, , ...tail] = list;
+  }`),
+  )[0]!;
+  const first = group.initialization[0]!;
+  const second = group.initialization[1]!;
+  expect(first.kind).toBe("variable");
+  expect(second.kind).toBe("variable");
+  if (first.kind !== "variable" || second.kind !== "variable") throw new Error("missing variable steps");
+  expect(first.properties.map((binding) => binding.name.text)).toEqual(["renamed", "leaf", "rest"]);
+  expect(second.properties.map((binding) => binding.name.text)).toEqual(["head", "tail"]);
+  for (const binding of [...first.properties, ...second.properties]) {
+    expect(binding.declaration.name).toBe(binding.name);
+    expect(ts.isBindingElement(binding.declaration)).toBe(true);
+    expect(Object.isFrozen(binding)).toBe(true);
+  }
+});
+
+it("publishes function and class values after their source declarations without property-backing local names", () => {
+  const group = runtimeModuleDeclarationGroups(
+    parse(`namespace N {
+    before(); export function f(){return 1;} between(); export class C {} after();
+  }`),
+  )[0]!;
+  expect(group.initialization.map((step) => step.kind)).toEqual([
+    "statement",
+    "statement",
+    "publish-local",
+    "statement",
+    "statement",
+    "publish-local",
+    "statement",
+  ]);
+  const publications = group.initialization.filter((step) => step.kind === "publish-local");
+  expect(publications.map((step) => step.name.text)).toEqual(["f", "C"]);
+  expect(publications[0]!.declaration).toBe(group.functions[0]);
+  expect(publications[1]!.declaration).toBe(group.initializers[3]);
+});
+
+it("does not guess runtime emission for const enums or import aliases", () => {
+  const group = runtimeModuleDeclarationGroups(
+    parse(`namespace N {
+    export enum E {A} export const enum CE {A} export import Alias = Other;
+    export import type T = Other;
+  }`),
+  )[0]!;
+  const publications = group.initialization.filter((step) => step.kind === "publish-local");
+  expect(publications.map((step) => [step.name.text, step.requiresRuntimeResolution])).toEqual([
+    ["E", false],
+    ["CE", true],
+  ]);
+  const aliases = group.initialization.filter((step) => step.kind === "export-alias");
+  expect(aliases).toHaveLength(1);
+  expect(aliases[0]!.declaration.name.text).toBe("Alias");
+  expect(aliases[0]!.requiresRuntimeResolution).toBe(true);
+});
+
+it("gives empty and type-only namespace bodies no initialization steps", () => {
+  const groups = runtimeModuleDeclarationGroups(
+    parse(`namespace Empty {}
+    namespace Types {export interface I {} export type T=number; export declare const value:number;}`),
+  );
+  expect(groups.map((group) => group.initialization)).toEqual([[], []]);
+});
