@@ -2332,7 +2332,7 @@ function buildNativeGeneratorPlan(ctx: CodegenContext, decl: GeneratorDecl): Nat
     const binding = stmt.initializer.declarations[0]!;
     const continues = sourceLoopContinues(stmt.statement);
     if (!ts.isIdentifier(binding.name) || !continues) return fail();
-    if (!forOfBindingIsFrameSafe(decl.body!, binding.name)) return fail();
+    if (!forOfBindingIsFrameSafe(ctx, decl.body!, binding.name)) return fail();
     if (decl.parameters.some((p) => ts.isIdentifier(p.name) && p.name.text === binding.name.getText())) return fail();
     const iterator = continuationSpillName("operand");
     addSpill(iterator);
@@ -2508,7 +2508,7 @@ function buildNativeGeneratorPlan(ctx: CodegenContext, decl: GeneratorDecl): Nat
       sourceLoopContinues(stmt.statement) !== undefined &&
       binding &&
       ts.isIdentifier(binding.name) &&
-      forOfBindingIsFrameSafe(decl.body!, binding.name) &&
+      forOfBindingIsFrameSafe(ctx, decl.body!, binding.name) &&
       !decl.parameters.some((p) => ts.isIdentifier(p.name) && p.name.text === binding.name.getText())
     ) {
       return lowerForOfWithClose(stmt, unwind);

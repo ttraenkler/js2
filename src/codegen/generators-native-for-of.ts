@@ -2,12 +2,14 @@
 import { ts } from "../ts-api.js";
 import type { Instr } from "../ir/types.js";
 import { buildTargetTaggedTry } from "../ir/try-table.js";
+import { haveDisjointLoopScopes } from "../frontend/ts/disjoint-loop-bindings.js";
 import { allocLocal, getLocalType } from "./context/locals.js";
 import type { CodegenContext, FunctionContext, NativeGeneratorInfo } from "./context/types.js";
 import { MODE_THROW, setStateInstrs, storeSpills } from "./frame-core.js";
 import { ensureNativeIteratorRuntime } from "./iterator-native.js";
 import { ensureExnTag } from "./registry/imports.js";
-import { coerceType, compileExpression } from "./shared.js";
+import { coerceType, compileExpression, valTypesMatch } from "./shared.js";
+import { resolveSpillLocalValType } from "./statements/variables.js";
 
 export type NativeForOfTerminator =
   | { kind: "iterator-init"; subject: ts.Expression; iterator: string; next: number }
@@ -15,8 +17,10 @@ export type NativeForOfTerminator =
   | { kind: "iterator-close"; iterator: string; next: number };
 
 /** Immutable expression closures snapshot a loop value; shared loop cells need more machinery. */
-export function forOfBindingIsFrameSafe(body: ts.Node, binding: ts.Identifier): boolean {
+export function forOfBindingIsFrameSafe(ctx: CodegenContext, body: ts.Node, binding: ts.Identifier): boolean {
   const declaration = binding.parent;
+  const declarations: ts.Node[] = [declaration];
+  let captured = false;
   const snapshot =
     ts.isVariableDeclaration(declaration) &&
     ts.isVariableDeclarationList(declaration.parent) &&
@@ -30,16 +34,27 @@ export function forOfBindingIsFrameSafe(body: ts.Node, binding: ts.Identifier): 
       sharedEnvironment || (ts.isFunctionLike(node) && !ts.isArrowFunction(node) && !ts.isFunctionExpression(node));
     if (ts.isIdentifier(node) && node.text === binding.text && node !== binding) {
       const parent = node.parent;
+      if (nested) captured = true;
+      if (nested && (!snapshot || shared)) safe = false;
       if (
-        (nested && (!snapshot || shared)) ||
-        (parent && (ts.isVariableDeclaration(parent) || ts.isParameter(parent)) && parent.name === node)
+        parent &&
+        (ts.isVariableDeclaration(parent) || ts.isParameter(parent) || ts.isBindingElement(parent)) &&
+        parent.name === node
       ) {
-        safe = false;
+        declarations.push(parent);
       }
     }
     ts.forEachChild(node, (child) => visit(child, nested, shared));
   };
   visit(body, false, false);
+  if (declarations.length > 1) {
+    // addSpill deduplicates by name. Sharing is sound only if every lifetime
+    // is disjoint, no closure outlives it, and every writer uses the same ABI.
+    if (captured || !haveDisjointLoopScopes(declarations)) return false;
+    const types = declarations.map((node) => resolveSpillLocalValType(ctx, node as ts.VariableDeclaration));
+    const first = types[0];
+    if (!first || types.some((type) => !type || !valTypesMatch(first, type))) return false;
+  }
   return safe;
 }
 

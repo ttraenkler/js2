@@ -15917,4 +15917,71 @@ Fetched upstream main `e16ace7ca09da0e5150e0be34b27e7891a37afe8` for the request
 merge. The ongoing checker run predates this synchronization; its results must
 remain attributed to `4641a4e2c97`, not the merged tree.
 
+Upstream synchronization completed in signed merge **`394f0edc2f50`**, with
+`e16ace7ca09da0e5150e0be34b27e7891a37afe8` verified as an ancestor; no conflicts.
+Pre-merge notes were saved in signed **`8455c75aa4f`**, without manual stashing.
+Post-merge validation: TypeScript7 typecheck **58212 exit 0**; the six focused
+capture, pattern, builtin-receiver, and loop-snapshot suites **80792 exit 0,
+74/74 pass**. Logs `.tmp/post-e16-merge-typecheck.log` and
+`.tmp/post-e16-merge-regressions.log`.
+Resumed original SortedMap planner and reduced runtime diagnostics on the
+merged tree: **15594 exit 1, 0/1 admitted** and **87150 exit 1, 2/8 pass**,
+respectively. The same-name host-import and Array.from tuple-representation
+blockers remain; these are not new merge regressions against the recorded
+pre-merge controls. Logs `.tmp/post-e16-sortedmap-plan.log` and
+`.tmp/post-e16-sortedmap-runtime.log`. No generator production workaround was
+added, and the standalone TypeScript/unit-suite goal remains open.
+
+Next implementation: prove when name-keyed generator frame slots may be reused
+by block-scoped loop-header declarations with disjoint lexical lifetimes and
+identical resolved Wasm representations. Check all same-name declarations
+pairwise, not just against the first for-of binding; reject overlapping/var/
+pattern scopes and captured duplicates. This changes admission, not the frame
+registry or the upstream source. Add sequential, two-iterable, opposite-branch,
+and finally runtime controls in both IR modes, plus overlap, carrier, and
+capture refusal controls. The separate Array.from consumer defect remains
+in scope for the follow-up original-harness rerun.
+
+Disjoint-loop candidate implements that proof in the shared generator planner,
+with a syntax-only frontend scope helper. No registry/layout mutation. Both
+`forOfBindingIsFrameSafe` callers now supply the context so the proof uses the
+same `resolveSpillLocalValType` representation as frame construction. Pattern
+declarations are also recognized as possible overlapping bindings.
+
+Validation on merged `394f0edc2f50` plus candidate:
+
+- New suite **24/24**, existing loop-snapshot controls **14/14** (**65237**,
+  `.tmp/disjoint-bindings-expanded.log`). Read-only pre-fix replay of both
+  planner files at `394f0edc2f50` **88374: 12/24**: ten disjoint runtime checks
+  fail compilation and two pattern-overlap refusals fail because the baseline
+  admits them. Independent actual execution **51058: 0/2** confirms the latter
+  baseline modules throw rather than produce native expected **129**; the
+  stronger refusal is not hiding a passing baseline.
+- Original, unmodified `SortedMap.entries` planner **47018: 1/1 admitted**.
+  Reduced tuple consumer matrix **96364: 4/8** (all direct-for-of variants pass;
+  all Array.from variants still invalid), versus pre-fix **2/8**.
+- Original `createIOError` harness **78305 exit 0**, **155205 ms**,
+  **9,352,148 bytes**, valid, **zero imports**, **1/1 runtime invocation matches**.
+  The nine live host-generator imports in the earlier candidate are gone.
+  Log/artifact prefix `.tmp/vfs-disjoint`; upstream source unchanged.
+- Actual original SortedMap entry **22165**, **5036 ms**, **745,568 bytes**,
+  valid, zero imports, **1/2 runtime invocations match**: comparison order
+  **1324/1324**, insertion order **0/2413**. Preserve this failure for follow-up;
+  do not claim full SortedMap correctness. Prefix `.tmp/sortedmap-original`.
+  Direct native tsx import could not resolve upstream harness dependency chai;
+  native entry execution was not verified by that attempt (no packages installed).
+- Typecheck, formatting, lint, LOC/function/coercion/oracle gates **54288 exit 0**;
+  no new grants. Dead-export evidence remains preservation-only **6/6 full +
+  6/6 cut**, graph OPEN, strict modeled closure FAIL, retirement NOT CERTIFIED.
+  Log `.tmp/disjoint-bindings-gates.log`.
+
+Earlier full checker **23428** is now terminal exit 1, attributed to
+`4641a4e2c97` (before this merge/candidate): **1,465,012 ms**, **60,808,273 bytes**,
+valid, zero imports, **0/3 unchanged oracles match**. All now trap in
+`createSymbol`, function **8154**, offset **24953002** (`0x17cc0aa`), mapped to
+original checker.ts **2621:9**, rather than the prior createNodeBuilder site.
+Prefix `.tmp/checker-transported-global`, including source map. The prior
+transported-capture correction moved the runtime blocker but did not produce
+a checker pass. Next inspect the exact createSymbol instruction/capture.
+
 "js2wasm compiles 60% of test262" is a percentage. "js2wasm compiles the TypeScript compiler itself" is a story. Landing even Tier 3 is the single strongest artifact for conversations with potential maintainers or funders — it demonstrates the compiler has enough depth to handle production TypeScript, not just hand-picked benchmark inputs. The gap between "a toy subset compiles" and "the real compiler compiles" is exactly what separates a proof-of-concept from a usable tool.
