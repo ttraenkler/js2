@@ -13912,7 +13912,14 @@ five host imports remain, down from ten in the earlier saved artifact. They are
 `__gen_create_buffer`, `__gen_push_ref`, `__create_generator`, `__get_filename`,
 and `__get_dirname`. Standalone execution remains blocked, not a pass of the
 three invocation cases. Evidence: `.tmp/checker-process-isolation-diagnostic.log`.
-The requested main sync targets fetched main 5bfc069422c7cece3e7f19f84e7ce3e51be2269c;
-pending work is being committed before merging, without a manual stash.
+The requested main sync merged fetched main
+5bfc069422c7cece3e7f19f84e7ce3e51be2269c in signed merge 27452c5040,
+after committing the loop fix as a79f609db5. No merge conflicts or manual stash.
+Post-merge focused tests pass **40/40** across six files, including upstream's
+axios callable-ABI controls (`.tmp/main-5bfc-typescript-focused.log`).
+Next: lower the checker generator's yielding switch, and remove the unconditional
+Node filename/dirname host-import path from standalone identifier reads without
+breaking host loader values or lexical shadows. The current import producer is
+`src/codegen/expressions/identifiers.ts`; original uses are in TypeScript's sys.ts.
 
 "js2wasm compiles 60% of test262" is a percentage. "js2wasm compiles the TypeScript compiler itself" is a story. Landing even Tier 3 is the single strongest artifact for conversations with potential maintainers or funders — it demonstrates the compiler has enough depth to handle production TypeScript, not just hand-picked benchmark inputs. The gap between "a toy subset compiles" and "the real compiler compiles" is exactly what separates a proof-of-concept from a usable tool.
