@@ -14547,4 +14547,56 @@ means **one parse diagnostic**, not a generic sentinel: `runCase` returns the
 negative diagnostics length after walking the AST. These narrow the next
 investigation to missing child traversal and an unexpected parser diagnostic.
 
+### Parser field and callable-overload diagnostics (2026-09-28)
+
+The saved artifact trace locates Core's diagnostic at source offsets
+1236–1240, the `enum` in `export const enum Comparison`. Performance's null
+access is `isOuterExpression` in factory/utilities.ts 632, reached after
+parseCallExpressionRest, not nodeFactory 632. `tryParseModifier` disassembly
+shows the factory token callable result still being tested against a closed
+struct and replaced with null before finishNode. This may explain modifiers
+missing from Builder traversal and early termination of Core's modifier list.
+Added a focused overloaded-factory reduction before changing source planning.
+
+An independent field probe is building in session **82321**, log
+`.tmp/parser-current-field-diagnostic.log`, artifact prefix
+`.tmp/parser-current-field`; it exports per-node kind/position/end/flags and
+diagnostic code/location. Native probe succeeds with the exact pinned parser
+(`.tmp/parser-current-field-native.log`). Original acceptance fingerprints
+remain unchanged. The probe is diagnostic only, never whole-parser acceptance.
+
+Field probe completed: valid **14,588,181-byte** zero-import binary in
+**162,544 ms**; Builder count **41 vs 44**, Core diagnostic count **1 vs 0**.
+Per-node replay (`.tmp/parser-current-field-comparison.log`) shows the count
+delta hides several differences: missing export/question/EOF tokens; boolean
+and string keyword types represented as type-reference/identifier pairs; and
+malformed import-specifier traversal with non-finite kind/flags. Core reports
+diagnostic **1389**, start **1236**, length **4**. This is not merely three
+missing children or a hash arithmetic error.
+
+The initial overload reduction returned a fresh literal and passed **2/2**;
+it was not a reproduction. Revised it to return an open base value through a
+generic interface: now fails **0/2** (`.tmp/open-overload-generic-baseline.log`).
+Type inspection confirms factoryCreateToken's resolved result is
+ModifierToken<...>, but its first declared overload returns SuperExpression,
+which need not appear as any expression's type. The frontend planner now
+observes declared callable result types as ABI participants, separately from
+expression witnesses, before layout publication. Only actual expressions
+produce oracle keys; signature-only observations do not tag the callable as an
+open object. No new backend checker query or representation mutation was added.
+
+Focused controls pass **44/44**, callable controls **32/32**, and the final
+direct-planner controls **27/27** (overlapping suites, not additive).
+Typecheck, source gates, lint and formatting pass; dead-export preservation
+is still open-graph and does not certify deletion. Full parser acceptance
+completed in **178,062 ms**: valid **14,588,065-byte** zero-import Wasm,
+**1/3** matches. Core matches **40098163538143**; Performance returns
+**49626207298165 vs 49645738923599** and Builder returns
+**13372983427767 vs 13386537220945**. Neither now throws, but incorrect
+fingerprints are failures. Logs: `.tmp/open-overload-candidate.log`,
+`.tmp/open-overload-callable-controls.log`, `.tmp/open-overload-final-controls.log`,
+`.tmp/open-overload-gates.log`, `.tmp/parser-overload-carrier-diagnostic.log`.
+Next: merge freshly fetched loopdive/js2 main, recheck focused controls, then
+compare remaining Builder/Performance node fields against native TypeScript.
+
 "js2wasm compiles 60% of test262" is a percentage. "js2wasm compiles the TypeScript compiler itself" is a story. Landing even Tier 3 is the single strongest artifact for conversations with potential maintainers or funders — it demonstrates the compiler has enough depth to handle production TypeScript, not just hand-picked benchmark inputs. The gap between "a toy subset compiles" and "the real compiler compiles" is exactly what separates a proof-of-concept from a usable tool.

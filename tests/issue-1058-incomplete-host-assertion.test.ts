@@ -46,6 +46,13 @@ it("selects exact incomplete interface types without treating unknown shapes as 
     const optionalView = optionalized;
     const stringView = stringified;
     const remappedView = remapped;
+    interface SignatureOnly extends GenericBase<number> { extra: number; }
+    declare const signatureOnly: () => SignatureOnly;
+    declare const incompatibleResult: () => GenericDerived<string>;
+    declare const classResult: () => Nominal;
+    const callable = signatureOnly;
+    const excludedCallable = incompatibleResult;
+    const nominalCallable = classResult;
   `,
     ts.ScriptTarget.Latest,
     true,
@@ -57,12 +64,35 @@ it("selects exact incomplete interface types without treating unknown shapes as 
   expect(
     [...incompleteAssertionCarrierTypes(checker, source).keys()].map((type) => checker.typeToString(type)),
   ).toEqual(["Incomplete<number>", "GenericDerived<number>"]);
-  expect(
-    [...incompleteAssertionCarrierPlan(checker, [source]).types].map((type) => checker.typeToString(type)).sort(),
-  ).toEqual(["GenericBase<number>", "GenericDerived<number>", "Incomplete<number>"]);
+  const plan = incompleteAssertionCarrierPlan(checker, [source]);
+  expect([...plan.types].map((type) => checker.typeToString(type)).sort()).toEqual([
+    "GenericBase<number>",
+    "GenericDerived<number>",
+    "Incomplete<number>",
+    "SignatureOnly",
+  ]);
+  expect(plan.witnesses.some((node) => checker.getTypeAtLocation(node).getCallSignatures().length > 0)).toBe(false);
 });
 
 const cases = [
+  {
+    name: "preserves open results through an overloaded factory callable",
+    body: `
+      interface Node { flags: number; kind: number; }
+      interface SourceFile extends Node { text: string; }
+      interface Token<K extends number> extends Node { kind: K; }
+      interface Special extends Token<1> { flow?: number; }
+      function incomplete(): SourceFile { return { text: "x" } as unknown as SourceFile; }
+      function base(kind: number): Node { return { flags: 8, kind }; }
+      function token(kind: 1): Special;
+      function token<K extends number>(kind: K): Token<K>;
+      function token<K extends number>(kind: K): Token<K> { return base(kind) as Token<K>; }
+      const factory = { token };
+      const create = factory.token;
+      export function run(): number { return create(2).flags + incomplete().text.length; }
+    `,
+    expected: 9,
+  },
   {
     name: "constructs a class value through an open interface result",
     body: `

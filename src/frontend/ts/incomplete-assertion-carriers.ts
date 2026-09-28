@@ -74,27 +74,40 @@ export function incompleteAssertionCarrierPlan(checker: ts.TypeChecker, sources:
     }
   }
   if (types.size) {
-    const observed: { node: ts.Expression; type: ts.Type; view: ts.Type }[] = [];
+    const observed: { node?: ts.Expression; type: ts.Type; view: ts.Type }[] = [];
+    const signatureResults = new Set<ts.Type>();
+    const observe = (view: ts.Type, node?: ts.Expression): void => {
+      let type = view;
+      const seen = new Set<ts.Type>();
+      while (!seen.has(type)) {
+        seen.add(type);
+        const target = readonlyErasureMappedAliasTarget(type);
+        if (!target) break;
+        type = target;
+      }
+      observed.push({ node, type, view });
+      const symbol = type.getSymbol();
+      // getBaseTypes exposes declared generic bases (Base<T>), not always
+      // their concrete view. Select observed assignable instantiations only.
+      if (
+        types.has(type) ||
+        (symbol && roots.some(({ target, family }) => family.has(symbol) && checker.isTypeAssignableTo(target, type)))
+      ) {
+        types.add(type);
+      }
+    };
     const visit = (node: ts.Node): void => {
       if (ts.isExpression(node)) {
         const view = checker.getTypeAtLocation(node);
-        let type = view;
-        const seen = new Set<ts.Type>();
-        while (!seen.has(type)) {
-          seen.add(type);
-          const target = readonlyErasureMappedAliasTarget(type);
-          if (!target) break;
-          type = target;
-        }
-        observed.push({ node, type, view });
-        const symbol = type.getSymbol();
-        // getBaseTypes exposes declared generic bases (Base<T>), not always
-        // their concrete view. Select observed assignable instantiations only.
-        if (
-          types.has(type) ||
-          (symbol && roots.some(({ target, family }) => family.has(symbol) && checker.isTypeAssignableTo(target, type)))
-        ) {
-          types.add(type);
+        observe(view, node);
+        // A callable's declared overload result participates in its ABI even
+        // when no source expression directly has that interface type.
+        for (const signature of view.getCallSignatures()) {
+          const result = checker.getReturnTypeOfSignature(signature);
+          if (!signatureResults.has(result)) {
+            signatureResults.add(result);
+            observe(result);
+          }
         }
       }
       ts.forEachChild(node, visit);
@@ -113,7 +126,7 @@ export function incompleteAssertionCarrierPlan(checker: ts.TypeChecker, sources:
       }
       if (types.has(type)) {
         types.add(view);
-        witnesses.push(node);
+        if (node) witnesses.push(node);
       }
     }
   }
