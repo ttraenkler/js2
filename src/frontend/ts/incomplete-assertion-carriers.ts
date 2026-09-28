@@ -19,11 +19,12 @@ export function incompleteAssertionCarrierTypes(
       )
         operand = operand.expression;
       const actual = checker.getTypeAtLocation(operand);
-      // Unknown, union, callable and collection shapes are not proof of an
-      // incomplete plain record. Classes retain their separate brand contract.
+      // Only inferred object-literal shapes prove incomplete construction.
+      // Interface refinements (Node as Identifier) and class instances do not.
       if (
         target.flags & ts.TypeFlags.Object &&
         actual.flags & ts.TypeFlags.Object &&
+        ((actual.getSymbol()?.flags ?? 0) & ts.SymbolFlags.ObjectLiteral) !== 0 &&
         target.getSymbol()?.declarations?.some(ts.isInterfaceDeclaration) &&
         !checker.isArrayType(target) &&
         !checker.isTupleType(target) &&

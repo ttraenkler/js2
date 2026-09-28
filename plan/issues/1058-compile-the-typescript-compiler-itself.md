@@ -14226,5 +14226,47 @@ without errors (the `.mjs` files are outside its configured include set).
 Evidence: `.tmp/json-virtual-harness-final-controls.log`,
 `.tmp/json-virtual-harness-final-typecheck.log`,
 `.tmp/json-virtual-harness-final-lint.log`.
+An additional compiled six-module cyclic initialization regression passes
+**2/2**, one each with IR enabled and disabled, with valid zero-import Wasm.
+It preserves the early-captured delegate after installing a class-backed
+System, and confirms both the saved and current read return the same value.
+Evidence: `tests/issue-1058-staged-system-init.test.ts`,
+`.tmp/staged-system-init-controls.log`. This is a small compiler regression,
+not acceptance of the full upstream filesystem graph.
+
+### Reject interface refinements as incomplete-construction evidence (2026-09-28)
+
+Checker session **56344** completed (exit 1): **61,712,802 bytes**, valid Wasm,
+zero imports, compile success, but **0/3 runtime oracles**. Its 25-minute compile
+is not runtime acceptance. Untouched artifact `.tmp/checker-host-carrier.wasm`
+and source map are preserved. Replaying with the existing exception renderer
+and V8 trace reports `TypeError: Cannot access property on null or undefined at
+1338:13` in factory `createIdentifier`, at the `node.escapedText` observation.
+Unlike the previous checker-host null trap, this failure occurs during parsing;
+it is not evidence that runtime execution advanced. Logs:
+`.tmp/checker-host-carrier-diagnostic.log`,
+`.tmp/checker-host-carrier-runtime-trace.log`.
+
+The new classifier was unsoundly treating `Node as Identifier` refinements and
+class instances as incomplete plain-object construction. Its new negative
+control fails on the prior implementation (extra `RefinedNode` and
+`Incomplete<boolean>` entries). Require the source type's ObjectLiteral symbol
+as positive evidence, preserving inferred literal aliases but excluding named
+interface refinements and class instances. The full upstream type-program
+inventory changes from **887 per-file selected type rows to 6**; TypeCheckerHost
+remains selected, Identifier no longer is. This count is a classifier inventory,
+not a measure of runtime correctness. The full-build causal repair remains to
+be verified.
+
+Focused controls pass **30/30** across incomplete-host assertions, staged System
+initialization, class-backed interface refinements, and service allocators.
+Evidence: `.tmp/incomplete-carrier-refinement-classifier-baseline.log`,
+`.tmp/incomplete-carrier-literal-controls.log`,
+`.tmp/incomplete-carrier-inventory.log`,
+`.tmp/incomplete-carrier-literal-inventory.log`.
+The narrowed full-checker successor is live in session **68244**, log
+`.tmp/checker-literal-carrier-diagnostic.log`, intended separate artifact
+`.tmp/checker-literal-carrier.wasm` plus source map. JSON session **12127**
+remains on its earlier classifier snapshot; do not label it a narrowed-source run.
 
 "js2wasm compiles 60% of test262" is a percentage. "js2wasm compiles the TypeScript compiler itself" is a story. Landing even Tier 3 is the single strongest artifact for conversations with potential maintainers or funders — it demonstrates the compiler has enough depth to handle production TypeScript, not just hand-picked benchmark inputs. The gap between "a toy subset compiles" and "the real compiler compiles" is exactly what separates a proof-of-concept from a usable tool.

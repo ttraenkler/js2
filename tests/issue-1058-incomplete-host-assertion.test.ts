@@ -21,6 +21,12 @@ it("selects exact incomplete interface types without treating unknown shapes as 
     const e = value as unknown as Nominal;
     declare const unknownValue: unknown;
     const f = unknownValue as Incomplete<boolean>;
+    interface BaseNode { value: number; }
+    interface RefinedNode extends BaseNode { unused(): number; }
+    declare const node: BaseNode;
+    const g = node as RefinedNode;
+    class PartialClass { value = 1; }
+    const h = new PartialClass() as unknown as Incomplete<boolean>;
   `,
     ts.ScriptTarget.Latest,
     true,
