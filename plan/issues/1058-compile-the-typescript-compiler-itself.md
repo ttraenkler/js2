@@ -13452,6 +13452,78 @@ matrix now passes (96 existing tests plus 24 new tests). Do not
 describe equal totals as regression-free. Full checker, all original unit suites, strict IR closure,
 and self-hosting remain open.
 
+### Namespace edge coverage and deprecation isolation (2026-09-28)
+
+The single-padding fix is signed and committed as `eca08fa14c`. The permanent
+constructor matrix is **0/12 baseline → 12/12 candidate**, with **38/38** adjacent
+controls after deleting the duplicate walker. The full checker run remains live
+in session 68705; this turn verified that handle rather than restarting it.
+
+Namespace changes remain uncommitted. A new native-versus-standalone edge matrix
+initially passed **6/16**: dotted groups, exported destructuring, namespace aliases,
+class augmentation, and enum augmentation failed with both IR settings. Reusing
+the existing class/enum value fixed augmentation (class-declared statics still use
+their existing storage lowering). The shared enum initialization plan now accepts
+one enum declaration augmented by namespaces, but continues rejecting multiple
+enum declarations whose initialization requires ordered merging. Permanent
+identity/reverse-map controls and adjacent tests pass **99/99** before dotted
+support. Dotted paths now allocate and publish each component in order, including
+the exported outer component of nested groups; the reduced matrix improves to
+**12/16**, leaving destructuring and aliases unresolved. Broader tests with nested
+and merged dotted paths pass **103/103** across five files
+(`.tmp/namespace-augmentation-final.log`). Type checking and targeted lint pass.
+
+Deprecation isolation is inconclusive, not a fix: reduced callback selection,
+generic wrapping, optional options, and cross-module options pass **4/4**, **4/4**,
+and **2/2** respectively. An original-source diagnostic using complete deprecation
+dependencies passes direct error, wrapped error, and direct silent cases, but
+direct warning catches an exception (**3/4**), unlike the original unit-suite
+pattern. It validates with zero imports, 8,794,387 bytes, 114,121 ms.
+Evidence: `.tmp/deprecation-source-diagnostic.log`; scratch source is
+`.tmp/deprecation-source-workload.ts`. Do not attribute the original three unit
+failures to callback selection based on these controls.
+
+The original semver recheck initially failed before compilation because the
+launcher omitted the TypeScript loader (native **692/692**, no Wasm tests).
+That process was confirmed terminal, then retried with `--import tsx`; session
+50577 and `.tmp/semver-namespace-augmentation-retry-o1.log` are the live run.
+No result from that retry is claimed yet. Namespace declarations with destructured
+exports require per-binding publication, not an end-of-pattern copy that would
+break defaults reading earlier bindings. Export aliases currently fail in the
+frontend before runtime publication. Both remain next implementation work.
+
+### Exported pattern publication continuation (2026-09-28)
+
+The original semver retry is complete: **692/692 native and 692/692 standalone**,
+valid zero-import O1 Wasm, 7,398,201 bytes, 161,366 ms. Evidence:
+`.tmp/semver-namespace-augmentation-retry-o1.log`. This measures the namespace
+augmentation candidate before the later destructuring publication changes, not
+every uncommitted change below.
+
+Exported destructuring now reuses existing object/array pattern lowering and
+publishes each owned binding immediately after its physical local store, walking
+each shared instruction array once. It does not copy all values at the end:
+later defaults/getters must observe earlier namespace properties, while an earlier
+getter must not see a later own property. Exact binding declarations come from
+the shared namespace initialization plan; no second destructuring algorithm was
+introduced. The adapter retains detached bodies on the existing body stack so
+late import shifts reach both pattern instructions and publication snippets.
+
+Fresh controlled comparison, disabling only this initializer hook: **32/44 →
+44/44** in the namespace semantics file, fixing all twelve new cases with no
+changed previously passing rows. Native oracles execute for every case. Broader
+namespace/class checks pass **96/96**. Coverage includes object and array defaults,
+getter publication order, own-property presence, nested binding patterns, and
+object rest. Type checking and targeted lint pass. Evidence:
+`.tmp/namespace-pattern-baseline.log`, `.tmp/namespace-pattern-candidate.log`,
+`.tmp/namespace-pattern-final-tsc.log`. Namespace alias declarations remain a
+confirmed frontend rejection and their runtime publication remains unimplemented.
+
+The full checker diagnostic remains live in session 68705, now past the checker
+source body and into workload module initialization. No validation or invocation
+success is claimed while that process is still running. Namespace work and these
+issue notes remain uncommitted; the last signed commit is still `eca08fa14c`.
+
 ### ESM namespace identity continuation (2026-09-27)
 
 The initialization hypothesis above is now confirmed and fixed: the shared IR
@@ -13484,5 +13556,56 @@ the identity-planning fix (before named-import materialization) remains
 **684/692** standalone, native **692/692**, valid zero-import Wasm,
 7,063,962 bytes, 139,505 ms (`.tmp/semver-esm-identity-o1.log`). Full TypeScript
 checker, self-hosting, strict IR closure, and the eight semver cases remain open.
+
+### Latest main merge and checker continuation (2026-09-28)
+
+Fetched `loopdive/js2` main at `d31c9c98d288983416f651a527d94ab7623c35ae`
+and merged it into `codex/1058-typescript-standalone` as signed merge
+`df2025778d`. Verified main is an ancestor and the commit contains an SSH
+signature. No conflicts; the unfinished namespace work was retained. Worktree:
+`/private/tmp/ts2wasm-ts5-1058-20260927`. The unrelated main checkout is untouched.
+
+Correction to the earlier live-process note: checker session 68705 finished.
+At the single-padding candidate it compiled in **1,462,422 ms**, emitting
+**68,850,561 bytes**, but validation failed at `__closure_4431` (expected
+`ref null 66`, got `f64`); **0/3 workload invocations** ran. The saved NodeLinks
+constructor now has nine operands for nine fields, so the previous padding
+failure is gone. Evidence: `.tmp/checker-single-pad-diagnostic.log`,
+`.tmp/checker-single-pad.wasm`, `.tmp/checker-single-pad-body.wat`.
+
+Disassembling the saved invalid binary with Binaryen isolated the next closure
+to the checker callback `p.flags & SymbolFlags.Value &&
+isExpandoPropertyDeclaration(p.valueDeclaration)`. Its mixed primitive return
+requires the tagged AnyValue carrier. A generic post-expression boxing
+experiment produced valid Wasm but lost the boolean tag; that experimental
+`type-coercion.ts` change has been removed. The current narrow candidate passes
+the already-planned return carrier into concise closure expressions and boxes
+logical-AND operands before their join. It uses the common emitter for both
+IR settings, not a second legacy-only implementation.
+
+After this merge, the focused tag probe passes **2/2** and the reduced generic
+Map callback matrix passes **2/4**: reversing the object/predicate declaration
+order still returns the wrong answer in both IR settings. Those two failures
+remain open and must not be counted as full-checker success. Evidence:
+`.tmp/closure-union-context-only-postmerge.log`. New permanent tag, bitwise, and
+short-circuit tests additionally exercise both optimization settings. Controlled
+post-merge A/B, disabling only the two contextual-carrier changes through a
+Vitest transform: **0/12 baseline → 12/12 candidate**, all native oracles pass.
+The broader post-merge run passes **81/81 executed tests**, with **4 additional
+Test262 fixture-dependent tests skipped**, not credited as passing. Type
+checking passes and targeted lint has only three pre-existing warnings.
+Evidence: `.tmp/closure-union-d31-baseline.log`,
+`.tmp/ts5-d31-merge-focused.log`, `.tmp/ts5-d31-merge-typecheck.log`, and
+`.tmp/ts5-d31-closure-lint.log`. No full checker rebuild has been run with this
+latest candidate.
+
+Correction to the earlier namespace-alias note: internal exported import aliases
+now publish their target and observe later alias replacement, including member
+calls. Before the latest merge, namespace and module-position controls passed
+**67/67** (`.tmp/namespace-alias-focused.log`). External require aliases and ESM
+imports in namespace bodies remain rejected. This is partial alias coverage,
+not certification of all namespace forms. Namespace changes and the new
+closure candidate remain uncommitted; full TypeScript units and self-hosting
+remain open.
 
 "js2wasm compiles 60% of test262" is a percentage. "js2wasm compiles the TypeScript compiler itself" is a story. Landing even Tier 3 is the single strongest artifact for conversations with potential maintainers or funders — it demonstrates the compiler has enough depth to handle production TypeScript, not just hand-picked benchmark inputs. The gap between "a toy subset compiles" and "the real compiler compiles" is exactly what separates a proof-of-concept from a usable tool.

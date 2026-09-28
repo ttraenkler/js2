@@ -14,6 +14,7 @@ import { defaultValueInstrs } from "../type-coercion.js";
 import { ensureLateImport, flushLateImportShifts } from "./late-imports.js";
 import { nullishJoinCarrier } from "./nullish-join-carrier.js";
 import { usesHostBigIntCarrier } from "../host-bigint-carrier.js";
+import { isAnyValue } from "../any-helpers.js";
 
 type MappedArgsInfo = NonNullable<FunctionContext["mappedArgsInfo"]>;
 
@@ -61,10 +62,13 @@ export function compileLogicalAnd(
   ctx: CodegenContext,
   fctx: FunctionContext,
   expr: ts.BinaryExpression,
-  _expectedType?: ValType,
+  expectedType?: ValType,
 ): ValType {
   // JS semantics: a && b → if a is falsy, return a; else return b
-  const leftType = compileExpression(ctx, fctx, expr.left, hostBigIntExpected(ctx, expr.left));
+  // Box each operand before joining mixed primitive results, preserving its
+  // number/boolean tag instead of converting both branches to f64 first.
+  const carrier = expectedType && isAnyValue(expectedType, ctx) ? expectedType : undefined;
+  const leftType = compileExpression(ctx, fctx, expr.left, carrier ?? hostBigIntExpected(ctx, expr.left));
   if (!leftType) {
     ensureI32Condition(fctx, leftType, ctx);
     return { kind: "i32" };
@@ -77,7 +81,7 @@ export function compileLogicalAnd(
 
   // Compile RHS in a side buffer to discover its natural type
   const savedBody = pushBody(fctx);
-  const rightType = compileExpression(ctx, fctx, expr.right, hostBigIntExpected(ctx, expr.right));
+  const rightType = compileExpression(ctx, fctx, expr.right, carrier ?? hostBigIntExpected(ctx, expr.right));
   let thenInstrs = fctx.body;
   fctx.body = savedBody;
 

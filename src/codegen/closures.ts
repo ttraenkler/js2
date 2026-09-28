@@ -1,4 +1,5 @@
 import { initializeNativeGeneratorFunctionValue } from "./generators-factory-prototype.js";
+import { isAnyValue } from "./any-helpers.js";
 import { widenJsDefaultGuessSlot } from "./js-default-param-type-guess.js";
 // Copyright (c) 2026 Loopdive GmbH. Licensed under Apache-2.0 WITH LLVM-exception.
 /**
@@ -3390,7 +3391,12 @@ export function compileLiftedClosureBody(
       compileStatement(ctx, liftedFctx, stmt);
     }
   } else {
-    const exprType = compileExpression(ctx, liftedFctx, body);
+    const exprType = compileExpression(
+      ctx,
+      liftedFctx,
+      body,
+      closureReturnType && isAnyValue(closureReturnType, ctx) ? closureReturnType : undefined,
+    );
     if (exprType !== null && closureReturnType) {
       // Expression result is the return value - already on stack
       conciseBodyHasValue = true;
