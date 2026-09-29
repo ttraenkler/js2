@@ -14,6 +14,10 @@ area: compiler
 goal: standalone
 requested_by: ttraenkler/sendev-standalone
 related: [6713, 6711, 2580, 6751]
+# 2026-09-29 (#6736): one import line in the dispatcher; the lowering and its
+# operand-position predicate live in src/codegen/standalone-any-length.ts.
+loc-budget-allow:
+  - src/codegen/property-access-dispatch.ts
 ---
 
 # #6736 — `F.prototype.length` answers a number in standalone
@@ -86,93 +90,107 @@ standalone-dynamic lane for the next link.
 
 ## Implementation Plan
 
-Executed as written.
+Executed. The design was revised once after the first merge_group attempt.
 
-1. **Measure where the number comes from.** Probes (`.tmp/p6736/*.js`) showed
-   the bug is not specific to function prototypes. In standalone, every
-   `recv.length` read on an `any` receiver goes through
-   `emitStandaloneAnyLength` in `property-access-dispatch.ts`, which
-   always returns `f64`. Its non-string, non-closure fallback is
-   `__extern_length`, the array-like ToLength reader, so an absent `length`
-   comes back as `0`. Four cases all read `0`: `id({}).length`,
-   `Object.create(p).length`, `F.prototype.length`, and lodash's
-   `LazyWrapper.prototype.length`. The dynamic-key spelling (`o[k]` with
-   `k = "length"`) was already correct. JS-host fixed the same bug in #2580 M2
-   through `emitDynGet`.
-2. **Lowering.** Replace the function with `emitStandaloneAnyLengthGet` in a
-   new classified module, `src/codegen/standalone-any-length.ts`. It
-   returns `externref` and tries these arms in order:
+1. **Measure.** In standalone, every `recv.length` read on an `any` receiver
+   went through `emitStandaloneAnyLength` (`property-access-dispatch.ts`).
+   That path returns `f64` via `__extern_length`, the ToLength array-like
+   reader, so an absent `length` read as `0`. Affected: `F.prototype`,
+   `Object.create(p)`, `{}` and lodash's `LazyWrapper.prototype`. The
+   dynamic-key spelling was already right. JS-host had fixed the same thing in
+   #2580 M2.
+2. **Lowering.** Add `emitStandaloneAnyLengthGet` in a new module,
+   `src/codegen/standalone-any-length.ts`. It returns `externref` through
+   these arms, in order:
    1. `$AnyString` → box(len).
-   2. `__builtinfn_get_meta` hit → the metadata value.
-   3. Closure → own `length` from the closure bag, else 0.
-   4. `null`/`undefined` → box(`__extern_length`), same as before.
-   5. `$__vec_base` → box(field 0).
-   6. Anything else → `__extern_get(recv, "length")`, a real Get that walks
-      the prototype chain and returns `undefined` when `length` is absent.
+   2. `__builtinfn_get_meta` → the metadata value.
+   3. Closure → own `length` from the bag, or 0.
+   4. The object runtime's ordinary `$Object` → `__extern_get(recv, "length")`,
+      the real Get. It walks the prototype chain and gives `undefined` when
+      absent.
+   5. Anything else → box(`__extern_length`), the old value.
 
-   Arms 1–5 return the same values as before. Every boxed-number template is
-   cloned per use: the late-import shift rewrites `call` operands in place,
-   so a shared `Instr` would get shifted twice.
-3. **Scope.** Only the two standalone/WASI callers change (the `any`-receiver
-   `.length` arm and the tuple-length externref fallback). The JS-host path is
-   untouched.
-4. **Acceptance.** The regression test `tests/issue-6736-any-length-absent.test.ts`
-   has three cases: the issue's reduction, lodash `isArrayLike`, and a
-   present/absent length matrix. It must fail on the parent and pass with the
-   fix. Scoped standalone test262 (`built-ins/Function/prototype`,
-   `language/statements/function` plus array-like `.length` consumers) must
-   show no losses, and the lodash standalone-dynamic lane is compared before
-   and after.
+   Only arm 4 changes a value. Each boxed-number template is cloned per use,
+   because the late-import shift rewrites `call` operands in place.
+3. **Where the new read is used.** A new predicate,
+   `lengthReadIsNumericOperand`, keeps the untouched numeric lowering for any
+   read that is an operand of arithmetic, a relational test, `++`/`--`, an
+   index, or an equality against another `.length` or a number literal
+   (`i < a.length`, `b.length !== a.length`, `a.length - 1`). Every other
+   position — a call argument (`isLength(value.length)`), an initializer, a
+   return, `typeof`, `=== undefined` — uses the real Get. JS-host is not
+   touched.
+4. **Why the first cut was withdrawn.** It applied the Get to every
+   non-string, non-closure receiver and read `$__vec_base` field 0 directly.
+   The merge_group
+   ([run 36522230625](https://github.com/loopdive/js2/actions/runs/36522230625))
+   parked it on 70 standalone regressions:
+   - 69 TypedArray rows. Field 0 of a TypedArray view is the `-1` auto-length
+     sentinel, and detached views read their stale length; only
+     `__extern_length` knows those carriers.
+   - ES5 `harness/compare-array-arguments.js`. Two externref lengths compared
+     with `!==` pulled `__any_to_extern` / `__any_from_extern_honest` into the
+     module, which changed the module-wide `===` lowering. That exposed a
+     latent `arguments[i]` read that returns an object.
+
+   Arms 4–5 and the operand predicate are the fix for both.
+5. **Acceptance.**
+   - Regression test: fails on the parent, passes with the fix.
+   - The 71 rows lost in the merge_group pass locally, apart from one Temporal
+     row that has no provider locally.
+   - Scoped standalone test262, parent vs fix, has no losses.
+   - The lodash lane is measured before and after on the same base.
 
 ## Resolution
 
-**Root cause.** The bug was broader than function prototypes. In standalone,
-every `.length` read on an `any` receiver was lowered as a number, so
-`{}.length`, `Object.create(p).length`, `F.prototype.length` and `(5).length`
-all read as `0` instead of `undefined`. The fix is
-`src/codegen/standalone-any-length.ts`, which follows the plan above.
+**Result.** An absent `length` on an ordinary object now reads `undefined`
+in standalone. This covers `F.prototype`, `Object.create(p)` and `{}`, and
+lodash's `isArrayLike(LazyWrapper.prototype)` is false again. The
+implementation is described in the plan above.
 
-**Regression test.** `tests/issue-6736-any-length-absent.test.ts`: 3/3 pass
+**Regression test** `tests/issue-6736-any-length-absent.test.ts`: 3/3 pass
 with the fix. On the parent all three fail, reading `2`, `108` and `127`
 (expected `5`, `127` and `511`).
 
-**Updated test.** `tests/issue-2576.test.ts` used to pin the old lowering's
-`0` for `(5).length`. It now expects `NaN`, which is `undefined` returned
-through a `number` export.
+**Nearby unit tests (15 files) and `issue-2576`:** green, with no expectation
+changes.
 
-**Unit tests near the change.** 15 files. The 9 failures in
-`issue-1472`, `issue-2861` and `string-derived-length-fast-path` fail
-identically on the parent.
+**Rows lost in the first merge_group** (run 36522230625, 71 rows):
 
-**Scoped standalone test262.** 1401 rows, run in-process against the same base
-(`0aeb5733bb`), parent vs fix:
+- 70 pass locally with the fix.
+- The 71st, `Temporal/Duration/prototype/round/roundingmode-trunc.js`, fails
+  the same way on the parent locally, because no Temporal provider is built
+  here. In the merge_group it was a `compile_timeout`.
 
-| Rows | Parent | Fix |
+**Scoped standalone test262**, parent `0aeb5733bb` vs fix, 1773 rows:
+
+| | Parent | Fix |
 |---|---|---|
-| All 1401 | 1216 pass · 137 fail · 48 CE | 1216 pass · 137 fail · 48 CE |
+| All rows | 1508 pass | 1507 pass |
 | `built-ins/Function/prototype` + `language/statements/function` (760) | 711 pass | 711 pass |
 
-The other rows cover `built-ins/Array/from`, `Array/prototype/{slice,indexOf}`,
-`Object/keys` and `language/arguments-object`. Zero rows flipped in either
-direction.
+The 1773 rows also include `Array/from`, `Array/prototype/{slice,indexOf}`,
+`Object/keys`, `language/arguments-object`, `test/harness`,
+`TypedArray/prototype/{length,copyWithin,fill,set}` and `rest-parameters`.
+The one-row gap is `TypedArray/prototype/fill/detached-buffer.js`. It hit a
+216 s compile timeout under load and passes when re-run alone. No other row
+flipped.
 
-**JS-host.** Byte-identical binaries on the probe set; both call sites are
-gated on standalone/WASI.
+**JS-host:** byte-identical binaries on the probe set.
 
-**lodash standalone-dynamic lane.** The lane status is `optimization-error`
-both before and after:
-`wasm-opt -O4 failed: unexpected expr type … Flatten.cpp:231`. That is the
-#4586/#6732 retry class, and it does not change here.
+**lodash standalone-dynamic lane**, same base (`3c9d85424a`), parent vs fix:
 
-The unoptimized binary (`--inspect-binary`) moves forward:
+- Parent: `runtime-error`, `"TypeError: called value is not a function"`,
+  phase `module-init`.
+- Fix: `runtime-error`, `"TypeError: called value is not a function"`, phase
+  `checksum`. Module init now completes. The next link is filed as #6751.
 
-- **Before:** module init throws `TypeError: called value is not a function`
-  (measured on the #6713 PR head).
-- **After:** module init completes. The checksum call throws
-  `TypeError: called value is not a function`, which is filed as #6751.
+**Residuals, all pre-existing behaviour and unchanged here:**
 
-**Residual.** Numeric var-slot inference can still type a local that is
-initialized from `v.length` as f64 when that parameter's call sites mix arrays
-and plain objects. Example: `function chk(v, want){ var got = v.length; … }`,
-called first with an array and then with `{}`. The value is then read as `NaN`
-instead of `undefined`. Such a local was already numeric before this change.
+- A `.length` read that is a numeric operand still uses the ToLength value,
+  so `{}.length === 0` is still true. The same holds for reads that are not
+  on an ordinary `$Object`, such as `(5).length`.
+- `arguments[i]` read through a captured `arguments` object can report
+  `typeof` `"object"`. Seen in the compare-array-arguments reduction.
+- Numeric var-slot inference can type a local initialized from `v.length` as
+  f64.

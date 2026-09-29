@@ -20,29 +20,24 @@ related: [6736, 6713, 6732, 4586]
 ## Problem
 
 After [#6736](https://js2wasm.loopdive.com/dashboard/issue.html?slug=6736-standalone-fnctor-prototype-length-reads-number),
-lodash 4.18.1's `runInContext` module init completes in `--target standalone`
-with 0 imports. The first call to the perf export then throws:
+lodash 4.18.1 finishes `runInContext` module init in `--target standalone`
+with 0 imports. The first call to the perf export then throws. Measured
+2026-09-29 on `3c9d85424a` + #6736, with the command below:
 
 ```
-checksum THROW: TypeError: called value is not a function
+npx tsx scripts/generate-npm-compat-report.mjs --only lodash --no-write --perf-only --lane standalone-dynamic
 ```
 
-Measured 2026-09-29 on `0aeb5733bb` + #6736. The steps:
+The lane record, verbatim:
 
-1. Build the unoptimized binary:
-   `npx tsx scripts/generate-npm-compat-report.mjs --only lodash --no-write --perf-only --lane standalone-dynamic --inspect-binary .tmp/lodash.wasm`
-2. Instantiate it with `{}`.
-3. Call `__module_init()`, which returns normally.
-4. Call `__npmCompatStandaloneDynamic(1, 4381)`, which throws the error above.
+```
+"status": "runtime-error", "diagnostic": "TypeError: called value is not a function",
+"optimizationVerified": true, "phase": "checksum"
+```
 
-The sample op is `words(text).length + kebabCase(text).length`.
-
-The lane itself still reports `optimization-error`. That is the O4
-`Flatten.cpp:231` abort, followed by the `--skip-pass=flatten` retry, and it is
-tracked separately in
-[#6732](https://js2wasm.loopdive.com/dashboard/issue.html?slug=6732-standalone-axios-o4-no-flatten-retry-exceeds-timeout).
-This issue covers only the runtime link, which the unoptimized binary
-exposes.
+The sample op is `words(text).length + kebabCase(text).length`. The O4
+optimization now succeeds on this base, so the runtime error is the only
+thing left in the lane.
 
 ## Direction
 
