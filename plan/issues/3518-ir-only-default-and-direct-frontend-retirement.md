@@ -17035,3 +17035,165 @@ normal merge hooks137/137 and independent strict137/137, no skipped/worker
 errors. The six owned hashes and every incoming non-issue file remain exact;
 only the eight planned paths differ from mainf32ffc4d. Publish this independent
 prerequisite through the fork/protected queue before downstream refreshes.
+
+
+## Public native object/Number graph implementation plan — 2026-09-30
+
+Claim:3518:public-native-object-number-graph-20260930, owner
+ttraenkler/codex-public-native-object-number-graph-20260930, branch
+codex/3518-public-native-object-number-graph-20260930. Root owns integration,
+issue/inventory metadata, claims and publication. Existing Astra writer owns
+implementation/tests only in this isolated worktree. Main and every frozen or
+armed worktree are read-only. Dependencies must land through protected queue;
+local development ancestry never counts as delivery.
+
+Acceptance is the ORIGINAL nine-row712 suite, presently5/9: oracle, four
+legacy host/standalone UTF16/UTF8 rows, four public native original/decoded
+UTF16/UTF8 rows. Preserve original fixture SHA
+c0550b99175c0eb61afa7d5d110a287f3fe90e9fc8e581c6d58a19fe0a971ba9 and suite SHA
+afc3885f51522cec10d5eccac536636b104b9a01b8c5e5c139b8dbd5fef35d37.
+The actual path is create-default, install two genuine source accessor
+closures, Number conversion, absent inherited@@toPrimitive, Get(valueOf)
+invokes getter(trace1), its returned closure invokes(trace12,value7), result712
+without Get(toString). Preserve repeated calls and two fresh instances.
+Number({}) adds default-prototype coverage; it replaces no row.
+
+### Reviewed reuse and ownership
+
+Reuse realm12 by exact recorded manifest: requirement/catalog/literal/source
+issuer/substrate joins, coordinator, tests/helpers. Select Number components
+explicitly, no56-file overlay. Required source/provider hunks are
+prepare-number-conversion/from-ast/program-source, number-conversion-callable,
+callable-declarations/runtime manifest/contracts. Required semantic hunks are
+native-object-access/getter-invocation/invocation/prototype requirements and
+native-source-closure-callables/native-invocation/primitive-boundary ABI.
+Reuse Number coverage/invocation/method-effects analyses; pure NumberFromValue,
+BigIntToNumber and ObjectPrototypeToString bodies plus genuine primitive/BigInt
+owners and canonical well-known Symbol contract/owner/source/provider hooks.
+Inspect each against current merged main/dependencies before copying/hunk
+composition; preserve current stronger Object.create(null) resolver and all
+statement/lowering hooks. Retain old Number classifier's bounded tests/contract;
+it cannot become generic IsCallable. Existing ordinary status/value Get cannot
+be bound directly as scalar Get. Unused original prepared components stay
+preserved, not deleted or weakened.
+
+New owned modules:
+- runtime/wasmgc/values/realm-object-layouts.ts: stateful layout variants.
+- runtime/wasmgc/values/mixed-object-access-bodies.ts: heterogeneous property,
+  Get/Has and prototype algorithms.
+- backend/wasmgc/resources/native-mixed-object-access.ts: authentic owner.
+- runtime/wasmgc/values/mixed-invocation-bodies.ts: mixed dispatch/ABI bodies.
+- backend/wasmgc/resources/native-mixed-invocation.ts: authentic call population.
+- backend/wasmgc/resources/native-object-realm.ts: real singleton/descriptor
+  population and algorithm bindings.
+- backend/wasmgc/resources/native-number-from-value.ts: canonical conversion.
+- backend/wasmgc/program/native-object-number-abi.ts: public ABI reconciliation.
+Paths above are under src/. Extend existing program/native-realm coordinator,
+realm requirements/catalog/literals, builtin requests/owner/pure builders,
+source closures/capture/closure layouts/WasmGC allocation emitter, String and
+wrapper factory seams, program-consumer/program-physical-plan and retained
+source invocation adapter only where this graph requires. No physical
+coordination in semantic src/ir/. Worker may propose a better coherent module
+split before writing it; root owns inventory/claim records for any extra paths.
+
+### Implementation sequence and invariants
+
+1. Derive/authenticate complete accepted program/projection demands, catalog
+   obligations, actual carrier population and supplemental literals. Do not
+   infer absence from an unrecognizable carrier or incomplete population.
+2. Introduce immutable private state reference after all existing fields,
+   wrapper payloads or source captures. Mutable actual externref prototype is
+   in that state. Keep closure fields0–2/captures3+, builtin metadata3–4,
+   wrapper payload6 unchanged. Initialize genuine state after captures even
+   for zero-capture closures, with an issued initializer binding. Audit every
+   reader/issuer/currentness/callable/allocation/generic closure/capture adapter;
+   legacy registries, DOM tails and other backends retain default layouts.
+3. Reserve strings/vectors/canonical TypeError and one authenticated exception
+   tag, then state prerequisites. Builtin owner may borrow authentic tag while
+   its existing default lifecycle stays intact. Source calls, descriptors,
+   mixed operations and Number use the SAME tag and payload; no caught rebox.
+4. Issue real builtin algorithm requests before ONE combined source/native
+   closure pack. Reserve source slots, mixed dispatchers, property algorithms,
+   realm initialization and public adapters before sole freeze. Bind original
+   consumer source slots/cyclic refs, fill canonical leaves/algorithm/source
+   bodies/population, authenticate complete graph before output.
+5. Mixed lookup: String virtual-own first, genuine native/source carrier
+   authority before bag/state reads, original receiver throughout traversal,
+   present undefined/getter-less accessor stops traversal, unknown remains
+   unresolved. Validate proposed chains before mutation (cycles, immutable
+   Object.prototype). Keep bounded kernel's ordinary-final layout/finality
+   refusal intact; stateful heterogeneous families use their own dispatcher.
+6. Complete real Object prototype/catalog singleton identities/descriptors,
+   constructor links/accessor halves/aliases and native algorithm dependencies.
+   Canonical default is accepted only for the same actual completed singleton
+   and issued realm population. Reject fake/copied/foreign/partial owners,
+   unresolved implicit links or substituted prototypes. A property bag cannot
+   stand in for a prototype. Reuse actual Object constructor/prototype/accessor
+   bodies and complete their ToObject/ToPropertyKey/descriptor/prototype/Call
+   bindings. ObjectToString needs real slots/String concat/@@toStringTag Get.
+7. Mixed invocation authenticates builtin metadataID/realm/singleton BEFORE
+   source fallback, refuses unknown metadata, accepts legitimate same-shaped
+   source transport. Keep(this,argv) separate from user formals/own.length;
+   explicit method0(receiver,method)→call0(callee,receiver). Preserve receivers,
+   missing/excess arguments, capture cells and normal/abrupt state restoration.
+8. Number owner binds scalar mixed Get, genuine IsCallable, mixed method0/1,
+   canonical primitive classification/StringToNumber, BigInt conversion,
+   actual@@toPrimitive Symbol/literals and shared TypeError/tag. Reconcile
+   js.number.from-value, js.object.create-default and js.object.define-accessor
+   with genuine canonical manifest/signatures/occurrences/reservation tokens.
+   Extend coverage through real realm evidence, not deleting default-prototype
+   refusal. Reauthenticate retained exact requirements/types/slots/owners/tag/
+   program/projection, bodies/locals/currentness and completion. Equal counts
+   or signatures do not authorize wrong/external fills. Per-owner collision
+   preflight reserves none of that owner; earlier owners need not roll back.
+
+### Validation and full-scope limits
+
+Run unchanged original9/9 first, genuine original/decoded bothencodings, two
+instances/repeated712. Fresh child of that exact prepared fixture must prove
+codec byteidentity, no TypeScript/frontend resolutions and no host imports.
+Add default Number({}) and inherited native/source valueOf/toString/getters,
+String-exotic traversal, present undefined vs absence, getter-less descriptor,
+exact abrupt getter/method payloads/no toString after successful valueOf,
+cross-family prototype/cycle/immutable identity, source/native accessors,
+redefinition/deletion/order, missing/excess args/receivers, same-shaped distinct
+metadataIDs/unknown metadata/genuine source closures, forged/cloned/foreign/
+stale/wrong-body owners and normal/displaced indices. Preserve old ABI/primitive,
+bootstrap/source/default consumer controls and original failures. No fake
+closures/providers/packet splicing or selected easier substitute fixture.
+One heavy process; explicit parent/fork4GB/maxforks1, strict unhandled errors,
+no timeout/assertion/fixture/hook/gate/protection changes. Normal required
+checks, signed Thomas/Codex/actual-model commits and exact protected main
+ancestry/content/conformance are mandatory before counting delivery.
+
+Passing9 is a required milestone, not full IR completion or realmReady grant.
+All45catalog intrinsics remain obligations; no placeholders/disappearing IDs.
+Remaining full Object/Function includes call/apply/bind/toString/@@hasInstance,
+bound functions, constructor semantics/CreateDynamicFunction and transitive
+array/iterator/exotic operations. Complete remaining backends/program/full
+conformance and native Number primitive/Symbol/BigInt/general coercions.
+Legacy retirement waits for full IR scope tested and equal.
+
+
+### Reviewed state-owner and population refinements
+
+NEW ninth source leaf backend/wasmgc/resources/native-realm-object-layouts.ts
+privately issues/authenticates the shared state type, concrete state-bearing
+ordinary/wrapper variants and source initializer reservations before closures.
+It does not depend on eventual full singleton population. The pure runtime
+layout leaf stays separate. State belongs after EACH concrete carrier's
+existing fields/captures, never inserted in a shared ordinary root. Generic
+lowering already resolves subtype even for zero captures; preserve lower-
+generic/legacy registry behavior unless a real shared reader requires opt-in.
+The mixed define-accessor adapter authenticates genuine source/native
+IsCallable before delegating unchanged canonical descriptor/storage donors.
+
+The Object.prototype.constructor→Object→static population→Function.prototype
+transitive graph is a real completion obligation. Current incomplete catalog
+cannot authorize a canonical full population. No fake/empty algorithm bodies,
+null constructor aliases, marker-only completeness, or silent missing inherited
+keys. Implement real transitive providers/anchors or keep admission explicitly
+unsupported; passing selected scalar cases never grants population completion.
+State/layout/mixed owners can advance toward that whole graph independently,
+with honest tests and old failures retained. Architecture must decide exact
+population boundary from genuine ownership before final graph admission.
