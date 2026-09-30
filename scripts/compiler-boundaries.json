@@ -272,9 +272,11 @@
         "src/backend/wasmgc/program/native-primitive-boundary-abi.ts",
         "src/backend/wasmgc/resources/native-primitive-wrapper-layouts.ts",
         "src/backend/wasmgc/resources/native-primitive-wrapper-storage.ts",
-        "src/backend/wasmgc/resources/native-invocation-substrate.ts"
+        "src/backend/wasmgc/resources/native-invocation-substrate.ts",
+        "src/backend/wasmgc/resources/native-builtin-function-requests.ts",
+        "src/backend/wasmgc/resources/native-builtin-functions.ts"
       ],
-      "minModules": 42
+      "minModules": 44
     },
     {
       "id": "native-runtime",
@@ -371,9 +373,13 @@
         "src/runtime/wasmgc/values/to-object-body.ts",
         "src/runtime/wasmgc/values/object-prototype-method-bodies.ts",
         "src/runtime/wasmgc/values/object-prototype-accessor-bodies.ts",
-        "src/runtime/wasmgc/values/object-constructor-body.ts"
+        "src/runtime/wasmgc/values/object-constructor-body.ts",
+        "src/runtime/wasmgc/values/builtin-function-layouts.ts",
+        "src/runtime/wasmgc/values/builtin-function-bodies.ts",
+        "src/runtime/wasmgc/values/builtin-function-property-bodies.ts",
+        "src/runtime/wasmgc/values/builtin-function-prototype-bodies.ts"
       ],
-      "minModules": 89
+      "minModules": 93
     },
     {
       "id": "standalone-platform",
@@ -14549,6 +14555,36 @@
       "path": "src/backend/wasmgc/resources/native-invocation-substrate.ts",
       "state": "clean",
       "layer": "backend-wasmgc"
+    },
+    {
+      "path": "src/backend/wasmgc/resources/native-builtin-function-requests.ts",
+      "state": "clean",
+      "layer": "backend-wasmgc"
+    },
+    {
+      "path": "src/backend/wasmgc/resources/native-builtin-functions.ts",
+      "state": "clean",
+      "layer": "backend-wasmgc"
+    },
+    {
+      "path": "src/runtime/wasmgc/values/builtin-function-layouts.ts",
+      "state": "clean",
+      "layer": "native-runtime"
+    },
+    {
+      "path": "src/runtime/wasmgc/values/builtin-function-bodies.ts",
+      "state": "clean",
+      "layer": "native-runtime"
+    },
+    {
+      "path": "src/runtime/wasmgc/values/builtin-function-property-bodies.ts",
+      "state": "clean",
+      "layer": "native-runtime"
+    },
+    {
+      "path": "src/runtime/wasmgc/values/builtin-function-prototype-bodies.ts",
+      "state": "clean",
+      "layer": "native-runtime"
     }
   ]
 }
