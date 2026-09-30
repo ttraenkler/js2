@@ -17197,3 +17197,92 @@ unsupported; passing selected scalar cases never grants population completion.
 State/layout/mixed owners can advance toward that whole graph independently,
 with honest tests and old failures retained. Architecture must decide exact
 population boundary from genuine ownership before final graph admission.
+
+
+### Implementation Plan — Function call/apply and complete array-like list bodies (2026-09-30)
+
+Claim `3518:function-prototype-invokers-20260930` is held by
+`ttraenkler/codex-function-prototype-invokers-20260930` on isolated branch
+`codex/3518-function-prototype-invokers-20260930`, dependency commit
+`8a730516ced8ace5da216cbb8f5b5c54c064d421`. Upstream issue-assignments effect was
+verified at `016ee6672545272c9286e35caa3815e6409c97c4`; no GitHub issue was created.
+Root owns claims, metadata, integration and publication. Writer owns four new
+files: runtime/wasmgc/values/create-list-from-array-like-body.ts and
+function-prototype-invoker-bodies.ts under src/, plus
+ tests/helpers/ir-function-prototype-body-controls.ts and
+ tests/issue-3518-function-prototype-invoker-bodies.test.ts.
+
+Implement pure instruction builders for ECMA-262 2026 CreateListFromArrayLike
+(all/property-key) and Function.prototype.call/apply. These consume the genuine
+argument-vector layout and explicit semantic ports. List creation performs
+IsObject, one length Get and full ToLength, then generic Get for every integral
+f64 index before Push; no i32 length truncation, iterator, sparse skipping or
+receiver-specific shortcut. Property-key mode validates actual String/Symbol
+after Get without coercion. Call checks IsCallable first, consumes only thisArg
+and forwards every remaining input unchanged. Apply checks IsCallable before
+observations, handles null/undefined argument lists, otherwise uses all-mode
+list creation. Both use the two-parameter algorithm transport and tail-dispatch
+GenericCall with target, unchanged thisArg and the real typed vector.
+
+Validate own data coordinates without executing getters, malformed modes and
+literal instruction trees; return independent fresh definitions. Component
+controls execute actual Wasm with canonically issued NewVector/Push and real
+logical length, under normal/displaced coordinates. Explicit semantic observer
+imports are component oracles, never host-free provider evidence. Cover growth,
+missing/explicit values, inherited/Proxy/accessor Get order, coercion and abrupt
+payload identity, property-key refusal, reentry and a 2^32 length with index-zero
+throw. The latter proves no initial wrap without billions of iterations.
+
+Acceptance requires a nonempty focused denominator, TS7 and relevant changed
+root/LOC/boundary gates with frozen inputs. Retain all original failures. Only
+one heavy process may run; this writer prepares source while root's graph
+boundary rerun owns the slot, then requests the slot before validation.
+
+This component does not grant public readiness or prove the original nine-row
+Number fixture. Authenticate the full production Get/Call/ToLength/undefined/
+literal/vector/tag owners during the later public realm join. Full Object and
+Function catalog population, bound Call/Construct/newTarget, dynamic Function/
+eval/with, transitive algorithms and both backend equality remain in scope.
+Finite vector resource exhaustion is a real remaining owner obligation, never
+permission to truncate observable length. Preserve the legacy implementation
+until full IR coverage is tested and equal; verified main merges alone count
+as delivery.
+
+
+The four-file source draft passed independent static review with all owned
+hashes unchanged; the expected 245 controls remain unmeasured until execution.
+Root registered exactly the two actual pure runtime leaves, retaining all 1,737
+previous rows, policy and history. Inventory now 1,739; native-runtime entries
+94 to 96 and floor 93 to 95. Boundary activation-tail expectations append only
+these genuine leaves. No imports or public readiness were fabricated.
+
+
+### Function call/apply component — actual validation checkpoint (2026-09-30)
+
+The four owned files executed TS7, 245/245 focused controls (16/16 abrupt
+identity), 349/349 full boundary tests and seven serial preservation gates.
+All 7,374 pinned inputs remained unchanged. Original 243/245 assertion-tool
+failures and their input bytes are retained; only the poisoned-wrapper deep
+comparison was replaced with per-element assertions, retaining exact middle
+identity and zero-coercion checks. The complete rerun passed with unchanged
+production/helper hashes.
+
+Explicit host semantic observers remain in the measured execution helper;
+these are pure algorithm component controls, not native-provider or public
+readiness evidence. Architecture and retirement remain uncertified. The
+original public Number denominator remains 5/9. Sole claim ownership was
+verified on upstream issue-assignments before checkpointing. No downstream
+refresh or broad new PR until exact prerequisite PR 6359 is delivered.
+
+See [the durable component handoff](../log/3518-function-prototype-invokers-handoff-2026-09-30.md)
+for exact scope, validation, preserved failures and remaining integration.
+
+
+Normal checkpoint hooks caught two actual noDelete and one useArrowFunction
+findings in the component test. Equivalent Reflect.deleteProperty controls now
+assert true deletion and own absence; the callable fixture remains arity2.
+All four owned files pass Biome/Prettier, fresh TS7 and full245/245 rerun pass,
+and7377 pinned inputs remain exact. Recipes/helper unchanged. The original
+hook failure is retained; no suppression or hook bypass. Prerequisite6359 is
+now actually admitted with verified base/head parents; protected merge-group
+CI/Test262 and main delivery remain pending. Scoped claim stays active.
