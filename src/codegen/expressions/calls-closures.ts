@@ -2498,6 +2498,9 @@ export function tryExternClassMethodOnAny(
     methodName === "reduceRight" ||
     methodName === "find" ||
     methodName === "findIndex" ||
+    // (#6907) host lane too: Uint8ClampedArray_findLast answered undefined.
+    methodName === "findLast" ||
+    methodName === "findLastIndex" ||
     methodName === "indexOf" ||
     methodName === "lastIndexOf"
   ) {

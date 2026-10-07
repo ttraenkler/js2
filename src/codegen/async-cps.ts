@@ -1727,6 +1727,8 @@ export interface TryCatchChunk {
   readonly sawReturnAwait: boolean;
 }
 
+const EMPTY_CATCH_CHUNK: TryCatchChunk = { segs: [], tail: [], sawReturnAwait: false };
+
 /** Lower one statement list with a FRESH linear state; null on non-canonical. */
 function lowerChunk(
   statements: readonly ts.Statement[],
@@ -1770,8 +1772,10 @@ function lowerChunk(
  */
 interface TryCatchGroup {
   readonly tryBody: RegionBody;
-  /** Linear catch body (a nested awaited try inside a catch bails the shape). */
+  /** Linear catch body (empty when {@link catchRegion} carries the catch). */
   readonly catchChunk: TryCatchChunk;
+  /** (#6907) Host lane: a non-linear catch body, lowered like the try body. */
+  readonly catchRegion?: RegionBody;
   readonly catchParamName: string | null;
   /** Scope-unique frame/local name backing the catch binding. */
   readonly catchParamSpillName: string | null;
@@ -1826,11 +1830,15 @@ function bodySegCount(body: RegionBody): number {
   let n = 0;
   for (const item of body.items) {
     if (item.kind === "chunk") n += item.chunk.segs.length;
-    else if (item.kind === "group") n += bodySegCount(item.group.tryBody) + item.group.catchChunk.segs.length;
+    else if (item.kind === "group") n += bodySegCount(item.group.tryBody) + groupCatchSegCount(item.group);
     else if (item.kind === "conditional") n += bodySegCount(item.whenTrue) + bodySegCount(item.whenFalse);
     else n += bodySegCount(item.body);
   }
   return n;
+}
+
+function groupCatchSegCount(group: TryCatchGroup): number {
+  return group.catchChunk.segs.length + (group.catchRegion !== undefined ? bodySegCount(group.catchRegion) : 0);
 }
 
 /** Any try/catch group anywhere in the body (recursive)? */
@@ -2018,12 +2026,18 @@ function lowerRegionBody(
     // A `return await` inside the try body may only be its FINAL item, and only
     // when nothing follows this group in the SOURCE body (checked by the
     // caller's non-final sawReturnAwait rejections below via the pre rule).
+    // (#6907) Host lane, no finally: a non-linear catch block
+    // (`catch (e) { try { return await alt(); } catch {} throw e; }`) is a region.
     const catchChunk = lowerChunk(stmt.catchClause.block.statements, awaitSet, checker);
-    if (catchChunk === null) return null;
-    items.push({
-      kind: "group",
-      group: { tryBody, catchChunk, catchParamName, catchParamSpillName, finallyStmts },
-    });
+    const catchRegion =
+      catchChunk === null && hoist && finallyStmts === null
+        ? lowerRegionBody(stmt.catchClause.block.statements, awaitSet, depth + 1, hoist, checker)
+        : null;
+    if (catchChunk === null && catchRegion === null) return null;
+    if (catchRegion?.hoisted === true) hoisted = true;
+    const catchParts =
+      catchRegion !== null ? { catchChunk: EMPTY_CATCH_CHUNK, catchRegion } : { catchChunk: catchChunk! };
+    items.push({ kind: "group", group: { tryBody, ...catchParts, catchParamName, catchParamSpillName, finallyStmts } });
     cursor = i + 1;
   }
   const tail = lowerChunk(statements.slice(cursor), awaitSet, checker);
@@ -2410,7 +2424,9 @@ export function planTryCatchCfg(
       pendingLeads = [];
       // Catch chain (handler `catchHandler`). The inline F leads at the exit
       // cover the catch chain's NORMAL completion.
-      if (group.catchChunk.segs.length === 0) {
+      if (group.catchRegion !== undefined) {
+        buildCatchRegion(group.catchRegion, catchHandler, catchAliases, tryEndsRA ? null : tryExitId);
+      } else if (group.catchChunk.segs.length === 0) {
         states.push({
           id: catchEntry,
           resumeFrom: null,
@@ -2441,6 +2457,35 @@ export function planTryCatchCfg(
         handlers.push({ id: rFin, parent: enclosing, finalizer: fin });
       }
       // Invariant: the next state pushed is the join (states.length === join).
+    }
+  };
+
+  /** (#6907) Non-linear catch body: region + exit state; patches the try-exit goto; aliases the catch param. */
+  const buildCatchRegion = (
+    region: RegionBody,
+    handler: number,
+    aliases: AsyncCfgState["lexicalAliases"],
+    tryExitGoto: number | null,
+  ): void => {
+    const entry = states.length;
+    buildBody(region, handler);
+    const endsRA = bodyEndsWithReturnAwait(region);
+    states.push({
+      id: states.length,
+      resumeFrom: pendingResume,
+      lead: endsRA ? [] : pendingLeads,
+      terminator: endsRA ? { kind: "settleSent" } : { kind: "goto", target: states.length + 1 },
+    });
+    pendingResume = null;
+    pendingLeads = [];
+    const join = states.length;
+    if (tryExitGoto !== null) {
+      states[tryExitGoto] = { ...states[tryExitGoto]!, terminator: { kind: "goto", target: join } };
+    }
+    if (aliases === undefined) return;
+    for (let id = entry; id < join; id++) {
+      const st = states[id]!;
+      states[id] = { ...st, lexicalAliases: [...aliases, ...(st.lexicalAliases ?? [])] };
     }
   };
 
@@ -2513,6 +2558,7 @@ export function tryCatchAsyncSpillInfo(
       }
       collect(item.group.tryBody);
       segments.push(...item.group.catchChunk.segs);
+      if (item.group.catchRegion !== undefined) collect(item.group.catchRegion);
       const cp = item.group.catchParamSpillName;
       if (cp !== null && !catchParamNames.includes(cp)) catchParamNames.push(cp);
     }

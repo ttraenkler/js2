@@ -3432,7 +3432,9 @@ export function compileLiftedClosureBody(
       compileStatement(ctx, liftedFctx, stmt);
     }
   } else {
-    const exprType = compileExpression(ctx, liftedFctx, body);
+    // (#6907) A typed-ref result is the concise body's expected type, as for `return`.
+    const refResult = closureReturnType?.kind === "ref" || closureReturnType?.kind === "ref_null";
+    const exprType = compileExpression(ctx, liftedFctx, body, refResult ? closureReturnType : undefined);
     if (exprType !== null && closureReturnType) {
       // Expression result is the return value - already on stack
       conciseBodyHasValue = true;

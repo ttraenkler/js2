@@ -91,7 +91,12 @@ export async function runHarness({ quiet = false } = {}) {
     const snapshotPath = join(suite.root, "tests", "unit", "__snapshots__", `${filePath.split("/").at(-1)}.snap`);
     const snapshotShim = existsSync(snapshotPath) ? buildPrettierSnapshotShim(snapshotPath) : "";
     const source = `${UPSTREAM_TEST_SHIM}\n${snapshotShim}\n${transformed}\n${UPSTREAM_TEST_EXPORTS}`;
-    const result = await compileAndRunUpstreamModule({ generatedPath, source, timeoutMs: 240_000 });
+    // Files whose original imports reach Prettier's Node config/plugin loaders
+    // (`node:fs`, `node:fs/promises`) use the isolated worker's Node host
+    // dependency lane (the axios `nodeHostDependencyFiles` pattern): the web
+    // ambient default stays, only the path-based fs capability is granted.
+    const workerEnv = suite.pin.nodeHostDependencyFiles?.includes(file) ? { DOGFOOD_NODE_HOST_DEPS: "1" } : undefined;
+    const result = await compileAndRunUpstreamModule({ generatedPath, source, timeoutMs: 240_000, workerEnv });
     runs.push({ file, result });
     log(
       `[dogfood] ${file}: ${result.native.statuses.filter(Boolean).length}/${result.native.count} native; ` +

@@ -612,6 +612,7 @@ import {
 import { compileDeclarations } from "./audited-declarations.js";
 import { snapshotLegacyBodyAudit } from "./legacy-body-audit.js";
 import type { ModuleInitMode } from "./declarations.js";
+import { dropTypeOnlySourceInitializers } from "./type-only-source-init.js"; // (#6907)
 import { prepareModuleTdzGlobals } from "./module-global-registration.js";
 import { hoistedVarPreInitValueIsObserved } from "./declarations/hoisted-var-preinit-read.js";
 import { inferParamTypeFromCallSites } from "./declarations/param-return-inference.js";
@@ -11054,6 +11055,7 @@ export function generateMultiModule(multiAst: MultiTypedAST, options?: CodegenOp
         const ownGens = snapshotOwnNativeGenerators(ctx, sf, collidingFuncNames);
         if (ownGens.size > 0) ownNativeGenBySource.set(sf, ownGens);
       }
+      dropTypeOnlySourceInitializers(ctx, multiAst);
     });
     // #2847: make initial boolean brands visible while bodies are emitted;
     // recover again at finalize for fields discovered during body compilation.

@@ -1777,8 +1777,10 @@ export function compileReceiverMethodCall(
       // happens to define the same method name is order-dependent and can run a
       // private-field body against an unrelated object. Leave those receivers
       // dynamic so their runtime identity selects the method.
+      // (#6907) A callable receiver (`test.each = fn`) is never a class instance.
       const canInferClass =
         !interfaceForcesDynamic &&
+        (receiverType.getCallSignatures?.().length ?? 0) === 0 &&
         recvProps.length > 0 &&
         (receiverType.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown)) === 0;
       const canonicalClasses = canInferClass

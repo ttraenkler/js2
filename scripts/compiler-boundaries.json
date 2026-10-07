@@ -2691,6 +2691,14 @@
       "nextBoundary": "Separate existing TS-wrapper, module-resolution and mixed identity/type/planning dependencies before frontend closure. This file was already unmigrated before the contracts-only frontend activation; no source behavior changed."
     },
     {
+      "path": "src/checker/value-reachable-sources.ts",
+      "state": "unmigrated",
+      "layer": "mixed-needs-split",
+      "destination": "frontend-ts",
+      "owner": "3518-coordinator",
+      "nextBoundary": "New #6907 leaf: value-edge reachability over the checker Program (TS wrapper only); moves with src/checker/index.ts when the checker's TS-wrapper dependencies are separated at frontend closure."
+    },
+    {
       "path": "src/checker/usage-inference.ts",
       "state": "unmigrated",
       "layer": "mixed-needs-split",
@@ -10265,6 +10273,14 @@
       "destination": "backend-wasmgc",
       "owner": "3518-coordinator",
       "nextBoundary": "Separate AST/context-driven generation, physical resources and generated native runtime."
+    },
+    {
+      "path": "src/codegen/type-only-source-init.ts",
+      "state": "unmigrated",
+      "layer": "mixed-needs-split",
+      "destination": "backend-wasmgc",
+      "owner": "3518-coordinator",
+      "nextBoundary": "New #6907 leaf of the multi-module collect phase (filters CodegenContext.moduleInitStatements); moves with src/codegen/index.ts's module-init planning."
     },
     {
       "path": "src/codegen/typed-array-set-bounds.ts",

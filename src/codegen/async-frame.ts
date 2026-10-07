@@ -2536,6 +2536,10 @@ export function ensureAsyncResumeFunction(
   };
 
   const savedFunc = ctx.currentFunc;
+  // (#6907) Keep the ENTRY body (param defaults) reachable by late-import shifters.
+  const entryBodies = savedFunc ? [savedFunc.body, ...savedFunc.savedBodies] : [];
+  const entryBodiesAdded = entryBodies.filter((b) => !ctx.liveBodies.has(b));
+  for (const body of entryBodiesAdded) ctx.liveBodies.add(body);
   ctx.currentFunc = resumeFctx;
   let chain: Instr[];
   // (#2906 Gap 3 → slice 3) Each handler region's finalizer, compiled a SECOND
@@ -2593,6 +2597,7 @@ export function ensureAsyncResumeFunction(
     }
   } finally {
     ctx.currentFunc = savedFunc;
+    for (const body of entryBodiesAdded) ctx.liveBodies.delete(body);
   }
 
   // Resolve bindings only after all finalizers have compiled, as in the

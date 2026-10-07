@@ -26,5 +26,11 @@
     "tests/unit/traverse-doc.js",
     "tests/unit/whitespace-utilities.js"
   ],
-  "_note": "The complete tests/unit/*.js inventory is verified. This adapter executes the synchronous, self-contained utility/document/config files whose imports stay within Prettier's implementation, while preserving original callbacks and inputs. Async plugin loading, snapshots, node:path/url, external development dependencies, visitor-key parser graphs, and larger parser graphs remain explicitly deferred."
+  "nodeHostDependencyFiles": [
+    "tests/unit/get-parser-plugin-by-parser-name.js",
+    "tests/unit/get-printer-plugin-by-ast-format.js",
+    "tests/unit/massage-ast.js",
+    "tests/unit/resolve-parser.js"
+  ],
+  "_note": "The complete tests/unit/*.js inventory is verified. This adapter executes the synchronous, self-contained utility/document/config files whose imports stay within Prettier's implementation, while preserving original callbacks and inputs. The four files that import src/main/parser-and-printer.js reach the Node config loaders (node:fs) transitively and use the isolated-worker Node host-dependency lane (nodeHostDependencyFiles) while retaining the web ambient default. Async plugin loading, snapshots, node:path/url, external development dependencies, visitor-key parser graphs, and larger parser graphs remain explicitly deferred."
 }

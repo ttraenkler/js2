@@ -124,6 +124,17 @@ async function loadNodeHostDependencies() {
       // Optional builtins remain subject to the compiler's normal diagnostic.
     }
   }
+  // The flattening above lets a LATER namespace's own member clobber an
+  // earlier MODULE-name key: `node:process` carries the deprecated
+  // `process.assert` function, so `dependencies.assert` (what the compiled
+  // `__node_assert` carrier resolves) became `process.assert` and
+  // `import { equal } from "node:assert"` read `undefined` — while Node
+  // resolves the real assert module. Module names are the bindings the
+  // compiler addresses by name, so they win over flattened members.
+  for (const moduleName of Object.keys(dependencies)) {
+    if (!moduleName.startsWith("node:")) continue;
+    dependencies[moduleName.slice(5)] = dependencies[moduleName];
+  }
   // Node exposes the WHATWG encoding/stream constructors globally, but the
   // compiled adapter resolves extern classes from the explicit dependency
   // map. Forward the same host constructors so upstream Node tests can use
