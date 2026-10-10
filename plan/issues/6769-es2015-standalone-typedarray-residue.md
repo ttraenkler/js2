@@ -639,3 +639,131 @@ from #6651's broad grant so they cannot strand —
 `__is_truthy`). S7c needed no grant (`call-identifier.ts` changes one
 argument; `unmatched-closure-host-call.ts` stays under the file threshold).
 No new source file; `src/ir/select.ts` untouched.
+
+## 2026-10-10 frozen-census Reflect.set distinct receiver identity negative
+
+Same frozen standalone epoch38901fff records
+`test/built-ins/TypedArrayConstructors/internals/Set/key-is-valid-index-reflect-set.js`
+FAIL04:30:04 local, honest14auto standard official strictboth reachedtrue,
+compile5132ms/exec123ms. First error: receiver[0] should be created (receiver:
+empty object), SameValue(Object,Object) false, diagnostic names Float64Array
+and makeArray. OriginalSHA
+`99cb57265f028839bdadd786f7067424cf1abeba16a2d5d75445bd6133212f8e`.
+Root fully read original and previously all431lines testTypedArray.js. Value
+is a method-bearing object counting valueOf; different plain receiver should
+get that exact object without target mutation/coercion. Later distinct TA,
+short TA, nonextensible, accessor/nonwritable receiver and final valueOfCalls0
+are masked, not passes. Original requests factories[passthrough]; reported
+makeArray differs. Pin actual honest assembled harness/selected factory route
+after execution release before assuming those identities/counts are faithful;
+do not mutate the original/filter or replace its assertion to erase mismatch.
+
+This is the existing documented #2773/#3037 value-identity residual. Its
+historical externref round-trip attribution is a hypothesis for this epoch,
+not proven solely by matching rendered objects. Compare direct identity,
+property storage/readback, actual receiver Reflect.set route, function-membered
+versus plain objects, coercion counters and current factory assembly before
+selecting a repair. Shared carrier/IR ownership is not released here; no
+duplicate TypedArray walk implementation or comparator weakening authorized.
+
+At1567/11778 originals, partial1531PASS29FAIL1CE6timeouts has zero accounting
+problems,10211unsettled; SAME62071/shard2PID13477 remainsLIVE. No source,
+runner, original, Git, claim, PR-readiness or heavy-execution change made here.
+
+### Read-only factory-route discriminator, 2026-10-10
+
+The frozen runner's honest path calls `assembleOriginalHarness(source, meta)`
+before running the primary variant (`tests/test262-runner.ts`, line 4775).
+The assembler reads literal metadata includes, then runtime/assert/sta sources;
+its prefix transformations shown here deduplicate top-level function names and
+handle a test-declared `$262`, not factory selectors. Searches of the runtime
+shim and assembler found no makeArray/makePassthrough/factory-selector override.
+The transformed helper shims elsewhere in test262-runner.ts are not evidence
+of what this honest path executed. An initial shell glob failed before search;
+the successful directory/file-scoped search supersedes that failed command.
+
+Literal testTypedArray.js forwards includeArgFactories through
+testWithTypedArrayConstructors to testWithAllTypedArrayConstructors. The latter
+filters factories using function identity, binds the selected factory to each
+constructor, and reports the UNBOUND factory's `.name` on an exception. The
+passthrough selector should retain makePassthrough, not makeArray. Thus the
+observed makeArray label needs at least these independent discriminators:
+actual assembled selector bytes; filter function identities/result list;
+selected unbound function name; bound function target/argument behavior; and
+receiver value identity. A wrong name alone does not prove the wrong factory
+ran; matching source alone does not prove compiled function identity works.
+
+Frozen inspected file SHA-256:
+
+- original-harness.ts: a7a9f9a3ebb0fe9ab3f25ee1e4a11dcde734561174de3d203e487a46e57d90f0
+- test262-runner.ts: 6bd2b218df37fb1103bdc8a9032da6189b42ae5b44438638a458e1266ec889d8
+- test262-fyi-runtime.js: fda934374318f6933cdec543faf0868b0c1be1554bd5c5ad90fa0de99454a177
+
+No assembly/compiler execution or source change occurred. Runtime cause and
+masked assertions remain UNKNOWN; the live census retains the original FAIL.
+
+## 2026-10-10 frozen-census parameter-heritage TypedArray subclass negative
+
+Canonical negative60, epoch38901fff, honest14/auto standard official standalone:
+`test/language/statements/class/subclass/builtin-objects/TypedArray/regular-subclassing.js`
+FAIL07:25:35 local, strictboth, reachedtrue, compile5479ms/exec93ms.
+First assertion observes arr.length undefined rather than2; diagnostic labels
+Float64Array and makeArray. Root fully read unchanged original, SHA256
+e3c07575c0dc1090fbd8a9a36fbdb4f38a7e2779b7a60520ac52946fb3b2a485.
+The callback declares `class Typed extends Constructor {}`, constructs
+`new Typed(2)`, then checks length2. Later constructors/factories and actual
+variant calls remain unmeasured; diagnostic labels alone do not prove identities.
+
+Existing class issue6772's deferred table explicitly routes this exact original
+to6769 carrier work and the non-linked parameter-heritage construct driver.
+Do not duplicate that implementation or reinterpret a historical deferral as
+goal exclusion. After owner handover and root execution release, distinguish
+actual callback constructor/factory identity, implicit derived super forwarding
+of argument2/NewTarget, native TypedArray allocation/internal length, subclass
+carrier propagation and length-read dispatch. Pair direct construction, named
+builtin heritage and parameter heritage at the same source/provider epoch;
+retain subclass prototype/instance identity and indexed access controls. Repair
+the demonstrated narrow site, not a constant length2 fold or generic class
+property shim. Shared class/new-super/IR ownership remains unreleased.
+
+At3315/11778:3254PASS51FAIL4CE6timeouts8463unsettled, accounting problems[].
+Same native62071 explicitly reports live shard4/PID36154. No competing tests,
+source/runner/original/provider mutation, claim, Git or PR-ready change occurred.
+
+## 2026-10-10 direct Int32Array distinct receiver value identity (nonpass81)
+
+Root fully read unchanged
+`test/built-ins/TypedArrayConstructors/internals/Set/key-is-in-bounds-receiver-is-not-typed-array.js`,
+SHA25646546537fa07267f3247dc1efaab1e6ac50d34ba135d6e910283d7a4a49e7eb6.
+Frozen38901fff honest14/providersauto standard official standalone strictboth
+FAIL09:13:43 local, reachedtrue, compile1176ms/exec32ms:
+Test262Error: value assigned to receiver[0] Expected SameValue of the two
+rendered [object Object] values to be true. This identifies the final original
+assertion, not actual mismatching carriers or a proven externref defect.
+
+Original directly creates Int32Array(10), plain receiver{}, and an object
+whose valueOf increments a counter. Reflect.set(target,0,value,receiver) must
+return true, leave coercion counter0 and store the exact original object at
+receiver[0]. No includes/factory enumeration is requested. Unlike earlier
+6769 factory-based receiver negative, this removes helper-factory selection
+from this ORIGINAL's setup, but does not establish a common runtime cause.
+Earlier success/counter assertions in the stopping execution do not prove
+both configured variants completed. Metadata2024 does not exclude the path
+selected by the authoritative11778 manifest.
+
+Add to existing2773/3037 value-identity/6769 receiver custody. After owner
+handover and root execution release, compare exact staged value identity,
+actual Int32Array brand, receiver Reflect.set route, property storage and
+readback boxing, and SameValue. Pair method-bearing value vs plain object,
+direct receiver property assignment, Object.is/strict equality controls,
+same-target numeric conversion, invalid index, distinct TypedArray receiver,
+nonextensible and accessor receiver. Preserve zero coercion on ordinary
+receiver and genuine target/receiver identity; do not replace the value by
+a clone/number, weaken comparison or change provider/harness. Repair only
+the demonstrated carrier/write/read seam, then unchanged-original A–C–A,
+earlier exact factory original and neighbors under the same provider epoch.
+
+At4734/11778:4653PASS70FAIL5CE6compile_timeout,7044unsettled,
+zero accounting problems. SAME62071 LIVE seventh shard index6/PID64778,
+full completion false. No original/source/provider/runner/Git/PR change,
+competing execution or claimed fix/pass gain; all81 nonpasses tracked.

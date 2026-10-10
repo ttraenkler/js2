@@ -83,6 +83,99 @@ func-budget-allow:
 
 ## Problem
 
+### 2026-10-10 Symbol-wrapper numeric conversion negative handoff
+
+Same frozen standalone epoch38901fff8f9a5ca029cbefcdaec5d8dd40949861
+records `test/built-ins/Symbol/prototype/Symbol.toPrimitive/redefined-symbol-wrapper-ordinary-toprimitive.js`
+FAIL03:52:33 local, honest14auto standard official strictboth,
+reached_test true, compile1775ms/exec50ms. Actual first error:
+`Test262Error: hint: number Expected a TypeError to be thrown but no exception was thrown at all`.
+Original SHA256
+`4f03ae2286fad92879c99e64266e563510e941b2cb6692cc387950330605b6af`.
+Root fully read unchanged original: redefine Symbol.prototype[@@toPrimitive]
+to null; loose-equality/default-hint assertion; unary-plus number-hint throw;
+template string-hint; redefine to undefined and further default/relational
+number/property-key string controls. The observed stop is unary plus after
+the null redefinition, not the older runner-only read-only-descriptor error.
+Do not retain that older first failure as the current baseline or infer all
+later controls now work. Exact both-variant identities remain unavailable.
+
+This is the existing S5 stretch residual, no new ownership claim. Once the
+real tag method is absent/nullish, ordinary number-hint conversion must use
+valueOf before toString; Symbol-wrapper valueOf returns a Symbol and the
+subsequent numeric conversion must throw TypeError rather than silently return
+a numeric result. Trace actual wrapper-vs-primitive carrier, live prototype
+lookup, nullish GetMethod fallback, ordinary method order, and numeric terminal
+before selecting a patch. Preserve custom methods/getter counts/abrupt outcomes,
+default/string-hint behavior, undefined/deleted tags and plain numeric wrappers.
+No constant throw for every wrapper and no original/harness substitutions.
+The neighboring6770Symbol-tag deletion failure alone does not prove common
+causality. Existing owner/IR coordination and root heavy-release prerequisites
+remain unchanged.
+
+At1359/11778 unique originals, partial1334PASS18FAIL1CE6timeouts has zero
+accounting problems,10419unsettled. SAME62071/shard1PID53943 confirmedlive.
+No production source/runner/original/Git/claim/PR or heavy execution changed;
+full11778including74Intl target remains unachieved.
+
+### 2026-10-10 GeneratorFunction negative handoff (no new claim)
+
+Later canonical partial readback at the SAME frozen epoch records two siblings:
+`test/built-ins/AsyncGeneratorFunction/is-a-constructor.js` FAIL, compile_ms
+6849 / exec_ms 1646, and `test/built-ins/AsyncFunction/is-a-constructor.js`
+FAIL, compile_ms 7102 / exec_ms 1357. Both honest-14/auto, strict both,
+reached_test true, with their isConstructor assertion observing false.
+Root fully read the unchanged originals. Both include isConstructor.js and
+wellKnownIntrinsicObjects.js and declare only Reflect.construct as a feature.
+Original SHA-256 pins respectively:
+`e323ea57dbe1a09d6fdf228269d34228daef0d12bad6f8a5530d9fa35a542977` and
+`0dca73a0d12d3d30549b1f824eb5c3806909c15655a316da715994245aa5fd00`.
+Their subsequent new intrinsic operation is not proven executed. Similar
+assertion text does not prove a common causal defect. Retain both in the
+authoritative manifest; do not silently exclude them based on intrinsic age.
+Current partial is 727 unique originals: 711 PASS, six compile_timeout,
+nine FAIL, one compile_error, with 11,051 originals unsettled. This is not
+completion or a final pass rate; the live process has not released execution.
+
+The frozen standalone census at `38901fff8f9a5ca029cbefcdaec5d8dd40949861`
+again records `test/built-ins/GeneratorFunction/is-a-constructor.js` as FAIL:
+honest-14/auto, strict both, reached_test true, compile_ms 5351, exec_ms 1187,
+`isConstructor(GeneratorFunction)` observed false. Original SHA-256:
+`97dc21864112f2e61d38eff7e253b945786d460675ec5ed07b3ddc77fc8757a9`.
+The unchanged helper returns false for ANY caught Reflect.construct exception,
+not exclusively failed IsConstructor. The later new GeneratorFunction operation
+is not proven to run. Preserve that separate CreateDynamicFunction acceptance.
+
+The unchanged wellKnownIntrinsicObjects include obtains this intrinsic by
+`new Function` evaluating `(function* () {}).constructor`; child/parent boundary
+transfer is relevant. Current source still marks the native GeneratorFunction
+carrier callable AND constructible, while builtin-callable-brand's Object flag
+classifier arm is emitted only after that compilation context branded a carrier.
+Current Reflect classifier also has a conditional boundary-kind fallback.
+These source facts retain the older umbrella hypothesis but do not distinguish
+wrong child result, missing outer recognition, prototype allocation or another
+Reflect failure. No emitted route or runtime causal attribution was measured.
+
+Do not blindly remove the context gate or turn every callable into a constructor.
+Preserve ordinary nonconstructible arrows/methods and same-shape noncallable
+objects. Next decisive controls remain matched same-module versus dynamic-child
+intrinsic values, actual caught error identity, and emitted outer classifier/
+boundary capability plus child carrier inspection, then both the original
+reflection check and actual CreateDynamicFunction construction. Coordinate
+existing 6651/4245/6640/4238 and constructor-lane ownership rather than duplicate
+implementation. No source edit, heavy execution, commit, publication or IR
+ownership transfer occurred; root's census session 62071 remains live.
+
+Source pins at the frozen execution epoch:
+
+```text
+600d0f5eb093fab6517747a57907be4fbcb024e0ea8a9a409c2e2d4d16651eec src/codegen/builtin-callable-brand.ts
+dec58a4b1fd4c7797778fb8da79fb091bad98f438a3e298e6d2e6266a4a8dd3d src/codegen/generator-function-intrinsic.ts
+ea5e0f15e42f5eb72d411b3f7c0eb01e52d823ccc9104f5fe3f70e2e87026fb2 src/codegen/reflect-construct-native.ts
+68e1a3e4565a8d33ea7fc918627fbbf446bcf14d7a939777616b2b545a5e7d32 test262/harness/isConstructor.js
+bf52f7cca33e62937a9f800b67f6c9d4e4a0bc5819115223f6782f8cb84536a4 test262/harness/wellKnownIntrinsicObjects.js
+```
+
 70 ES2015 test262 rows under `built-ins/**` outside the Object/Reflect (#6770),
 Array (#6771), class (#6772), Iterator (#6773), expressions (#6774), TypedArray
 (#6769, merged) and Promise (#5197, merged) lanes fail in `--target standalone`.
@@ -714,3 +807,174 @@ TypedArray/prototype/slice, TypedArrayConstructors/ctors/buffer-arg) plus every 
   #6771's or #6774's change-set as of 2026-09-30 (`git diff --stat origin/main...origin/<branch>`).
 - Commit early, push the branch immediately, do NOT open a PR and do NOT enqueue: the lead opens
   it. No `git stash`; A/B by file copy from `.tmp/6775/base`.
+
+## 2026-10-10 fresh Function.prototype.toString constructor negative
+
+Frozen integrated epoch38901fff records the unchanged original
+`test/built-ins/Function/prototype/toString/not-a-constructor.js` FAIL at
+06:52:31 local: honest oracle14/auto providers, official standard standalone,
+strictboth, reached_test true, compile1693ms/execute47ms. Error:
+`Test262Error: Expected a TypeError to be thrown but no exception was thrown at all`.
+Original SHA256
+`52c3c2aa9b4557c99712505a914eb32b8026c087349dc453bec288e5302b91f2`;
+root fully read it unchanged.
+
+The source first requires isConstructor(Function.prototype.toString) false,
+then rejects direct `new Function.prototype.toString()` and aliased `new toString`.
+The recorded assertion-error establishes a missing throw, but not which strict
+variant/new-expression or actual callable carrier produced it. Do not infer
+all constructor assertions passed, or reuse historical native-constructor gains
+as acceptance of this current source epoch.
+
+Implementation next steps after ownership and root heavy-lease release: isolate
+both direct and aliased constructor paths, inspect their actual lowered carrier,
+and enforce nonconstructibility using the callable's genuine [[Construct]]
+capability rather than a spelling-only blacklist. Preserve ordinary toString
+calls, live replacements/shadows, Reflect.construct/newTarget admission and
+genuinely constructible function controls; coordinate the existing native
+constructor PR6605 owner instead of duplicating shared new-super/IR edits.
+Run this unchanged original A-candidate-A with actual requested strict variants,
+the native-constructor neighborhood and full acceptance gates. No test exclusion,
+oracle change or completed-fix claim is authorized by this observation.
+
+At2923/11778 canonical originals:2871PASS43FAIL3CE6timeouts8855unsettled,
+no accounting problems. SAME62071 fourthshardPID21569 confirmed live.
+Canonical nonpass52 tracked; no competing execution/source/Git/claim mutation.
+
+### 2026-10-10 callable class Proxy native-syntax stringification negative
+
+Frozen38901fff canonical nonpass71:
+`test/built-ins/Function/prototype/toString/proxy-class.js`, SHA256
+85f6829f92b0a37cca0e01024047e1c1ac3a5b04e543260178fdab28039efe9b.
+Root fully read original and complete nativeFunctionMatcher.js, helper SHA
+277e156a46d4f200e92c0f0d89aebbf5c6e94ca3eae8638f7802365819db0954.
+FAIL08:23:09local honest14/auto standard official standalone strictboth,
+reachedtrue, compile2907ms/exec60ms. Error Conforms to NativeFunction Syntax:
+"[object Function]". Exact failing assertion/variant is UNKNOWN.
+
+Original calls assertNativeFunction on a Proxy of an anonymous class, then
+the inherited .apply from another class Proxy with an apply trap. The helper
+actually converts with empty-string concatenation, then validates the complete
+NativeFunction grammar; it does not directly invoke Function.prototype.toString
+on every candidate. Distinguish primitive conversion dispatch, proxy get of
+toString/valueOf, callable branding/native source serialization and inherited
+Function.prototype.apply carrier. Second assertion is not proven reached.
+An apply TRAP is not automatically a replacement .apply property; preserve
+proxy property lookup and ordinary class-call nonconstructibility behavior.
+
+After Proxy/callable/stringification owner handover/root execution release,
+pair implicit conversion and direct Function.prototype.toString.call on class,
+ordinary callable Proxy and inherited native methods; preserve noncallable
+receiver TypeError, custom toString/Symbol.toPrimitive overrides and get trap
+side effects. Native-function representation must satisfy actual grammar,
+without fabricating source for noncallable objects or weakening the matcher.
+Coordinate existing shared native-function/Proxy work; run unchanged two-case
+original and same-epoch conversion/call/construct regressions plus normal gates.
+
+SAME62071 remains nonterminal with advancing canonical rows. At4007/11778:
+3936PASS61FAIL4CE6timeouts7771unsettled, problems[]. No source/runner/helper/
+original/provider/Git/claim/PR or competing execution mutation occurred.
+
+### 2026-10-10 ErrorData/newTarget stack negatives86–87
+
+Root fully read unchanged originals and nativeErrors.js (SHA256
+601b5841cc3df18b72c3b5ce35c4d737acb3843c733b786991461ec5a6184508).
+The seven-constructor loop starts Error, then EvalError, RangeError,
+ReferenceError, SyntaxError, TypeError and URIError. First ErrorConstructor
+assertions fail; later constructors and assertions are masked, not measured.
+Frozen38901fff honest14/auto official standalone strictboth records:
+
+- Error/prototype/stack/getter-foreign-new-target.js SHA256
+  574d3d267999b83037e2e40331e3f165cac776090358fd1ab4016adf4d92aa07,
+  09:42:53 local FAIL reachedtrue compile5419/exec91ms. First prototype
+  identity expects NotAnError.prototype but receives null. Subsequent direct
+  stack getter must return a string from genuine [[ErrorData]] while e.stack
+  must remain undefined because Error.prototype is outside the chosen chain.
+  This is a different new.target, NOT a foreign realm test.
+- Error/prototype/stack/getter-subclass.js SHA256
+  c1147393e1f061634c8309a8d0f877f7d56c0e9f635f67f50abd0a1f7c573831,
+  09:42:57 FAIL reachedtrue compile3623/exec95ms. First direct stack getter
+  on a subclass instance returns undefined instead of a string; inherited
+  property access and remaining constructors are masked.
+
+Implementation plan after shared native-error/constructor owner handover and
+root execution release: distinguish actual Reflect.construct prototype
+selection, subclass allocation/brand propagation, ErrorData slot access and
+getter receiver identity. Preserve all seven constructors, arbitrary newTarget
+prototype and slot-backed getter independently of prototype lookup; never
+identify ErrorData merely by instanceof or fabricate stack for plain objects.
+Controls: direct Error, each NativeError subclass, non-Error newTarget exact
+prototype, getter call on slot-bearing instance without Error.prototype in its
+chain, plain objects with/without inherited accessor, primitives and exact
+undefined/string outcomes. Current first divergences do not prove a common
+root cause. Unchanged originals A–C–A, neighbors and normal gates required.
+
+At5150/11778:5059PASS80FAIL5CE6compile_timeout,6628unsettled,
+problems[]. SAME62071 remains live seventh shard6/PID64778. No source,
+corpus, harness, provider, Git or PR mutation; no competing execution.
+
+### Root review and bounded Sol diagnostic dispatch
+
+Root fully read371lines es2015-error-stack-allocation-plan-astra-20261010.md
+and independently verified SHA256
+21d8da5ca26a92d2a2654b6f81c0b8823f63fff558d1fb12354937b5d26b5141.
+Plan inventories six-field native Error ABI, dynamic constructor identity,
+runtime-valued class heritage, nominal ErrorData getter, field3 typed reads,
+subclass receiver propagation and intrinsic/explicit prototype consumers.
+Source gaps are not actual failing-route proof. A prototype field alone would
+leave allocation/effect ordering, intrinsic fallback, prepared resources and
+property/getter receiver paths inconsistent. Cached claims are timestamped,
+not live-owner or release evidence;5316 issue/assignment discrepancy remains.
+No production ABI/class/prototype seam is cleared or original repair measured.
+
+Root dispatched Sol6.1High error_stack_controls_sol61 to its isolated inactive
+6878-boolean-property-carrier worktree, owning ONLY new inert
+.tmp/es2015-error-stack-controls-sol61.ts and corresponding plan/issues/
+es2015-error-stack-controls-handoff-sol61-20261010.md. All peer preparations
+must be preserved. Scope: independent unannotated native-Wasm future controls
+for seven constructors, runtime-valued inheritance, exact prototype/ErrorData
+separation, getter receivers, mutation and ordered conversion effects, plus
+positive/intentionally-negative instrument controls and unchanged original
+pins. Every proposed case UNRUN; launcher wiring/route telemetry and execution
+await root heavy-lease release. No host simulation, source/runner/provider/
+corpus edits, validation, Git/publication or readiness claim authorized.
+
+At5270/11778:5177PASS82FAIL5CE6timeouts6508unsettled, problems[];
+same62071 eighth index7/PID54196 LIVE. All93nonpasses remain tracked.
+
+### Completed inert Error diagnostic packet, root full review
+
+Root fully read530lines .tmp/es2015-error-stack-controls-sol61.ts in three
+untruncated chunks and289lines plan/issues/es2015-error-stack-controls-handoff-
+sol61-20261010.md in the isolated carrier checkout. Independent SHA256 pins:
+packet dc3e7357d59f30adb4f82e8ea310ed9e92a76444e6f9797f38544aa7e6a59224;
+handoff40e0b953d7987902ffe43131996f64b7a68a779e1d5422825b02682a3d4d5ebf.
+Sixty controls plus two original registrations=62 independent Script inputs,
+ALLUNRUN,59expectedpositive/1intentional runtime assertion negative.
+Constructor11/subclass17/foreign16/brand-lookup14/instrument2 inventory;
+seven separate runtime-Ctor ordinal controls for each original expose masks
+without replacing identifier heritage with constructor literals. Constructor
+cell/assertion/variant counts are expected denominators, never observed PASS.
+
+Root reviewed exact unrelated-prototype getterstring/propertyundefined,
+ErrorData vs plain/inheritor/Proxy/revokedProxy distinctions, typed/dynamic/
+caught reads, own overrides/delete/reparent, capturedparent/subclassidentity,
+ordered heritage/prototype/conversion effects and IsConstructor-before-list
+controls. Proxy/class limitations can stop controls before Error allocation;
+firstfailureordinal and route remainUNKNOWN then. I01 is only a spec-positive
+shape; an actually passing unchanged native Error original must still prove
+the instrument. I02 mustruntimeFAIL reachedtrue, not compile_error or PASS.
+
+Maintained launcher integration remains deferred: preparation runner hash
+fc526d5816a810e6e9507943f0d4ab5c9ef17494fa15d288be1c748b202a88b6
+differs frozenEXEC6bd2b218df37fb1103bdc8a9032da6189b42ae5b44438638a458e1266ec889d8.
+Worker/pool/officialassembler/import-object source matches do not prove bundle,
+provider/cache identities or route/ABI telemetry. Full actual strict variants,
+allocation/carrier/prototype/getterreceiver/propertyconsumer receipts required.
+Worker reported27peer preparation/source/test pins unchanged; no production
+write, execution, Git/PR mutation or owner release. Standdown after finite prep;
+root heavy lease and ABI/class/prototype owner gates still apply.
+
+Latest5401/11778:5307PASS82FAIL5CE7timeout6377unsettled, problems[];
+same62071 eighthindex7/PID54196LIVE,94known nonpasses all tracked. No conformance
+gain attributed to this inert packet or completed-fix/readiness claim.

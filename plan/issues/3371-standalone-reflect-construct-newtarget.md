@@ -1888,3 +1888,33 @@ exactly once. This is a native oracle observation, not compiler validation.
 
 This handoff makes no source edit, test edit, ownership/status change, or claim
 that the current refusal is the sole remaining Reflect.construct defect.
+## 2026-10-10 Object subclass argument original refused (nonpass74)
+
+Root fully read unchanged `test/built-ins/Object/subclass-object-arg.js`,
+SHA25690e763f6771877068ab240f2d49605003476b6870f9ccc7864b56bbd49e29b83.
+Frozen38901fff honest14/auto standard official standalone strictboth records
+CE08:49:47 local, compile2804ms, reached_test false, exec_ms absent:
+`L20:10 Codegen error: standalone Reflect.construct cannot preserve an arbitrary distinct NewTarget without a statically-resolved NewTarget.prototype assignment (#3371).`
+Original class O extends Object; new O({a:1}) and
+Reflect.construct(Object,[{b:2}],O) must ignore the supplied object values,
+leave a/b undefined and have exact O.prototype. No assertion was reached;
+do not count implicit-derived construction or argument behavior as passing.
+
+Unlike the existing array-like argumentsList original, this uses an ordinary
+array literal and a class NewTarget whose default prototype exists without an
+explicit prototype assignment. Track distinct admission and Object constructor
+semantics rather than treating identical issue-number text as one cause.
+After owner handover and root heavy-lease release, trace class carrier/prototype
+proof and the actual Reflect route; preserve constructor staging/evaluation
+order, genuine distinct NewTarget prototype and Object's subclass allocation
+instead of returning the argument object. Controls must distinguish new Object
+value identity vs subclass allocation, implicit new O and explicit Reflect,
+custom prototype/getter throw, nonconstructor NewTarget and ignored argument
+side effects, plus exact prototype and absent own a/b. Only release a narrow
+proven constructor/prototype seam; no broad refusal removal or synthesized
+prototype assignment. Same-epoch unchanged-original A–C–A and construction
+neighbors are required before fix/publication credit.
+
+At4393/11778:4318PASS64FAIL5CE6compile_timeout,7385unsettled,
+zero accounting problems. SAME62071 LIVE/shard5/PID47243; full completion
+false. No source/original/provider/runner/Git/PR change or competing execution.

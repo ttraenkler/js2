@@ -25,6 +25,34 @@ files:
 
 # #6834 — Test262 entry-only value self-import graphs
 
+## 2026-10-10 frozen-census named generator self-import residual
+
+Same frozen standalone epoch38901fff8f9a5ca029cbefcdaec5d8dd40949861
+records `test/language/module-code/instn-named-bndng-gen.js` FAIL04:06:06
+local, honest14auto standard official, row strictboth, reached_test false,
+error `[object WebAssembly.Exception]`; compile/exec timing fields absent.
+Original SHA256
+`6b338f1d18ebc80fecb5efbf89abee491a0b6d142bc95efe46efd8e4bca90cfc`.
+Root fully read unchanged original, flags[module]/features[generators]: imports
+its own exported generator g as g2; pre-evaluation binding returns23;
+assignment to g2 must throw TypeError; binding still returns23 afterward.
+Do not infer actual strict reruns from the generic row strictboth field for
+this module, or recover assertion identity from the opaque exception alone.
+
+Existing transport repair explicitly retained this original as a canonical
+failure, with a separate historical richer diagnostic locating import-binding
+assignment rejection. Current opaque receipt is not a fresh proof of that
+exact runtime cause; generator initialization/callability and assignment must
+be distinguished through the actual graph after root releases execution.
+Keep semantic handoff with existing2864/5157 owners, not a new module-transport
+claim, broader compiler takeover or silent host-import fallback. Preserve
+entry/self identity, initialization-before-evaluation, immutable indirect
+binding, generator brand/return value and absence of forbidden env imports.
+
+At1454/11778 originals, partial1425PASS22FAIL1CE6timeouts has zero accounting
+problems,10324unsettled; SAME62071/shard1PID53943 remainsLIVE. No source,
+runner, original, Git, claim, PR-readiness or heavy-execution change made here.
+
 ## Status and ownership
 
 Implementation plan prepared by Astra against verified upstream commit

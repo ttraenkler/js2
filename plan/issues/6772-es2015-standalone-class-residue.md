@@ -1093,3 +1093,41 @@ check-func-budget (bare and `LOC_GATE_BASE=ce6631272c`), check-coercion-
 sites, check:oracle-ratchet, check:dead-exports, check-compiler-boundaries
 `--mode inventory`, check-import-cycles (SCC 697), check-flat-dir-budget
 (829/829), check:ir-fallbacks, typecheck — all exit 0.
+
+## 2026-10-10 current GeneratorFunction subclass negative handoff
+
+Source/evidence update only; no ownership adoption or completed repair. Root
+verified the same full census session 62071 / shard-one PID53943 live at frozen
+execution HEAD `38901fff8f9a5ca029cbefcdaec5d8dd40949861`. Canonical original
+`test/language/statements/class/subclass/builtin-objects/GeneratorFunction/instance-length.js`
+records FAIL, `length should be an own property`: standalone, honest oracle14,
+providers auto, strict both, reached_test true, compile_ms4078, exec_ms60.
+Root fully read and hashed the unchanged original:
+`ea432b0c4d335318c5b97422a819f9e79f9ed72debf43238b6df40f393db395c`.
+
+The test obtains GeneratorFunction via the generator function's prototype
+constructor, subclasses it, constructs GFn with two parameter strings and a
+body, and uses propertyHelper to demand the resulting function's OWN length2
+data descriptor (writable/enumerable false, configurable true). The first own
+property failure does not prove later value/flag/mutation assertions executed
+or both variants ran. It is not the same observation as intrinsic
+is-a-constructor's false result, and the intrinsic constructor's seeded length1
+cannot satisfy this resulting function's length2 obligation.
+
+This exact original is already in this issue's deferred provider-construction
+surface, cross-referenced to6640/4238. The current intrinsic builder source
+documents its callable/constructible carrier and separately out-of-scope
+CreateDynamicFunction invocation. Do not treat that comment as runtime route
+proof or fix the wrong constructor object's descriptor. Before implementation,
+inspect actual subclass NewTarget forwarding, provider-created result identity,
+own descriptor producer and ordinary reflection route. Preserve name/prototype,
+returned callable/generator behavior, abrupt completion and ordinary subclass
+controls; coordinate current constructor/provider owners without taking IR or
+shared source ownership. Historical umbrella successes do not remeasure this
+frozen epoch. No duplicate issue, source change, heavy overlap, replay, compile
+or runtime gain is claimed here.
+
+Current canonical partial1049unique:1028PASS,14FAIL,onecompile_error,
+sixcompile_timeout,10729unsettled; no accounting problems. Full11778including
+74Intl acceptance remains unachieved. Natural full-run terminal and root's
+serialized verification release remain required; no original is excluded.

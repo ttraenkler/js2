@@ -2223,3 +2223,182 @@ with the frozen source/artifact receipts above. Producer is INACTIVE; original
 integration/census remain open. Root accepted publication and released heavy
 lease at actual push terminal; this append is source-only until a later normal
 documentation commit/push lease. No extra runtime/build/watch was started.
+
+## 2026-10-10 fresh frozen-census global declaration negatives
+
+Epoch38901fff, honest oracle14/auto providers, standard official standalone,
+has two fresh FAIL rows. Root fully read both unchanged originals:
+
+- `test/language/global-code/script-decl-func.js`, SHA256
+  `7d618dee98fc04c52c30607dd626afa7faf34501bb19dc59bca6b52f76d3bb93`,
+  05:16:38 local, compile16221ms/exec506ms, strictboth, reachedtrue. First
+  error: brandNew descriptor should not be configurable. evalScript creates
+  a function binding, then verifyProperty requires writable/enumerable true
+  and configurable false. Later configurable/nonconfigurable existing-property
+  redeclarations after preventExtensions are masked, not passes.
+- `test/language/global-code/script-decl-lex.js`, SHA256
+  `7e2539d5d96b1dd324a4f29c3f2da21c9a5dfd3e04b2baebc0ce108a04f4d016`,
+  05:17:04 local, compile7083ms/exec230ms, strictboth, reachedtrue. First error:
+  TypeError: TypeError: Cannot define property, object is not extensible.
+  Original prevents extensions before evalScript let/const/class declarations;
+  lexical bindings must remain independent of global-object properties. Exact
+  failing declaration/operation is not established by this message. Later let
+  mutability, const assignment TypeError and class mutability/property-absence
+  checks are masked. No claim of all actual variant calls from strictboth.
+
+Route through existing clusterE/current script-declaration consumer ownership,
+not a new interpreter-only patch. Historical interpreter fixes measured zero
+change under default QuickJS; current row labels alone do not prove the active
+adapter/bridge branch. P1 producer acceptance remains producer-only, not these
+originals' acceptance or consumer activation. After ownership/root execution
+release, establish actual native eval route and plan/consumer activation, then
+compare declaration-record descriptors, global object vs declarative binding
+storage, existing property and extensibility behavior, and binding write/error
+identity across the unchanged17 controls/43 diagnostics. Preserve separate
+record/effective-name projections, full original assertions and normal providers.
+Do not make every global property nonconfigurable or store lexical bindings as
+global properties merely to restore one first assertion.
+
+At2026/11778 originals:1986PASS33FAIL1CE6timeouts9752unsettled,
+zeroaccountingproblems. SAME62071 returnedactualrunning-not-final shard2PID13477.
+These are canonical negatives39/40; no source/runner/original/Git/claim/ready
+or heavy-execution mutation occurred. Full suite remains unfinished.
+
+## 2026-10-10 restricted-global lexical collision and declaration atomicity
+
+Frozen38901fff canonical nonpass64:
+`test/language/global-code/script-decl-lex-restricted-global.js`, SHA256
+8436eaf4133096c5ca3c3c89c606d05f747271e4c8c8285dfcf8bc07b8fc2296.
+Root fully read original unchanged. FAIL07:51:19 local, honest14/auto,
+standard official standalone, strictboth, reachedtrue, compile3004ms/exec402ms.
+Error: TypeError(null/undefined access): Let binding collision with
+non-configurable global property(not defined through a declaration).
+The description-like error does not establish exact stopping expression,
+active bridge or exception identity; do not attribute solely from wording.
+
+Original defines one configurable and one nonconfigurable global property,
+then evalScript lets the configurable name. That must succeed. Next evalScript
+`var x; let test262NonConfigurable;` must throw SyntaxError, and subsequent x
+read must throw ReferenceError: restricted-global validation precedes all
+declaration effects. Do not infer either error assertion passed from FAIL row.
+
+Route to existing clusterE/script-declaration consumer alongside the two earlier
+global negatives. After owner handover/root execution release, discriminate
+global descriptor storage and HasRestrictedGlobalProperty, configurable-property
+lexical admission, preflight order before CreateGlobalVarBinding, and exception
+translation through actual auto-provider/bridge. Preserve distinct declarative
+and object bindings; record before/after global x and lexical record state.
+Reject atomically with the correct SyntaxError without partially publishing x.
+Do not broadly reject configurable globals, roll back only after effects, or
+change the error comparator/provider. Positive configurable case, restricted
+let/const/class collisions, var/function neighbors, absent-x and no-sideeffect
+controls plus unchanged official original require same-epoch acceptance/gates.
+Existing inactive producer acceptance is not consumer activation or runtime proof.
+
+SAME62071 explicitly reportsLIVE shard4/PID36154. At3648/11778:3584PASS54FAIL
+4CE6timeouts8130unsettled, problems[]. No competing execution, source, runner,
+original, provider, Git, claim or PR-state mutation occurred.
+
+## 2026-10-10 script function declaration collision (nonpass75)
+
+Root fully read unchanged
+`test/language/global-code/script-decl-var-collision.js`, SHA256
+7d4c31f6fb7f804323bae8a2f5fce25e1193a5bd1c5a7c815fea322cec1f2e8a.
+Frozen38901fff honest14/auto standard official standalone strictboth records
+FAIL08:50:21 local, reachedtrue, compile3121ms/exec311ms:
+Actual error: Test262Error: function on `let` binding Expected a SyntaxError
+to be thrown but no exception was thrown at all.
+
+Original establishes global var/let/const/class declarations, admits var and
+function redeclarations of the existing var, then checks var declarations
+colliding with each lexical kind plus absence of accompanying x. The first
+visible failure specifically names function-on-let, whose evalScript contains
+`var x; function test262Let() {}`. Later x-absence and function-on-const/class
+assertions are masked, not passes. Actual strict-variant calls and active
+native bridge remain unknown; do not infer all earlier controls executed in
+both variants from the partial row.
+
+Route via existing clusterE global declaration consumer, separately from
+restricted-property collision and descriptor/extensibility negatives. After
+owner handover/root execution release, compare VarDeclaredNames for function
+declarations, HasLexicalDeclaration over the shared script environment, actual
+provider/bridge name projections and preflight before any var/function effects.
+Both declaration kinds must atomically reject collisions with let/const/class
+using SyntaxError while x stays absent; an existing var may be redeclared.
+Controls should preserve all six original collision/absence pairs, positive
+var/function redeclarations, fresh-script record persistence and error identity.
+Do not weaken original assertions, remap providers, broadly reject valid
+redeclared vars, or publish x before later rejection. Preserve inactive producer
+and consumer ownership distinctions; same-epoch unchanged original A–C–A,
+retained declaration controls and normal gates required before acceptance.
+
+At4393/11778:4318PASS64FAIL5CE6compile_timeout,7385unsettled,
+zero accounting problems. SAME62071 LIVE/shard5/PID47243, full completion
+false. No source/original/provider/runner/Git/PR/claim change or execution.
+
+## 2026-10-10 indirect generator re-export module negative (nonpass83)
+
+Frozen38901fff honest14/providersauto standard official standalone strictboth
+FAIL09:24:32 local: `test/language/module-code/instn-iee-bndng-gen.js`,
+error `[object WebAssembly.Exception]`, reached_test false; compile_ms/exec_ms
+are absent, not0 or a timed stage attribution. Root fully read original SHA
+443bb1cfa46419decccc24946f290140c0b965e16be3cf02b05b741990025bd4
+and its sole circular fixture instn-iee-bndng-gen_FIXTURE.js SHA
+e2d7db9ffa77105a7ea7b22e64c382c01ebdfa0a195eebe8fa931d8211191cf8.
+
+Original calls imported B().next().value before textual import/export and
+expects455; assigning B=null must throw TypeError and preserve the binding's
+generator value. It exports function* A returning455. Fixture indirectly
+re-exports A as B but does not create local A or B bindings; separate reads of
+both names must produce ReferenceError, and typeof afterward undefined,
+captured in results length4/order. No original assertion is proven reached by
+this row. It is distinct from earlier direct/default named-generator binding
+negative; preserve circular module graph and indirect export semantics.
+
+Existing clusterF already names this exact original and requires alias-aware
+generator instantiation; that historical mechanism is NOT this epoch's proven
+first divergence. After current module/generator/IR owner handover and root
+lease release, inspect module linking/instantiation, circular evaluation order,
+ResolveExport/CreateImportBinding vs local environment names, generator call
+carrier/resume route and raw exception translation before choosing a seam.
+Controls: direct and indirect imported generators, immutable live import binding,
+hoisted declaration before evaluation, fixture export-only names absent locally,
+circular environment initialization and exact four diagnostic results; retain
+ordinary function and prior named/default generator controls. No flattening
+the graph, replacing import with a copied local, fabricated generator value,
+blanket exception swallow or harness/provider substitution. Unchanged complete
+two-file graph A–C–A, relevant neighbors and normal gates required for acceptance.
+
+At4983/11778:4900PASS72FAIL5CE6compile_timeout,6795unsettled,
+zero accounting problems. SAME62071 LIVE seventh index6/PID64778; full
+completion false. No source/original/fixture/provider/runner/Git/PR/claim
+mutation or competing execution; all83 non-passing originals tracked.
+
+## 2026-10-10 nonconfigurable global function negative88
+
+Root fully read script-decl-func-err-non-configurable.js SHA256
+205b0ad0f244c474a6804570e3e5dae00899bb5f2352ce3e7e162341e89cc8be.
+Frozen38901fff honest14/auto standard official standalone strictboth FAIL
+09:43:44 local, reachedtrue compile7615/exec887ms. Error is TypeError
+(null/undefined access) followed by the test description; actual stopping
+setup/eval/assert ordinal is UNKNOWN, not evidence of the required TypeError.
+
+Defines global data1 writable/nonenumerable, data2 nonwritable/enumerable,
+data3 neither, and two accessors; all nonconfigurable. Both actual accessor
+descriptors are enumerable:true despite the second diagnostic describing
+non-enumerable. Preserve the unchanged source rather than fixing its prose.
+Each evalScript('var x; function NAME() {}') must reject with TypeError;
+each subsequent x read must throw ReferenceError, proving atomic preflight.
+
+After eval/global-object/descriptor owners hand over and lease release, locate
+first runtime divergence, then inspect CanDeclareGlobalFunction descriptor
+predicate and atomic GlobalDeclarationInstantiation before var publication.
+Nonconfigurable writable AND enumerable data is admissible; accessors are not.
+Controls: all actual original descriptors, configurable positive, writable+
+enumerable positive, exact exception identity, x absent after every rejection,
+preserved old property and accepted redeclaration behavior. No broad swallow,
+premature bindings, harness/provider change or spelling-based restriction.
+Unchanged original A–C–A and retained global-declaration neighbors required.
+
+At5150/11778:5059PASS80FAIL5CE6timeouts6628unsettled, problems[];
+SAME62071 live shard6/PID64778. No competing execution or source/Git change.

@@ -925,3 +925,33 @@ shared helper, IR, provider, variant, hook, commit, push or publication changed.
 The original ten green revised-fixture rows, prior eight matched gains and
 zero losses remain separate evidence; physical removal/restoration proofs
 remain UNPROVEN and PR readiness is not asserted.
+## 2026-10-10 fresh frozen-census mixed Map append/read negative
+
+Frozen epoch38901fff now records the unchanged original
+`test/built-ins/Map/prototype/set/append-new-values.js` FAIL05:26:40 local,
+honest oracle14/providersauto standard official standalone, strictboth,
+reachedtrue, compile1849ms/exec33ms. Exact first error: Expected SameValue
+(NaN, "valid") to be true. Original SHA256:
+`b09112198aa445935aae67691b6155b6901eb819f0091e17f8da410730525c54`.
+
+Root fully read the original: seed numeric/string/Symbol keys with numeric
+values, set null->42 and 1->"valid", verify size5 and get(1), then collect
+forEach({value,key}) records and pop them to check the last three entries.
+Both direct get(1) and the first popped record value expect "valid"; this error
+does NOT identify which read failed or prove storage corruption. Later order,
+null-key and Symbol-identity assertions are masked. Add ordinal/counter and
+typed physical-carrier evidence before assigning a cause.
+
+This original is already in the historical mixed-Map residual, but neither
+matching text nor revised nullish-fixture gains establish the same defect.
+Preserve existing direct/local equality and nullish controls. After ownership
+and root execution release, distinguish set storage from get return projection,
+heterogeneous seed/update value carriers, forEach callback value/key transport,
+record array storage/pop/property observation, exact insertion order and Symbol
+identity. Compare numeric-only, string-only and mixed unannotated originals;
+do not force all values numeric/string, hardcode expected reads, weaken SameValue
+or count source-only/revised-fixture results as this original's acceptance.
+
+At2127/11778 originals:2085PASS35FAIL1CE6timeouts9651unsettled,
+zeroaccountingproblems; SAME62071 confirms live shard2PID13477. Canonical
+negative42 tracked; no source/runner/original/Git/claim/readiness/heavy mutation.

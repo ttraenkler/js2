@@ -1490,3 +1490,142 @@ were the same (587,273) before and after the changes.
 (S9/S10/S20) and = `489d0aac` (merge, S22, this record). That includes
 import-cycles (largest SCC 697) and flat-dir (829/829). The S22 grant is in
 the frontmatter (`class-bodies.ts::compileSuperCall` +5).
+
+## 2026-10-10 frozen census S14 dynamic eval alias failure
+
+Current frozen38901fff canonical original
+`test/language/expressions/call/tco-non-eval-function-dynamic.js` FAIL at
+07:10:25 local, honest oracle14/auto providers, official standard standalone,
+noStrict, reached_test true, compile3212ms/execute110ms. Final assertion observed
+SameValue(0,1) false. OriginalSHA256
+`8d381595908fa414b6aaa027f3386bf922220738e1902b16037f08f836b1c803`.
+Root fully read the unchanged original and full tcoHelper.js, whose actual
+$MAX_ITERATIONS is100000, SHA256
+`a533b07378e41044c98199e250e1c78a28610a783ad0814cb467e9ea2f5de8fa`.
+
+The sloppy IIFE eval creates local `var eval = f`; nested strict f calls
+`eval(n-1)` until n0 increments callCount. Current final0 is not evidence of
+historical overflow, helper result-signature cause or completed recursion.
+Separate the dynamic local-binding insertion/capture, actual eval-versus-ordinary
+call resolution, arguments/result/closure state and tail-call lowering using
+actual maintained provider assembly and reached runtime observations. Prior S14
+plan and historical pinned-provider measurements above are context, not proof
+of this frozen auto-provider epoch or a current ownership release.
+
+Implementation/control next steps after author/IR/shared ownership handover and
+root execution release: compare unchanged original against ordinary local alias,
+the other non-eval-function/global variants, direct intrinsic eval and genuinely
+captured dynamically added alias. Establish binding/call semantics at short depth
+before testing the unchanged100000 depth. Preserve direct-eval environment,
+abrupt completion, try-handler and param/result tail-call guards. No helper count
+reduction, eval host fallback, provider pin substitution, original rewrite or
+compiler.ts/output.ts/sharedIR edit is authorized by this observation.
+
+Canonical nonpass58 tracked. At3073/11778:3015PASS49FAIL3CE6timeouts8705unsettled,
+no accounting problems. SAME62071 fifthshardPID36154 confirmed live; all proposed
+new controls UNRUN and no competing heavy/source/Git/claim/PR mutation occurred.
+
+### 2026-10-10 live with-environment eval-named callable negative
+
+Frozen38901fff canonical nonpass69:
+`test/language/expressions/call/tco-non-eval-with.js`, SHA256
+d50ebf30dfa315ea5ba57fe555176a0ecbd393fe4515fcaf7ae52e8f256eebec.
+Root fully read original unchanged. FAIL08:10:56local, honest14/auto,
+standard official standalone, noStrict, reachedtrue, compile3736ms/exec138ms;
+final assertion SameValue(0,1) false. Literal tcoHelper remains100000 iterations,
+previously fully read/pinned a533b07378e41044c98199e250e1c78a28610a783ad0814cb467e9ea2f5de8fa.
+
+Original creates strict f inside with(scope), exits with, then adds scope.eval=f
+before calling f(100000). The escaped closure must retain the LIVE object
+environment, see its subsequently added eval property, and perform ordinary
+Call when the resolved function is not the intrinsic eval. CallCount0 does not
+prove a stack-overflow/TCO cause or identify whether closure capture, late
+property visibility, identifier resolution or call lowering failed. This is
+distinct from earlier dynamic-local-var eval alias insertion.
+
+After actual with/closure/call/eval ownership handover and root execution
+release, compare late vs pre-existing eval property, ordinary non-eval property,
+same closure outside with, and intrinsic-eval identity/shadow controls. Establish
+short-depth binding/receiver/argument/termination behavior before unchanged
+100000-depth acceptance. Object Environment Record call reference also carries
+scope as this-value even though this original's f does not observe it; retain
+receiver controls, unscopables/inherited lookup, escaped live mutations and
+abrupt evaluation semantics. Coordinate4206/4264/6651 capture substrate; the
+unwired conditional capture leaf does not implement or verify this escaped call.
+No helper reduction, loop substitution, source rewrite or provider swap.
+
+SAME62071 explicitly reportsLIVE sixthshardindex5/PID47243. Partial3843/11778:
+3774PASS59FAIL4CE6timeouts7935unsettled, problems[]. No source/Git/claim/PR
+or competing execution mutation occurred; full acceptance remains unachieved.
+
+### 2026-10-10 static local eval alias actual overflow, retried original
+
+Frozen38901fff canonical nonpass70:
+`test/language/expressions/call/tco-non-eval-function.js`, SHA256
+d87d82ebfe86486a7b96a1fec941feb15f6a106ee21014576d1c8e5829c66e4c.
+Root fully read original unchanged. FAIL08:16:41local, honest14/auto,
+standard official standalone, noStrict, reachedtrue, compile3112ms/exec42ms,
+retriedtrue/retry_count1. Final error Maximum call stack size exceeded.
+This is an observed final overflow, unlike earlier dynamic-local/with alias
+originals' callCount0 assertions. Retry labels do not establish first-attempt
+phase/cause, retry-free performance or complete variant coverage.
+
+Sloppy outer IIFE defines strict f, statically binds local var eval=f, and calls
+f with unchanged tcoHelper100000 iterations. The recursive tail-position
+eval(n-1) is an ordinary callable alias, not intrinsic direct eval. Required
+behavior reaches n0 exactly once without unbounded call-stack growth.
+Preserve original(helper SHA a533b07378e41044c98199e250e1c78a28610a783ad0814cb467e9ea2f5de8fa)
+and all call/capture/argument semantics; reducing depth is not acceptance.
+
+After callable/closure/tail-lowering/IR owner handover and root execution
+release, locate actual resolved alias and emitted/runtime dispatch: closure
+indirect call tail eligibility, closure environment/argument propagation,
+result signature and active handler guards, maintained provider vs native
+route. Use short-depth alias/direct-name/intrinsic-eval controls to distinguish
+call correctness from depth, then original100000 plus currently passing tail
+neighbors and non-tail/try-handler negatives. Historical S14 provider/helper
+attribution is not proof of this auto-provider source epoch. Fix ordinary-call
+tail semantics rather than special-casing eval spelling or this original.
+
+SAME62071 explicitly remainsLIVE shard5PID47243. At3920/11778:3850PASS60FAIL
+4CE6timeouts7858unsettled, problems[]. No competing execution/source/Git/
+claim/PR mutation or current conformance gain is claimed.
+
+### 2026-10-10 function destructuring iterator-step timeout94
+
+Root fully read unchanged function/dstr/ary-ptrn-elem-id-iter-step-err.js,
+SHA256e0393a33ec5f8ad2b75c1db6ee1e771aef01bc1d4b1a7bee8a734eb871e931f1.
+Frozen38901fff honest14/auto officialstandard standalone strictboth canonical
+10:18:45 local compile_timeout, reachedfalse, compile_ms10000, error timeout
+(10s), retriedtrue/retry_count1; exec_ms absent, not0. This is final nonpass94,
+not a runtime assertion failure or a proven deterministic compiler defect.
+
+Original g[Symbol.iterator] returns an iterator whose next throws Test262Error;
+f is a function expression with array-destructured parameter [x]. Calling f(g)
+must propagate that exact abrupt completion. No original assertion is proven
+reached by this row. IteratorBindingInitialization must mark done on the
+abrupt step; inspect completion/close rules without assuming runtime failure.
+
+Actual live shard-7 stderr separately records pool TIMEOUT exceeded30s for
+the strict rerun, then exceeded10s for retry, each maintained runner killing
+its worker. stdout reports73025ms overall test duration and final canonical
+compile_timeout10s. These differing counters describe separate observed
+events; do not equate73025ms with compile_ms, infer initial/sloppy status,
+resource root cause or exact compiler phase. Root sent no process signal or
+timeout change. A runner-managed worker recycle is not whole-run termination.
+
+Next after root lease release: same-epoch unchanged original solo and strict/
+sloppy variant receipts with known-passing instrumentation control, collect
+actual compile-stage/worker/provider lifecycle evidence and source timings.
+Compare plain parameter, successful custom iterator, next-throw exact identity,
+getter-throw iterator/next, sibling method/generator destructuring and IteratorClose
+effects. Attribute semantic vs compiler-stage vs resource/recycle instability
+only from actual evidence. No increased timer, retry deletion, timeout-to-skip,
+loop removal, original rewrite, provider/oracle replacement or fabricated PASS.
+If a repeatable compile divergence exists, file its actual phase/owner plan
+before production edits, then same-epoch A–C–A and full acceptance.
+
+At5351/11778:5257PASS82FAIL5CE7compile_timeout,6427unsettled,
+problems[]; all94known nonpasses tracked. SAME62071 LIVE eighth shard7/
+PID54196, full completionfalse. Heavy lease occupied; no competing execution,
+source/base/corpus/provider/runner/Git/PR mutation or root process signal.

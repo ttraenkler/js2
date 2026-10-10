@@ -1058,3 +1058,35 @@ Two low findings are recorded as genuine gaps, neither introduced here:
   lane, but the host throw is not a JS `Error` there (`e.name` is null,
   `e instanceof ReferenceError` false). Standalone is correct. So B3 is fixed on
   standalone only; a host-lane `assert.throws(ReferenceError, …)` still fails.
+
+## 2026-10-10 frozen-census primitive Symbol PutValue residual
+
+Same frozen standalone epoch38901fff8f9a5ca029cbefcdaec5d8dd40949861
+records `test/language/types/reference/put-value-prop-base-primitive.js`
+FAIL04:05:43 local, honest14auto standard official strictboth,
+reached_test true, compile11917ms/exec346ms. Actual error explicitly says
+`strict rerun: TypeError: Cannot create property on a Symbol`.
+Original SHA256
+`74c58487c9f371b8ae80fba98b086e2cbced55a78da1a2f1d84f7bcb5522adf5`.
+Root fully read unchanged original: install separate successful Proxy set
+traps on Number/String/Boolean/Symbol.prototype chains; write a named property
+through each primitive receiver; each trap count must equal1. Current stop is
+Symbol's strict write, not the historical Number trap never firing. Exact
+sloppy outcome and all actual per-variant assertion counts are not supplied by
+this row and must not be invented.
+
+Existing mechanismI/5157 primitive-reference ownership applies; coordinate
+shared prototype/Proxy carrier consumers rather than claim a new file. A
+primitive write is not unconditionally forbidden in strict mode: perform
+ToObject/base [[Set]] with original primitive Receiver, reach the inherited
+setter/Proxy trap, then throw only if [[Set]] returns false for a strict
+reference. Successful trap here must remain observable and avoid own property
+creation on a transient wrapper. Trace Symbol boxing, mutable prototype walk,
+receiver preservation, actual trap boolean and strict failure terminal before
+patching. Retain true/false trap controls, absent/data/accessor cases, abrupt
+completion, all four primitive families and sloppy/strict separation. Do not
+fix by globally suppressing strict-write errors or substituting wrapper this.
+
+At1454/11778 originals, partial1425PASS22FAIL1CE6timeouts has zero accounting
+problems,10324unsettled; SAME62071/shard1PID53943 remainsLIVE. No source,
+runner, original, Git, claim, PR-readiness or heavy-execution change made here.

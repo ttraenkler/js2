@@ -1013,3 +1013,67 @@ Still open: `S13.2.2_A19_T8` CHECK#2 (a `var` re-declared inside a second `with`
 block keeping the first block's scope) and the `with (arguments)` rows.
 
 Resume from #4491's "Suspended Work" section.
+## 2026-10-10 ES2015 frozen-census unscopables update refusal handoff
+
+Canonical negative61, epoch38901fff, honest14/auto standard official standalone:
+`test/language/statements/with/unscopables-inc-dec.js`, SHA256
+cbefdfa73dedf2fd84a1f2c8c616de00292df7f1837bba7d811c40a642f6d29f.
+Root fully read original. CE07:25:36 local, noStrict, reachedfalse,
+compile1528ms; execution unmeasured. Both outer with assignments at25:1/40:1
+hit1387's proven-closed-object-shape refusal mentioning class/method capture
+and deferred1472. This message proves refusal, not a closure-ABI root cause.
+The existing historical table names this exact original; no new GitHub issue
+or duplicate owner claim is created and ES5 issue status is not promoted done.
+
+Nested environments have a.x7 and b.x4; b's computed Symbol.unscopables getter
+increments a counter and toggles flag, returning an object blocking x according
+to flag. Each x++/x-- must resolve its Reference once: getter count1, outer a.x7
+unchanged, inner b.x5/3 respectively. All runtime assertions are currently masked.
+After owner/root lease release, inspect with assignment-expression shape proof,
+computed accessor recognition and actual supported environment IR before
+choosing an admission repair. Preserve live targets and evaluate environment,
+HasBinding/getter, read, numeric conversion and write in specified order; reuse
+the resolved Reference for PutValue rather than looking up unscopables twice.
+Controls must include both operators, blocked/unblocked nested bindings,
+getter side effects/abrupt completion and inherited properties. Removing the
+refusal without complete reference semantics is not acceptance. Coordinate
+4231/4264/4491 and current IR owners; no shared IR ownership transfer is implied.
+
+Same62071/shard4/PID36154 remains live. At3315/11778:3254PASS51FAIL4CE6timeouts,
+8463unsettled, problems[]. No compiler/helper/test/build execution, source,
+runner, original, provider, Git, claim or PR-readiness mutation occurred.
+
+### Astra plan and Sol preparation reviewed, 2026-10-10
+
+Root fully read342line Astra plan
+`plan/issues/es2015-unscopables-update-reference-plan-astra-20261010.md`,
+SHA23498cd92e119c5acb2e361cd9fd68e32cd07eb1c8a63b2cdd5625ac044ed70f.
+Source-call-flow locates the measured refusal in outer-body closure selection
+encountering the nested accessor, before target proof. Existing update already
+reuses its operation-local capture map for GetValue/PutValue. Separately,
+source emits outer HasBinding captures eagerly; runtime side effects remain
+UNPROVEN and this is not asserted to be the original's conversion lever.
+
+Sol6.1High prepared only three new files in isolated carrier worktree
+`/Users/thomas/.codex/worktrees/6878-boolean-property-carrier-sol61/js2`:
+51line `src/codegen/with-reference-capture.ts` SHA
+490a9495a5395db9cc743b7e2c45fd1ed765992d32d0a67de1eff50472d76a0a;
+306line `tests/issue-4206-with-reference-capture.test.ts` SHA
+a6543274d67ba6b71c9ea93c6264667ab306efea777f1f8409d1494a43c1ef99;
+156line `plan/issues/es2015-with-reference-capture-handoff-sol61-20261010.md`
+SHAaf1995dc3c5a58a76bf1a2a56e5fdbd7f186d2a8bcc09655e108bfe94bb76683.
+Root fully read all513lines and independently checked hashes. Leaf nests outer
+captures under previous misses, retains complete identity maps and restores
+body buffers in finally; restoration is not callback-effect rollback. Eight
+structural plus16actual native integration registrations are ALLUNRUN, not
+passes or official-worker acceptance. Integration controls deliberately create
+accessors before entering with; they cannot prove accessor-in-with admission.
+
+No production wiring/registration, existing source edit, compiler execution,
+commit or PR occurred. Shared captureDynamicWithHasBindings integration and
+IR accessor selection remain pending owner/root coordination; original CE is
+untouched. Root must establish failing baseline controls, integrate on a current
+isolated epoch, run same-epoch candidate controls and normal gates, and retain
+separate complete original-admission acceptance. Prepared source is not PR-ready.
+Native62071 explicitly remainedLIVE; latest partial3565/11778 is3504PASS51FAIL
+4CE6timeouts8213unsettled, problems[]. No full-suite completion claim.

@@ -944,3 +944,140 @@ New leaves registered in `scripts/compiler-boundaries.json`.
 
 `status` stays `in-progress`: the S6 residual rows and the probe gaps are
 unmet criteria, not recorded-and-accepted ones.
+
+### 2026-10-10 fresh frozen-census S6 Symbol tag negative
+
+Same frozen standalone epoch38901fff8f9a5ca029cbefcdaec5d8dd40949861
+records `test/built-ins/Object/prototype/toString/symbol-tag-non-str-builtin.js`
+FAIL03:45:13 local, honest14auto standard official strictboth,
+reached_test true, compile6865ms/exec178ms. First error compares actual
+`[object Symbol]` with expected `[object Object]`. Original SHA256
+`315a6475218ca742518c73f688742570dc5b62bdc25597b1e8af9ecdb3ebcee0`.
+Root fully read original: delete Symbol.prototype's well-known tag; call the
+extracted Object.prototype.toString on Symbol('desc'); then redefine Math's
+tag to a Symbol value and delete JSON's tag, expecting Object fallback each.
+Only the first failure is established; subsequent Math/JSON assertions and
+actual both-variant execution are not proven by this row.
+
+This is the existing exact S6 residual, not a new task or released ownership.
+Root fully read current object-proto-symbol-tag.ts: real __extern_get consult
+returns null for absent/nonstring tags; consumer banks a classifier/constant
+builtinTag before Get. Those source facts alone do not identify the selected
+runtime carrier/prototype/delete route. A fix must observe live Symbol wrapper
+prototype tag deletion/nonstring fallback through normal property semantics,
+not permanently hardcode Symbol to Object or special-case this test. Preserve
+present/custom/getter tags, primitive/wrapper distinctions and pre-Get builtin
+classification/abrupt order. Existing owner/IR handover and heavy execution
+release remain prerequisites; the ListFormat descriptor scratch proposal does
+not authorize shared Symbol/runtime changes.
+
+At1294/11778 unique originals, partial1270PASS17FAIL1CE6timeouts has zero
+accounting problems,10484unsettled. Native62071/shard1PID53943 is confirmed
+LIVE, not completion. No source/runner/original/claim/Git/PR change or heavy
+execution/restart made here; full11778including74Intl target remains intact.
+
+### 2026-10-10 fresh frozen-census primitive prototype tag override negative
+
+Canonical non-pass95 is the existing S6 original
+`test/built-ins/Object/prototype/toString/symbol-tag-override-primitives.js`,
+SHA256 `5c4866a2ac983b99d9bb382db3dce780fda983f6cd883cf17d46487af4bfe5e7`.
+Root fully read and hashed the unchanged original. Frozen standalone epoch
+38901fff8f9a5ca029cbefcdaec5d8dd40949861 records FAIL10:50:16 local,
+honest14/auto, official standard, strictboth, reached_test true,
+compile3543ms/exec103ms. Error: actual `[object Boolean]` versus expected
+`[object test262]`. The aggregate row does not identify whether the first
+Boolean.prototype assertion or the subsequent true primitive assertion failed,
+nor establish actual execution of both variants.
+
+The original writes a string-valued Symbol.toStringTag to Boolean.prototype,
+then checks the prototype and true; repeats for Number.prototype and 0,
+String.prototype and the empty string; finally defines Symbol.prototype's tag
+and checks that prototype. All assertions after the first failing Boolean
+comparison are masked. No includes are used. Historical S6 observations of
+silently dropped primitive-wrapper prototype writes are hypotheses to recheck,
+not a proven current route or attribution.
+
+The current tag helper performs a real __extern_get using the interned
+well-known Symbol carrier and only accepts a native string result; the call
+consumer banks builtinTag before Get. Source inspection cannot distinguish a
+dropped prototype write, the wrong prototype companion, boxing/receiver loss,
+or bypassed/misregistered tag consult on this actual emitted route. Do not
+hardcode `test262`, replace builtin tags globally, or claim this is fixed by
+the earlier Symbol nonstring fallback proposal.
+
+Implementation handoff after execution release and existing owner handover:
+
+- First obtain separate actual strict-variant receipts for the unchanged
+  original and isolate each prototype/primitive comparison without altering
+  the authoritative original or treating controls as original passes.
+- Observe symbol-key write/read/descriptor identity on each live wrapper
+  prototype, then primitive boxing and wrapper prototype lookup through the
+  maintained standalone runner. Compare direct intrinsic call, extracted
+  method call, and genuinely dynamic receiver routes; retain receiver identity.
+- Preserve present string overrides, absent/nonstring fallback, deletion,
+  getter receiver/count/abrupt completion and pre-Get builtin classification.
+  Include Boolean/Number/String/Symbol prototypes and instances, neighboring
+  unmodified builtin tags, and the existing nonstring-tag original as controls.
+- Attribute any narrow fix using matched native-Wasm A/B/removal receipts,
+  actually passing positive and intentional runtime-negative controls, then
+  revalidate the full authoritative 11778 originals including all74Intl.
+
+No ownership is released or duplicated by this receipt. No production edit,
+claim, runner/oracle/corpus/provider change, execution, restart, Git mutation
+or PR publication occurred. At the latest same-handle observation native62071
+is LIVE on shard7 PID54196; partial5619/11778 =5524PASS83FAIL5CE7timeouts,
+6159 unsettled, zero accounting problems, fullCensusComplete false. This is
+negative evidence and a handoff, not completion or new pass credit.
+
+### Cloud handoff: complete primitive-control source review
+
+The historical LIVE observations above are superseded: observer62071 is
+missing after interruption and shard7 PID54196 was independently absent.
+Preserved canonical5690/11778 =5595PASS83FAIL5CE7timeouts;6088unsettled.
+No natural terminal is available for interrupted shard7. No recovery ran.
+
+Root finished sequential source review of all2468 lines of the isolated Sol
+packet `.tmp/es2015-primitive-wrapper-tag-controls-sol61-20261010.ts` in
+`/Users/thomas/Code/js2/.codex-worktrees/6878-derivation-cache-regressions-sol61`.
+Its unchanged SHA256 is
+`44b7746bbb0797ff74dc44c67a04530c1cf35490108cf3abd000fb658f095795`.
+The119 independent controls and2 original registrations remain UNRUN/unwired;
+118 expected-positive and1 intentional runtime-negative are not test results.
+
+The reviewed expectations distinguish absent Boolean/Number/String own tags
+from Symbol's required nonwritable configurable seed; ordinary versus strict
+assignment; boxed strict-getter receivers versus object identity; configurable
+definition/deletion, nonstring fallback, throwing Get, and classification
+before a revoking Proxy tag getter. Symbol nonstring/deleted fallback is Object,
+not a permanent Symbol brand. Native dynamic-route execution remains unobserved.
+
+Before accepting the lazy-materialization coverage, strengthen or instrument
+`lazy-materialization-wrapper-first` and `lazy-materialization-symbol-first`:
+the former's `before` wrapper and latter's `alias` are unused. Source order
+alone cannot prove those preparatory operations survive optimization or select
+the intended runtime route. Consume the wrapper/alias observably, retain emitted
+route evidence, and keep the pristine/instrument controls independent. No
+control execution or production repair is authorized merely by this review.
+
+Owner handover remains unresolved: the last finite actual assignment read
+atd1720ae09459aa012752b35d46768303acb483e5 names
+`ttraenkler/opus-6770`, in-progress, write21505-y5j21jvm. The outstanding human
+handover question has not been answered. Preserve existing work; do not infer
+handover from age, silence, empty PR search or automatic goal continuation.
+After handover, establish truthful maintained-runner admission, measure variants
+and first-failure ordinals, implement the narrow attributed fix, and verify
+matched controls plus the full11778/74Intl population before claiming completion.
+
+The finite Sol6.1 High follow-up has now strengthened exactly those two cells.
+Alias identity/read/write/delete and pre-existing wrapper identity/prototype/
+tag checks are observable before mutation, after assignment and after deletion.
+Both cells now require UNOBSERVED runtime-route evidence rather than assuming
+optimization defeat. Root read both replacement Scripts and the complete
+updated worker handoff, then independently hashed them. Packet2487lines SHA256
+`2231cac9c8b78bdc53b35a44dedbbcde024e1d9ced47253a695464b6b6aebfd9`;
+handoffSHA256
+`f8aea79913a389f17d49132afbf4b8230b0d9401c4c8d03ace38f3e2ef24130f`.
+Counts remain119controls+2original registrations, allUNRUN/unwired.
+Eight peer hashes and tracked diff/branch/HEAD were preserved by the worker.
+This remedies unused fixture values only, not the production failure or
+unobserved runtime-route/variant/ownership/admission requirements.
