@@ -99,3 +99,14 @@ verify the actual remote/PR HEAD after normal push gates. No source/test
 implementation claim has been acquired. The unused isolated6916 checkout is
 retained unchanged. This record prevents a speculative optimization, not a
 claim of completed IR migration.
+
+## Session B takeover audit — 2026-10-11
+
+Human-authorized takeover of all Session B is tracked by the separate planning-only
+claim `6916:b-takeover-audit-20261011-01a12827`, owner
+`ttraenkler/codex-ir-session-b-20261011-01a12827`. The [independently verified
+ownership and checkpoint map](../log/ir-coordination-session-b-20261011.md)
+records exact upstream evidence, transfers and the existing forwarding-resolver
+checkpoint selected to advance. This auxiliary audit does not reopen the rejected
+remainder optimization, change its acceptance bar or authorize source work here.
+All source tasks keep their own original issue plans and concrete dependencies.
