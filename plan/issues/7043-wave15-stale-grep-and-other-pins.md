@@ -31,6 +31,10 @@ whose new behaviour is wrong stay red under their own issue (#7044–#7048,
 
 ## Re-pinned (test-only)
 
+`issue-743-ctor-sites-in-fixpoint`, `issue-1744`, `issue-1907` and `issue-1973`
+were also re-pinned here, but #7026 (wave-15 value lane, PR #6721) landed the
+same fixes first; this change takes main's versions of those four files.
+
 | file | what moved | cause |
 |---|---|---|
 | `issue-700-test262-language-service` | worker wrappers pass merged `opts`; graph branch keys on `moduleGraph` | d01944b471 (#4035), 1de31aa63c (#6776), f1ad427b98 |
@@ -51,13 +55,10 @@ whose new behaviour is wrong stay red under their own issue (#7044–#7048,
 | `issue-4130-npm-compat-promotion-fast-path` | two evidence-upload steps lacked the artifact-only gate — gated in `ci.yml` (test unchanged) | 57aa0d7302, a8441b41d5 |
 | `issue-6706-native-first-lane-providers` | the native-first lane is `if: false` (JS-host Test262 retired) | ae7991db21 |
 | `issue-2742-standalone-carveout` | the set moved to `string-proto-tostring.ts`; `trim` left it | a047a5f029 |
-| `issue-743-ctor-sites-in-fixpoint` | derivation flags are memoised per compile; reset in a test that skips `compile()` | 0be07b6077 (#4415) |
 | `emit-encodeinstr-failloud` | `br_table` has a real payload + encoding | 4b1f8a402a (#2952) |
 | `typed-export-signatures` | optional param is undefined-capable externref; host module imports its string constants | 315752dcbc (#4536) |
-| `issue-1744`, `issue-1973` | `binaryen.readBinary` without GC rejects two identical-shape singleton rec groups — new `tests/helpers/binaryen-read-gc.ts` declares the features | harness |
 | `issue-1058-multifile-generic-callback-registration` | the pinned TypeError is gone; `test()` answers the JS-correct 42 | — |
 | `issue-6651-sg1-generator-singletons` | "PINNED WRONG" `yield *` newline module validates and completes | — |
 | `es5-standalone-array-nonindex-keys` | `a[2³²−2] = 1` no longer traps; `length` is the JS-correct 2³²−1 | — |
-| `issue-1907` | `Object.seal` read as a value has a real host-free body | 55a5837704 |
 | `issue-2998` | the object-LHS `instanceof` host predicate was retired by #2916 itself | 4c2c44482f |
 | `issue-2984-ctor-carrier-own-props` | the pinned "KNOWN GAP" store bypass is fixed; the strict write throws | — |

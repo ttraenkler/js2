@@ -16,14 +16,14 @@
 //   2. Optimized output produces identical observable results to unoptimized.
 
 import { describe, expect, it } from "vitest";
-import binaryen from "binaryen";
-import { readBinaryWithGc } from "./helpers/binaryen-read-gc.js"; // (#7014) GC-aware binaryen read
+// (#7014) binaryen 132 reads with MVP features unless told otherwise — see the helper.
+import { readBinaryAllFeatures } from "./helpers/binaryen-read.js";
 import { compile } from "../src/index.js";
 import { buildImports } from "./equivalence/helpers.js";
 
 /** Does the (re-parsed) optimized binary contain any `exact` heap type? */
 function hasExactRefTypes(binary: Uint8Array): boolean {
-  const mod = readBinaryWithGc(binaryen, binary);
+  const mod = readBinaryAllFeatures(binary);
   try {
     return /\bexact\b/.test(mod.emitText());
   } finally {

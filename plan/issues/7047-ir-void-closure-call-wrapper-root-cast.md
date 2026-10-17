@@ -59,6 +59,7 @@ the legacy path stopped doing in July.
 2. Regression: the 2967 test above. Note the same file's five
    `binaryen.readBinary` failures ("distinct rec groups would be identical …
    use --enable-gc") are a harness problem fixed by
-   `tests/helpers/binaryen-read-gc.ts` (#7043); apply it to this file in the
+   `tests/helpers/binaryen-read.ts` (`readBinaryAllFeatures`, landed with #7026);
+   apply it to this file in the
    same change (the file could not be touched while this test was red).
 3. Standalone check: the same shape under `--target standalone`.

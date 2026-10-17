@@ -74,9 +74,14 @@ describe("#1907 standalone built-in static method value reads", () => {
   // and never leaks `__get_builtin`. (This test previously used `Math.max`, which
   // #2933 later implemented natively; `Object.seal` has no standalone native body
   // yet, so it exercises the generic-throw-body path.)
-  it("built-in static method value reads reify host-free (#1907 / #2984; Object.seal now has a real body)", async () => {
+  it("unsupported built-in static method value reads reify host-free and fail loud when called (#1907 / #2984)", async () => {
     const result = await compile(
-      `export function run(): number { const seal: any = Object.seal; seal({}); return 1; }`,
+      // (#7014 wave 15) `Object.seal` gained a native standalone body since this
+      // was written (re-measured 2026-10-17 on upstream main 0727e2985b: the call
+      // returns 1, as in JS), so it no longer reaches the generic-throw body.
+      // `Object.isSealed` still has none — in JS this call returns, so a throw
+      // here can only be the fail-loud reified body.
+      `export function run(): number { const isSealed: any = Object.isSealed; isSealed({}); return 1; }`,
       {
         target: "standalone",
       },
@@ -85,11 +90,7 @@ describe("#1907 standalone built-in static method value reads", () => {
     assertNoBannedImports(result.imports);
     expect(WebAssembly.validate(result.binary), "module must validate").toBe(true);
     const { instance } = await WebAssembly.instantiate(result.binary, {});
-    // (#7014) `Object.seal` is no longer an UNSUPPORTED value read: it reifies a
-    // real host-free body since 55a5837704 (2026-08-20, the freeze/seal/
-    // preventExtensions value arm in builtin-value-read.ts), so the call runs
-    // and answers like JS. The host-free reification above is still the point.
-    expect((instance.exports as { run: () => number }).run()).toBe(1);
+    expect(() => (instance.exports as { run: () => number }).run()).toThrow();
   });
 
   // #1907 reopened (2026-07-20): after #838 landed BigInt64Array / BigUint64Array
