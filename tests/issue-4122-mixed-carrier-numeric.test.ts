@@ -85,11 +85,21 @@ describe("#4122 — an unresolvable assignment does not demote a proven-numeric 
 
   it("emits no unboxing in the accumulator loop", async () => {
     const { wat } = await build(ACCUMULATOR);
-    expect(bodyOf(wat!, "benchMethod")).not.toMatch(/call \$__unbox_number/);
+    // `p.inc()` is a GUARDED direct call (#3683 `__dc_P_inc_0_g`); its miss arm
+    // is the legacy `__call_m_inc_0` dispatcher, whose externref result is
+    // unboxed. Since the #4157 post-lowering inliner (334654f1ed) inlines that
+    // trampoline into `benchMethod`, the miss arm's unbox now appears in this
+    // body. It unboxes the dispatcher's RESULT on the cold path, not the
+    // accumulator, so strip exactly that pair before asserting.
+    const body = bodyOf(wat!, "benchMethod").replace(/call \$__call_m_\w+\s+call \$__unbox_number/g, "");
+    expect(body).not.toMatch(/call \$__unbox_number/);
   });
 
   it("is off under the kill switch, restoring the boxed carrier", async () => {
-    const { wat } = await build(ACCUMULATOR, { JS2WASM_MIXED_CARRIER_NUMERIC: "0" });
+    // #4121 (79bc420bba) independently proves this accumulator numeric through
+    // the unboxing admission, so #4122's switch alone no longer changes the
+    // slot; switch both off to observe the boxed carrier #4122 replaced.
+    const { wat } = await build(ACCUMULATOR, { JS2WASM_MIXED_CARRIER_NUMERIC: "0", JS2WASM_NUMERIC_ADMISSION: "0" });
     const body = bodyOf(wat!, "benchMethod");
     expect(localType(body, "s")).toBe("externref");
     expect(body).toMatch(/call \$__unbox_number/);

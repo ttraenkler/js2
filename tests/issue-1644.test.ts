@@ -91,10 +91,14 @@ describe("#1644 Slice A — bigint i64 brand boxing", () => {
 
 describe("#1644 Slice E1 — standalone bigint externref carrier", () => {
   it("WASI bigint boxes and unboxes through an any-returning function without BigInt host imports", async () => {
+    // `asAny` must return a genuinely MIXED value: with a bigint-only body the
+    // return-type inference now narrows `any` to i64 and inlines the call, so
+    // nothing is boxed and the `$BigInt` carrier this pin is about never
+    // appears (measured on main, 2026-10-17). The string arm keeps it boxed.
     const { value, envImports, wat } = await runWasiNumber(`
-      function asAny(x: bigint): any { return x; }
+      function asAny(x: bigint, alt: string, pick: boolean): any { return pick ? x : alt; }
       export function test(): number {
-        const round: bigint = asAny(10n);
+        const round: bigint = asAny(10n, "s", true);
         return round === 10n ? 1 : 0;
       }
     `);

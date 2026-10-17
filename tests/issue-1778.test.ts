@@ -35,12 +35,15 @@ describe("#1778 landing standalone test262 pass rate", () => {
 
     expect(JSON.parse(publicReport)).toEqual(report);
     expect(report.mode.target).toBe("standalone");
-    expect(report.mode.summary_only).toBe(true);
-    expect(report.summary.pass).toBe(4368);
-    expect(report.summary.total).toBe(43106);
-    expect(report.summary.fail).toBe(report.summary.total - report.summary.pass);
-    expect(((report.summary.pass / report.summary.total) * 100).toFixed(1)).toBe("10.1");
-    expect(report.source.artifacts).toContain("benchmarks/results/test262-standalone-report-20260601-213702.json");
+    // The file was a hand-published June summary (4368 / 43106, `summary_only`)
+    // when this pin was written. CI now refreshes it with the FULL standalone
+    // report on every baseline promotion (see the [skip ci] "baseline refresh"
+    // commits that touch it), so exact counts are stale by construction. Pin
+    // the shape the host-off toggle reads instead.
+    const { pass, total, fail } = report.summary;
+    expect(Number.isInteger(pass) && pass > 0).toBe(true);
+    expect(Number.isInteger(total) && total >= pass).toBe(true);
+    expect(Number.isInteger(fail) && fail <= total - pass).toBe(true);
   });
 
   it("landing page fetches real standalone data and exposes unavailable or stale states", () => {
@@ -68,8 +71,10 @@ describe("#1778 landing standalone test262 pass rate", () => {
     expect(hostOffBranch).toContain("renderDonut(standalone.summary, captionMain, options.captionSub)");
     expect(hostOffBranch).not.toContain("hostSummary");
     expect(hostOffBranch).not.toContain("applySummaryRatios");
-    expect(html).toContain("updateHeadlineStat({ pass, fail, ce, skip, total }, captionMain, captionSub)");
-    expect(html).toContain("updateHeadlineUnavailable(captionMain, captionSub, detail)");
+    // The caption argument is IR-decorated since fa1e5df779 (#IR website view),
+    // so match the call shape rather than one formatting of it.
+    expect(html).toMatch(/updateHeadlineStat\(\s*\{ pass, fail, ce, skip, total \},\s*captionMain,/);
+    expect(html).toMatch(/updateHeadlineUnavailable\(captionMain, [^\n]*captionSub, detail\)/);
     expect(html).toContain("window.__conformanceHeadlineHydrated");
   });
 

@@ -168,23 +168,24 @@ describe("#2984 ctor-carrier own props: runtime descriptor MOP on builtin constr
     expect(ret).toBe(2);
   });
 
-  it("KNOWN GAP (pre-existing): a dynamic write bypasses the non-writable flag", async () => {
-    // The DESCRIPTOR correctly reports `writable:false`, but the dynamic
-    // `o[k] = v` store path (`__extern_set`) does not consult `$PropEntry`
-    // flags, so the write lands. This is a pre-existing `$Object` runtime gap
-    // (it reproduces for any `Object.defineProperty`-defined non-writable
-    // property, not just these carriers) — pinned here so a future fix in the
-    // store path is noticed rather than silently changing this slice's shape.
+  it("a dynamic write honours the non-writable flag (was a KNOWN GAP pin)", async () => {
+    // This pinned the pre-existing `$Object` store gap — `__extern_set` did not
+    // consult `$PropEntry` flags, so the write LANDED — "so a future fix in the
+    // store path is noticed". (#7014) It is fixed on main: the module is strict,
+    // so the write throws a TypeError (§10.1.9.2 → PutValue) and `length` keeps
+    // its value, exactly as node answers. Pin the spec behaviour now.
     const ret = await runStandalone(`
       ${THRU_FN}
       var wr = function (o: any, k: any, v: any): void { o[k] = v; };
       var rd = function (o: any, k: any): any { return o[k]; };
       check(gg(WeakRef, "length").writable, false);
-      wr(WeakRef, "length", 99);
-      check(rd(WeakRef, "length"), 99);
+      var threw = 0;
+      try { wr(WeakRef, "length", 99); } catch (e) { threw = e instanceof TypeError ? 1 : 2; }
+      check(threw, 1);
+      check(rd(WeakRef, "length"), 1);
       return hits;
     `);
-    expect(ret).toBe(2);
+    expect(ret).toBe(3);
   });
 
   it("host (gc) lane still compiles the same sources", async () => {

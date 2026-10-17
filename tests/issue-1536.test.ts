@@ -26,6 +26,25 @@ function asciiCodes(s: string): number[] {
   return [...s].map((c) => c.charCodeAt(0));
 }
 
+/**
+ * A ctor body plus the init expressions of every global it reads. Native
+ * string literals are interned as `$__strlit_N` globals since #3673
+ * (2834060c35), so the materialized `$name` is a `global.get` of a global whose
+ * init holds the code units — not an inline `array.new_fixed` any more.
+ */
+function withReferencedGlobals(wat: string, body: string): string {
+  const globals = wat.split("\n").filter((line) => /^\s*\((?:global |import "[^"]*" "[^"]*" \(global)/.test(line));
+  const refs = [...body.matchAll(/global\.get (\d+)\b/g)].map((m) => globals[Number(m[1])] ?? "");
+  return [body, ...refs].join("\n");
+}
+
+/**
+ * A WASI module that can THROW imports `fd_write` (and `proc_exit`) for the
+ * uncaught-exception printer wired into `_start` (#2968, src/codegen/wasi.ts);
+ * these tests catch every throw, so inert stubs suffice.
+ */
+const WASI_STUBS = { wasi_snapshot_preview1: { fd_write: () => 0, proc_exit: () => {} } };
+
 describe("#1536 Phase 2 — native Error `$name` materialization (standalone)", () => {
   it("`new TypeError(...)` constructor materializes the name string (not ref.null.extern)", async () => {
     const src = `
@@ -41,7 +60,7 @@ describe("#1536 Phase 2 — native Error `$name` materialization (standalone)", 
     const wat = r.wat ?? "";
     const ctorStart = wat.indexOf("(func $__new_TypeError");
     expect(ctorStart).toBeGreaterThanOrEqual(0);
-    const ctorBody = wat.slice(ctorStart, ctorStart + 600);
+    const ctorBody = withReferencedGlobals(wat, wat.slice(ctorStart, ctorStart + 600));
     for (const code of asciiCodes("TypeError")) {
       expect(ctorBody).toContain(`i32.const ${code}`);
     }
@@ -60,7 +79,7 @@ describe("#1536 Phase 2 — native Error `$name` materialization (standalone)", 
     expect(r.success).toBe(true);
     const envImports = r.imports.filter((i) => i.module === "env").map((i) => i.name);
     expect(envImports).not.toContain("__new_RangeError");
-    const { instance } = await WebAssembly.instantiate(r.binary, {});
+    const { instance } = await WebAssembly.instantiate(r.binary, WASI_STUBS);
     const test = instance.exports.test as () => number;
     expect(test()).toBe(42);
   });
@@ -76,12 +95,12 @@ describe("#1536 Phase 2 — native Error `$name` materialization (standalone)", 
       `;
       const r = await compile(src, { target: "wasi" });
       expect(r.success, `${n} compiles`).toBe(true);
-      const { instance } = await WebAssembly.instantiate(r.binary, {});
+      const { instance } = await WebAssembly.instantiate(r.binary, WASI_STUBS);
       expect((instance.exports.test as () => number)(), `${n} runs`).toBe(1);
       const wat = r.wat ?? "";
       const s = wat.indexOf(`(func $__new_${n}`);
       expect(s, `${n} ctor present`).toBeGreaterThanOrEqual(0);
-      const body = wat.slice(s, s + 700);
+      const body = withReferencedGlobals(wat, wat.slice(s, s + 700));
       // First char code of the name appears as an i32.const in the ctor body.
       expect(body, `${n} name materialized`).toContain(`i32.const ${n.charCodeAt(0)}`);
     }

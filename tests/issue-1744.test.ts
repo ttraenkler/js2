@@ -21,6 +21,7 @@
  */
 import { describe, expect, it } from "vitest";
 import binaryen from "binaryen";
+import { readBinaryWithGc } from "./helpers/binaryen-read-gc.js"; // (#7014) GC-aware binaryen read
 import { compile } from "../src/index.js";
 
 const STRING_HASH_SOURCE = `
@@ -45,7 +46,7 @@ export function run(n) {
 async function compileToWat(source: string): Promise<{ wat: string; binary: Uint8Array }> {
   const result = await compile(source, { fileName: "t.js", target: "wasi", nativeStrings: true });
   expect(result.success, `Compile failed: ${result.errors?.map((e) => e.message).join("; ")}`).toBe(true);
-  const mod = binaryen.readBinary(result.binary);
+  const mod = readBinaryWithGc(binaryen, result.binary);
   const wat = mod.emitText();
   mod.dispose();
   return { wat, binary: result.binary };

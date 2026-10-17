@@ -143,11 +143,14 @@ describe("#4150 — __fmod integral fast path", () => {
       expect(guarded).toContain("f64.trunc");
       expect(guarded).toContain("i64.trunc_f64_s");
       expect(guarded).toContain("i64.rem_s");
-      expect(guarded).toMatch(/\bcall\b/);
+      // The exact-helper fallback sits in tail position, so the legacy lane
+      // emits it as `return_call` (CLAUDE.md: tail calls in return position);
+      // `\bcall\b` alone cannot match after the `_`.
+      expect(guarded).toMatch(/\b(?:return_)?call\b/);
 
       for (const name of ["fractional", "outside", "zero"]) {
         const rejected = functionWat(result.wat, name);
-        expect(rejected).toMatch(/\bcall\b/);
+        expect(rejected).toMatch(/\b(?:return_)?call\b/);
         expect(rejected).not.toContain("i64.trunc_f64_s");
         expect(rejected).not.toContain("i64.rem_s");
       }

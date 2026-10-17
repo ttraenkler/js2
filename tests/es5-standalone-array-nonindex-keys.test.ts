@@ -152,9 +152,14 @@ describe.each(LANES)("#4247 — non-array-index element keys are named propertie
     // cannot hold 4 billion slots, so the honest outcome is the pre-existing
     // grow trap — NOT a silent named-property write that would answer a bogus
     // `length`. Pinning the classification, not the trap's wording.
+    //
+    // (#7014) The trap is gone: on main the write lands as a real (sparse)
+    // element and `length` answers the JS-correct 2^32-1 (node: 4294967295).
+    // A bag diversion would have left `length` at 0, so asserting the exact
+    // value still pins the classification this test is about.
     const src = `const a: any[] = [];
                  export function test(): number { a[4294967294] = 1; return a.length; }`;
-    await expect(run(src, lane)).rejects.toThrow();
+    expect(await run(src, lane)).toBe(4294967295);
   });
 
   it("`length` is never captured by the named-key routing", async () => {

@@ -41,8 +41,11 @@ describe("#6706 A — eval provider on the native-first lane", () => {
   it("downloads and verifies the provider instead of building the refusal tier", () => {
     const job = jobBlock("test262-native-first");
     expect(job).toContain("needs: [runtime-eval-provider, temporal-provider]");
-    expect(job).toContain("!cancelled()");
-    expect(job).toContain("needs.runtime-eval-provider.result == 'success'");
+    // The lane is RETIRED with the JS-host Test262 sunset (ae7991db21,
+    // 2026-10-12): its `!cancelled() && needs.*.result == 'success' && …`
+    // trigger became `if: false`. The provider wiring below is kept intact so
+    // the lane stays re-enableable; assert that, plus the retirement itself.
+    expect(job).toContain("if: false # JS-host Test262 is retired.");
     expect(job).toContain("name: runtime-eval-provider-${{ github.run_id }}");
     expect(job).toContain("node scripts/build-quickjs-eval-provider.mjs --require-cache");
     expect(job).toContain("JS2WASM_EVAL_ENGINE: ${{ inputs.eval_engine || 'quickjs' }}");

@@ -104,10 +104,12 @@ describe("#1120 — int32 fast path for bitwise-coerced numeric loops", () => {
       }
     `;
     const wat = await compileWat(src);
-    // Locals must be i32, not f64.
-    expect(wat).toMatch(/\(local \$a i32\)/);
-    expect(wat).toMatch(/\(local \$b i32\)/);
-    expect(wat).toMatch(/\(local \$next i32\)/);
+    // Locals must be i32, not f64. The IR path now claims this function and
+    // names its scalar slots `$slot_<name>` (src/ir/lower-generic.ts); `next`
+    // is an SSA temp there, so only the loop-carried `a`/`b` keep a named slot.
+    expect(wat).toMatch(/\(local \$(?:\$slot_)?a i32\)/);
+    expect(wat).toMatch(/\(local \$(?:\$slot_)?b i32\)/);
+    expect(wat).not.toMatch(/\(local \$(?:\$slot_)?(?:a|b|next) f64\)/);
     // Hot body must use i32.add, not f64.add + f64.const 4294967296 + ToInt32 dance.
     expect(wat).toMatch(/i32\.add/);
     // The heavy modular reduction (×4294967296) MUST be gone from the loop.

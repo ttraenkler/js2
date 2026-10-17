@@ -20,18 +20,29 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const SRC = readFileSync(fileURLToPath(new URL("../src/codegen/array-object-proto.ts", import.meta.url)), "utf-8");
+// The set itself moved to `string-proto-tostring.ts` (exported, typed
+// `ReadonlySet<string>`); `array-object-proto.ts` keeps the refusal that
+// consumes it, which the third test below still reads.
+const SET_SRC = readFileSync(
+  fileURLToPath(new URL("../src/codegen/string-proto-tostring.ts", import.meta.url)),
+  "utf-8",
+);
 
 function carveOutSet(): Set<string> {
-  const m = /SUPERSEDED_BY_BORROWED_PATH\s*=\s*new Set\(\[([^\]]*)\]\)/.exec(SRC);
+  const m = /SUPERSEDED_BY_BORROWED_PATH(?::\s*ReadonlySet<string>)?\s*=\s*new Set\(\[([^\]]*)\]\)/.exec(SET_SRC);
   if (!m?.[1]) throw new Error("SUPERSEDED_BY_BORROWED_PATH not found — did the carve-out move?");
   return new Set([...m[1].matchAll(/"([^"]+)"/g)].map((x) => x[1] as string));
 }
 
 describe("#2742 standalone String.prototype superseded-wiring carve-out", () => {
-  it("carves out exactly the five members the A/B measured as +18/-0", () => {
+  it("carves out exactly the members the A/B measured as +18/-0 (minus `trim`)", () => {
     // Measured over 450 String/prototype files, same box/run/list, both arms
     // from one tree: +18 fail->pass, 0 pass->fail, 0 off-target moves.
-    expect([...carveOutSet()].sort()).toEqual(["codePointAt", "endsWith", "includes", "startsWith", "trim"].sort());
+    // `trim` LEFT the set on 2026-08-19 (a047a5f029, "give String.prototype.trim
+    // its real reflective body"): its wired body now does ToString through
+    // `__to_primitive`, which the borrowed path did not, re-measured 551/551 on
+    // the ES5 standalone guard. The other four stay carved out.
+    expect([...carveOutSet()].sort()).toEqual(["codePointAt", "endsWith", "includes", "startsWith"].sort());
   });
 
   it("keeps every member whose wired body is still load-bearing", () => {

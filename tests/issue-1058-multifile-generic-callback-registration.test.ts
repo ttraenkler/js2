@@ -596,8 +596,13 @@ export function test(): number {
 
     // No source-certified arm is emitted for `(Node | undefined) => ...`:
     // host `undefined` is not Wasm null, so `ref.cast_null` would trap. The
-    // existing dynamic-dispatch miss remains a catchable TypeError instead.
-    expect(() => exports.test()).toThrow(/Cannot access property on null or undefined/);
+    // existing dynamic-dispatch miss remained a catchable TypeError instead.
+    //
+    // (#7014) On main the call now completes with the JS-correct answer:
+    // `invoke(undefined, acceptOptionalNode)` returns `undefined`, so `test()`
+    // is 42 (node agrees). The bridge-safety half of this pin still holds —
+    // nothing traps with an illegal cast — and the value is now asserted.
     expect(() => exports.test()).not.toThrow(/illegal cast/);
+    expect(exports.test()).toBe(42);
   });
 });

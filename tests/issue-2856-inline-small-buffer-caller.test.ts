@@ -43,8 +43,12 @@ describe("#2856 — inline-small nested-buffer caller containment", () => {
     const nextFunction = result.wat.indexOf("\n  (func $", runStart + 1);
     const runBody = result.wat.slice(runStart, nextFunction < 0 ? result.wat.length : nextFunction);
     // WAT emission uses numeric function indices. The retained direct call is
-    // the proof that the nested-buffer caller hit the conservative barrier.
-    expect(runBody).toMatch(/\bcall \d+/);
+    // the proof that the nested-buffer caller hit the conservative IR barrier.
+    // Since #4157 (334654f1ed) the post-lowering Wasm inliner (codegen/
+    // ir-inline.ts) may then inline that symbolic call, leaving its
+    // `$__inl<N>_p0` parameter local instead — equally a proof, because had
+    // the IR pass rewritten the caller there would be no call left to inline.
+    expect(runBody).toMatch(/\bcall \d+|\(local \$__inl\d+_p0 /);
 
     const imports = buildImports(result.imports, undefined, result.stringPool);
     const { instance } = await WebAssembly.instantiate(result.binary, imports);

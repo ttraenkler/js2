@@ -39,13 +39,21 @@ describe("#700 Test262 Language Service integration", () => {
     expect(branchEnd).toBeGreaterThan(branchStart);
     expect(originalHarnessBranch).toContain("return compileSingleSource(source, {");
     expect(originalHarnessBranch).not.toContain("return compile(source, {");
+    // The wrappers now spread the harness defaults into `opts` first
+    // (#4035 `hostBridge`, d01944b471; #6776 `validate: false`, 1de31aa63c),
+    // so the routed call passes `opts`, not the raw `options`.
     expect(worker).toContain(
-      "return incrementalCompiler ? incrementalCompiler.compile(source, options) : compile(source, options);",
+      "return incrementalCompiler ? incrementalCompiler.compile(source, opts) : compile(source, opts);",
     );
-    expect(worker).toContain("incrementalCompiler.compileMulti(files, entryFile, options)");
+    expect(worker).toContain("incrementalCompiler.compileMulti(files, entryFile, opts)");
 
-    const fixtureBranchStart = worker.indexOf("  if (hasFixtureGraph(fixtureFiles)) {");
-    const fixtureBranchEnd = worker.indexOf("\n  }\n  if (originalHarness) {", fixtureBranchStart);
+    // The graph branch keys on `moduleGraph` since FYI namespace self-import
+    // graphs were linked (f1ad427b98), and the Temporal / linked-harness arms
+    // now sit between it and the literal-harness branch, so end at the next
+    // top-level `if`.
+    const fixtureBranchStart = worker.indexOf("  if (moduleGraph) {");
+    const fixtureBranchEnd = worker.indexOf("\n  }\n  if (", fixtureBranchStart);
+    expect(fixtureBranchStart).toBeGreaterThan(-1);
     const fixtureBranch = worker.slice(fixtureBranchStart, fixtureBranchEnd);
     expect(fixtureBranch).toContain("return compileMultipleSources(");
     expect(fixtureBranch).not.toContain("return compileMulti(");

@@ -74,19 +74,20 @@ describe("#2998 static-primitive-LHS instanceof drops __instanceof_check in stan
     expect(await runStandalone(src)).toBe(1);
   });
 
-  it("does NOT fold an object/any LHS — proto-chain path is still host-backed (#2916 Slice B)", async () => {
+  it("does NOT fold an object/any LHS — the proto-chain walk answers it (#2916 Slice B)", async () => {
     // `obj` is a real object value: its membership answer needs the deferred
-    // proto-chain walk, so the dynamic predicate must remain in place (not
-    // wrongly short-circuited to false).
+    // proto-chain walk, so it must not be short-circuited to false.
     const src = `export function test(): number {
       const F: any = function () {};
       const obj: any = new F();
       return (obj instanceof F) ? 1 : 0;
     }`;
     const r = await compileStandalone(src);
-    // The object-LHS path is intentionally unchanged; it still routes to the
-    // host predicate (leak deferred), so the guard must NOT have fired here.
-    expect(envImports(r)).toContain("__instanceof_check");
+    // (#7014) The "leak deferred" half is gone: #2916 itself retired the
+    // object-LHS host predicate (4c2c44482f, native-ordinary-instanceof.ts),
+    // so the walk now runs in Wasm. Pin the answer and the absence of the leak.
+    expect(envImports(r)).not.toContain("__instanceof_check");
+    expect(await runStandalone(src)).toBe(1);
   });
 
   it("gc/host lane keeps the dynamic predicate (byte-behaviour unchanged)", async () => {

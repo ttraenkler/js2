@@ -24,13 +24,17 @@ function terminalFor(result: Awaited<ReturnType<typeof compile>>, displayName = 
   return outcome!;
 }
 
-async function expectBuildUnsupported(source: string, code: IrUnsupportedCode): Promise<void> {
+async function expectBuildUnsupported(
+  source: string,
+  code: IrUnsupportedCode,
+  stage: "build" | "select" = "build",
+): Promise<void> {
   const result = await compile(source, { fileName: `${code}.ts`, trackIrOutcomes: true });
   const outcome = terminalFor(result);
   expect(outcome).toMatchObject({
     kind: "unsupported",
     code,
-    stage: "build",
+    stage,
     legacyBodyEmitted: true,
     irBodyEmitted: false,
   });
@@ -225,6 +229,10 @@ describe("#3529 P2 — typed dataflow outcomes", () => {
     {
       name: "object identity representation",
       code: "operand-coercion-unsupported" as const,
+      // Rejected one gate earlier since 3b782f6d60 ("reject positively
+      // identified reference equality pairs"): the selector refuses the
+      // reference `===` with the same code before the builder sees it.
+      stage: "select" as const,
       source: `
         class Box {}
         export function test(): number { return new Box() === new Box() ? 1 : 0; }
@@ -260,8 +268,9 @@ describe("#3529 P2 — typed dataflow outcomes", () => {
         }
       `,
     },
-  ])("records $name at the exact producer gate", async ({ source, code }) => {
-    await expectBuildUnsupported(source, code);
+  ])("records $name at the exact producer gate", async (testCase) => {
+    const { source, code } = testCase;
+    await expectBuildUnsupported(source, code, "stage" in testCase ? testCase.stage : "build");
   });
 
   it.each([

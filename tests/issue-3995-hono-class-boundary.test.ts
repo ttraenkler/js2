@@ -745,7 +745,13 @@ describe("#3995 Hono erased class boundary regressions", () => {
       { platform: "web" },
     );
     expect(typedScalar.success, typedScalar.errors.map((error) => error.message).join("\n")).toBe(true);
-    expect(typedScalar.wat).not.toContain("__async_resume_fanon_");
+    // (#7014) This used to be the NEGATIVE control (a typed scalar callee kept
+    // the old synchronous pass-through). Since #6504 round 29 (57ecfe13ee, "the
+    // spill continuation for an await in a call argument") a plain-identifier
+    // callee with an awaited argument also suspends through a real resume
+    // continuation — the pass-through compiled `await` as a no-op — so the
+    // typed spelling activates the continuation too.
+    expect(typedScalar.wat).toContain("__async_resume_fanon_");
   });
 
   it("invokes a path-extension predicate through a closure", async () => {

@@ -191,9 +191,20 @@ export function test(): number {
     // structural distinction: test the retained closure global, reload that
     // SAME global in the hit arm, and call the lifted body directly. The miss
     // arm remains the legacy dispatcher for pre-initialization safety.
-    expect(trampoline).toMatch(
-      /global\.get (\d+)\s+ref\.is_null\s+i32\.eqz[\s\S]*?\(then\s+global\.get \1\s+ref\.as_non_null[\s\S]*?call \d+/,
-    );
+    //
+    // (#7014) A captured method now also materializes a TYPED TWIN, and the
+    // trampoline filler prefers the twin arm (typed-this.ts: `twinIdx !==
+    // undefined && twinSignatureAgrees` before the generic retained-closure
+    // arm): a cast receiver plus ONE direct call (behind the receiver-shape
+    // guard when the trampoline is the `_g` variant). Either shape is a direct
+    // call; the live-closure semantics are pinned by the 1023 above (`bias = 20`
+    // is observed by the second `p.go(2)`).
+    const retainedClosureArm =
+      /global\.get (\d+)\s+ref\.is_null\s+i32\.eqz[\s\S]*?\(then\s+global\.get \1\s+ref\.as_non_null[\s\S]*?call \d+/;
+    // The twin arm: the receiver cast to the fnctor struct, the arguments,
+    // then ONE direct call (guarded `_g` trampolines wrap it in a shape test).
+    const typedTwinArm = /ref\.cast \(ref \d+\)\s+(?:local\.get \d+\s+)*call \d+/;
+    expect(retainedClosureArm.test(trampoline) || typedTwinArm.test(trampoline), trampoline).toBe(true);
   });
 
   it("devirtualizes guarded this-calls inside a captured generic method body", async () => {
@@ -392,7 +403,10 @@ export function test(): number { var p = new P(); return p.go(); }`;
     // *fixes* a pre-existing divergence rather than preserving it, and the pin
     // records the JS-correct value on both sides of that difference.
     expect(direct.run()).toBe(1237);
-    expect(dynamic.run()).toBe(1230);
+    // (#7014) The dynamic lane now answers the JS-correct 1237 too: the
+    // `__call_m_*` route observes the void callee's `undefined`. The old pin
+    // recorded the WRONG 1230 as a known divergence; both lanes agree now.
+    expect(dynamic.run()).toBe(1237);
   });
 
   it("kill-switch reproduces the pre-S3 output byte-for-byte", async () => {

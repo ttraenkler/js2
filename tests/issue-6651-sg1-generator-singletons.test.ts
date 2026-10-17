@@ -375,7 +375,11 @@ describe("#6651 SG1 · residuals pinned in their current (spec-WRONG) state", ()
     ]);
   });
 
-  it("PINNED WRONG — `yield *` before a newline emits INVALID Wasm", async () => {
+  // (#7014) No longer wrong: on main the module validates and the delegation
+  // completes, answering the JS-correct `done === true` (node agrees: `g2()`
+  // yields nothing, so `g` finishes on its first `next()`). The pin now asserts
+  // that value; the history below records what it used to pin.
+  it("`yield *` before a newline delegates and completes (was PINNED WRONG: invalid Wasm)", async () => {
     // Pre-existing (recorded by slice A1, re-verified by this lane against the
     // current tree): the module fails WASM VALIDATION with
     //   __gen_resume_g: local.tee[0] expected (ref null N), found ref.as_non_null of (ref eq)
@@ -393,6 +397,6 @@ export function test(): number {
   const r: any = g().next();
   return r.done === true ? 1 : 0;
 }`;
-    await expect(run(src)).rejects.toThrow(/CompileError|local\.tee/);
+    expect(await run(src)).toBe(1);
   });
 });

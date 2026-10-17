@@ -78,7 +78,9 @@ describe("#2098 flake classification + bucket signature in diff-test262", () => 
     expect(code).toBe(0);
     expect(out).toMatch(/ct_flake recoveries.*: 1 ===/);
     expect(out).toMatch(/ct_suspect recoveries.*: 1 ===/);
-    expect(out).toMatch(/Trap baseline unknowns .*: 2 ===/);
+    // (#4141, c6c42ce7d0) The heading now carries a per-cause breakdown,
+    // e.g. ": 2 (compile_timeout 2) ===".
+    expect(out).toMatch(/Trap baseline unknowns .*: 2 \(compile_timeout 2\) ===/);
     expect(out).not.toMatch(/GATE FAIL: trap category/);
   });
 
@@ -98,7 +100,11 @@ describe("#2098 flake classification + bucket signature in diff-test262", () => 
 
     const { code, out } = runDiff(p.base, p.cand);
     expect(code).toBe(0);
-    expect(out).toMatch(/Trap baseline unknowns \(absent\/compile_timeout → trap; excluded from #3189\): 1 ===/);
+    // Reworded by #4141 (c6c42ce7d0), which also counts a baseline `skip` as
+    // never-observed and appends the per-cause breakdown.
+    expect(out).toMatch(
+      /Trap baseline unknowns \(baseline never observed runtime → trap; excluded from #3189\): 1 \(absent 1\) ===/,
+    );
     expect(out).toMatch(/oob: omitted-by-baseline\.js \(baseline absent\)/);
     expect(out).not.toMatch(/GATE FAIL: trap category/);
   });

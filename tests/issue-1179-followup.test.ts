@@ -137,7 +137,16 @@ describe("#1179-followup — i32 multiplication fast path is spec-conformant", (
     // ToInt32 dance (`f64.const 4294967296` etc.) is present — both
     // are smoking guns for the f64 path.
     expect(wat).toMatch(/f64\.mul/);
-    expect(wat).toContain("4294967296");
+    // ToInt32 is no longer the `f64.const 4294967296` modulo dance: #3739
+    // (57038dce23) rewrote it as an IEEE-754 bit decomposition through i64
+    // (`$js_bitwise_i64_*` locals). Assert that f64→int32 lowering on `run`
+    // itself, and that the product was not narrowed to i32.mul.
+    const runStart = wat.indexOf("(func $run ");
+    const runEnd = wat.indexOf("\n  (func ", runStart + 1);
+    const runBody = wat.slice(runStart, runEnd < 0 ? undefined : runEnd);
+    expect(runBody).toMatch(/f64\.mul/);
+    expect(runBody).not.toMatch(/i32\.mul/);
+    expect(runBody).toMatch(/i64\.reinterpret_f64|4294967296/);
   });
 
   it("nested chain: `((a*b) ^ (i*17)) & 0xFFFF` falls back to f64 because of the unsafe inner `*`", async () => {

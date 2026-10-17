@@ -177,7 +177,7 @@ jobs:
             }
 
       - name: Preserve compiler boundary evidence (#3518)
-        if: always() && steps.compiler_boundaries.outcome != 'skipped' && steps.compiler_boundaries.outcome != ''
+        if: always() && steps.npm_compat.outputs.only != 'true' && steps.compiler_boundaries.outcome != 'skipped' && steps.compiler_boundaries.outcome != ''
         uses: actions/upload-artifact@v4
         with:
           name: compiler-boundaries-${{ github.run_id }}-${{ github.run_attempt }}
@@ -639,7 +639,7 @@ jobs:
           pnpm run test:changed-root
 
       - name: Archive Linear append parent evidence (quality)
-        if: always() && hashFiles('.tmp/6915-ci/run-*/**') != ''
+        if: always() && steps.npm_compat.outputs.only != 'true' && hashFiles('.tmp/6915-ci/run-*/**') != ''
         uses: actions/upload-artifact@v6
         with:
           name: linear-append-quality-${{ github.run_id }}-${{ github.run_attempt }}
